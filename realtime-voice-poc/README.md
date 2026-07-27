@@ -4,6 +4,10 @@ Android Studio에서 `android/`를 열고, FastAPI 백엔드를 별도 터미널
 
 재현 가능한 Windows 테스트 절차는 [테스트 재현 가이드](docs/test-reproduction.md)를 참고합니다.
 
+실서비스 적용 가능성, Context7·공식 문서 검증 결과, 운영 전 변경 항목은 [서비스 아키텍처 검증 문서](docs/service-architecture-validation.md)를 참고합니다.
+
+제품 기능·권한·리포트·게시글 분석 기준은 [Notion 개발 계약 요약](../docs/development-contracts.md)과 [설계 계약 요약](../docs/design-contracts.md)을 따르며, 이 README의 모델·VAD·수동 응답 값은 독립 PoC 재현 범위입니다.
+
 ## 1. Windows PowerShell 실행
 
 ### 백엔드

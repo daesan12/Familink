@@ -33,4 +33,19 @@ class RealtimeEventParserTest {
     fun `malformed event is ignored`() {
         assertEquals(null, RealtimeEventParser.parse("not-json"))
     }
+
+    @Test
+    fun `event with invalid required field type is ignored`() {
+        assertEquals(null, RealtimeEventParser.parse("""{"type":{"nested":true}}"""))
+    }
+
+    @Test
+    fun `event with invalid optional field types uses a safe summary`() {
+        val errorEvent = RealtimeEventParser.parse("""{"type":"error","error":"invalid"}""")
+        val responseDoneEvent =
+            RealtimeEventParser.parse("""{"type":"response.done","response":"invalid"}""")
+
+        assertEquals("error", errorEvent?.summary)
+        assertEquals("response.done", responseDoneEvent?.summary)
+    }
 }

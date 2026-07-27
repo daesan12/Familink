@@ -6,6 +6,8 @@
 
 이 문서는 API Key를 Android APK에 넣지 않고, FastAPI 백엔드와 Android Emulator를 연결해 현재 PoC 테스트를 재현하는 절차입니다.
 
+> 아래 모델·음성·VAD 값은 독립 PoC 재현용 환경값이다. 제품의 페르소나 매핑, 게시글 분석 모델, 리포트 계약은 [Notion 개발 계약 요약](../../docs/development-contracts.md)과 최신 기술 결정 문서를 따른다.
+
 ## 1. 테스트 구성
 
     Android Emulator
