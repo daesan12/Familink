@@ -1,0 +1,60 @@
+{
+  "skill_name": "spec-change-applier",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "pending/CHG-B104-123-call-end.md 전체를 승인합니다. 이 제안만 공식 스펙에 반영해 주세요.",
+      "expected_output": "지정 제안과 승인 전체를 확인하고 관련 단일 도메인과 COVERAGE만 갱신한 뒤 검증된 제안을 applied로 이동한다.",
+      "files": [],
+      "expectations": [
+        "지정된 pending 파일만 처리한다.",
+        "승인된 단일 도메인과 필요한 매핑만 수정한다.",
+        "검증 후에만 applied로 이동한다."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "pending/CHG-B104-211-report-contract.md 전체 승인. API 응답과 daily_reports 데이터 계약 변경을 함께 반영해 주세요.",
+      "expected_output": "차단 변경의 승인 범위를 확인하고 관련 도메인, API, DATA_MODEL, COVERAGE를 함께 갱신하며 일관성을 검증한다.",
+      "files": [],
+      "expectations": [
+        "API와 DATA_MODEL 계약을 함께 갱신한다.",
+        "관련 도메인과 COVERAGE를 함께 확인한다.",
+        "소스 코드와 빌드 설정을 수정하지 않는다."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "pending/CHG-B104-305-notification.md에서 7개 설정 항목 명칭만 승인합니다. 기본값 OFF 제안은 승인하지 않았습니다.",
+      "expected_output": "7개 명칭만 공식 스펙에 반영하고 기본값은 확정하지 않으며, 미처리 범위가 남은 제안은 pending에 유지한다.",
+      "files": [],
+      "expectations": [
+        "부분 승인 범위만 반영한다.",
+        "기본값 OFF를 공식 스펙에 넣지 않는다.",
+        "남은 처분이 있는 제안을 applied로 이동하지 않는다."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "pending/CHG-B104-400-group-role.md를 공식 스펙에 반영해 주세요.",
+      "expected_output": "명시적 승인 증거가 없으므로 공식 스펙과 제안을 수정하지 않고 승인을 요청한다.",
+      "files": [],
+      "expectations": [
+        "공식 스펙을 수정하지 않는다.",
+        "pending 파일을 이동하거나 결정 정보를 채우지 않는다.",
+        "필요한 승인 범위를 보고한다."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "이미 applied/CHG-B104-123-call-end.md로 처리한 제안을 다시 반영해 주세요.",
+      "expected_output": "이미 적용된 제안을 재반영하지 않고 현재 공식 스펙의 반영 상태만 확인해 보고한다.",
+      "files": [],
+      "expectations": [
+        "중복 반영하지 않는다.",
+        "새 pending 제안을 만들지 않는다.",
+        "현재 반영 상태만 검증한다."
+      ]
+    }
+  ]
+}

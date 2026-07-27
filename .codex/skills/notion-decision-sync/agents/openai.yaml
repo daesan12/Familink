@@ -1,0 +1,4 @@
+interface:
+  display_name: "Notion 회의 결정 동기화"
+  short_description: "2 AI 최신 회의와 개발 문서의 불일치를 점검·승인 반영·검증"
+  default_prompt: "Use $notion-decision-sync with the Notion plugin to audit the latest meeting records and my additional evidence under the 2 AI root, report missing or conflicting development-document updates, wait for approval before mutation, apply only approved items, route ERD and API differences to the backend handoff page, and re-fetch every edited page for verification."
