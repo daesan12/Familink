@@ -1,0 +1,89 @@
+# [AI_CALL] AI 전화
+
+> 상태: 일부 확정
+> 기준: 2026-07-27, 최신 확정 Notion·요구사항·AI Tool Calling 결정·API 명세서 2차 수정본
+
+## AI 작업 컨텍스트
+
+- 목적: 피보호자와 AI의 WebRTC 통화를 시작·진행·종료하고, 통화 중 필요한 가족 맥락과 일정을 안전하게 조회한다.
+- 포함 범위: 페르소나 선택, 세션 생성, WebRTC 연결, 실시간 자막, Tool Calling, 통화 상태·종료, 내부 저장 경계.
+- 제외 범위: 장기 기억(MVP 제외), 통화 녹음 재생, 보호자에게 전문 제공, 확장 검색 Tool.
+- 핵심 규칙: 현재 그룹·현재 피보호자 권한 범위만 사용하고 상대 날짜는 `Asia/Seoul` 기준 절대 날짜로 변환한 뒤 일정 Tool을 호출한다.
+- 완료 조건: 세션 상태 전이와 비노출 원칙을 지키고, `API-CALLS-001`~`API-CALLS-003` API 계약과 충돌하지 않는다.
+
+## 확정된 동작
+
+1. 피보호자는 자동 발신 시간이나 횟수 제한 없이 원할 때 AI 전화 탭에서
+   페르소나를 선택하고 예시 발화를 확인한 뒤 통화를 시작한다.
+2. RN+Kotlin 프론트엔드는 Access Token, `persona_id`, `sdp_offer`를 FastAPI 세션 생성 경로로 전달한다.
+3. FastAPI는 토큰·현재 그룹 소속·피보호자 권한을 검증하고 WebRTC 세션을 OpenAI Realtime API와 연결한다.
+4. 세션 생성 성공 결과로 `call_session_id`와 `sdp_answer`를 받아 WebRTC 연결을 완료한다.
+5. WebRTC 연결 과정과 세션 보조 통신은 확정된 Sideband WebSocket 흐름을 따른다.
+6. 통화 화면에는 통화 시간, 음소거, 통화 종료, 스피커 제어와 AI 발화 실시간 자막을 제공한다.
+7. AI 발화 자막은 항상 표시한다. 사용자 발화 자막과 자막 끄기 기능은 제공하지 않는다. 자막 delta는 화면 표시용이고, 완료된 발화 단위 텍스트만 내부 처리와 리포트 생성에 사용한다.
+8. 저장된 관심사는 다음 AI 통화의 대화 맥락에 전달한다.
+9. 현재 그룹의 당일 게시글 분석 결과는 통화 시작 프롬프트에 한 번 주입한다. 이 과정은 Tool Calling이 아니다.
+10. 통화 중 사용할 Tool은 다음 두 가지다.
+   - `get_person_recent_post_summaries(person_query)`: 현재 그룹에서 해당 인물의 분석 완료 게시글 요약을 최신 최대 5개 반환한다. 원문 본문과 미디어는 반환하지 않는다. 대상이 모호하면 후보를 확인한다.
+   - `get_calendar_events_by_date(target_date)`: `YYYY-MM-DD` 하나만 받아 해당 날짜와 겹치는 현재 그룹의 모든 일정을 반환한다. `keyword`와 임의 기간 조회는 사용하지 않으며 결과가 없으면 빈 배열을 반환할 수 있다.
+11. 상대 날짜는 `Asia/Seoul` 기준 절대 날짜로 변환한 뒤 일정 Tool에 전달한다.
+12. 서버가 사용자·그룹·세션·권한·시간대 컨텍스트를 주입하며, 모델이 이 값을 사용자 입력으로 받아 신뢰하지 않는다.
+13. 연결 결과는 `CONNECTED` 또는 `FAILED`로 처리한다. 세션 상태는 `CONNECTING`, `IN_PROGRESS`, `COMPLETED`, `INCOMPLETE`, `CANCELLED`, `FAILED`를 사용한다. `CONNECTING` 중 연결 성공은 `IN_PROGRESS`, 종료 요청은 `CANCELLED`, 연결 오류는 `FAILED`가 된다. `IN_PROGRESS` 중 종료 요청은 `COMPLETED`, 종료 요청 없이 연결이 끊기면 `INCOMPLETE`가 된다.
+14. `COMPLETED` 통화는 건별 리포트를 생성한다. `INCOMPLETE`는 충분한 transcript가 있을 때만 생성하며, `CANCELLED`·`FAILED`는 리포트를 생성하지 않는다.
+15. 통화 종료 요청은 비동기로 접수하고 중복 종료로 세션·리포트를 중복 생성하지 않는다.
+16. 녹음 원본은 저장하지 않는다. 보호자에게 전체 통화 전문·원본 음성을 노출하지 않고 건별 요약과 보호자 전달 메시지만 제공한다.
+
+확정된 예외:
+
+- 조건: Tool의 대상 인물이 모호함
+  - 처리: 반환된 후보를 바탕으로 사용자의 확인을 받는다.
+- 조건: 연결 결과가 실패하거나 사용자가 취소함
+  - 처리: 최종 상태를 `FAILED` 또는 `CANCELLED`로 기록하고 건별 리포트를 만들지 않는다.
+- 조건: `INCOMPLETE` 상태에서 transcript가 리포트 기준에 부족함
+  - 처리: 건별 리포트를 만들지 않는다.
+
+## 구현 규칙
+
+- 권한: AI 전화는 피보호자만 사용한다. FastAPI가 Access Token, 현재 그룹, 피보호자 권한을 검증한다.
+- 상태와 전이: 위 확정 전이만 사용한다. `CANCELLED`는 연결 전 종료, `FAILED`는 연결 실패, `INCOMPLETE`는 연결 후 비정상 종료를 구분한다.
+- API:
+  - 처리 주체: FastAPI 세션 처리, Spring Boot 일반 권한·업무 API
+  - Method와 Path: `API-CALLS-001`~`API-CALLS-003`의 Method·Path·요청·결과는 [`../contracts/API.md`](../contracts/API.md)를 참조한다. 확인된 세션 생성 경로는 `POST /call-sessions`다.
+  - 핵심 입력·결과: `persona_id`, `sdp_offer`, 연결 결과와 종료 상태를 계약에 맞게 교환한다.
+- 데이터:
+  - 관련 엔티티: `call_sessions`, `call_transcripts`, `call_reports`
+  - 읽기·쓰기 소유자: FastAPI가 세션·transcript·AI 결과를 직접 기록한다. 테이블 제약은 [`../contracts/DATA_MODEL.md`](../contracts/DATA_MODEL.md)를 따른다.
+  - 주요 제약조건: 원본 음성·전체 전문을 보호자 조회 데이터로 만들지 않는다. `call_sessions`에는 상세 disconnect reason 컬럼을 두지 않는다.
+- 화면:
+  - 진입점: 피보호자 하단 `AI 전화` 탭, IA `F-1`~`F-3`
+  - 사용자에게 표시할 결과: 페르소나 예시, 연결·통화 상태, 실시간 자막, 통화 제어, 종료 결과. 건별 감정과 전체 전문은 표시하지 않는다.
+
+## 인수 조건
+
+### AC-001
+
+- Given: 승인된 현재 그룹의 피보호자가 페르소나를 선택했다.
+- When: `API-CALLS-001` 계약으로 SDP offer를 제출한다.
+- Then: FastAPI가 권한을 확인하고 WebRTC 통화 세션을 생성한다.
+
+### AC-002
+
+- Given: 통화가 `IN_PROGRESS`다.
+- When: AI가 발화하고 사용자가 음소거·스피커·종료 제어를 사용한다.
+- Then: AI 발화 자막은 항상 갱신되고 사용자 발화 자막·자막 끄기 기능은 나타나지 않으며, 완료된 발화만 내부 transcript 처리에 사용된다.
+
+### AC-003
+
+- Given: 상대 날짜가 포함된 일정 질문이 있다.
+- When: 일정 Tool을 호출한다.
+- Then: `Asia/Seoul` 기준 `YYYY-MM-DD` 하나만 `target_date`로 전달한다.
+
+## 미결정 사항
+
+- 상대 날짜 변환을 수행하는 애플리케이션 계층
+- 초기 페르소나 목록과 음성 예시·고지 방식
+- 통화 transcript 보존 기간과 삭제 정책
+- 장기 기억의 도입 시점과 저장 범위
+- 주제 기반 게시글 검색 Tool의 확장 계약
+- 피보호자가 실제 가족과 직접 연락하고 싶다고 말했을 때 보호자에게 보내는
+  확장 알림의 감지 기준과 대상 보호자 선정 규칙
