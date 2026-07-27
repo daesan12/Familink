@@ -1,8 +1,9 @@
 package com.example.realtimevoicepoc
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 enum class RealtimeEventKind {
     SpeechStarted,
@@ -24,7 +25,7 @@ data class ParsedRealtimeEvent(
 object RealtimeEventParser {
     fun parse(payload: String): ParsedRealtimeEvent? {
         val json = runCatching { Json.parseToJsonElement(payload).jsonObject }.getOrNull() ?: return null
-        val type = json["type"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: return null
+        val type = (json["type"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() } ?: return null
         val kind = when (type) {
             "input_audio_buffer.speech_started" -> RealtimeEventKind.SpeechStarted
             "input_audio_buffer.speech_stopped" -> RealtimeEventKind.SpeechStopped
@@ -48,12 +49,14 @@ object RealtimeEventParser {
 
         val summary = when (kind) {
             RealtimeEventKind.Error -> {
-                val message = json["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content.orEmpty()
+                val message =
+                    ((json["error"] as? JsonObject)?.get("message") as? JsonPrimitive)?.content.orEmpty()
                 if (message.isBlank()) "error" else "error: $message"
             }
 
             RealtimeEventKind.ResponseDone -> {
-                val status = json["response"]?.jsonObject?.get("status")?.jsonPrimitive?.content.orEmpty()
+                val status =
+                    ((json["response"] as? JsonObject)?.get("status") as? JsonPrimitive)?.content.orEmpty()
                 if (status.isBlank()) type else "$type ($status)"
             }
 
