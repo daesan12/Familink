@@ -50,3 +50,9 @@
 
 - 코드 구조, 호출 흐름, 의존성 또는 변경 영향을 분석할 때는 `.codex/guides/codegraph.md`를 읽고 따른다.
 - 최신 공식 문서 탐색이 필요할 때는 `.codex/guides/context7.md`를 읽고 따른다.
+
+## 코드 컨벤션
+
+- Java: `docs/conventions/java.md`
+- Kotlin·Kotlin DSL: `docs/conventions/kotlin.md`
+- React Native·TypeScript: `docs/conventions/react-native.md`
