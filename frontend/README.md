@@ -1,19 +1,38 @@
 # Frontend
 
-React Native 제품 모듈을 위한 초기 폴더 구조입니다.
+Android용 React Native 애플리케이션입니다. Node.js 22.11.0 이상, JDK 17,
+Android Studio와 Android SDK가 필요합니다.
 
-현재 작업 범위는 공통 진입점과 `feed` 기능 디렉터리의 구조를 확정하고,
-구조가 누락되지 않았는지 로컬에서 검증할 수 있게 만드는 것까지입니다.
-React Native 의존성, Android 네이티브 프로젝트, 실행·빌드 설정과 실제 피드
-기능은 아직 구성하지 않았습니다.
+## 최초 설치
 
-## 구조 검증
+`frontend` 디렉터리에서 의존성을 설치합니다.
 
-Node.js 22.11.0 이상에서 다음 명령을 실행합니다.
+```bash
+npm install
+```
+
+## Android 에뮬레이터에서 실행
+
+Android Studio의 Device Manager에서 에뮬레이터를 먼저 실행합니다. 터미널
+하나에서 Metro 개발 서버를 실행합니다.
+
+```bash
+npm start
+```
+
+다른 터미널에서 앱을 빌드하고 에뮬레이터에 설치합니다.
+
+```bash
+npm run android
+```
+
+`S15P11B104`와 실행 환경 준비 안내가 표시되면 정상입니다.
+
+## 검증
 
 ```bash
 npm run check:structure
+npm run typecheck
+npm run lint
+npm test
 ```
-
-이 검사는 필수 디렉터리와 파일의 존재 여부, `package.json`과
-`tsconfig.json`의 JSON 구문을 확인합니다.

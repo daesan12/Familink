@@ -1,9 +1,8 @@
 {
+  "extends": "@react-native/typescript-config",
   "compilerOptions": {
-    "allowJs": false,
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
     "strict": true
   },
-  "include": ["App.tsx", "src/**/*.ts", "src/**/*.tsx"]
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["**/node_modules", "**/Pods"]
 }
