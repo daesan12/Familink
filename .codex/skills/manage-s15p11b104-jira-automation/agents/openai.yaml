@@ -1,0 +1,4 @@
+interface:
+  display_name: "S15P11B104 Jira 자동화 관리"
+  short_description: "S15P11B104용 모든 유형의 Jira 자동화 생성·수정·검증"
+  default_prompt: "Use $manage-s15p11b104-jira-automation to create or update a live Jira Automation rule, enforce the no-new-subtask and Story-versus-Task prefix policies, keep standalone work unprefixed and unrelated when appropriate, require one assignee, due date, allowed Story Points, and a purpose/work/completion description for every created issue, and verify the saved rule without running it unless I explicitly request a live test."

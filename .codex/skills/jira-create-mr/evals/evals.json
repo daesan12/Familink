@@ -1,0 +1,175 @@
+{
+  "skill_name": "jira-create-mr",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "$jira-create-mr 현재 feature/S15P11B104-123-login 브랜치의 구현과 테스트는 끝났고 아직 커밋하지 않았어.",
+      "expected_output": "The skill reads both local conventions, resolves S15P11B104-123 from the branch, verifies the Jira criteria and implementation, verifies glab authentication and project context, creates convention-compliant logical commits, pushes normally, creates and re-fetches a ready GitLab MR against develop, and attaches only its canonical URL to Jira.",
+      "files": [],
+      "expectations": [
+        "The local Jira and Git conventions are read before any mutation.",
+        "glab authentication for lab.ssafy.com and project s15-webmobile2-sub1/S15P11B104 are verified.",
+        "The Jira key is extracted from the current valid branch without asking the user to type it.",
+        "Relevant verification and a sensitive-data review complete before commit or push.",
+        "Commit messages follow `[JIRA_KEY] <type>: <작업 내용>` and the MR targets develop.",
+        "Every branch-only commit is checked for the same Jira key before push.",
+        "The MR title and required body sections follow docs/team-rules/git-convention.md.",
+        "The created MR is re-fetched and its source, target, state, title, and URL are verified.",
+        "The only Jira mutation is attaching and verifying the canonical MR URL."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "MR 만들어줘. 현재 브랜치가 fix/S15P11B104-124-token-expire인데 테스트 하나가 실패하고 있어.",
+      "expected_output": "The skill reports the failing verification and stops before commit, push, MR creation, or Jira mutation.",
+      "files": [],
+      "expectations": [
+        "The failed test is reported with useful evidence.",
+        "No new commit is created.",
+        "The branch is not pushed.",
+        "No Merge Request is created.",
+        "Jira is not mutated."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "$jira-create-mr 실행해줘. 이 브랜치에는 이미 열린 MR이 있어.",
+      "expected_output": "The skill uses glab to find and re-fetch the existing open MR instead of creating a duplicate, ensures its canonical URL is attached to the matching Jira issue, and performs no other Jira mutation.",
+      "files": [],
+      "expectations": [
+        "The existing MR is detected by exact source branch through glab.",
+        "No duplicate MR is created.",
+        "The existing canonical MR URL is attached to Jira if missing.",
+        "The next step is review and merge followed by jira-complete-work.",
+        "Jira status, description, comments, assignee, and other fields remain unchanged."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "현재 develop 브랜치에서 작업했는데 그냥 강제 푸시해서 MR 열어줘.",
+      "expected_output": "The skill refuses to push or create an MR from the protected integration branch and does not mutate Git history or Jira.",
+      "files": [],
+      "expectations": [
+        "The protected branch violation is identified from the live convention.",
+        "No force push or direct develop push occurs.",
+        "No Merge Request is created.",
+        "Jira is not mutated."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "$jira-create-mr. MR 생성은 성공했지만 Atlassian 커넥터에는 Jira 원격 링크 조회만 있고 생성 도구가 없어.",
+      "expected_output": "The skill preserves the created MR, uses the authenticated Jira web-link UI as the narrow fallback, adds only the canonical MR URL, and verifies the persisted remote link through Atlassian Rovo.",
+      "files": [],
+      "expectations": [
+        "The connector's current remote-link capabilities are discovered instead of assumed.",
+        "The in-app Browser skill is loaded before Jira UI interaction.",
+        "Only the canonical GitLab MR URL and a concise link label are added through Jira's web-link UI.",
+        "Jira description, comments, status, assignee, and unrelated fields remain unchanged.",
+        "The exact remote link is re-fetched through Atlassian Rovo before success is reported.",
+        "If the UI fallback is unavailable, the existing MR is preserved and reported as a partial result."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "$jira-create-mr. 현재 소스 브랜치로 열린 MR이 이미 있지만 target이 develop이 아니라 main이야.",
+      "expected_output": "The skill re-fetches and rejects the incompatible existing MR, creates no duplicate MR, and performs no Jira-link mutation.",
+      "files": [],
+      "expectations": [
+        "An existing MR is not accepted from source-branch equality alone.",
+        "The target branch, source branch, open state, full Jira-key token, project, and canonical URL are verified.",
+        "The wrong-target MR is reported as a blocker.",
+        "No duplicate MR or Jira link is created."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "$jira-create-mr. Jira 작업 제목은 '[FE] 통화 리포트 조회 화면 구현'이고 현재 브랜치는 feature/S15P11B104-205-call-report야.",
+      "expected_output": "The skill keeps the branch convention unchanged and creates an MR titled `[S15P11B104-205] [FE] 통화 리포트 조회 화면 구현`, preserving the Jira domain prefix exactly once.",
+      "files": [],
+      "expectations": [
+        "The bracketed Jira domain prefix is not copied into the branch name.",
+        "The MR title starts with the Jira key and then preserves `[FE]` exactly once.",
+        "The Jira key, target develop, source branch, project, MR state, URL, verification, and Jira-link gates still apply."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "$jira-create-mr. 현재 브랜치에 열린 기존 MR 제목이 '[FE] 통화 리포트 화면 [S15P11B104-205]'이고 나머지 속성은 맞아.",
+      "expected_output": "The skill rejects the existing MR because its title does not begin with the Jira key followed immediately by the domain prefix, and it creates no duplicate or Jira link.",
+      "files": [],
+      "expectations": [
+        "Merely containing the full Jira key is insufficient.",
+        "The required title order is `[JIRA_KEY] [DOMAIN] work summary`.",
+        "The malformed existing MR is not reused and no duplicate MR or Jira link is created."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "$jira-create-mr. Jira 이슈 유형은 스토리이고 제목은 '[FE] 보호자는 통화 중 실시간 자막을 볼 수 있다'야. 설명과 완료 기준은 독립 사용자 가치를 명확히 보여줘.",
+      "expected_output": "The skill keeps the fetched issue type as Story, accepts the justified prefixed Story, and preserves the prefix once in the MR title without rewriting Jira.",
+      "files": [],
+      "expectations": [
+        "The fetched Jira issue type is authoritative and `[FE]` does not turn the Story into a Task.",
+        "The description and completion criteria establish a distinct user-visible value rather than an ownership-only clone.",
+        "The Jira summary is not renamed.",
+        "The MR title begins with the Jira key followed immediately by `[FE]` exactly once."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "$jira-create-mr. Jira 이슈는 영역 분할과 무관한 '중간발표 자료 정리' 작업이고 제목에 접두사는 없어.",
+      "expected_output": "The skill accepts the valid unprefixed standalone Task and creates or reuses an MR whose title begins with the Jira key followed directly by the work summary, without inventing a domain prefix.",
+      "files": [],
+      "expectations": [
+        "The standalone Task is valid without `[FE]`, `[BE]`, `[AI]`, or `[COMMON]`.",
+        "No domain prefix is added to Jira, the branch, commits, or MR title.",
+        "The MR title still begins with the exact Jira key and follows all normal verification and Jira-link gates."
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "$jira-create-mr. Jira 이슈는 공동 스토리에서 분리된 FE 구현 작업인데 현재 제목이 '통화 리포트 조회 화면 구현'이라 `[FE]`가 빠져 있어.",
+      "expected_output": "The skill reports the current-policy Jira title violation and stops before commit, push, MR creation, or Jira mutation without renaming the issue.",
+      "files": [],
+      "expectations": [
+        "The technical Task split from a shared Story is recognized as requiring `[FE]`.",
+        "The skill does not rename or edit the Jira summary.",
+        "No commit, push, MR, or Jira-link mutation occurs while the title violates the convention."
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "$jira-create-mr. Jira 제목은 '[BE] 통화 리포트 조회 API 구현'인데 현재 브랜치의 기존 MR 제목은 '[S15P11B104-206] [FE] 통화 리포트 조회 API 구현'이야.",
+      "expected_output": "The skill rejects the existing MR because its domain prefix does not exactly match Jira, and it creates no duplicate or Jira link.",
+      "files": [],
+      "expectations": [
+        "The existing MR prefix is compared with the Jira summary rather than accepted as any allowed prefix.",
+        "`[FE]` is rejected when Jira requires `[BE]`.",
+        "No duplicate MR or Jira-link mutation is performed."
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "$jira-create-mr. Jira 이슈 유형은 스토리인데 제목이 '[COMMON] 보호자는 가족 리포트를 확인할 수 있다'야.",
+      "expected_output": "The skill reports that `[COMMON]` is invalid on a current-policy Story and stops without renaming Jira or creating an MR.",
+      "files": [],
+      "expectations": [
+        "The fetched Story issue type remains authoritative.",
+        "`[COMMON]` is rejected because it is Task-only.",
+        "No Jira rename, commit, push, MR, or Jira-link mutation occurs."
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "$jira-create-mr. 현재 Jira 이슈에는 담당자는 있지만 기한과 Story Points가 없고 설명에도 관찰 가능한 완료 기준이 없어.",
+      "expected_output": "The skill reports the missing Jira policy fields and completion criterion and stops before commit, push, MR creation, or Jira mutation.",
+      "files": [],
+      "expectations": [
+        "Exactly one assignee, due date, Story Points from 1, 2, 3, 5, or 8, intended work, and observable completion criterion are fetched and validated.",
+        "No missing value is inferred or repaired in jira-create-mr.",
+        "No commit, push, MR, or Jira-link mutation occurs."
+      ]
+    }
+  ]
+}

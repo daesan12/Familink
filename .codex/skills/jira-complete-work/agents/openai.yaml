@@ -1,0 +1,4 @@
+interface:
+  display_name: "Jira 작업 완료"
+  short_description: "병합된 GitLab MR을 검증하고 Jira 티켓을 완료"
+  default_prompt: "Use $jira-complete-work to read the local Jira and Git conventions, resolve the Jira key from the current branch or supplied MR, treat Jira domain prefixes as validated scope metadata rather than issue type, reject ownership-only prefixed Stories and invalid `[COMMON]` use, verify that the exact merged MR matches Jira's prefix or lack of prefix, ensure the canonical URL is linked in Jira, transition only the matching issue to Done through Atlassian Rovo, and re-fetch the final state."
