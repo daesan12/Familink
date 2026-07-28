@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomTabBar } from './BottomTabBar';
 import { CurrentGroupSwitcher } from './CurrentGroupSwitcher';
@@ -145,9 +145,11 @@ export function AppShell({
     setCurrentGroupId(groupId);
     setIsGroupMenuOpen(false);
     onGroupChange?.(groupId);
-    void groupStore?.save(groupId).catch(() => {
-      // 화면 전환은 유지하고 영속화 오류 처리는 상위 앱 계층에 위임한다.
-    });
+    if (groupStore) {
+      groupStore.save(groupId).catch(() => {
+        // 화면 전환은 유지하고 영속화 오류 처리는 상위 앱 계층에 위임한다.
+      });
+    }
   };
 
   return (

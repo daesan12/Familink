@@ -1,4 +1,6 @@
-import { AppShell } from './src/app-shell';
+import {SafeAreaProvider} from 'react-native-safe-area-context';
+
+import {AppShell} from './src/app-shell';
 import type {
   AppScreenRegistry,
   CurrentGroupStore,
@@ -23,13 +25,15 @@ export default function App({
   screens,
 }: AppProps) {
   return (
-    <AppShell
-      groupStore={groupStore}
-      groups={groups}
-      initialGroupId={initialGroupId}
-      onCreateGroup={onCreateGroup}
-      onJoinGroup={onJoinGroup}
-      screens={screens}
-    />
+    <SafeAreaProvider>
+      <AppShell
+        groupStore={groupStore}
+        groups={groups}
+        initialGroupId={initialGroupId}
+        onCreateGroup={onCreateGroup}
+        onJoinGroup={onJoinGroup}
+        screens={screens}
+      />
+    </SafeAreaProvider>
   );
 }
