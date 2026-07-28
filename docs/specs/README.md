@@ -52,7 +52,7 @@ specs/
 ├─ TEMPLATE.md
 ├─ domains/                   # 사용자 기능 도메인 8개
 └─ contracts/
-   ├─ API.md                  # API 명세서 2차 수정본의 로컬 계약
+   ├─ API.md                  # Notion 활성 API 명세의 로컬 계약
    └─ DATA_MODEL.md           # 최신 확정 ERD의 로컬 계약
 ```
 

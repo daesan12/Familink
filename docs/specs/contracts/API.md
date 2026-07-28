@@ -1,12 +1,11 @@
 # API 계약
 
 > 상태: 일부 확정
-> 기준: 2026-07-28 조회, API 명세서 2차 수정본 60건(활성 API 59건·폐기 1건)
+> 기준: 2026-07-28 조회, Notion 활성 API 명세 59건
 
 이 문서는 제품 구현에서 사용하는 유일한 로컬 API 계약이다. 아래 목록에는
-2차 수정본의 활성 API 59건에 대한 ID, Method, Path, 처리 백엔드, 권한,
-핵심 요청, 성공 결과와 원본에 명시된 오류를 옮겼다. 폐기 1건은 활성 계약과
-분리해 기록한다. 이전 API 경로·콜백 구조·필드·상태 코드를 섞지 않는다.
+Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 요청,
+성공 결과와 원본에 명시된 오류를 옮겼다.
 
 표의 성공 결과는 원본 성공 응답의 핵심 `data` 내용이다. 공통 응답 봉투의
 세부 형태가 행에 적혀 있지 않다면 임의로 만들지 않는다. 오류가 “명시 없음”인
@@ -15,14 +14,13 @@
 
 ## 공통 경계
 
-- 모든 API의 Method와 Path는 `API 명세서 2차 수정본`의 값을 그대로
-  사용한다. 이 문서 표에 적힌 Path가 공식 구현 경로이며 `/api/v1`,
+- 모든 API의 Method와 Path는 이 문서 표의 값을 사용한다. 표에 적힌 Path가
+  공식 구현 경로이며 `/api/v1`,
   `/internal/v1` 등의 별도 기본 경로를 앞에 추가하지 않는다.
-- 이전 API 문서나 다른 개요 문서의 경로·콜백 구조를 혼합하지 않는다.
 - Spring Boot가 활성 API 59건 전체와 AI 오케스트레이션, DB 읽기·쓰기를
   처리한다.
-- `API-POSTS-006`은 폐기된 출처 레코드이며 HTTP API로 구현하지 않는다.
-  게시글 분석은 Spring Boot 내부 서비스 호출로 수행한다.
+- 게시글 분석은 Spring Scheduler가 대상을 선별한 뒤 Spring Boot 내부
+  서비스 호출로 수행한다.
 - 인증이 필요한 요청은 Access Token을 사용한다. 재발급은 Refresh Token을
   사용한다.
 - 회원가입과 로그인은 `loginId`와 `password`를 사용한다. 이메일
@@ -97,16 +95,13 @@
 
 구현 규칙:
 
-- `API-POSTS-004`는 각 그룹에 독립된 `posts` 행을 만들며 `batch_id`를
-  사용하지 않는다.
+- `API-POSTS-004`는 선택한 각 그룹에 독립된 `posts` 행을 만든다.
 - 보호자의 게시글 작성에 따른 카네이션은 KST 날짜·그룹 기준 하루 최대
   한 번 적립한다.
 - `API-FILES-001`의 `purpose`별 MIME 허용 목록과 최대 크기는 미결정이다.
   서버가 UUID 기반 object key를 만들며 제품 DB에는 최적화본 URL만 저장한다.
-- 폐기된 출처 레코드 `API-POSTS-006`
-  `POST /internal/posts/{postId}/analysis`는 활성 API가 아니다. Spring
-  Scheduler가 마지막 `updated_at` 이후 10분간 변경이 없는 게시글을 찾고
-  Spring 내부 `PostAnalysisService`를 호출한다.
+- Spring Scheduler가 마지막 `updated_at` 이후 10분간 변경이 없는 게시글을
+  찾고 Spring 내부 `PostAnalysisService`를 호출한다.
 
 ## 일정
 

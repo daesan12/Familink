@@ -1,7 +1,7 @@
 # [GROUPS_AND_MEMBERSHIP] 그룹·멤버십
 
 > 상태: 일부 확정
-> 기준: 2026-07-28, 최신 확정 Notion·API 명세서 2차 수정본·최신 ERD
+> 기준: 2026-07-28, 최신 확정 Notion·활성 API 명세·최신 ERD
 
 ## AI 작업 컨텍스트
 

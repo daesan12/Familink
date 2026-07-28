@@ -1,7 +1,7 @@
 # [SPEC-ID] 기능명
 
 > 상태: 확정 / 일부 확정
-> 기준: YYYY-MM-DD, API 명세서 2차 수정본
+> 기준: YYYY-MM-DD, Notion 활성 API 명세
 
 ## AI 작업 컨텍스트
 

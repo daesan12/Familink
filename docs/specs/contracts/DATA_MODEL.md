@@ -4,8 +4,8 @@
 > 기준: 2026-07-28 최신 확정 ERD 기준·관계·테이블·제약 문서
 > 데이터베이스: PostgreSQL
 
-이 문서는 현재 사용하는 21개 테이블의 로컬 계약이다. 예전 내장 DBML, 삭제된
-컬럼·Enum·테이블은 구현 기준이 아니다. 모든 시각 컬럼은 별도 언급이 없으면
+이 문서는 현재 사용하는 21개 테이블과 컬럼·Enum·제약의 로컬 계약이다.
+모든 시각 컬럼은 별도 언급이 없으면
 `TIMESTAMPTZ`이고 UTC 절대 시각으로 저장한다. API timestamp와 서버 로그도
 UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 매일 22시 리포트
 스케줄 같은 비즈니스 규칙에만 `Asia/Seoul`을 적용한다.
@@ -45,7 +45,6 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - PK: `id BIGINT`
 - 컬럼: `name VARCHAR(10)`, `invite_code VARCHAR(6) UNIQUE`,
   `created_at`, `updated_at`; 모두 NOT NULL
-- `image`, `description`, `batch_id`와 같은 과거 컬럼은 사용하지 않는다.
 
 ### `group_members`
 
@@ -102,7 +101,6 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - FK: `group_id -> family_groups.id`,
   `author_member_id -> group_members.id`
 - 컬럼: `content VARCHAR(140)`, `created_at`, `updated_at` NOT NULL
-- `batch_id`는 사용하지 않는다.
 
 ### `post_media`
 
@@ -165,7 +163,7 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - FK: `event_id -> calendar_events.id`,
   `group_member_id -> group_members.id`
 - Unique: `(event_id, group_member_id)`
-- 별도 `event_reminders` 테이블은 사용하지 않는다.
+- 일정 알림은 `notifications`에 저장한다.
 
 ## AI 통화·리포트
 

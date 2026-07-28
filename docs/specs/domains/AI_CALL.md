@@ -1,7 +1,7 @@
 # [AI_CALL] AI 전화
 
 > 상태: 일부 확정
-> 기준: 2026-07-28, 최신 확정 Notion·요구사항·AI Tool Calling 결정·API 명세서 2차 수정본
+> 기준: 2026-07-28, 최신 확정 Notion·요구사항·AI Tool Calling 결정·활성 API 명세
 
 ## AI 작업 컨텍스트
 
