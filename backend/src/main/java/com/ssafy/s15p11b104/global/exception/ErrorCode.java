@@ -3,30 +3,30 @@ package com.ssafy.s15p11b104.global.exception;
 import org.springframework.http.HttpStatus;
 
 /**
- * API 계약에 명시된 오류 코드와 대응 HTTP 상태를 정의한다.
+ * API 계약에 정의된 오류 코드와 대응 HTTP 상태, 응답 문구를 정의한다.
  *
  * <p>계약에 없는 오류 코드를 임의로 추가하지 않는다.
  */
 public enum ErrorCode {
 
-	INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청 값이 올바르지 않습니다."),
+	INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청 형식 또는 검증 실패"),
 	UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
-	INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "로그인 ID 또는 비밀번호가 올바르지 않습니다."),
-	LOGIN_ID_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 로그인 ID입니다.");
+	INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 일치하지 않습니다."),
+	LOGIN_ID_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 로그인 아이디");
 
 	private final HttpStatus status;
-	private final String defaultMessage;
+	private final String message;
 
-	ErrorCode(HttpStatus status, String defaultMessage) {
+	ErrorCode(HttpStatus status, String message) {
 		this.status = status;
-		this.defaultMessage = defaultMessage;
+		this.message = message;
 	}
 
 	public HttpStatus getStatus() {
 		return status;
 	}
 
-	public String getDefaultMessage() {
-		return defaultMessage;
+	public String getMessage() {
+		return message;
 	}
 }

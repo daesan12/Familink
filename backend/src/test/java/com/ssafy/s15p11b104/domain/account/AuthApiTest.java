@@ -70,7 +70,7 @@ class AuthApiTest extends IntegrationTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.success").value(true))
 			.andExpect(jsonPath("$.data.available").value(true))
-			.andExpect(jsonPath("$.error").value((Object) null));
+			.andExpect(jsonPath("$.message").value("로그인 아이디 중복 확인 성공"));
 	}
 
 	@Test
@@ -87,29 +87,29 @@ class AuthApiTest extends IntegrationTest {
 		mockMvc.perform(get("/auth/login-id/check").param("loginId", "abcd"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.success").value(false))
-			.andExpect(jsonPath("$.data").value((Object) null))
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.errors").isArray())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
 	void loginIdCheckRejectsLoginIdLongerThanFifteenCharacters() throws Exception {
 		mockMvc.perform(get("/auth/login-id/check").param("loginId", "sixteencharacter"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
 	void loginIdCheckRejectsLoginIdContainingWhitespace() throws Exception {
 		mockMvc.perform(get("/auth/login-id/check").param("loginId", " testuser"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
 	void loginIdCheckRejectsMissingLoginIdParameter() throws Exception {
 		mockMvc.perform(get("/auth/login-id/check"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -117,6 +117,7 @@ class AuthApiTest extends IntegrationTest {
 		mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(SIGNUP_BODY))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.success").value(true))
+			.andExpect(jsonPath("$.message").value("회원가입 성공"))
 			.andExpect(jsonPath("$.data.userId").isNumber())
 			.andExpect(jsonPath("$.data.loginId").value(LOGIN_ID))
 			.andExpect(jsonPath("$.data.name").value("이경호"))
@@ -147,7 +148,7 @@ class AuthApiTest extends IntegrationTest {
 		mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(SIGNUP_BODY))
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.success").value(false))
-			.andExpect(jsonPath("$.error.code").value("LOGIN_ID_DUPLICATED"));
+			.andExpect(jsonPath("$.code").value("LOGIN_ID_DUPLICATED"));
 
 		assertThat(userRepository.count()).isEqualTo(1);
 	}
@@ -166,9 +167,22 @@ class AuthApiTest extends IntegrationTest {
 
 		mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
 		assertThat(userRepository.count()).isZero();
+	}
+
+	@Test
+	void signupReportsFailedFieldsInErrors() throws Exception {
+		String body = SIGNUP_BODY.replace("\"password123\"", "\"short\"");
+
+		mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.success").value(false))
+			.andExpect(jsonPath("$.message").value("요청 형식 또는 검증 실패"))
+			.andExpect(jsonPath("$.errors").isArray())
+			.andExpect(jsonPath("$.errors[0].field").value("password"))
+			.andExpect(jsonPath("$.errors[0].message").isString());
 	}
 
 	@Test
@@ -185,7 +199,7 @@ class AuthApiTest extends IntegrationTest {
 
 		mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -194,7 +208,7 @@ class AuthApiTest extends IntegrationTest {
 
 		mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
 		assertThat(userRepository.count()).isZero();
 	}
@@ -205,7 +219,7 @@ class AuthApiTest extends IntegrationTest {
 
 		mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -214,7 +228,7 @@ class AuthApiTest extends IntegrationTest {
 
 		mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -223,7 +237,7 @@ class AuthApiTest extends IntegrationTest {
 
 		mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -239,14 +253,14 @@ class AuthApiTest extends IntegrationTest {
 
 		mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
 	void loginRejectsBlankPassword() throws Exception {
 		mockMvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content(loginBody("")))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -260,14 +274,14 @@ class AuthApiTest extends IntegrationTest {
 
 		mockMvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content(body))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
 	void loginRejectsMalformedJson() throws Exception {
 		mockMvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content("{\"loginId\":"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -277,6 +291,7 @@ class AuthApiTest extends IntegrationTest {
 		mockMvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content(loginBody(PASSWORD)))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.success").value(true))
+			.andExpect(jsonPath("$.message").value("로그인 성공"))
 			.andExpect(jsonPath("$.data.tokenType").value("Bearer"))
 			.andExpect(jsonPath("$.data.accessToken").isString())
 			.andExpect(jsonPath("$.data.accessTokenExpiresIn").value(1800))
@@ -291,14 +306,14 @@ class AuthApiTest extends IntegrationTest {
 
 		mockMvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content(loginBody("wrongpassword")))
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.error.code").value("INVALID_CREDENTIALS"));
+			.andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
 	}
 
 	@Test
 	void loginRejectsUnknownLoginId() throws Exception {
 		mockMvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content(loginBody(PASSWORD)))
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.error.code").value("INVALID_CREDENTIALS"));
+			.andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
 	}
 
 	@Test
@@ -335,21 +350,21 @@ class AuthApiTest extends IntegrationTest {
 
 		mockMvc.perform(post("/auth/logout").contentType(MediaType.APPLICATION_JSON).content(logoutBody(refreshToken)))
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
 	}
 
 	@Test
 	void logoutRejectsUnknownRefreshToken() throws Exception {
 		mockMvc.perform(post("/auth/logout").contentType(MediaType.APPLICATION_JSON).content(logoutBody("not-issued")))
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
 	}
 
 	@Test
 	void logoutRejectsBlankRefreshToken() throws Exception {
 		mockMvc.perform(post("/auth/logout").contentType(MediaType.APPLICATION_JSON).content(logoutBody("")))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	private void signup() throws Exception {
