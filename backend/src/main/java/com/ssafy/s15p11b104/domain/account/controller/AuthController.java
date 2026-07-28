@@ -30,6 +30,10 @@ import jakarta.validation.constraints.Size;
 @RequestMapping("/auth")
 public class AuthController {
 
+	private static final String LOGIN_ID_CHECK_MESSAGE = "로그인 아이디 중복 확인 성공";
+	private static final String SIGNUP_MESSAGE = "회원가입 성공";
+	private static final String LOGIN_MESSAGE = "로그인 성공";
+
 	private final AuthService authService;
 
 	AuthController(AuthService authService) {
@@ -47,7 +51,7 @@ public class AuthController {
 	@GetMapping("/login-id/check")
 	public ApiResponse<LoginIdAvailabilityResponse> checkLoginId(
 		@RequestParam @NotBlank @Size(min = 5, max = 15) @Pattern(regexp = "\\S+") String loginId) {
-		return ApiResponse.success(authService.checkLoginIdAvailability(loginId));
+		return ApiResponse.success(LOGIN_ID_CHECK_MESSAGE, authService.checkLoginIdAvailability(loginId));
 	}
 
 	/**
@@ -59,7 +63,7 @@ public class AuthController {
 	@PostMapping("/signup")
 	@ResponseStatus(HttpStatus.CREATED)
 	public ApiResponse<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
-		return ApiResponse.success(authService.signup(request));
+		return ApiResponse.success(SIGNUP_MESSAGE, authService.signup(request));
 	}
 
 	/**
@@ -70,7 +74,7 @@ public class AuthController {
 	 */
 	@PostMapping("/login")
 	public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-		return ApiResponse.success(authService.login(request));
+		return ApiResponse.success(LOGIN_MESSAGE, authService.login(request));
 	}
 
 	/**
