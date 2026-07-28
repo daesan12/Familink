@@ -117,4 +117,4 @@
 
 ## 8. 테스트 단계 연결
 
-Notion의 [단위 테스트](https://app.notion.com/p/ddde66fae1928241aa5501eaa7a20170), [통합 테스트](https://app.notion.com/p/cb5e66fae19283dcadb8013b48ccf71e), [회귀 테스트](https://app.notion.com/p/a87e66fae192820a8cfb81d9f0a935a8), [E2E 테스트](https://app.notion.com/p/0d1e66fae19282dcb6ff010d443a971f), [User Test](https://app.notion.com/p/383e66fae19282e29f690115c0644ceb)는 테스트 DB와 체크리스트의 원본이다. 현재 로컬 PoC 테스트는 세션 연결·오디오·VAD 재현만 검증하며 제품 리포트·권한·그룹 데이터 격리를 검증했다고 간주하지 않는다.
+Notion의 [단위 테스트](https://app.notion.com/p/ddde66fae1928241aa5501eaa7a20170), [통합 테스트](https://app.notion.com/p/cb5e66fae19283dcadb8013b48ccf71e), [회귀 테스트](https://app.notion.com/p/a87e66fae192820a8cfb81d9f0a935a8), [E2E 테스트](https://app.notion.com/p/0d1e66fae19282dcb6ff010d443a971f), [User Test](https://app.notion.com/p/383e66fae19282e29f690115c0644ceb)는 테스트 DB와 체크리스트의 원본이다. 현재 저장소에는 실행 가능한 로컬 PoC 테스트가 없으므로 제품 리포트·권한·그룹 데이터 격리가 검증됐다고 간주하지 않는다.
