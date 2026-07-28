@@ -1,4 +1,8 @@
 spring:
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:backend/.env[.properties]
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/${POSTGRES_DB:s15p11b104}}
     username: ${POSTGRES_USER:s15p11b104}
@@ -12,3 +16,12 @@ spring:
 app:
   auth:
     secret: ${JWT_SECRET:local-development-only-access-token-signing-secret}
+
+openai:
+  realtime:
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_REALTIME_MODEL:gpt-realtime-2}
+    base-url: ${OPENAI_REALTIME_BASE_URL:https://api.openai.com}
+    sideband-url: ${OPENAI_REALTIME_SIDEBAND_URL:wss://api.openai.com/v1/realtime}
+    connect-timeout: 5s
+    request-timeout: 20s
