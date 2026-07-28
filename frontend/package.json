@@ -1,0 +1,8 @@
+{
+  "name": "s15p11b104-frontend",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "check:structure": "node scripts/check-structure.mjs"
+  }
+}
