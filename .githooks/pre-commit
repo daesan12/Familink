@@ -1,0 +1,36 @@
+#!/bin/sh
+
+# Keep this hook fast and dependency-free. It checks only staged changes.
+if ! git diff --cached --check; then
+    printf '\n[pre-commit] 충돌 표시 또는 공백 오류를 수정한 뒤 다시 커밋하세요.\n' >&2
+    exit 1
+fi
+
+staged_paths=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR --) || {
+    printf '[pre-commit] staged 파일 목록을 확인하지 못했습니다.\n' >&2
+    exit 1
+}
+
+blocked_paths=$(
+    printf '%s\n' "$staged_paths" |
+        while IFS= read -r path; do
+            case "$path" in
+                .env.example | */.env.example | .env.*.example | */.env.*.example)
+                    ;;
+                .env | */.env | .env.* | */.env.* | local.properties | */local.properties)
+                    printf '%s\n' "$path"
+                    ;;
+            esac
+        done
+)
+
+if [ -n "$blocked_paths" ]; then
+    printf '[pre-commit] 로컬 설정 파일은 커밋할 수 없습니다:\n' >&2
+    printf '%s\n' "$blocked_paths" | while IFS= read -r path; do
+        printf '  - %s\n' "$path" >&2
+    done
+    printf '공유가 필요한 환경 변수는 .env.example 파일에 작성하세요.\n' >&2
+    exit 1
+fi
+
+exit 0
