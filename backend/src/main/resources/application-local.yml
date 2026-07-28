@@ -8,3 +8,7 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:local_redis_password}
+
+app:
+  auth:
+    secret: ${JWT_SECRET:local-development-only-access-token-signing-secret}
