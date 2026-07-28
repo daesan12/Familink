@@ -1,0 +1,3 @@
+app:
+  auth:
+    secret: test-only-access-token-signing-secret-value

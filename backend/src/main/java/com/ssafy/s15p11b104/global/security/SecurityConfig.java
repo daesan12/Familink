@@ -1,15 +1,19 @@
 package com.ssafy.s15p11b104.global.security;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
+@EnableConfigurationProperties(AuthTokenProperties.class)
 public class SecurityConfig {
 
 	private static final String[] PUBLIC_ENDPOINTS = {
@@ -17,7 +21,11 @@ public class SecurityConfig {
 		"/actuator/health/**",
 		"/v3/api-docs/**",
 		"/swagger-ui.html",
-		"/swagger-ui/**"
+		"/swagger-ui/**",
+		"/auth/login-id/check",
+		"/auth/signup",
+		"/auth/login",
+		"/auth/logout"
 	};
 
 	@Bean
@@ -34,5 +42,10 @@ public class SecurityConfig {
 				.requestMatchers(PUBLIC_ENDPOINTS).permitAll()
 				.anyRequest().authenticated())
 			.build();
+	}
+
+	@Bean
+	PasswordEncoder passwordEncoder() {
+		return new BCryptPasswordEncoder();
 	}
 }

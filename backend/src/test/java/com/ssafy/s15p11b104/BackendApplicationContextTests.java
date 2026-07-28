@@ -7,8 +7,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
 
 @SpringBootTest(properties = {
 	"spring.autoconfigure.exclude="
@@ -25,6 +29,12 @@ class BackendApplicationContextTests {
 	@Autowired
 	private MockMvc mockMvc;
 
+	@MockitoBean
+	private UserRepository userRepository;
+
+	@MockitoBean
+	private StringRedisTemplate redisTemplate;
+
 	@Test
 	void healthEndpointIsPublic() throws Exception {
 		mockMvc.perform(get("/actuator/health"))
@@ -34,6 +44,12 @@ class BackendApplicationContextTests {
 	@Test
 	void openApiEndpointIsPublic() throws Exception {
 		mockMvc.perform(get("/v3/api-docs"))
+			.andExpect(status().isOk());
+	}
+
+	@Test
+	void authEndpointsArePublic() throws Exception {
+		mockMvc.perform(get("/auth/login-id/check").param("loginId", "testuser"))
 			.andExpect(status().isOk());
 	}
 
