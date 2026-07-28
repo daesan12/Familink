@@ -1,7 +1,7 @@
 # 원본 반영 범위
 
 > 용도: 최초 이관과 이후 스펙 변경 시 전수 누락 검증
-> 기준 조회: 2026-07-27 (`2 AI` 루트 및 직접 연결된 현행 문서)
+> 기준 조회: 2026-07-28 (`2 AI` 루트 및 직접 연결된 현행 문서)
 
 Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페이지의
 `last_edited_time`으로 해석하지 않는다. 일반 구현은 이 문서가 아니라
@@ -12,16 +12,18 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 원본 종류 | 원본 수 | 반영 수 | 제외·보류 |
 |---|---:|---:|---|
 | 요구사항 정의서 | 49 | 49 | 없음: 확정 32, 검토중 17은 미결정으로 유지 |
-| 현재 유효한 기능 명세 | 6 | 6 | 템플릿 예시 `FN-001`~`FN-008` 8건 제외 |
+| 현재 유효한 기능 명세 | 6 | 6 | 없음 |
 | IA 화면 | 70 | 70 | 없음 |
-| API 명세서 2차 수정본 | 60 | 60 | 없음 |
-| 최신 확정 ERD 현행 테이블 | 21 | 21 | 과거 내장 DBML과 제거 테이블 제외 |
-| 확정 기술·AI 설계 결정 | 9 | 9 | 기술 결정 DB의 이름·본문 없는 자리표시자 5건 제외 |
+| Notion 활성 API 명세 | 59 | 59 | 없음 |
+| 최신 확정 ERD 현행 테이블 | 21 | 21 | 없음 |
+| 확정 기술·AI 설계 결정 | 7 | 7 | 기술 결정 3건·현행 AI 설계 4건 |
 
-기능 명세 컨테이너는 `FN-009` 이후를 현행으로 명시한다. 따라서
-`FN-001`~`FN-008`의 이메일 회원가입·이메일 로그인·이메일 인증, 카카오 로그인,
-웹 반응형 레이아웃 등은 현재 제품 스펙이나 인수 조건으로 사용하지 않는다.
-현행 회원가입과 로그인은 이메일이 아닌 로그인 ID와 비밀번호를 사용한다.
+회원가입과 로그인은 로그인 ID와 비밀번호를 사용한다. 이메일·소셜 인증과
+웹 반응형 레이아웃은 제품 스펙과 인수 조건에 포함하지 않는다.
+
+2026-07-28 최종 기술 결정, 현행 AI 설계, API와 ERD를 같은 주제의 최신
+구현 기준으로 사용한다. AI 오케스트레이션과 데이터 처리는 Spring Boot
+단일 백엔드가 담당한다.
 
 ## 요구사항 49건
 
@@ -29,11 +31,11 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 |---|---|---|---|---|
 | 요구사항 | REQ-001 Android 모바일 앱 지원 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영·미결정 유지 | Android 전용은 확정, 최소 버전·시험 기기는 미결정 |
 | 요구사항 | REQ-002 아이디·비밀번호 회원가입 및 로그인 | [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 |  |
-| 요구사항 | REQ-003 프로필 및 개인정보 설정 | [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·미결정 유지 | 그룹원 공개 범위·팝업 세부 미결정 |
+| 요구사항 | REQ-003 프로필 및 개인정보 설정 | [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 | 그룹 구성원 프로필은 `memberId`, `displayName`, `age`, `gender`만 제공 |
 | 요구사항 | REQ-004 가족 그룹 생성 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영·확정 |  |
 | 요구사항 | REQ-005 가족 초대·참가 요청·관리자 승인 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 |  |
 | 요구사항 | REQ-006 역할 및 그룹 데이터 접근 제어 | [공통](./COMMON.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영·확정 |  |
-| 요구사항 | REQ-007 사용자별 그룹 소속 범위 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영·미결정 유지 | 보호자 다중 그룹과 1계정 1그룹 대안 미결정 |
+| 요구사항 | REQ-007 사용자별 그룹 소속 범위 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영·확정 | 보호자는 여러 그룹, 피보호자는 활성 한 그룹 |
 | 요구사항 | REQ-008 역할 구성과 그룹 지속 이용 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영·확정 | 역할 부족에 따른 유예·비활성화 없음 |
 | 요구사항 | REQ-009 역할별 화면 및 하단 내비게이션 | [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
 | 요구사항 | REQ-010 피보호자 자유 발신 AI 전화 | [AI 통화](./domains/AI_CALL.md) | 반영·확정 |  |
@@ -44,7 +46,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-015 가족 게시글 기반 AI 대화 | [피드](./domains/FEED_AND_MEDIA.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 텍스트 모델·품질 기준·대체 모델은 미결정 유지 |
 | 요구사항 | REQ-016 장기 개인화 대화 기억 | [AI 통화](./domains/AI_CALL.md) | 반영·미결정 유지 | MVP 제외, 확장 정책 미결정 |
 | 요구사항 | REQ-017 통화 건별 요약 리포트 | [리포트](./domains/REPORTS.md) | 반영·확정 |  |
-| 요구사항 | REQ-018 22시 일일 리포트 생성 | [리포트](./domains/REPORTS.md) | 반영·확정 | 메시지 매핑·22시 이후 통화는 미결정 유지 |
+| 요구사항 | REQ-018 22시 일일 리포트 생성 | [리포트](./domains/REPORTS.md) | 반영·확정 | Spring Scheduler `Asia/Seoul` 22시, UTC 저장; 22시 이후 통화의 `report_date`만 미결정 |
 | 요구사항 | REQ-019 피보호자별 리포트 조회 | [리포트](./domains/REPORTS.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 | 좌측 넘김, 구성원 필터 없음 |
 | 요구사항 | REQ-020 통화 녹음 원본 미저장 및 전체 전문 미제공 | [공통](./COMMON.md), [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영·확정 |  |
 | 요구사항 | REQ-021 가족 피드 게시글 관리 | [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 |  |
@@ -67,11 +69,11 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-038 가족 직접 연락 요청 알림 | [AI 통화](./domains/AI_CALL.md), [알림](./domains/NOTIFICATIONS.md) | 반영·미결정 유지 | 확장 기능 판단·대상 정책 미결정 |
 | 요구사항 | REQ-039 첫 사용 온보딩 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영·미결정 유지 | 단계·건너뛰기 미결정 |
 | 요구사항 | REQ-040 소셜 로그인 | [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·미결정 유지 | 확장 범위, 사업자·병합 정책 미결정 |
-| 요구사항 | REQ-041 게시 대상 그룹 선택 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영·미결정 유지 | REQ-007 결정에 종속 |
+| 요구사항 | REQ-041 게시 대상 그룹 선택 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영·미결정 유지 | 보호자 다중 그룹은 확정, 다중 그룹 게시글의 최종 작성·노출 규칙은 미결정 |
 | 요구사항 | REQ-042 개인정보 및 AI 통화 동의 | [공통](./COMMON.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·미결정 유지 | 동의 문구·필수/선택·재동의 미결정 |
 | 요구사항 | REQ-043 현재 그룹 표시 및 그룹 전환 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
 | 요구사항 | REQ-044 무그룹 사용자 진입 및 요청 상태 확인 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
-| 요구사항 | REQ-045 AI 통화 시작 시 당일 게시글 맥락 주입 | [AI 통화](./domains/AI_CALL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | Tool Calling 아님 |
+| 요구사항 | REQ-045 AI 통화 시작 시 당일 게시글 맥락 주입 | [AI 통화](./domains/AI_CALL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | Tool Calling 아님; Spring Boot가 초기화 시 주입 |
 | 요구사항 | REQ-046 특정 인물 최신 게시글 요약 조회 Tool | [AI 통화](./domains/AI_CALL.md) | 반영·확정 |  |
 | 요구사항 | REQ-047 대화 주제 관련 게시글 검색 Tool | [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 확장 분류만 확정, 계약은 미결정 |
 | 요구사항 | REQ-048 보호자 전달 메모 통화 후처리 | [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영·확정 | 통화 중 Tool이 아님 |
@@ -81,11 +83,11 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 
 | 원본 종류 | ID·이름 | 반영 문서 | 상태 | 비고 |
 |---|---|---|---|---|
-| 기능 명세 | FN-009 게시글 AI 분석 및 저장 | [피드](./domains/FEED_AND_MEDIA.md), [API](./contracts/API.md), [데이터](./contracts/DATA_MODEL.md) | 반영 |  |
-| 기능 명세 | FN-010 FastAPI AI 통화 세션 생성 | [AI 통화](./domains/AI_CALL.md), [API](./contracts/API.md) | 반영 |  |
-| 기능 명세 | FN-011 건별 통화 리포트 생성 및 저장 | [리포트](./domains/REPORTS.md), [API](./contracts/API.md) | 반영 |  |
-| 기능 명세 | FN-012 22시 일일 리포트 생성 및 저장 | [리포트](./domains/REPORTS.md), [API](./contracts/API.md) | 반영 |  |
-| 기능 명세 | FN-013 특정 날짜 전체 일정 조회 Tool | [AI 통화](./domains/AI_CALL.md), [일정](./domains/CALENDAR.md) | 반영 | 상대 날짜 변환 계층 미결정 유지 |
+| 기능 명세 | FN-009 게시글 AI 분석 및 저장 | [피드](./domains/FEED_AND_MEDIA.md), [API](./contracts/API.md), [데이터](./contracts/DATA_MODEL.md) | 반영·확정 | Spring Scheduler·내부 서비스로 수행 |
+| 기능 명세 | FN-010 AI 통화 세션 생성 | [AI 통화](./domains/AI_CALL.md), [API](./contracts/API.md) | 반영·확정 | Kotlin이 Spring Boot API 호출 |
+| 기능 명세 | FN-011 건별 통화 리포트 생성 및 저장 | [리포트](./domains/REPORTS.md), [API](./contracts/API.md) | 반영·상위 결정 적용 | Spring Boot가 생성·저장 |
+| 기능 명세 | FN-012 22시 일일 리포트 생성 및 저장 | [리포트](./domains/REPORTS.md), [API](./contracts/API.md) | 반영·상위 결정 적용 | Spring Scheduler `Asia/Seoul` 22시, UTC 저장 |
+| 기능 명세 | FN-013 특정 날짜 전체 일정 조회 Tool | [AI 통화](./domains/AI_CALL.md), [일정](./domains/CALENDAR.md) | 반영 | Tool 입력 `date_expression`; 서버가 `Asia/Seoul` 기준 날짜 해석·조회 |
 | 기능 명세 | FN-014 피드 다중 사진 가로 넘김 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 |  |
 
 ## IA 화면 70건
@@ -150,7 +152,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | IA | C-1p 피보호자 / 관심사 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 직접 입력 |
 | IA | B-5 피보호자&보호자 / 그룹 선택 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 그룹 생성·역할 |
 | IA | B-4 피보호자&보호자 / 그룹 선택 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 승인 대기 카드 |
-| IA | C-1 피보호자 / 관심사 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 최소 개수 표기는 확정 정책과 충돌하여 미결정 |
+| IA | C-1 피보호자 / 관심사 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 최소 선택 개수 없음, 0~10개 |
 | IA | D-1 피보호자&보호자 / 피드 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 다중 사진 가로 넘김 |
 | IA | B-3 피보호자&보호자 / 그룹 선택 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 승인 대기 |
 | IA | D-0 피보호자&보호자 / 피드 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 빈 피드 |
@@ -166,73 +168,72 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | IA | J-7 피보호자 / 프로필 · 생년월일 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 |  |
 | IA | J-6 피보호자 / 프로필 · 성별 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 |  |
 
-## API 명세서 2차 수정본 60건
+## Notion 활성 API 명세 59건
 
 각 행의 Method·Path·권한·핵심 요청·성공 결과·명시 오류는
 [`contracts/API.md`](./contracts/API.md)에 있다.
 
 | 원본 종류 | ID·이름 | 반영 문서 | 상태 | 비고 |
 |---|---|---|---|---|
-| API 2차 | API-ALIASES-001 그룹원 호칭 설정 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
-| API 2차 | API-AUTH-001 로그인 ID 중복 확인 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
-| API 2차 | API-AUTH-002 회원가입 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
-| API 2차 | API-AUTH-003 로그인 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
-| API 2차 | API-AUTH-004 토큰 재발급 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
-| API 2차 | API-AUTH-005 로그아웃 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
-| API 2차 | API-CALENDAR-001 그룹 일정 목록 조회 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
-| API 2차 | API-CALENDAR-002 일정 상세 조회 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
-| API 2차 | API-CALENDAR-003 일정 등록 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
-| API 2차 | API-CALENDAR-004 일정 수정 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
-| API 2차 | API-CALENDAR-005 일정 삭제 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
-| API 2차 | API-CALLS-001 AI 통화 세션 생성 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md) | 반영 | FastAPI |
-| API 2차 | API-CALLS-002 WebRTC 연결 결과 전달 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md) | 반영 | FastAPI |
-| API 2차 | API-CALLS-003 통화 종료 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영 | FastAPI |
-| API 2차 | API-CARNATION-001 그룹 잔디·주간 랭킹 조회 | [API](./contracts/API.md), [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영 | Spring Boot |
-| API 2차 | API-CARNATION-002 구성원 카네이션 날짜 조회 | [API](./contracts/API.md), [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영 | Spring Boot |
-| API 2차 | API-COMMENTS-001 댓글 목록 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| API 2차 | API-COMMENTS-002 댓글 등록 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| API 2차 | API-COMMENTS-003 댓글 수정 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| API 2차 | API-COMMENTS-004 댓글 삭제 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| API 2차 | API-FILES-001 Presigned URL 발급 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | MIME·크기 미결정 유지 |
-| API 2차 | API-GROUPS-001 내 그룹·가입 요청 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
-| API 2차 | API-GROUPS-002 그룹 생성 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
-| API 2차 | API-GROUPS-003 초대 코드 가입 요청 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
-| API 2차 | API-GROUPS-005 그룹 상세 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
-| API 2차 | API-GROUPS-006 그룹 구성원 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
-| API 2차 | API-GROUPS-007 그룹명 수정 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
-| API 2차 | API-GROUPS-008 초대 코드 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
-| API 2차 | API-GROUPS-010 가입 요청 목록 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |
-| API 2차 | API-GROUPS-011 가입 요청 승인 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |
-| API 2차 | API-GROUPS-012 가입 요청 거절 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |
-| API 2차 | API-GROUPS-013 구성원 역할 변경 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |
-| API 2차 | API-GROUPS-014 관리자 변경 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |
-| API 2차 | API-GROUPS-015 구성원 내보내기 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |
-| API 2차 | API-GROUPS-016 그룹 나가기 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 본인 |
-| API 2차 | API-GROUPS-017 그룹 삭제 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |
-| API 2차 | API-INTERESTS-002 관심사 조회 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | 피보호자 본인·같은 그룹 보호자 |
-| API 2차 | API-INTERESTS-003 관심사 저장 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | 피보호자 본인 |
-| API 2차 | API-NOTIFICATIONS-001 기기 토큰 등록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
-| API 2차 | API-NOTIFICATIONS-002 미읽음 수 조회 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
-| API 2차 | API-NOTIFICATIONS-003 앱 내부 알림 목록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
-| API 2차 | API-NOTIFICATIONS-004 단일 알림 읽음 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
-| API 2차 | API-NOTIFICATIONS-005 전체 알림 읽음 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
-| API 2차 | API-NOTIFICATIONS-006 푸시 설정 조회 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 7개 유형 |
-| API 2차 | API-NOTIFICATIONS-007 푸시 설정 저장 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 7개 유형 |
-| API 2차 | API-NOTIFICATIONS-008 기기 토큰 비활성화 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
-| API 2차 | API-POSTS-001 그룹 피드 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| API 2차 | API-POSTS-002 게시글 상세 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| API 2차 | API-POSTS-003 게시글 보관함 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| API 2차 | API-POSTS-004 게시글 등록 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| API 2차 | API-POSTS-005 게시글 수정 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| API 2차 | API-POSTS-006 내부 게시글 분석 요청 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | FastAPI |
-| API 2차 | API-POSTS-007 게시글 삭제 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| API 2차 | API-REACTIONS-001 게시글 반응 변경 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| API 2차 | API-REPORTS-001 리포트 날짜 조회 | [API](./contracts/API.md), [리포트](./domains/REPORTS.md) | 반영 | 보호자 |
-| API 2차 | API-REPORTS-002 일일·건별 리포트 조회 | [API](./contracts/API.md), [리포트](./domains/REPORTS.md) | 반영 | 메시지 배열 매핑 미결정 유지 |
-| API 2차 | API-REPORTS-003 통화 건별 리포트 조회 | [API](./contracts/API.md), [리포트](./domains/REPORTS.md) | 반영 | 보호자 |
-| API 2차 | API-USERS-001 내 프로필 조회 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
-| API 2차 | API-USERS-002 내 프로필 수정 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
-| API 2차 | API-USERS-003 회원 탈퇴 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
+| 활성 API | API-ALIASES-001 그룹원 호칭 설정 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
+| 활성 API | API-AUTH-001 로그인 ID 중복 확인 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
+| 활성 API | API-AUTH-002 회원가입 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
+| 활성 API | API-AUTH-003 로그인 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
+| 활성 API | API-AUTH-004 토큰 재발급 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
+| 활성 API | API-AUTH-005 로그아웃 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
+| 활성 API | API-CALENDAR-001 그룹 일정 목록 조회 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
+| 활성 API | API-CALENDAR-002 일정 상세 조회 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
+| 활성 API | API-CALENDAR-003 일정 등록 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
+| 활성 API | API-CALENDAR-004 일정 수정 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
+| 활성 API | API-CALENDAR-005 일정 삭제 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
+| 활성 API | API-CALLS-001 AI 통화 세션 생성 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md) | 반영 | Spring Boot |
+| 활성 API | API-CALLS-002 WebRTC 연결 결과 전달 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md) | 반영 | Spring Boot |
+| 활성 API | API-CALLS-003 통화 종료 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring Boot |
+| 활성 API | API-CARNATION-001 그룹 잔디·주간 랭킹 조회 | [API](./contracts/API.md), [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영 | Spring Boot |
+| 활성 API | API-CARNATION-002 구성원 카네이션 날짜 조회 | [API](./contracts/API.md), [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영 | Spring Boot |
+| 활성 API | API-COMMENTS-001 댓글 목록 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-COMMENTS-002 댓글 등록 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-COMMENTS-003 댓글 수정 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-COMMENTS-004 댓글 삭제 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-FILES-001 Presigned URL 발급 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | MIME·크기 미결정 유지 |
+| 활성 API | API-GROUPS-001 내 그룹·가입 요청 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
+| 활성 API | API-GROUPS-002 그룹 생성 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
+| 활성 API | API-GROUPS-003 초대 코드 가입 요청 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
+| 활성 API | API-GROUPS-004 그룹 상세 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
+| 활성 API | API-GROUPS-005 그룹 구성원 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
+| 활성 API | API-GROUPS-006 그룹 정보 수정 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
+| 활성 API | API-GROUPS-007 초대 코드 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
+| 활성 API | API-GROUPS-008 가입 요청 목록 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |
+| 활성 API | API-GROUPS-009 가입 요청 처리 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영·확정 | 요청 명령 `decision=APPROVE\|REJECT`; 응답·저장 상태 `APPROVED\|REJECTED` |
+| 활성 API | API-GROUPS-010 구성원 역할 변경 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |
+| 활성 API | API-GROUPS-011 관리자 변경 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |
+| 활성 API | API-GROUPS-012 구성원 내보내기 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |
+| 활성 API | API-GROUPS-013 그룹 나가기 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 본인·`DELETE` |
+| 활성 API | API-GROUPS-014 그룹 삭제 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |
+| 활성 API | API-GROUPS-015 구성원 프로필 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | 축소 프로필 |
+| 활성 API | API-INTERESTS-001 관심사 조회 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | 피보호자 본인·같은 그룹 보호자 |
+| 활성 API | API-INTERESTS-002 관심사 일괄 수정 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | 0~10개·피보호자 본인 |
+| 활성 API | API-NOTIFICATIONS-001 기기 토큰 등록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
+| 활성 API | API-NOTIFICATIONS-002 미읽음 수 조회 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
+| 활성 API | API-NOTIFICATIONS-003 앱 내부 알림 목록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
+| 활성 API | API-NOTIFICATIONS-004 단일 알림 읽음 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
+| 활성 API | API-NOTIFICATIONS-005 전체 알림 읽음 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
+| 활성 API | API-NOTIFICATIONS-006 푸시 설정 조회 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 7개 유형 |
+| 활성 API | API-NOTIFICATIONS-007 푸시 설정 저장 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 7개 유형 |
+| 활성 API | API-NOTIFICATIONS-008 기기 토큰 비활성화 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
+| 활성 API | API-POSTS-001 그룹 피드 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-POSTS-002 게시글 상세 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-POSTS-003 게시글 보관함 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-POSTS-004 게시글 등록 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-POSTS-005 게시글 수정 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-POSTS-007 게시글 삭제 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-REACTIONS-001 게시글 반응 변경 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-REPORTS-001 리포트 날짜 조회 | [API](./contracts/API.md), [리포트](./domains/REPORTS.md) | 반영 | 보호자 |
+| 활성 API | API-REPORTS-002 일일·건별 리포트 조회 | [API](./contracts/API.md), [리포트](./domains/REPORTS.md) | 반영 | 단일 `guardianMessageSummary` |
+| 활성 API | API-REPORTS-003 통화 건별 리포트 조회 | [API](./contracts/API.md), [리포트](./domains/REPORTS.md) | 반영 | 보호자 |
+| 활성 API | API-USERS-001 내 프로필 조회 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
+| 활성 API | API-USERS-002 내 프로필 수정 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
+| 활성 API | API-USERS-003 회원 탈퇴 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
 
 ## 최신 확정 ERD 현행 테이블 21개
 
@@ -244,36 +245,34 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | ERD | `group_join_requests` | [데이터](./contracts/DATA_MODEL.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 |  |
 | ERD | `member_aliases` | [데이터](./contracts/DATA_MODEL.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 |  |
 | ERD | `member_interests` | [데이터](./contracts/DATA_MODEL.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 |  |
-| ERD | `posts` | [데이터](./contracts/DATA_MODEL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | `batch_id` 없음 |
+| ERD | `posts` | [데이터](./contracts/DATA_MODEL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | 그룹별 독립 행 |
 | ERD | `post_media` | [데이터](./contracts/DATA_MODEL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 |  |
 | ERD | `comments` | [데이터](./contracts/DATA_MODEL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 |  |
 | ERD | `post_reactions` | [데이터](./contracts/DATA_MODEL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 |  |
-| ERD | `post_analyses` | [데이터](./contracts/DATA_MODEL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | FastAPI 쓰기 확정 |
+| ERD | `post_analyses` | [데이터](./contracts/DATA_MODEL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot 쓰기 |
 | ERD | `calendar_events` | [데이터](./contracts/DATA_MODEL.md), [일정](./domains/CALENDAR.md) | 반영 |  |
 | ERD | `event_participants` | [데이터](./contracts/DATA_MODEL.md), [일정](./domains/CALENDAR.md) | 반영 |  |
-| ERD | `call_sessions` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영 | FastAPI 쓰기 확정 |
-| ERD | `call_transcripts` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영 | FastAPI 쓰기 확정 |
-| ERD | `call_reports` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영 | FastAPI 쓰기 확정 |
-| ERD | `daily_reports` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영 | FastAPI 쓰기 확정 |
+| ERD | `call_sessions` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영 | Spring Boot 쓰기 |
+| ERD | `call_transcripts` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영 | Spring Boot 쓰기 |
+| ERD | `call_reports` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring Boot 쓰기 |
+| ERD | `daily_reports` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring Boot 쓰기 |
 | ERD | `carnations` | [데이터](./contracts/DATA_MODEL.md), [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영 |  |
 | ERD | `notifications` | [데이터](./contracts/DATA_MODEL.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 앱 내부 알림 |
 | ERD | `notification_settings` | [데이터](./contracts/DATA_MODEL.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 푸시 허용 설정 |
 | ERD | `device_tokens` | [데이터](./contracts/DATA_MODEL.md), [알림](./domains/NOTIFICATIONS.md) | 반영 |  |
 
-## 확정 기술·AI 설계 결정 9건
+## 확정 기술·AI 설계 결정 7건
 
 기술 결정 DB 8개 레코드 중 이름과 결정 본문이 있는 3건만 결정으로
 집계했다. 이름·본문이 비어 있는 5건은 누락이 아니라 자리표시자이므로
-구현 기준으로 만들지 않았다. 여기에 직접 연결된 현행 AI 설계 결정 6건을
+구현 기준으로 만들지 않았다. 여기에 직접 연결된 현행 AI 설계 결정 4건을
 각각 매핑했다.
 
 | 원본 종류 | ID·이름 | 반영 문서 | 상태 | 비고 |
 |---|---|---|---|---|
-| 기술 결정 | 기술 스택 / 아키텍처 명확히 결정 | [공통](./COMMON.md), [API](./contracts/API.md), [데이터](./contracts/DATA_MODEL.md) | 반영 | RN+Kotlin, Spring Boot, FastAPI, PostgreSQL |
-| 기술 결정 | AI 전화 Tool Calling 및 통화 전후 처리 | [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영 | Tool과 비-Tool 주입 분리 |
+| 기술 결정 | 기술 스택 / 아키텍처 명확히 결정 | [공통](./COMMON.md), [API](./contracts/API.md), [데이터](./contracts/DATA_MODEL.md) | 반영 | AI 통화 화면만 Kotlin, 나머지 React Native, Spring Boot·PostgreSQL |
+| 기술 결정 | AI 전화 Tool Calling 및 통화 전후 처리 | [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring 단일 백엔드·Tool과 비-Tool 주입 분리 |
 | 기술 결정 | 게시물 멀티모달 분석 방식 — A안 확정 | [피드](./domains/FEED_AND_MEDIA.md), [API](./contracts/API.md) | 반영 | 이미지·영상 `Gemini 3.5 Flash`; 텍스트 `Gemini 2.5 Flash Lite`는 후보 |
-| AI 설계 | AI 통화 | [AI 통화](./domains/AI_CALL.md), [API](./contracts/API.md) | 반영 | WebRTC·Realtime·Sideband |
-| AI 설계 | AI 게시글 분석 | [피드](./domains/FEED_AND_MEDIA.md), [API](./contracts/API.md) | 반영 | 멀티모달·텍스트 모델 경계 |
 | AI 설계 | AI 요약 리포트 생성 | [리포트](./domains/REPORTS.md), [데이터](./contracts/DATA_MODEL.md) | 반영 | 건당·일일 리포트 모두 `Gemini 3.5 Flash` |
 | AI 설계 | AI 통화 tool calling | [AI 통화](./domains/AI_CALL.md), [일정](./domains/CALENDAR.md) | 반영 | 현행 Tool 2개와 비-Tool 주입 |
 | AI 설계 | AI 통화 상세 로직 | [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영 | 세션 상태·전사·후처리 |
@@ -284,19 +283,13 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 이 항목의 내용은 “반영 대기 규칙”이 아니라 구현자가 임의로 결정해서는 안
 되는 경계다. 상세 맥락은 연결된 도메인의 `미결정 사항`에 있다.
 
-- 일일 리포트 API의 `guardianMessages[]`와
-  `daily_reports.guardian_message TEXT`의 저장·응답 매핑
-- 감정 세부분류 길이: 기존 리포트 설계 30자와 API·ERD 50자
 - 22시 이후 종료 통화의 `report_date`
-- 상대 날짜를 절대 날짜로 변환하는 애플리케이션 계층
 - 텍스트 게시글용 `Gemini 2.5 Flash Lite`의 최종 채택 여부·정확한 버전, 품질 통과 기준,
   대체 모델
 - 게시글 분석 실패의 재시도 횟수·백오프·서버 복구·추가 오류 정책
 - IA의 일부 역할명과 화면 설명 불일치
-- 피보호자 관심사 화면의 “3개 이상” 표기와 확정 요구사항의 최소 개수 부재
 - 그룹 API의 `managerMemberId`와 ERD의
   `group_members.is_manager` 사이 응답 구성 규칙
-- 가입 승인 409의 정확한 도메인 오류명에 관한 API 본문 내부 불일치
 - 파일 업로드 `purpose`·MIME 허용 목록·최대 크기
-- 기기 토큰 재등록 갱신 정책과 푸시 설정 최초 기본값
+- 기기 토큰 재등록 갱신 정책
 - 통화 전사 보존 기간과 개인정보·AI 통화 동의의 문구·재동의 정책

@@ -1,28 +1,24 @@
 # 데이터 모델 계약
 
 > 상태: 일부 확정
-> 기준: 2026-07-23 최신 확정 ERD 기준·관계·테이블·제약 문서
+> 기준: 2026-07-28 최신 확정 ERD 기준·관계·테이블·제약 문서
 > 데이터베이스: PostgreSQL
 
-이 문서는 현재 사용하는 21개 테이블의 로컬 계약이다. 예전 내장 DBML, 삭제된
-컬럼·Enum·테이블은 구현 기준이 아니다. 모든 시각 컬럼은 별도 언급이 없으면
-`TIMESTAMPTZ`이고, 제품의 날짜 해석 기준 시간대는 `Asia/Seoul`이다.
-Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅샷이지 문서의
-최종 수정 시각을 뜻하지 않는다.
+이 문서는 현재 사용하는 21개 테이블과 컬럼·Enum·제약의 로컬 계약이다.
+모든 시각 컬럼은 별도 언급이 없으면
+`TIMESTAMPTZ`이고 UTC 절대 시각으로 저장한다. API timestamp와 서버 로그도
+UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 매일 22시 리포트
+스케줄 같은 비즈니스 규칙에만 `Asia/Seoul`을 적용한다.
 
 ## 소유권
 
-| 근거 수준 | 테이블 | 실행·쓰기 경계 |
-|---|---|---|
-| 아키텍처·API 실행 책임 확정, 테이블별 물리 쓰기 선언은 없음 | `users`, `family_groups`, `group_members`, `group_join_requests`, `member_aliases`, `member_interests`, `posts`, `post_media`, `comments`, `post_reactions`, `calendar_events`, `event_participants`, `carnations`, `notifications`, `notification_settings`, `device_tokens` | Spring Boot가 대응하는 사용자-facing 업무 API를 처리하고 게시글 `updated_at`을 관리한다. ERD는 각 테이블의 물리적 쓰기 소유자를 별도로 명시하지 않았다. |
-| 직접 쓰기 확정 | `post_analyses`, `call_sessions`, `call_transcripts`, `call_reports`, `daily_reports` | FastAPI가 AI 분석·통화·리포트 결과를 직접 생성·변경한다. |
+| 테이블 | 실행·쓰기 경계 |
+|---|---|
+| `users`, `family_groups`, `group_members`, `group_join_requests`, `member_aliases`, `member_interests`, `posts`, `post_media`, `comments`, `post_reactions`, `post_analyses`, `calendar_events`, `event_participants`, `call_sessions`, `call_transcripts`, `call_reports`, `daily_reports`, `carnations`, `notifications`, `notification_settings`, `device_tokens` | Spring Boot가 공개 API, 내부 AI 오케스트레이션과 모든 DB 읽기·쓰기를 소유한다. |
 
-- Spring Boot는 화면과 공개 API 제공을 위해 FastAPI 소유 결과를 읽을 수 있다.
-- FastAPI는 인증·권한 검증과 AI 컨텍스트 구성을 위해 필요한 일반 업무
-  데이터를 읽을 수 있다.
-- FastAPI가 위 일반 업무 테이블의 새로운 쓰기 경로를 맡거나 Spring Boot가
-  AI 결과 테이블을 대신 쓰도록 바꾸려면 먼저 스펙 변경 승인이 필요하다.
-- `persona_id`는 FastAPI의 고정 페르소나 번호이며 DB 외래 키가 아니다.
+- Spring Boot 단일 백엔드가 DB 읽기·쓰기를 담당한다.
+- `persona_id`는 Spring Boot가 관리하는 고정 페르소나 번호(1~6)이며 DB
+  외래 키가 아니다. 별도 `personas` 테이블을 사용하지 않는다.
 
 ## 회원·그룹
 
@@ -49,7 +45,6 @@ Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅�
 - PK: `id BIGINT`
 - 컬럼: `name VARCHAR(10)`, `invite_code VARCHAR(6) UNIQUE`,
   `created_at`, `updated_at`; 모두 NOT NULL
-- `image`, `description`, `batch_id`와 같은 과거 컬럼은 사용하지 않는다.
 
 ### `group_members`
 
@@ -106,7 +101,6 @@ Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅�
 - FK: `group_id -> family_groups.id`,
   `author_member_id -> group_members.id`
 - 컬럼: `content VARCHAR(140)`, `created_at`, `updated_at` NOT NULL
-- `batch_id`는 사용하지 않는다.
 
 ### `post_media`
 
@@ -138,7 +132,7 @@ Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅�
 
 - PK: `id BIGINT`
 - FK·Unique: `post_id -> posts.id`
-- 컬럼: `status VARCHAR(20)` NOT NULL,
+- 컬럼: `status ANALYSIS_STATUS` NOT NULL,
   `summary VARCHAR(500) NULL`, `analyzed_at NULL`, `created_at` NOT NULL
 - 상태는 `PENDING`, `SUCCESS`, `FAILED`다.
 - `PENDING`: `summary=NULL`, `analyzed_at=NULL`
@@ -169,7 +163,7 @@ Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅�
 - FK: `event_id -> calendar_events.id`,
   `group_member_id -> group_members.id`
 - Unique: `(event_id, group_member_id)`
-- 별도 `event_reminders` 테이블은 사용하지 않는다.
+- 일정 알림은 `notifications`에 저장한다.
 
 ## AI 통화·리포트
 
@@ -181,7 +175,7 @@ Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅�
 - 컬럼: `persona_id BIGINT`, `status CALL_STATUS`, `created_at` NOT NULL;
   `started_at NULL`, `ended_at NULL`
 - 시간 의미:
-  - `created_at`: FastAPI가 통화 시작 요청을 접수한 시각
+  - `created_at`: Spring Boot가 통화 시작 요청을 접수한 시각
   - `started_at`: WebRTC 연결 성공 결과를 받은 시각
   - `ended_at`: 종료·취소·실패 처리를 완료한 시각
 
@@ -203,7 +197,7 @@ Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅�
 - FK·Unique: `call_session_id -> call_sessions.id`
 - 컬럼: `summary VARCHAR(100)`, `emotion_category EMOTION_CATEGORY`,
   `emotion_subcategory VARCHAR(50)`, `created_at` NOT NULL;
-  `guardian_message TEXT NULL`
+  `guardian_message VARCHAR(100) NULL`
 
 ### `daily_reports`
 
@@ -213,7 +207,7 @@ Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅�
 - 컬럼: `report_date DATE`, `summary VARCHAR(200)`,
   `emotion_category EMOTION_CATEGORY`,
   `emotion_subcategory VARCHAR(50)`, `created_at` NOT NULL;
-  `guardian_message TEXT NULL`
+  `guardian_message VARCHAR(200) NULL`
 - Unique: `(care_receiver_member_id, report_date)`
 
 ## 활동·알림
@@ -221,9 +215,11 @@ Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅�
 ### `carnations`
 
 - PK: `id BIGINT`
-- FK: `group_member_id -> group_members.id`
+- FK: `group_id -> family_groups.id`,
+  `group_member_id -> group_members.id`
 - 컬럼: `earned_date DATE`, `created_at` NOT NULL
 - Unique: `(group_member_id, earned_date)`
+- Index: `(group_id, earned_date)`
 - `earned_date`는 KST 기준이다.
 
 ### `notifications`
@@ -238,8 +234,8 @@ Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅�
   - `related_event_id -> calendar_events.id`
   - `related_call_report_id -> call_reports.id`
   - `related_daily_report_id -> daily_reports.id`
-- 컬럼: `type NOTIFICATION_TYPE`, `title VARCHAR(100)`,
-  `body VARCHAR(300)`, `created_at` NOT NULL; `read_at NULL`
+- 컬럼: `type NOTIFICATION_TYPE`, `title TEXT`,
+  `body TEXT`, `created_at` NOT NULL; `read_at NULL`
 - 일정 시작 알림 중복 방지 부분 Unique:
   `(receiver_user_id, related_event_id, type)
   WHERE type = 'EVENT_REMINDER' AND related_event_id IS NOT NULL`
@@ -255,6 +251,7 @@ Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅�
 - Unique: `(user_id, notification_type)`
 - 설정은 사용자·유형 단위이며 `group_id`는 사용하지 않는다.
 - 이 값은 앱 내부 알림 생성 여부가 아니라 푸시 허용 여부다.
+- `is_enabled`의 최초 기본값은 `true`다.
 
 ### `device_tokens`
 
@@ -269,9 +266,10 @@ Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅�
 |---|---|
 | `USER_GENDER` | `MALE`, `FEMALE` |
 | `GROUP_ROLE` | `GUARDIAN`, `CARE_RECEIVER` |
-| `JOIN_REQUEST_STATUS` | `PENDING_ADMIN`, `APPROVED`, `REJECTED`, `CANCELLED` |
+| `JOIN_REQUEST_STATUS` | `PENDING_ADMIN`, `APPROVED`, `REJECTED` |
 | `MEDIA_TYPE` | `IMAGE`, `VIDEO` |
 | `REACTION_TYPE` | `HEART`, `LAUGH`, `SURPRISE`, `SAD`, `SUPPORT` |
+| `ANALYSIS_STATUS` | `PENDING`, `SUCCESS`, `FAILED` |
 | `NOTIFICATION_TYPE` | `NEW_POST`, `POST_ACTIVITY`, `EVENT_CHANGED`, `EVENT_REMINDER`, `CALL_REPORT`, `DAILY_REPORT`, `GROUP_JOIN_REQUEST` |
 | `CALL_STATUS` | `CONNECTING`, `IN_PROGRESS`, `COMPLETED`, `INCOMPLETE`, `CANCELLED`, `FAILED` |
 | `SPEAKER_TYPE` | `USER`, `ASSISTANT` |
@@ -290,17 +288,9 @@ Notion 원본은 2026-07-26에 다시 읽었으며, 이 시각은 조회 스냅�
 
 ## 미결정·충돌
 
-- `daily_reports.guardian_message`는 단일 `TEXT`이지만 API 2차 수정본의 일일
-  리포트 성공 결과는 통화별 `guardianMessages` 배열이다. 저장값과 응답 배열의
-  매핑 규칙은 확정되지 않았다.
-- 리포트 설계의 감정 세부분류 최대 30자와 최신 ERD·API의 최대 50자가
-  충돌한다. 구현자는 임의로 하나를 고르지 않는다.
 - `notifications`의 관련 일정 등 대상이 삭제될 때 “FK를 NULL 처리”와
   “스냅샷만 유지” 중 정확한 FK 동작은 확정되지 않았다.
-- `notification_settings.is_enabled`의 최초 기본값은 확정되지 않았다.
 - `openai_item_id`에 Unique를 둘지는 검토 중이다.
 - 통화 전사 보존 기간과 삭제 시점은 확정되지 않았다.
 - 그룹 API의 `managerMemberId`는 `family_groups` 컬럼이 아니다.
   `group_members.is_manager`에서 응답을 구성하는 정확한 규칙은 확정되지 않았다.
-- 일반 업무 테이블의 Spring Boot API 실행 책임은 확정되어 있으나, 최신 ERD는
-  각 테이블의 물리적 쓰기 소유자를 별도 속성으로 선언하지 않았다.

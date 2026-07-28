@@ -1,6 +1,6 @@
 ---
 name: jira-create-ticket
-description: Create convention-compliant S15P11B104 Jira tickets from short natural-language requests. Always use this skill when the user says `$jira-create-ticket`, asks to create, register, add, split, or estimate a Jira ticket, issue, task, bug, story, or epic, asks for a subtask, or wants team work divided among several people. Read `docs/team-rules/jira-convention.md`, require exactly one assignee, an explicit due date, and Story Points from 1, 2, 3, 5, or 8 for every new ticket, prevent new subtasks and duplicate work, keep one shared user-value Story, split its implementation into linked standard Tasks with `[FE]`, `[BE]`, `[AI]`, or `[COMMON]` when applicable, generate only evidence-supported descriptions and completion criteria, create through the Atlassian connector, and verify every saved field.
+description: Create convention-compliant S15P11B104 Jira tickets from short natural-language requests. Always use this skill when the user says `$jira-create-ticket`, asks to create, register, add, split, or estimate a Jira ticket, issue, task, bug, story, or epic, asks for a subtask, or wants team work divided among several people. Read `docs/team-rules/jira-convention.md`, require exactly one assignee and an explicit due date for every new ticket, require Story Points from 1, 2, 3, 5, or 8 for every non-Epic ticket while leaving Epics without Story Points, prevent new subtasks and duplicate work, keep one shared user-value Story, split its implementation into linked standard Tasks with `[FE]`, `[BE]`, `[AI]`, or `[COMMON]` when applicable, generate only evidence-supported descriptions and completion criteria, create through the Atlassian connector, and verify every saved field.
 compatibility: Requires the Atlassian connector plugin with Jira read/write access to https://ssafy.atlassian.net.
 ---
 
@@ -30,17 +30,18 @@ A request to create a subtask does not authorize silently creating a different i
 
 Most requests should require no follow-up. Extract the work from the user's words and current conversation before asking anything.
 
-The project policy requires exactly one assignee, an explicit due date, and Story Points even when Jira's create metadata marks those fields optional. A valid due date is an actual calendar date. Story Points must be one of `1`, `2`, `3`, `5`, or `8`. Do not infer or silently default either value. `나`/`저` resolves to the authenticated user.
+The project policy requires exactly one assignee and an explicit due date for every ticket even when Jira's create metadata marks those fields optional. For every non-Epic ticket, Story Points are also required and must be one of `1`, `2`, `3`, `5`, or `8`; Epics must not receive Story Points. Do not infer or silently default a due date or required Story Points value. `나`/`저` resolves to the authenticated user.
 
 When the invocation contains no actionable work, ask exactly one compact question:
 
 ```text
-어떤 작업을 등록할까요? 담당자 한 명, 기한(YYYY-MM-DD), Story Points(1·2·3·5·8)를 함께 알려주세요.
+어떤 작업을 등록할까요? 담당자 한 명과 기한(YYYY-MM-DD)을 알려주세요. 에픽이 아니라면 Story Points(1·2·3·5·8)도 함께 알려주세요.
 ```
 
 When the work is already clear, ask only for whichever required responses are missing, combined into one question. Examples:
 
-- Missing all policy fields: `담당자 한 명, 기한(YYYY-MM-DD), Story Points(1·2·3·5·8)를 알려주세요.`
+- Missing all policy fields for a non-Epic: `담당자 한 명, 기한(YYYY-MM-DD), Story Points(1·2·3·5·8)를 알려주세요.`
+- Missing all policy fields for an Epic: `담당자 한 명과 기한(YYYY-MM-DD)을 알려주세요.`
 - Missing only assignee: `담당자를 알려주세요.`
 - Missing only due date: `기한(YYYY-MM-DD)을 알려주세요.`
 - Missing only Story Points: `Story Points를 1·2·3·5·8 중 하나로 알려주세요.`
@@ -49,7 +50,7 @@ Ask one focused clarification only when a missing choice would create a material
 
 - The required assignee is missing or matches multiple Jira users.
 - The required due date is missing, invalid, or ambiguous.
-- Story Points are missing, outside the allowed scale, or greater than `8`.
+- A non-Epic ticket's Story Points are missing, outside the allowed scale, or greater than `8`.
 - A subtask is requested and the replacement standard-ticket relationship is not confirmed.
 - Multiple assignees are requested but independently completable ticket scopes are not clear.
 - Shared story work is being split but the execution domain for a resulting Task cannot be determined as `FE`, `BE`, `AI`, or `COMMON`.
@@ -57,7 +58,7 @@ Ask one focused clarification only when a missing choice would create a material
 - The request puts `[COMMON]` on a Story or puts a domain prefix on standalone planning, research, presentation, or other single-scope work.
 - The request contains conflicting issue types or relationship targets.
 
-Combine missing choices into one question. Do not separately ask for purpose, description, completion criteria, priority, labels, sprint, environment, or implementation details. Assignee, due date, and Story Points are the policy-required exceptions.
+Combine missing choices into one question. Do not separately ask for purpose, description, completion criteria, priority, labels, sprint, environment, or implementation details. Assignee and due date are always policy-required; Story Points are policy-required only for non-Epic tickets.
 
 If the same work is already represented by an unfinished issue, do not create another merely because its assignee, due date, Story Points, or priority differs. Report the existing issue and the differing fields. Create another only when the user explicitly confirms that a materially separate result is intended.
 
@@ -70,14 +71,15 @@ Before creating anything:
 3. Read the issue types available to project `S15P11B104`.
 4. After inferring the issue type, read its create-field metadata.
 5. Satisfy every field currently marked required. If live metadata differs from the rules below, the live metadata wins.
-6. Confirm that `assignee`, `duedate`, and Story Points (`customfield_10031` when that is still the live field) can be written for the selected type.
+6. Confirm that `assignee` and `duedate` can be written for the selected type. For a non-Epic type, also confirm that Story Points (`customfield_10031` when that is still the live field) can be written.
 
 The currently observed requirements are:
 
 - Every type: project, issue type, reporter, and summary.
 - Reporter has a Jira default and must not be asked from the user.
 - Priority has the Jira default `Low`; do not ask or override it unless the user explicitly requests another value.
-- Exactly one assignee, due date, and Story Points are policy-required user responses even when optional in Jira metadata.
+- Exactly one assignee and due date are policy-required user responses even when optional in Jira metadata.
+- Story Points are policy-required for every non-Epic ticket and must be omitted from Epics.
 - Description is optional to Jira, but this skill generates it for team readability.
 
 Stop without mutation if the live required fields cannot be discovered, the required policy fields cannot be written, or a required system value cannot be satisfied safely.
@@ -137,11 +139,12 @@ Do not ask the user to choose an issue type merely because Jira requires one; in
 
 ### Story Points
 
-- Require one of `1`, `2`, `3`, `5`, or `8` before creation.
+- Do not request or write Story Points for an Epic.
+- For every non-Epic ticket, require one of `1`, `2`, `3`, `5`, or `8` before creation.
 - Do not estimate silently from prose, issue type, assignee, or a related ticket.
-- Apply a common value to several tickets only when the user explicitly states that the estimate is shared.
-- If the work is estimated above `8`, stop and ask for independently completable ticket boundaries instead of rounding down.
-- Write the value to Jira's live Story Points field and verify the saved numeric value.
+- Apply a common value to several non-Epic tickets only when the user explicitly states that the estimate is shared.
+- If a non-Epic ticket is estimated above `8`, stop and ask for independently completable ticket boundaries instead of rounding down.
+- For a non-Epic ticket, write the value to Jira's live Story Points field and verify the saved numeric value. For an Epic, verify that Story Points remain empty.
 
 ### Summary
 
@@ -226,7 +229,7 @@ If participant roles or ticket boundaries are unclear, ask once for the missing 
 Create the issue with the Atlassian connector using only fields supported by the live metadata. After every successful create response:
 
 1. Fetch the created issue by its returned key.
-2. Verify project, issue type, summary including the required or intentionally absent domain prefix, reporter, exactly one assignee, due date, Story Points, Epic or issue link when applicable, priority, and description.
+2. Verify project, issue type, summary including the required or intentionally absent domain prefix, reporter, exactly one assignee, due date, Story Points for a non-Epic or an empty Story Points field for an Epic, Epic or issue link when applicable, priority, and description.
 3. Confirm that every description section is present and non-empty.
 4. Confirm that every collaborative ticket has one distinct completion result and no duplicate scope.
 
@@ -243,7 +246,7 @@ Jira 티켓 생성 완료
 유형: <issue type>
 담당자: <display name>
 기한: <YYYY-MM-DD>
-Story Points: <1 | 2 | 3 | 5 | 8>
+Story Points: <없음 (에픽) | 1 | 2 | 3 | 5 | 8>
 관계: <Epic/Blocks/Relates target | 없음>
 우선순위: <priority>
 URL: <canonical Jira URL>
@@ -261,7 +264,7 @@ For a dry run, start with `Jira 티켓 생성 미실행` and show the proposed f
 - Subtask conversion or standard-ticket relationship unresolved: make no mutation.
 - Required assignee missing, unresolved, or ambiguous: make no mutation.
 - Required due date missing, invalid, or ambiguous: make no mutation.
-- Required Story Points missing or invalid: make no mutation.
+- Required Story Points for a non-Epic ticket are missing or invalid: make no mutation.
 - Required technical-domain prefix is unresolved for a split implementation Task: make no mutation.
 - Requested prefix conflicts with the Story-versus-Task role: make no mutation, ask one compact correction question, and do not silently remove the prefix or convert the issue type.
 - Collaborative work has neither independently completable scopes nor one explicit DRI: make no mutation.

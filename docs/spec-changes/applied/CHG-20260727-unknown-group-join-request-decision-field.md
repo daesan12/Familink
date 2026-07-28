@@ -1,6 +1,6 @@
 # API-GROUPS-009 가입 요청 처리 판별 필드 확정
 
-- 상태: 제안
+- 상태: 승인·반영 완료
 - 제안자: unknown
 - 작성일: 2026-07-27
 - 차단 변경: 예
@@ -33,10 +33,11 @@
 
 ## 제안 내용
 
-다음 두 대안 중 하나를 명시적으로 선택해 활성 API 원본과 로컬 계약을 함께
-통일한다.
+요청 명령은 `decision`으로, 처리 결과의 저장·응답 상태는 `status`로
+구분한다. 기존 Body 예시의 `status`는 대안이 아니라 오기이므로
+`decision`으로 정정한다.
 
-### 대안 A — `decision` 사용
+### 확정 계약 — `decision` 사용
 
 ```json
 {
@@ -49,25 +50,10 @@
 - `APPROVE`일 때만 `assignedRole` 필수
 - `REJECT`일 때 `assignedRole` 생략 또는 `null`
 - 기존 오류 코드 `INVALID_JOIN_REQUEST_DECISION`과 의미가 일치한다.
-- 응답의 저장 결과 상태는 `APPROVED` 또는 `REJECTED`를 사용한다.
-
-### 대안 B — `status` 사용
-
-```json
-{
-  "status": "APPROVED",
-  "assignedRole": "CARE_RECEIVER"
-}
-```
-
-- 허용값: `APPROVED`, `REJECTED`
-- `APPROVED`일 때만 `assignedRole` 필수
-- `REJECTED`일 때 `assignedRole` 생략 또는 `null`
-- 오류 코드와 처리 규칙의 `decision` 표현을 `status` 기준으로 함께
-  수정해야 한다.
-
-선택 전까지 로컬 `API-GROUPS-009`에는 Method·Path·권한·성공 결과·명시
-오류만 반영하고, 요청 판별 필드명과 허용값은 `미결정`으로 유지한다.
+- 응답과 DB 저장 결과 상태는 `APPROVED` 또는 `REJECTED`를 사용한다.
+- `decision = REJECT`이면 `status = REJECTED`, `processed_at = 처리 시각`으로
+  변경하고 `assigned_role`은 `NULL`로 유지한다.
+- 거절 시 `group_members`는 생성하거나 변경하지 않는다.
 
 ## 변경 근거
 
@@ -86,16 +72,15 @@
 - 검증 범위: 활성 API 페이지 본문·속성, 로컬 API 계약, 프론트 요청 DTO,
   Spring Boot 요청 DTO와 승인·거절 테스트
 
-## 확인이 필요한 질문
-
-1. 요청 판별 필드는 `decision`과 `status` 중 어느 이름을 사용합니까?
-2. 허용값은 `APPROVE`·`REJECT`와 `APPROVED`·`REJECTED` 중 어느 쌍을
-   사용합니까?
-
 ## 결정 및 반영
 
-- 결정:
-- 결정자:
-- 결정일:
-- 반영 문서:
+- 결정: 요청 명령은 `decision=APPROVE|REJECT`, 저장·응답 상태는
+  `status=APPROVED|REJECTED`로 구분한다. 기존 Body 예시의 `status`는
+  필드명 선택지가 아니라 오기로 정정한다.
+- 결정자: 사용자
+- 결정일: 2026-07-28
+- 결정 근거: 사용자 제공 회의 근거와 수정된 활성
+  `API-GROUPS-009` 문서
+- 반영 문서: `docs/specs/contracts/API.md`,
+  `docs/specs/domains/GROUPS_AND_MEMBERSHIP.md`, `docs/specs/COVERAGE.md`
 - 반영 커밋:

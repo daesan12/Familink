@@ -1,7 +1,7 @@
 # COMMON 공통 규칙
 
 > 상태: 일부 확정
-> 기준: 2026-07-27, 최신 확정 Notion 및 API 명세서 2차 수정본·최신 ERD
+> 기준: 2026-07-28, 최신 확정 Notion·활성 API 명세·최신 ERD
 
 이 문서는 둘 이상의 도메인이 공유하는 규칙만 모은다. 도메인별 동작은 [`INDEX.md`](./INDEX.md)에서 관련 스펙을 찾는다.
 
@@ -19,27 +19,44 @@
 
 - 로그인·재발급·로그아웃은 API 계약의 인증 흐름을 따른다.
 - 클라이언트는 Access Token을 사용한다. Refresh Token 재발급은 `API-AUTH-004`, 로그아웃은 `API-AUTH-005` 계약을 따른다.
-- RN+Kotlin 클라이언트가 AI 통화 세션을 FastAPI에 직접 요청할 때 Access Token, 선택한 `persona_id`, `sdp_offer`를 전달한다.
-- FastAPI는 토큰, 현재 그룹 소속, 피보호자 권한을 검증한다.
+- 현재 회원가입과 로그인은 로그인 ID와 비밀번호를 사용한다. 이메일
+  회원가입·이메일 로그인·이메일 인증은 지원하지 않는다.
+- AI 전화 전용 Kotlin 모듈은 Spring Boot에 Access Token, 선택한
+  `persona_id`, `sdp_offer`를 전달한다.
+- `persona_id`는 1~6의 고정 번호이며 페르소나 DB 테이블이나 외래 키를
+  사용하지 않는다.
+- Spring Boot는 토큰, 현재 그룹 소속, 피보호자 권한을 검증한다.
 - AI Tool과 프롬프트에는 현재 그룹과 현재 세션의 권한 범위를 벗어난 데이터를 포함하지 않는다.
 
 ## 서비스와 데이터 소유권
 
 - 현재 제품 클라이언트 범위는 Android 모바일 앱이며 iOS 앱은 제외한다.
   최소 지원 Android 버전과 시험 기기 목록은 미결정이다.
-- 프론트엔드는 React Native와 Android Kotlin 브리지로 구성한다.
-- Spring Boot는 일반 업무 흐름과 사용자·그룹·피드·일정·알림 API, 게시글 `updated_at` 관리, 저장된 리포트 조회를 담당한다. ERD의 일반 테이블마다 물리적 쓰기 소유자를 별도로 선언한 것은 아니므로 근거 수준은 데이터 계약에 표시한다.
-- 게시글이 10분 동안 안정된 뒤 Spring Boot가 FastAPI 내부 분석 요청을 시작한다. FastAPI는 게시글 데이터를 읽고 분석 결과를 저장한다.
-- FastAPI는 AI 통화 세션, 통화 자막/결과, 게시글 AI 분석, 통화별 리포트, 일일 리포트를 처리하고 다음 AI 결과 테이블에 직접 기록한다.
-- Spring Boot는 통화 세션 ID를 대신 생성하거나 통화 세션을 갱신하지 않는다. 결과 화면은 저장된 리포트를 조회해 제공한다.
+- 모바일 앱의 AI 전화 화면과 통화 엔진만 Android Kotlin 네이티브
+  모듈로 구현한다. AI 전화를 제외한 모바일 화면과 기능은 React Native로
+  구현하며, React Native와 Kotlin의 브리지는 AI 전화 경계에서만 사용한다.
+- 모든 서비스 API, 인증·인가, AI 오케스트레이션과 DB 접근은 Spring Boot
+  단일 백엔드가 담당한다.
+- AI 전화 음성은 Kotlin 모듈과 OpenAI Realtime이 WebRTC로 직접
+  주고받는다. Spring Boot는 SDP 교환, Sideband WebSocket, Tool Calling,
+  발화 완료 전사와 통화 상태를 처리한다.
+- Spring Boot는 마지막 수정 후 10분이 지난 게시글을 직접 조회해 Gemini로
+  분석하고 `post_analyses`에 저장한다.
+- Spring Boot는 통화 세션·전사·건별 리포트·일일 리포트를 생성·갱신하고,
+  게시글 분석과 리포트 생성 시 Gemini를 직접 호출한다.
 - PostgreSQL이 공용 데이터 저장소다. 상세 테이블·관계·쓰기 소유권은 [`contracts/DATA_MODEL.md`](./contracts/DATA_MODEL.md)를 기준으로 한다.
 
 ## 시간과 날짜
 
 - 상대 날짜를 절대 날짜로 해석할 때 기준 시간대는 `Asia/Seoul`이다.
-- 절대 날짜로 변환한 값은 `YYYY-MM-DD` 형식으로 날짜 Tool에 전달한다.
-- 상대 날짜 변환을 수행하는 애플리케이션 계층(FastAPI 또는 Spring Boot)은 아직 확정하지 않는다.
-- 일일 리포트의 22시 기준은 `Asia/Seoul`이다. 22시 이후 종료 통화를 어느 날짜에 포함할지는 미결정이다.
+- 모델은 원문 날짜 표현을 `date_expression`으로 Tool에 전달하고, 서버가
+  `Asia/Seoul` 기준 현재 시각과 사용자 시간대를 적용해 단일 날짜로
+  해석한다. 날짜가 모호하거나 해석되지 않으면 임의 조회하지 않는다.
+- 일일 리포트는 Spring Scheduler가 `Asia/Seoul` 기준 매일 22시에
+  생성한다. 22시 이후 종료 통화를 어느 날짜에 포함할지는 미결정이다.
+- DB 저장·서버 로그·API timestamp는 UTC로 관리하고 PostgreSQL 시각
+  컬럼은 `TIMESTAMPTZ`를 사용한다. 사용자 화면에서는 서비스 시간대로
+  변환해 표시한다.
 
 ## 개인정보·녹음·대화 텍스트
 
@@ -58,8 +75,6 @@
 
 ## 미결정 사항
 
-- 상대 날짜 변환의 애플리케이션 계층
 - 통화 텍스트 보존 기간과 삭제 정책
 - 개인정보·AI 통화 동의 문구, 동의 유형, 재동의 시점
-- 그룹의 다중 소속 정책과 역할 구성의 세부 제약
 - 미디어 지원 포맷·코덱·메타데이터 제거 목록

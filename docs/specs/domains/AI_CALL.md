@@ -1,37 +1,58 @@
 # [AI_CALL] AI 전화
 
 > 상태: 일부 확정
-> 기준: 2026-07-27, 최신 확정 Notion·요구사항·AI Tool Calling 결정·API 명세서 2차 수정본
+> 기준: 2026-07-28, 최신 확정 Notion·요구사항·AI Tool Calling 결정·활성 API 명세
 
 ## AI 작업 컨텍스트
 
 - 목적: 피보호자와 AI의 WebRTC 통화를 시작·진행·종료하고, 통화 중 필요한 가족 맥락과 일정을 안전하게 조회한다.
 - 포함 범위: 페르소나 선택, 세션 생성, WebRTC 연결, 실시간 자막, Tool Calling, 통화 상태·종료, 내부 저장 경계.
 - 제외 범위: 장기 기억(MVP 제외), 통화 녹음 재생, 보호자에게 전문 제공, 확장 검색 Tool.
-- 핵심 규칙: 현재 그룹·현재 피보호자 권한 범위만 사용하고 상대 날짜는 `Asia/Seoul` 기준 절대 날짜로 변환한 뒤 일정 Tool을 호출한다.
+- 핵심 규칙: AI 전화 화면과 통화 엔진만 Kotlin 네이티브 모듈로
+  구현하고, 모든 서비스 API·인증·AI 오케스트레이션·DB 접근은 Spring Boot가
+  담당한다. 현재 그룹·현재 피보호자 권한 범위만 사용한다.
 - 완료 조건: 세션 상태 전이와 비노출 원칙을 지키고, `API-CALLS-001`~`API-CALLS-003` API 계약과 충돌하지 않는다.
 
 ## 확정된 동작
 
 1. 피보호자는 자동 발신 시간이나 횟수 제한 없이 원할 때 AI 전화 탭에서
    페르소나를 선택하고 예시 발화를 확인한 뒤 통화를 시작한다.
-2. RN+Kotlin 프론트엔드는 Access Token, `persona_id`, `sdp_offer`를 FastAPI 세션 생성 경로로 전달한다.
-3. FastAPI는 토큰·현재 그룹 소속·피보호자 권한을 검증하고 WebRTC 세션을 OpenAI Realtime API와 연결한다.
+2. AI 전화 전용 Kotlin 모듈은 고정 페르소나 번호 `persona_id`(1~6),
+   Access Token, `sdp_offer`를 Spring Boot의 세션 생성 경로로 전달한다.
+   AI 전화를 제외한 모바일 화면과 기능은 React Native로 구현한다.
+3. Spring Boot는 토큰·현재 그룹 소속·피보호자 권한을 검증하고 OpenAI
+   Realtime과 SDP를 교환한 뒤 동일 통화에 Sideband WebSocket으로
+   연결한다. OpenAI API 키는 Spring Boot 서버에서만 보관한다.
 4. 세션 생성 성공 결과로 `call_session_id`와 `sdp_answer`를 받아 WebRTC 연결을 완료한다.
-5. WebRTC 연결 과정과 세션 보조 통신은 확정된 Sideband WebSocket 흐름을 따른다.
+5. 음성은 Kotlin 모듈과 OpenAI Realtime이 WebRTC로 직접 주고받고
+   Spring Boot를 경유하지 않는다. Spring Boot는 Sideband WebSocket으로
+   세션 설정, Tool Calling, 전사 완료, 오류와 종료 이벤트를 처리한다.
 6. 통화 화면에는 통화 시간, 음소거, 통화 종료, 스피커 제어와 AI 발화 실시간 자막을 제공한다.
 7. AI 발화 자막은 항상 표시한다. 사용자 발화 자막과 자막 끄기 기능은 제공하지 않는다. 자막 delta는 화면 표시용이고, 완료된 발화 단위 텍스트만 내부 처리와 리포트 생성에 사용한다.
-8. 저장된 관심사는 다음 AI 통화의 대화 맥락에 전달한다.
-9. 현재 그룹의 당일 게시글 분석 결과는 통화 시작 프롬프트에 한 번 주입한다. 이 과정은 Tool Calling이 아니다.
+8. Spring Boot는 현재 그룹의 저장된 관심사, 가족 구성원 호칭과 당일
+   게시글 분석 결과를 통화 시작 프롬프트에 주입한다. 당일 게시글 분석
+   결과 주입은 Tool Calling이 아니다.
 10. 통화 중 사용할 Tool은 다음 두 가지다.
-   - `get_person_recent_post_summaries(person_query)`: 현재 그룹에서 해당 인물의 분석 완료 게시글 요약을 최신 최대 5개 반환한다. 원문 본문과 미디어는 반환하지 않는다. 대상이 모호하면 후보를 확인한다.
-   - `get_calendar_events_by_date(target_date)`: `YYYY-MM-DD` 하나만 받아 해당 날짜와 겹치는 현재 그룹의 모든 일정을 반환한다. `keyword`와 임의 기간 조회는 사용하지 않으며 결과가 없으면 빈 배열을 반환할 수 있다.
-11. 상대 날짜는 `Asia/Seoul` 기준 절대 날짜로 변환한 뒤 일정 Tool에 전달한다.
-12. 서버가 사용자·그룹·세션·권한·시간대 컨텍스트를 주입하며, 모델이 이 값을 사용자 입력으로 받아 신뢰하지 않는다.
+   - `get_person_recent_post_summaries`: 필수 입력은 세션 전용
+     `person_key`다. 현재 그룹에서 해당 인물의 분석 완료 게시글 요약을
+     최신 최대 5개 반환하며 원문 본문과 미디어는 반환하지 않는다.
+   - `get_calendar_events_by_date`: 필수 입력은 사용자의 원문 날짜 표현인
+     `date_expression`이다. 서버가 `Asia/Seoul` 기준 단일 날짜로 해석한 뒤
+     그 날짜와 겹치는 현재 그룹의 모든 일정을 반환한다. `keyword`와 임의
+     기간 조회는 사용하지 않으며 결과가 없으면 빈 배열을 반환할 수 있다.
+11. 모델은 세션 컨텍스트에서 `person_key`를 선택하고 날짜 표현을
+    `date_expression`으로 추출한다. 서버 Tool 로직은 세션·권한·현재 시각·
+    시간대를 검증·주입하고, 날짜가 모호하거나 해석되지 않으면 조회하지
+    않고 확인에 필요한 상태를 반환한다.
+12. 서버가 사용자·그룹·세션·권한·시간대 컨텍스트와 `person_key` 매핑을
+    주입하며, 모델이 이 값을 사용자 입력으로 받아 신뢰하지 않는다.
 13. 연결 결과는 `CONNECTED` 또는 `FAILED`로 처리한다. 세션 상태는 `CONNECTING`, `IN_PROGRESS`, `COMPLETED`, `INCOMPLETE`, `CANCELLED`, `FAILED`를 사용한다. `CONNECTING` 중 연결 성공은 `IN_PROGRESS`, 종료 요청은 `CANCELLED`, 연결 오류는 `FAILED`가 된다. `IN_PROGRESS` 중 종료 요청은 `COMPLETED`, 종료 요청 없이 연결이 끊기면 `INCOMPLETE`가 된다.
 14. `COMPLETED` 통화는 건별 리포트를 생성한다. `INCOMPLETE`는 충분한 transcript가 있을 때만 생성하며, `CANCELLED`·`FAILED`는 리포트를 생성하지 않는다.
 15. 통화 종료 요청은 비동기로 접수하고 중복 종료로 세션·리포트를 중복 생성하지 않는다.
 16. 녹음 원본은 저장하지 않는다. 보호자에게 전체 통화 전문·원본 음성을 노출하지 않고 건별 요약과 보호자 전달 메시지만 제공한다.
+17. Spring Boot는 Sideband의 발화 완료 이벤트를 기준으로 사용자와 AI
+    전사를 `call_transcripts`에 순서대로 저장하고, 통화 종료 상태에 따라
+    Gemini로 건별 리포트를 생성해 `call_reports`에 저장한다.
 
 확정된 예외:
 
@@ -44,15 +65,20 @@
 
 ## 구현 규칙
 
-- 권한: AI 전화는 피보호자만 사용한다. FastAPI가 Access Token, 현재 그룹, 피보호자 권한을 검증한다.
+- 권한: AI 전화는 피보호자만 사용한다. Spring Boot가 Access Token,
+  현재 그룹, 피보호자 권한을 검증한다.
+- `persona_id`는 1~6의 고정 번호로 검증하고, 페르소나 테이블이나 DB
+  외래 키를 사용하지 않는다.
 - 상태와 전이: 위 확정 전이만 사용한다. `CANCELLED`는 연결 전 종료, `FAILED`는 연결 실패, `INCOMPLETE`는 연결 후 비정상 종료를 구분한다.
 - API:
-  - 처리 주체: FastAPI 세션 처리, Spring Boot 일반 권한·업무 API
+  - 처리 주체: Spring Boot 단일 백엔드
   - Method와 Path: `API-CALLS-001`~`API-CALLS-003`의 Method·Path·요청·결과는 [`../contracts/API.md`](../contracts/API.md)를 참조한다. 확인된 세션 생성 경로는 `POST /call-sessions`다.
   - 핵심 입력·결과: `persona_id`, `sdp_offer`, 연결 결과와 종료 상태를 계약에 맞게 교환한다.
 - 데이터:
   - 관련 엔티티: `call_sessions`, `call_transcripts`, `call_reports`
-  - 읽기·쓰기 소유자: FastAPI가 세션·transcript·AI 결과를 직접 기록한다. 테이블 제약은 [`../contracts/DATA_MODEL.md`](../contracts/DATA_MODEL.md)를 따른다.
+  - 읽기·쓰기 소유자: Spring Boot가 세션·transcript·AI 결과를 직접
+    기록한다. 테이블 제약은
+    [`../contracts/DATA_MODEL.md`](../contracts/DATA_MODEL.md)를 따른다.
   - 주요 제약조건: 원본 음성·전체 전문을 보호자 조회 데이터로 만들지 않는다. `call_sessions`에는 상세 disconnect reason 컬럼을 두지 않는다.
 - 화면:
   - 진입점: 피보호자 하단 `AI 전화` 탭, IA `F-1`~`F-3`
@@ -64,7 +90,8 @@
 
 - Given: 승인된 현재 그룹의 피보호자가 페르소나를 선택했다.
 - When: `API-CALLS-001` 계약으로 SDP offer를 제출한다.
-- Then: FastAPI가 권한을 확인하고 WebRTC 통화 세션을 생성한다.
+- Then: Spring Boot가 권한을 확인하고 OpenAI Realtime 통화와 Sideband
+  연결을 생성한 뒤 SDP answer를 반환한다.
 
 ### AC-002
 
@@ -75,12 +102,12 @@
 ### AC-003
 
 - Given: 상대 날짜가 포함된 일정 질문이 있다.
-- When: 일정 Tool을 호출한다.
-- Then: `Asia/Seoul` 기준 `YYYY-MM-DD` 하나만 `target_date`로 전달한다.
+- When: 모델이 날짜 표현을 `date_expression`으로 전달해 일정 Tool을 실행한다.
+- Then: 서버가 `Asia/Seoul` 기준 하나의 날짜로 해석하고 그 날짜와 겹치는
+  현재 그룹 일정을 조회하며, 날짜가 모호하면 조회하지 않는다.
 
 ## 미결정 사항
 
-- 상대 날짜 변환을 수행하는 애플리케이션 계층
 - 초기 페르소나 목록과 음성 예시·고지 방식
 - 통화 transcript 보존 기간과 삭제 정책
 - 장기 기억의 도입 시점과 저장 범위
