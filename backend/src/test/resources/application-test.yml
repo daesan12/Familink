@@ -1,4 +1,7 @@
 app:
+  ai-analysis:
+    fixed-delay-ms: 3600000
+    initial-delay-ms: 3600000
   auth:
     secret: test-only-access-token-signing-secret-value
   storage:

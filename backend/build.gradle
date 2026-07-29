@@ -45,5 +45,12 @@ dependencies {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		if (!project.hasProperty('includeManualGms')) {
+			excludeTags 'manual-gms'
+		}
+		if (!project.hasProperty('includeManualGemini')) {
+			excludeTags 'manual-gemini'
+		}
+	}
 }
