@@ -15,7 +15,9 @@ public enum ErrorCode {
 	INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "Refresh Token 만료·위조·폐기"),
 	FORBIDDEN(HttpStatus.FORBIDDEN, "역할 또는 리소스 접근 권한 부족"),
 	LOGIN_ID_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 로그인 아이디"),
-	MANAGER_TRANSFER_REQUIRED(HttpStatus.CONFLICT, "다른 활성 구성원에게 관리자 권한을 위임한 후 탈퇴해야 함");
+	MANAGER_TRANSFER_REQUIRED(HttpStatus.CONFLICT, "다른 활성 구성원에게 관리자 권한을 위임한 후 탈퇴해야 함"),
+	GROUP_HAS_ACTIVE_MEMBERS(HttpStatus.CONFLICT, "다른 활성 구성원이 있는 그룹은 삭제할 수 없음"),
+	GROUP_NAME_MISMATCH(HttpStatus.CONFLICT, "확인용 그룹 이름이 그룹 이름과 일치하지 않음");
 
 	private final HttpStatus status;
 	private final String message;
