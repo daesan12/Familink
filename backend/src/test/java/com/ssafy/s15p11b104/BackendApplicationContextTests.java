@@ -20,9 +20,13 @@ import com.ssafy.s15p11b104.domain.feed.repository.PostAnalysisRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.CommentRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostReactionRepository;
+import com.ssafy.s15p11b104.domain.group.repository.FamilyGroupRepository;
+import com.ssafy.s15p11b104.domain.group.repository.GroupJoinRequestRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberInterestRepository;
+
+import jakarta.persistence.EntityManager;
 
 @SpringBootTest(properties = {
 	"spring.autoconfigure.exclude="
@@ -47,6 +51,15 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private GroupMemberRepository groupMemberRepository;
+
+	@MockitoBean
+	private FamilyGroupRepository familyGroupRepository;
+
+	@MockitoBean
+	private GroupJoinRequestRepository groupJoinRequestRepository;
+
+	@MockitoBean
+	private EntityManager entityManager;
 
 	@MockitoBean
 	private MemberInterestRepository memberInterestRepository;
