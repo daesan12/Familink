@@ -11,6 +11,7 @@ import com.google.genai.Client;
 import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.GenerateContentResponse;
+import com.google.genai.types.HttpOptions;
 import com.google.genai.types.Part;
 import com.google.genai.types.Schema;
 import com.google.genai.types.Type;
@@ -26,10 +27,19 @@ public class GoogleGeminiGateway implements GeminiGateway {
 
 	private final Client client;
 
-	public GoogleGeminiGateway(@Value("${gemini.analysis.api-key:}") String apiKey) {
+	public GoogleGeminiGateway(
+		@Value("${gemini.analysis.api-key:}") String apiKey,
+		@Value("${gemini.analysis.base-url:https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com}") String baseUrl) {
 		client = apiKey == null || apiKey.isBlank()
 			? null
-			: Client.builder().apiKey(apiKey).build();
+			: Client.builder()
+				.apiKey(apiKey)
+				.httpOptions(HttpOptions.builder()
+					.baseUrl(baseUrl)
+					.apiVersion("v1beta")
+					.headers(Map.of("x-goog-api-key", apiKey))
+					.build())
+				.build();
 	}
 
 	@Override
