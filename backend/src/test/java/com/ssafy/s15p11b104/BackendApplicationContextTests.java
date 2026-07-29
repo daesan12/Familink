@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberInterestRepository;
 
 @SpringBootTest(properties = {
@@ -44,6 +45,9 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private MemberInterestRepository memberInterestRepository;
+
+	@MockitoBean
+	private MemberAliasRepository memberAliasRepository;
 
 	@Test
 	void healthEndpointIsPublic() throws Exception {
