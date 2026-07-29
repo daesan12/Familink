@@ -19,6 +19,7 @@ import com.ssafy.s15p11b104.domain.group.dto.GroupListResponse;
 import com.ssafy.s15p11b104.domain.group.dto.GroupSummaryResponse;
 import com.ssafy.s15p11b104.domain.group.dto.GroupUpdateRequest;
 import com.ssafy.s15p11b104.domain.group.dto.GroupUpdateResponse;
+import com.ssafy.s15p11b104.domain.group.dto.InviteCodeResponse;
 import com.ssafy.s15p11b104.domain.group.dto.JoinRequestSummaryResponse;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
@@ -128,6 +129,14 @@ public class GroupService {
 			guardianCount,
 			careReceiverCount,
 			activeMembers.size());
+	}
+
+	@Transactional(readOnly = true)
+	public InviteCodeResponse getInviteCode(Long groupId, Long authenticatedUserId) {
+		GroupMember requester = groupMemberRepository
+			.findActiveByGroupIdAndUserId(groupId, authenticatedUserId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+		return new InviteCodeResponse(requester.getGroup().getInviteCode());
 	}
 
 	@Transactional
