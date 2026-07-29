@@ -52,4 +52,8 @@ public class PostReaction extends BaseEntity {
 	public ReactionType getReactionType() {
 		return reactionType;
 	}
+
+	public void changeReactionType(ReactionType reactionType) {
+		this.reactionType = reactionType;
+	}
 }
