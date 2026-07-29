@@ -4,8 +4,11 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 
@@ -20,6 +23,19 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 		  and member.leftAt is null
 		""")
 	Optional<GroupMember> findActiveByGroupIdAndUserId(
+		@Param("groupId") Long groupId,
+		@Param("userId") Long userId);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+		select member
+		from GroupMember member
+		join fetch member.user
+		where member.group.id = :groupId
+		  and member.user.id = :userId
+		  and member.leftAt is null
+		""")
+	Optional<GroupMember> findActiveForUpdateByGroupIdAndUserId(
 		@Param("groupId") Long groupId,
 		@Param("userId") Long userId);
 
