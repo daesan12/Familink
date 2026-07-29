@@ -11,4 +11,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	boolean existsByLoginId(String loginId);
 
 	Optional<User> findByLoginIdAndWithdrawnAtIsNull(String loginId);
+
+	Optional<User> findByIdAndWithdrawnAtIsNull(Long id);
 }

@@ -1,5 +1,6 @@
 package com.ssafy.s15p11b104.domain.group.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -33,4 +34,21 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 	Optional<GroupMember> findActiveByGroupIdAndMemberId(
 		@Param("groupId") Long groupId,
 		@Param("memberId") Long memberId);
+
+	@Query("""
+		select member
+		from GroupMember member
+		where member.user.id = :userId
+		  and member.leftAt is null
+		""")
+	List<GroupMember> findAllActiveByUserId(@Param("userId") Long userId);
+
+	@Query("""
+		select count(member) > 0
+		from GroupMember member
+		where member.user.id = :userId
+		  and member.leftAt is null
+		  and member.manager = true
+		""")
+	boolean existsActiveManagerByUserId(@Param("userId") Long userId);
 }

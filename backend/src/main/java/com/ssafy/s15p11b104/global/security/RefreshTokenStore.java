@@ -110,6 +110,18 @@ public class RefreshTokenStore {
 		return isApplied(deleted);
 	}
 
+	/**
+	 * 저장된 토큰과 무관하게 해당 사용자의 Refresh Token을 폐기한다.
+	 *
+	 * <p>탈퇴는 특정 토큰이 아니라 사용자의 세션 자체를 끝내므로, 요청에 실리지 않은 다른 기기의
+	 * 토큰까지 함께 끊어야 한다.
+	 *
+	 * @param userId 토큰 소유자의 사용자 ID
+	 */
+	public void revoke(Long userId) {
+		redisTemplate.delete(toKey(userId));
+	}
+
 	private boolean isApplied(Long scriptResult) {
 		return scriptResult != null && scriptResult > 0;
 	}
