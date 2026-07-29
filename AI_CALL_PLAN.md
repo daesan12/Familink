@@ -438,13 +438,13 @@ IN_PROGRESS -> INCOMPLETE
 
 ### 추가 검증 필요
 
-- [ ] 여섯 페르소나 실제 양방향 음성 통화 수동 E2E
-- [ ] `AiCallPromptContextProvider`의 KST 날짜 경계 통합 테스트
-- [ ] `SUCCESS` 게시글과 타 그룹 데이터 격리 통합 테스트
-- [ ] 가장 최근 `call_reports` 한 건 선택 통합 테스트
-- [ ] API 동시 요청 기반 활성 통화 중복 방지 통합 테스트
+- [x] 여섯 페르소나 실제 양방향 음성 통화 수동 E2E
+- [x] `AiCallPromptContextProvider`의 KST 날짜 경계 통합 테스트
+- [x] `SUCCESS` 게시글과 타 그룹 데이터 격리 통합 테스트
+- [x] 가장 최근 `call_reports` 한 건 선택 통합 테스트
+- [x] API 동시 요청 기반 활성 통화 중복 방지 통합 테스트
 - [ ] 실제 OpenAI Sideband 장애·제한 시간 E2E
-- [ ] 실제 OpenAI의 한국어 사용자·AI 완료 전사 순차 저장 E2E
+- [x] 실제 OpenAI의 한국어 사용자·AI 완료 전사 순차 저장 E2E
 
 실제 통화 실행 절차는 [AI_CALL_README.md](./AI_CALL_README.md)를 따른다.
 
