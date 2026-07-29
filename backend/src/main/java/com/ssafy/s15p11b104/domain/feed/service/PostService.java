@@ -20,6 +20,7 @@ import com.ssafy.s15p11b104.domain.feed.entity.PostMedia;
 import com.ssafy.s15p11b104.domain.feed.repository.PostAnalysisRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostMediaRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
+import com.ssafy.s15p11b104.domain.carnation.service.CarnationService;
 import com.ssafy.s15p11b104.domain.file.config.S3Properties;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
@@ -34,18 +35,21 @@ public class PostService {
 	private final PostMediaRepository postMediaRepository;
 	private final PostAnalysisRepository postAnalysisRepository;
 	private final S3Properties s3Properties;
+	private final CarnationService carnationService;
 
 	public PostService(
 		GroupMemberRepository groupMemberRepository,
 		PostRepository postRepository,
 		PostMediaRepository postMediaRepository,
 		PostAnalysisRepository postAnalysisRepository,
-		S3Properties s3Properties) {
+		S3Properties s3Properties,
+		CarnationService carnationService) {
 		this.groupMemberRepository = groupMemberRepository;
 		this.postRepository = postRepository;
 		this.postMediaRepository = postMediaRepository;
 		this.postAnalysisRepository = postAnalysisRepository;
 		this.s3Properties = s3Properties;
+		this.carnationService = carnationService;
 	}
 
 	@Transactional
@@ -89,6 +93,7 @@ public class PostService {
 		GroupMember author = getActiveMember(groupId, authenticatedUserId);
 		Post post = postRepository.save(new Post(author.getGroup(), author, request.content()));
 		replaceMedia(post, request.mediaType(), request.media());
+		carnationService.earnForPost(author);
 		return new PostCreatedItem(post.getId(), groupId);
 	}
 
