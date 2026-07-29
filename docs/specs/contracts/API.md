@@ -7,13 +7,26 @@
 Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 요청,
 성공 결과와 원본에 명시된 오류를 옮겼다.
 
-표의 성공 결과는 원본 성공 응답의 핵심 `data` 내용이다. 공통 응답 봉투의
-세부 형태가 행에 적혀 있지 않다면 임의로 만들지 않는다. 오류가 “명시 없음”인
-행에도 구현자가 관례적인 오류 코드를 추가해서는 안 되며, 먼저 계약을
-확정해야 한다.
+표의 성공 결과는 원본 성공 응답의 핵심 `data` 내용이다. 오류가 “명시
+없음”인 행에도 구현자가 관례적인 오류 코드를 추가해서는 안 되며, 먼저
+계약을 확정해야 한다.
 
 ## 공통 경계
 
+- 본문이 있는 성공 응답은 최상위에 `success=true`, API별 성공 문구인
+  `message`, 표의 성공 결과로 구성한 객체인 `data`를 둔다.
+- 실패 응답은 최상위에 `success=false`, 표의 명시 오류 문자열인 `code`,
+  오류 문구인 `message`, 필드 검증 실패 목록인 `errors`를 두며 `data`를
+  포함하지 않는다. 필드별 오류는 `field`, `message`로 구성하고 필드 단위
+  원인이 없으면 `errors`는 빈 배열이다.
+- `204 No Content` 성공 응답은 공통 응답 봉투를 포함하지 않는다.
+- 확인된 성공 문구는 `API-AUTH-001`의 `로그인 아이디 중복 확인 성공`,
+  `API-AUTH-002`의 `회원가입 성공`, `API-AUTH-003`의 `로그인 성공`,
+  `API-AUTH-004`의 `토큰 재발급 성공`이다. 다른 API의 성공 문구는 각
+  API의 확정 원본이나 별도 결정을 따른다.
+- 확인된 오류 문구는 `INVALID_REQUEST`의 `요청 형식 또는 검증 실패`,
+  `LOGIN_ID_DUPLICATED`의 `이미 사용 중인 로그인 아이디`,
+  `INVALID_CREDENTIALS`의 `아이디 또는 비밀번호가 일치하지 않습니다.`다.
 - 모든 API의 Method와 Path는 이 문서 표의 값을 사용한다. 표에 적힌 Path가
   공식 구현 경로이며 `/api/v1`,
   `/internal/v1` 등의 별도 기본 경로를 앞에 추가하지 않는다.
@@ -25,6 +38,9 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
   사용한다.
 - 회원가입과 로그인은 `loginId`와 `password`를 사용한다. 이메일
   회원가입·로그인·인증은 지원하지 않는다.
+- `API-AUTH-001`과 `API-AUTH-002`의 `loginId`는 5~15자이며 현재
+  `\S+` 검증이 인식하는 공백 문자를 거부한다. 최종 허용 문자 집합,
+  대소문자 구분과 정규화 규칙은 확정하지 않는다.
 - 그룹 데이터는 해당 그룹의 활성 구성원 범위에서만 접근한다.
 - Spring Boot 통화 API는 Access Token으로 사용자, 현재 그룹, 피보호자
   구성원과 권한을 확인한다. 클라이언트가 이 값을 별도 식별자로 보내지 않는다.
@@ -37,12 +53,19 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 |---|---|---|---|---|---|
 | `API-AUTH-001` | `GET /auth/login-id/check` | Spring Boot · 공개 | query `loginId` | `200`: `available` | `400 INVALID_REQUEST` |
 | `API-AUTH-002` | `POST /auth/signup` | Spring Boot · 공개 | `loginId`, `password`, `name`, `birthDate`, `gender` | `201`: `userId`, `loginId`, `name`, `createdAt` | `400 INVALID_REQUEST`; `409 LOGIN_ID_DUPLICATED` |
-| `API-AUTH-003` | `POST /auth/login` | Spring Boot · 공개 | `loginId`, `password` | `200`: `tokenType`, `accessToken`, `accessTokenExpiresIn`, `refreshToken`, `user{id,name}` | `400 INVALID_REQUEST`; `401 INVALID_CREDENTIALS` |
-| `API-AUTH-004` | `POST /auth/reissue` | Spring Boot · Refresh Token | `refreshToken` | `200`: `tokenType`, `accessToken`, `accessTokenExpiresIn`, `refreshToken` | `400 INVALID_REQUEST`; `401 INVALID_REFRESH_TOKEN` |
+| `API-AUTH-003` | `POST /auth/login` | Spring Boot · 공개 | `loginId`, `password` | `200`: `tokenType=Bearer`, `accessToken`, `accessTokenExpiresIn=1800`, `refreshToken`, `user{id,name}` | `400 INVALID_REQUEST`; `401 INVALID_CREDENTIALS` |
+| `API-AUTH-004` | `POST /auth/reissue` | Spring Boot · Refresh Token | `refreshToken` | `200`: `tokenType=Bearer`, `accessToken`, `accessTokenExpiresIn=1800`, `refreshToken` | `400 INVALID_REQUEST`; `401 INVALID_REFRESH_TOKEN` |
 | `API-AUTH-005` | `POST /auth/logout` | Spring Boot · 토큰 소유자 | `refreshToken` | `204 No Content` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-USERS-001` | `GET /users/me` | Spring Boot · 본인 | 없음 | `200`: `loginId`, `name`, `birthDate`, `gender`, `profileImageUrl` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-USERS-002` | `PATCH /users/me` | Spring Boot · 본인 | `name`, `loginId`, `birthDate`, `gender`, `profileImageUrl` | `200`: `id`, `name`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `409 LOGIN_ID_DUPLICATED` |
 | `API-USERS-003` | `DELETE /users/me` | Spring Boot · 본인 | 없음 | `204 No Content` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `409 MANAGER_TRANSFER_REQUIRED` |
+
+- `API-AUTH-004`는 현재 Redis에 저장된 Refresh Token과 요청 토큰이 같을
+  때만 새 Token Pair로 원자적으로 회전한다. 성공하면 기존 Refresh Token은
+  즉시 무효화되고 새 Refresh Token의 유효 기간은 기본 14일로 다시 시작한다.
+- `API-AUTH-005`는 인증에 사용한 Access Token을 남은 만료 시간 동안
+  블랙리스트에 등록하고, 요청 Refresh Token이 현재 저장값일 때 사용자별
+  Refresh Token 키를 삭제한다.
 
 ## 그룹·구성원·관심사
 
