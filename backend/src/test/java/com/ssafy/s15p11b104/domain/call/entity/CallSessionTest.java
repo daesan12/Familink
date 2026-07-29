@@ -56,6 +56,30 @@ class CallSessionTest {
 	}
 
 	@Test
+	void preservesFirstTerminalStatusAcrossDuplicateTerminationSignals() {
+		CallSession incomplete = createSession();
+		Instant connectedAt = Instant.parse("2026-07-28T01:00:00Z");
+		Instant disconnectedAt = Instant.parse("2026-07-28T01:02:00Z");
+		incomplete.markConnected(connectedAt);
+		incomplete.markUnexpectedDisconnect(disconnectedAt);
+
+		incomplete.endByUser(disconnectedAt.plusSeconds(1));
+
+		assertThat(incomplete.getStatus()).isEqualTo(CallStatus.INCOMPLETE);
+		assertThat(incomplete.getEndedAt()).isEqualTo(disconnectedAt);
+
+		CallSession completed = createSession();
+		Instant endedAt = Instant.parse("2026-07-28T01:03:00Z");
+		completed.markConnected(connectedAt);
+		completed.endByUser(endedAt);
+
+		completed.markUnexpectedDisconnect(endedAt.plusSeconds(1));
+
+		assertThat(completed.getStatus()).isEqualTo(CallStatus.COMPLETED);
+		assertThat(completed.getEndedAt()).isEqualTo(endedAt);
+	}
+
+	@Test
 	void rejectsConnectedTransitionFromTerminalState() {
 		CallSession session = createSession();
 		session.markConnectionFailed(Instant.parse("2026-07-28T01:00:00Z"));

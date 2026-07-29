@@ -1,12 +1,14 @@
+// 백엔드 PersonaCatalog의 ID·음성 매핑과 동일하게 유지한다.
 const personas = [
-	{ id: 1, name: "든든한 아들", voice: "cedar", initial: "아", description: "침착하고 믿음직하게 안부와 건강을 살펴요." },
-	{ id: 2, name: "살가운 딸", voice: "coral", initial: "딸", description: "일상과 감정을 세심하게 묻고 공감해요." },
-	{ id: 3, name: "활기찬 손자", voice: "ash", initial: "손", description: "밝은 분위기로 취미와 가족 이야기를 나눠요." },
-	{ id: 4, name: "다정한 손녀", voice: "shimmer", initial: "녀", description: "작은 이야기에도 따뜻하게 귀 기울여요." },
-	{ id: 5, name: "편안한 오랜 친구", voice: "marin", initial: "친", description: "부담 없이 동등한 친구처럼 대화해요." },
-	{ id: 6, name: "차분한 생활 도우미", voice: "sage", initial: "도", description: "일정과 생활 정보를 정확하고 간결하게 안내해요." },
+	{ id: 1, name: "사랑스러운 아들", voice: "ash", initial: "아", description: "엄마·아빠라고 부르며 다정한 존댓말로 대화해요." },
+	{ id: 2, name: "사랑스러운 딸", voice: "sage", initial: "딸", description: "엄마·아빠라고 부르며 세심한 존댓말로 대화해요." },
+	{ id: 3, name: "남자 비서", voice: "cedar", initial: "비", description: "회장님·사모님이라고 부르며 격식 있게 보좌해요." },
+	{ id: 4, name: "여자 비서", voice: "marin", initial: "서", description: "회장님·사모님이라고 부르며 세심하고 격식 있게 보좌해요." },
+	{ id: 5, name: "친구 학수", voice: "verse", initial: "학", description: "친구처럼 반말과 자연스러운 경상도 사투리로 대화해요." },
+	{ id: 6, name: "친구 복희", voice: "ballad", initial: "복", description: "친구처럼 반말과 자연스러운 전라도 사투리로 대화해요." },
 ];
 
+// 화면 전환과 상태 갱신에 사용하는 DOM 요소를 시작 시 한 번만 조회한다.
 const ui = {
 	selectionScreen: document.querySelector("#selectionScreen"),
 	callScreen: document.querySelector("#callScreen"),
@@ -33,6 +35,8 @@ const ui = {
 	toast: document.querySelector("#toast"),
 };
 
+// 한 번의 통화에서 공유하는 브라우저 런타임 상태다.
+// 서버에 저장되는 통화 상태와는 별개이며, 선택 화면 복귀나 새 통화 시작 시 초기화한다.
 const call = {
 	selectedPersonaId: 3,
 	callSessionId: null,
@@ -52,6 +56,7 @@ const call = {
 	captionHistory: [],
 };
 
+// 페르소나 목록을 접근 가능한 radio 형태의 버튼으로 구성한다.
 function renderPersonas() {
 	ui.personaGrid.replaceChildren();
 	for (const persona of personas) {
@@ -104,6 +109,7 @@ async function startCall() {
 	log("마이크 권한 요청");
 
 	try {
+		// 브라우저 기본 음성 보정 기능을 켠 마이크 스트림을 준비한다.
 		call.localStream = await navigator.mediaDevices.getUserMedia({
 			audio: {
 				echoCancellation: true,
@@ -114,6 +120,7 @@ async function startCall() {
 		throwIfCallCancelled();
 		log("마이크 스트림 준비 완료");
 
+		// 마이크 트랙은 WebRTC로 보내고, OpenAI의 원격 음성 트랙은 별도 이벤트로 받는다.
 		call.peerConnection = new RTCPeerConnection();
 		call.peerConnection.addEventListener("track", handleRemoteTrack);
 		call.peerConnection.addEventListener("connectionstatechange", handleConnectionStateChange);
@@ -121,17 +128,20 @@ async function startCall() {
 			call.peerConnection.addTrack(track, call.localStream);
 		}
 
+		// 음성과 별도로 Realtime 이벤트를 받아 AI 발화 자막과 화면 상태를 갱신한다.
 		call.dataChannel = call.peerConnection.createDataChannel("oai-events");
 		call.dataChannel.addEventListener("open", () => log("Realtime 이벤트 채널 연결"));
 		call.dataChannel.addEventListener("message", handleRealtimeEvent);
 		call.dataChannel.addEventListener("close", () => log("Realtime 이벤트 채널 종료"));
 
+		// 브라우저가 만든 SDP offer를 서버에 보내고, OpenAI가 만든 answer를 돌려받는다.
 		setCallState("연결 중", "WebRTC SDP를 교환하고 있습니다");
 		const offer = await call.peerConnection.createOffer();
 		await call.peerConnection.setLocalDescription(offer);
 		throwIfCallCancelled();
 		log("SDP offer 생성");
 
+		// 연결 중 종료 버튼을 누를 수 있으므로 생성 요청 Promise를 보관해 종료 처리와 공유한다.
 		call.sessionCreationPromise = createCallSession(persona.id, offer.sdp);
 		const payload = await call.sessionCreationPromise;
 		call.callSessionId = payload.call_session_id;
@@ -146,24 +156,31 @@ async function startCall() {
 		throwIfCallCancelled();
 		log("SDP answer 적용");
 
+		// WebRTC 연결이 실제로 완료된 뒤에만 서버 세션을 IN_PROGRESS로 전환한다.
 		await waitForConnected(call.peerConnection, 20_000);
 		throwIfCallCancelled();
 		await reportConnectionResult("CONNECTED");
 		throwIfCallCancelled();
+		if (isConnectionLost()) {
+			await endAfterConnectionLoss();
+			return;
+		}
 		beginTimer();
 		setCallState("통화 중", "말씀하시면 AI가 답합니다");
 		log("WebRTC 통화 연결 완료");
 	} catch (error) {
 		call.sessionCreationPromise = null;
+		// 사용자가 연결을 취소한 경우에는 오류 화면을 띄우지 않고 로컬 자원만 정리한다.
 		if (error instanceof CallCancelledError || call.cancelRequested) {
 			cleanupMedia();
 			return;
 		}
 		log(`연결 실패: ${safeErrorMessage(error)}`);
 		await reportConnectionResult("FAILED", "WEBRTC_CONNECTION_FAILED");
+		// 실패 결과를 기록하지 못했다면 종료 API라도 호출해 CONNECTING 세션이 남지 않게 한다.
 		if (call.callSessionId && !call.connectionReported) {
 			try {
-				await requestCallEnd();
+				await requestCallEnd("CONNECTION_LOST");
 			} catch (cleanupError) {
 				log(`실패 세션 정리 실패: ${safeErrorMessage(cleanupError)}`);
 			}
@@ -175,6 +192,7 @@ async function startCall() {
 }
 
 function handleRemoteTrack(event) {
+	// OpenAI가 보낸 음성 스트림을 숨겨진 audio 요소에 연결해 재생한다.
 	const [stream] = event.streams;
 	if (stream) {
 		ui.remoteAudio.srcObject = stream;
@@ -190,9 +208,15 @@ function handleConnectionStateChange() {
 		return;
 	}
 	log(`WebRTC 상태: ${state}`);
-	if ((state === "failed" || state === "disconnected") && call.startedAt && !call.ending) {
+	// 통화 시작 후의 단절만 서버 종료 API로 정리한다. 연결 단계 실패는 startCall의 catch가 처리한다.
+	if (isConnectionLost() && call.startedAt && !call.ending) {
 		void endAfterConnectionLoss();
 	}
+}
+
+function isConnectionLost() {
+	const state = call.peerConnection?.connectionState;
+	return state === "failed" || state === "disconnected";
 }
 
 async function endAfterConnectionLoss() {
@@ -200,7 +224,7 @@ async function endAfterConnectionLoss() {
 	call.cancelRequested = true;
 	log("WebRTC 연결 단절 감지");
 	try {
-		await requestCallEnd();
+		await requestCallEnd("CONNECTION_LOST");
 		finishLocally("연결이 종료되었습니다.");
 	} catch (error) {
 		log(`연결 단절 정리 실패: ${safeErrorMessage(error)}`);
@@ -209,6 +233,7 @@ async function endAfterConnectionLoss() {
 }
 
 function handleRealtimeEvent(message) {
+	// DataChannel 메시지는 OpenAI Realtime 이벤트 JSON이다.
 	let event;
 	try {
 		event = JSON.parse(message.data);
@@ -217,10 +242,12 @@ function handleRealtimeEvent(message) {
 		return;
 	}
 
+	// 오디오 chunk는 매우 자주 오므로 개발 로그에서 제외한다.
 	if (event.type !== "response.output_audio.delta") {
 		log(`Realtime: ${event.type}`);
 	}
 
+	// delta는 화면에 즉시 이어 붙이고, 완료 이벤트가 오면 하나의 확정 발화로 보관한다.
 	if (event.type === "response.output_audio_transcript.delta") {
 		call.captionDraft += event.delta ?? "";
 		ui.captionCurrent.textContent = call.captionDraft;
@@ -249,6 +276,7 @@ function handleRealtimeEvent(message) {
 }
 
 function renderCaptions() {
+	// 화면이 길어지지 않도록 최근 AI 발화 세 건만 표시한다.
 	const previous = call.captionHistory.slice(0, -1);
 	const current = call.captionHistory.at(-1) || "";
 	ui.captionHistory.textContent = previous.join(" ") || "AI 실시간 자막";
@@ -266,11 +294,12 @@ async function endCall() {
 	log("통화 종료 요청");
 
 	try {
+		// 세션 생성 중 종료했다면 생성 응답에서 ID를 받은 뒤 즉시 종료한다.
 		if (!call.callSessionId && call.sessionCreationPromise) {
 			const payload = await call.sessionCreationPromise;
 			call.callSessionId = payload.call_session_id;
 		}
-		await requestCallEnd();
+		await requestCallEnd("USER_REQUESTED");
 		finishLocally("편안한 대화가 되었기를 바랍니다.");
 	} catch (error) {
 		log(`종료 API 실패: ${safeErrorMessage(error)}`);
@@ -291,6 +320,7 @@ function finishLocally(message) {
 
 function toggleMicrophone() {
 	call.microphoneOn = !call.microphoneOn;
+	// 로컬 마이크 트랙만 비활성화하므로 원격 AI 음성은 계속 들을 수 있다.
 	for (const track of call.localStream?.getAudioTracks() ?? []) {
 		track.enabled = call.microphoneOn;
 	}
@@ -301,6 +331,7 @@ function toggleMicrophone() {
 
 function toggleSpeaker() {
 	call.speakerOn = !call.speakerOn;
+	// 원격 audio 요소만 음소거하며 WebRTC 연결과 마이크 송신은 유지한다.
 	ui.remoteAudio.muted = !call.speakerOn;
 	ui.speakerButton.setAttribute("aria-pressed", String(call.speakerOn));
 	ui.speakerButton.setAttribute("aria-label", call.speakerOn ? "스피커 끄기" : "스피커 켜기");
@@ -308,6 +339,7 @@ function toggleSpeaker() {
 }
 
 async function reportConnectionResult(result, errorCode) {
+	// 동일 브라우저에서 연결 결과를 중복 보고하지 않는다.
 	if (!call.callSessionId || call.connectionReported) {
 		return;
 	}
@@ -332,6 +364,7 @@ async function reportConnectionResult(result, errorCode) {
 }
 
 async function createCallSession(personaId, sdpOffer) {
+	// 서버가 권한·페르소나를 검증하고 OpenAI와 SDP를 교환한다.
 	const response = await fetch("/call-sessions", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -343,17 +376,22 @@ async function createCallSession(personaId, sdpOffer) {
 	return readApiResponse(response);
 }
 
-async function requestCallEnd() {
+async function requestCallEnd(terminationType = "USER_REQUESTED") {
 	if (!call.callSessionId) {
 		return;
 	}
 	const response = await fetch(`/call-sessions/${call.callSessionId}/end`, {
 		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			termination_type: terminationType,
+		}),
 	});
 	await readApiResponse(response);
 }
 
 function throwIfCallCancelled() {
+	// 비동기 연결 단계 사이마다 호출해 늦게 도착한 응답이 취소된 통화를 다시 진행하지 못하게 한다.
 	if (call.cancelRequested) {
 		throw new CallCancelledError();
 	}
@@ -364,6 +402,7 @@ function waitForConnected(peerConnection, timeoutMs) {
 		return Promise.resolve();
 	}
 	return new Promise((resolve, reject) => {
+		// 브라우저별 연결 지연이 무한 대기로 이어지지 않도록 제한 시간을 둔다.
 		const timeoutId = window.setTimeout(() => {
 			peerConnection.removeEventListener("connectionstatechange", handleState);
 			reject(new Error("20초 안에 통화가 연결되지 않았습니다."));
@@ -390,6 +429,7 @@ function waitForConnected(peerConnection, timeoutMs) {
 }
 
 async function readApiResponse(response) {
+	// 성공 응답과 공통 오류 응답을 한 곳에서 해석해 호출부의 처리를 단순화한다.
 	const contentType = response.headers.get("content-type") || "";
 	const payload = contentType.includes("application/json") ? await response.json() : null;
 	if (!response.ok) {
@@ -418,6 +458,7 @@ function formatDuration(seconds) {
 }
 
 function cleanupMedia() {
+	// 브라우저의 타이머·DataChannel·WebRTC·마이크를 모두 해제한다.
 	if (call.timerId) {
 		window.clearInterval(call.timerId);
 		call.timerId = null;
@@ -434,6 +475,7 @@ function cleanupMedia() {
 }
 
 function resetCallRuntime() {
+	// 새 통화가 이전 통화의 ID, 자막, 취소 상태를 이어받지 않도록 초기 상태로 되돌린다.
 	cleanupMedia();
 	call.callSessionId = null;
 	call.startedAt = null;
@@ -477,6 +519,7 @@ function setCallState(status, detail) {
 function showError(message) {
 	ui.toast.textContent = message;
 	ui.toast.classList.remove("is-hidden");
+	// 연속 오류가 발생하면 이전 숨김 타이머를 취소해 마지막 메시지를 5초간 보장한다.
 	window.clearTimeout(showError.timeoutId);
 	showError.timeoutId = window.setTimeout(() => ui.toast.classList.add("is-hidden"), 5000);
 }
@@ -509,8 +552,13 @@ ui.backButton.addEventListener("click", returnToSelection);
 
 window.addEventListener("beforeunload", () => {
 	if (call.callSessionId && !call.ending) {
+		// 페이지 종료 중에도 서버에 종료 요청이 전송되도록 keepalive를 사용한다.
 		fetch(`/call-sessions/${call.callSessionId}/end`, {
 			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				termination_type: "USER_REQUESTED",
+			}),
 			keepalive: true,
 		}).catch(() => {});
 	}

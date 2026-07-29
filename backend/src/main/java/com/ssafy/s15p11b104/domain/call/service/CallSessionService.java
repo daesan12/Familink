@@ -11,6 +11,7 @@ import org.springframework.util.StringUtils;
 
 import com.ssafy.s15p11b104.domain.call.dto.CallConnectionResultRequest;
 import com.ssafy.s15p11b104.domain.call.dto.CallSessionIdResponse;
+import com.ssafy.s15p11b104.domain.call.dto.CallTerminationType;
 import com.ssafy.s15p11b104.domain.call.dto.ConnectionResult;
 import com.ssafy.s15p11b104.domain.call.dto.CreateCallSessionRequest;
 import com.ssafy.s15p11b104.domain.call.dto.CreateCallSessionResponse;
@@ -109,12 +110,12 @@ public class CallSessionService {
 		return new CallSessionIdResponse(callSessionId);
 	}
 
-	public CallSessionIdResponse end(Long callSessionId) {
+	public CallSessionIdResponse end(Long callSessionId, CallTerminationType terminationType) {
 		CallActor actor = callActorResolver.resolve();
 		Objects.requireNonNull(transactionTemplate.execute(status -> {
 			CallSession session = findOwnedSessionForUpdate(callSessionId, actor);
 			try {
-				session.endByUser(Instant.now());
+				applyTermination(session, terminationType);
 			} catch (IllegalStateException exception) {
 				throw CallApiException.invalidCallStatus();
 			}
@@ -122,6 +123,14 @@ public class CallSessionService {
 		}));
 		hangUp(callSessionId);
 		return new CallSessionIdResponse(callSessionId);
+	}
+
+	private void applyTermination(CallSession session, CallTerminationType terminationType) {
+		if (terminationType == CallTerminationType.CONNECTION_LOST) {
+			session.markUnexpectedDisconnect(Instant.now());
+			return;
+		}
+		session.endByUser(Instant.now());
 	}
 
 	private PreparedCall prepareCall(CallActor actor, PersonaDefinition persona) {
@@ -141,7 +150,7 @@ public class CallSessionService {
 			CallStatus.CONNECTING
 		));
 		AiCallPromptContext context = promptContextProvider.load(careReceiver);
-		String instructions = promptComposer.compose(persona, context);
+		String instructions = promptComposer.compose(persona, careReceiver.getUser().getGender(), context);
 		return new PreparedCall(session.getId(), instructions);
 	}
 

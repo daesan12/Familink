@@ -95,7 +95,7 @@ public class CallSession extends CreatedAtEntity {
 			status = CallStatus.CANCELLED;
 		} else if (status == CallStatus.IN_PROGRESS) {
 			status = CallStatus.COMPLETED;
-		} else if (status == CallStatus.CANCELLED || status == CallStatus.COMPLETED) {
+		} else if (isTerminal()) {
 			return;
 		} else {
 			throw new IllegalStateException("현재 통화 상태에서는 종료할 수 없습니다.");
@@ -112,6 +112,13 @@ public class CallSession extends CreatedAtEntity {
 			return;
 		}
 		endedAt = disconnectedAt;
+	}
+
+	private boolean isTerminal() {
+		return status == CallStatus.COMPLETED
+			|| status == CallStatus.INCOMPLETE
+			|| status == CallStatus.CANCELLED
+			|| status == CallStatus.FAILED;
 	}
 
 	private void requireStatus(CallStatus expected) {

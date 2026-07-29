@@ -45,7 +45,7 @@ class OpenAiRealtimeGatewayTest {
 
 		OpenAiCall call = gateway.createCall(
 			"v=0\r\ns=browser\r\n",
-			new PersonaDefinition(1L, "든든한 아들", "cedar", "침착하게 대화합니다."),
+			new PersonaCatalog().get(1L),
 			"테스트 프롬프트",
 			10L
 		);
@@ -62,7 +62,7 @@ class OpenAiRealtimeGatewayTest {
 
 		assertThatThrownBy(() -> gateway.createCall(
 			"v=0\r\n",
-			new PersonaDefinition(1L, "든든한 아들", "cedar", "침착하게 대화합니다."),
+			new PersonaCatalog().get(1L),
 			"테스트 프롬프트",
 			10L
 		)).isInstanceOf(OpenAiRealtimeException.class);

@@ -11,8 +11,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.s15p11b104.domain.call.dto.CallConnectionResultRequest;
 import com.ssafy.s15p11b104.domain.call.dto.CallSessionIdResponse;
+import com.ssafy.s15p11b104.domain.call.dto.CallTerminationType;
 import com.ssafy.s15p11b104.domain.call.dto.CreateCallSessionRequest;
 import com.ssafy.s15p11b104.domain.call.dto.CreateCallSessionResponse;
+import com.ssafy.s15p11b104.domain.call.dto.EndCallSessionRequest;
 import com.ssafy.s15p11b104.domain.call.service.CallSessionService;
 
 import jakarta.validation.Valid;
@@ -44,7 +46,13 @@ public class CallSessionController {
 	}
 
 	@PostMapping("/{callSessionId}/end")
-	public ResponseEntity<CallSessionIdResponse> end(@PathVariable Long callSessionId) {
-		return ResponseEntity.accepted().body(callSessionService.end(callSessionId));
+	public ResponseEntity<CallSessionIdResponse> end(
+		@PathVariable Long callSessionId,
+		@RequestBody(required = false) EndCallSessionRequest request
+	) {
+		CallTerminationType terminationType = request == null
+			? CallTerminationType.USER_REQUESTED
+			: request.resolveTerminationType();
+		return ResponseEntity.accepted().body(callSessionService.end(callSessionId, terminationType));
 	}
 }
