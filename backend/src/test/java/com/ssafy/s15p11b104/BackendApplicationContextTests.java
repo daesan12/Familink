@@ -13,6 +13,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.group.repository.MemberInterestRepository;
 
 @SpringBootTest(properties = {
 	"spring.autoconfigure.exclude="
@@ -34,6 +36,12 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private StringRedisTemplate redisTemplate;
+
+	@MockitoBean
+	private GroupMemberRepository groupMemberRepository;
+
+	@MockitoBean
+	private MemberInterestRepository memberInterestRepository;
 
 	@Test
 	void healthEndpointIsPublic() throws Exception {

@@ -9,6 +9,8 @@ import org.springframework.http.HttpStatus;
  */
 public enum ErrorCode {
 
+	FORBIDDEN(HttpStatus.FORBIDDEN, "\uad8c\ud55c\uc774 \uc5c6\uc2b5\ub2c8\ub2e4."),
+
 	INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청 형식 또는 검증 실패"),
 	UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
 	INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 일치하지 않습니다."),
