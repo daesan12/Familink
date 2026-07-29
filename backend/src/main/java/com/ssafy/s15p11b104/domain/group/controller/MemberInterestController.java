@@ -14,6 +14,7 @@ import com.ssafy.s15p11b104.domain.group.dto.InterestReplaceRequest;
 import com.ssafy.s15p11b104.domain.group.dto.InterestResponse;
 import com.ssafy.s15p11b104.domain.group.service.MemberInterestService;
 import com.ssafy.s15p11b104.global.api.ApiResponse;
+import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
 
 import jakarta.validation.Valid;
 
@@ -34,10 +35,10 @@ public class MemberInterestController {
 	public ApiResponse<InterestResponse> getInterests(
 		@PathVariable Long groupId,
 		@PathVariable Long memberId,
-		@AuthenticationPrincipal Long authenticatedUserId) {
+		@AuthenticationPrincipal AuthenticatedUser user) {
 		return ApiResponse.success(
 			GET_MESSAGE,
-			memberInterestService.getInterests(groupId, memberId, authenticatedUserId));
+			memberInterestService.getInterests(groupId, memberId, user.id()));
 	}
 
 	@PutMapping
@@ -45,10 +46,10 @@ public class MemberInterestController {
 	public ApiResponse<InterestResponse> replaceInterests(
 		@PathVariable Long groupId,
 		@PathVariable Long memberId,
-		@AuthenticationPrincipal Long authenticatedUserId,
+		@AuthenticationPrincipal AuthenticatedUser user,
 		@Valid @RequestBody InterestReplaceRequest request) {
 		return ApiResponse.success(
 			PUT_MESSAGE,
-			memberInterestService.replaceInterests(groupId, memberId, authenticatedUserId, request));
+			memberInterestService.replaceInterests(groupId, memberId, user.id(), request));
 	}
 }

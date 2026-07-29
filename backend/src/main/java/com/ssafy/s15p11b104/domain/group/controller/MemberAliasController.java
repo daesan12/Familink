@@ -13,6 +13,7 @@ import com.ssafy.s15p11b104.domain.group.dto.AliasResponse;
 import com.ssafy.s15p11b104.domain.group.dto.AliasUpdateRequest;
 import com.ssafy.s15p11b104.domain.group.service.MemberAliasService;
 import com.ssafy.s15p11b104.global.api.ApiResponse;
+import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
 
 import jakarta.validation.Valid;
 
@@ -33,10 +34,10 @@ public class MemberAliasController {
 	public ApiResponse<AliasResponse> updateAlias(
 		@PathVariable Long groupId,
 		@PathVariable Long targetMemberId,
-		@AuthenticationPrincipal Long authenticatedUserId,
+		@AuthenticationPrincipal AuthenticatedUser user,
 		@Valid @RequestBody AliasUpdateRequest request) {
 		return ApiResponse.success(
 			UPDATE_MESSAGE,
-			memberAliasService.updateAlias(groupId, targetMemberId, authenticatedUserId, request));
+			memberAliasService.updateAlias(groupId, targetMemberId, user.id(), request));
 	}
 }
