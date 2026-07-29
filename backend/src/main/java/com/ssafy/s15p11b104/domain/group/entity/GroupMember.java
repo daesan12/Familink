@@ -54,6 +54,17 @@ public class GroupMember extends BaseEntity {
 		this.joinedAt = joinedAt;
 	}
 
+	/**
+	 * 그룹에서 나간 시각을 기록해 비활성 구성원으로 만든다.
+	 *
+	 * <p>행을 삭제하지 않으므로 과거 그룹 관계는 보존된다. 호출 전에 활성 구성원임을 확인한다.
+	 *
+	 * @param leftAt 나간 시각
+	 */
+	public void leave(Instant leftAt) {
+		this.leftAt = leftAt;
+	}
+
 	public FamilyGroup getGroup() {
 		return group;
 	}
