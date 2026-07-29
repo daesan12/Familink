@@ -1,6 +1,6 @@
 # Refresh Token 저장소와 만료 기준 확정
 
-- 상태: 제안
+- 상태: 일부 승인
 - 제안자: 이경호
 - 작성일: 2026-07-28
 - 차단 변경: 예
@@ -30,11 +30,11 @@
 - **Redis 키는 `refresh:{userId}`, 값은 Refresh Token 문자열**이다. 키의 만료 시간은 Refresh Token 유효 기간과 동일하게 설정해 만료된 토큰이 자동으로 제거되게 한다.
 - 이 키 구조는 **사용자당 활성 Refresh Token 1개(단일 세션)** 를 의미한다. 새 기기에서 로그인하면 기존 값이 덮어씌워지고, 이전 기기는 Access Token 만료 후 재로그인해야 한다. 2026-07-28 백엔드 담당자가 이 정책을 의도된 것으로 확인했다.
 - **로그아웃은 두 가지를 수행한다.** Access Token을 `blacklist:{accessToken}` 키(값 `logout`, TTL은 해당 Access Token의 남은 만료 시간)로 등록하고, `refresh:{userId}` 키를 삭제한다.
-- **인증 필터는 서명·만료 검증 후 블랙리스트를 조회**해 등록된 Access Token의 요청을 차단한다. 필터·블랙리스트 조회·재발급은 `S15P11B104-115`에서 구현한다.
+- **인증 필터는 서명·만료 검증 후 블랙리스트를 조회**해 등록된 Access Token의 요청을 차단한다. 필터·블랙리스트 조회·재발급은 `S15P11B104-115`에서 구현했다.
 - Refresh Token 유효 기간은 코드에 고정하지 않고 `backend/src/main/resources/application.yml`의 설정값으로 관리하며 기본값은 14일로 한다. Access Token 유효 기간도 같은 방식으로 관리하되 기본값은 Notion에 확정된 30분을 사용한다.
 - Access Token은 서버에 저장하지 않는 자체 검증 토큰(JWT)이며 발급 시 Redis에 기록하지 않는다. Redis에는 로그아웃된 토큰만 블랙리스트로 남는다.
 
-현재 develop의 구현(`S15P11B104-114`)은 Refresh Token을 불투명 난수 문자열로 발급하고 `auth:refresh:{토큰}` 키에 저장하는 과도기 상태다. `S15P11B104-115`에서 위 설계로 전환한다.
+현재 develop은 `S15P11B104-115`에서 위 JWT·사용자별 단일 키·회전·블랙리스트 설계로 전환했다.
 
 검증 문장: 로그인 응답의 `accessTokenExpiresIn`이 `1800`이고, 발급된 Refresh Token이 JWT 형식이며 `refresh:{userId}` 키의 만료 시간이 설정된 Refresh Token 유효 기간과 일치한다. 로그아웃 직후 같은 Access Token으로 보호 API를 호출하면 차단되고, 같은 Refresh Token으로 재발급을 요청하면 `401 INVALID_REFRESH_TOKEN`을 받는다.
 
@@ -52,20 +52,31 @@
 - 영향 계약: `COMMON.md` 「인증과 요청 경계」에 Refresh Token 저장 위치·유효 기간·단일 세션 정책과 로그아웃의 블랙리스트 동작을 추가한다. `contracts/API.md`에 Access Token 30분과 `tokenType=Bearer`를 기록한다. Method, Path, 요청·응답 필드 구성과 `contracts/DATA_MODEL.md`의 테이블 구성은 변경하지 않는다.
 - 영향 화면: 확인 필요. 단일 세션 정책으로 다른 기기에서 로그인하면 기존 기기가 Access Token 만료 후 로그아웃되므로, 클라이언트의 재발급 실패 처리(재로그인 유도)가 이 상황을 자연스럽게 안내해야 한다.
 - 클라이언트 구현 제약: 재발급은 **단일 비행(single-flight)으로 큐잉**해야 한다. 회전은 저장된 토큰과 제시된 토큰이 같을 때만 성공하므로, 여러 API 호출이 동시에 `401`을 받아 재발급을 병렬로 호출하면 하나만 성공하고 나머지는 `401 INVALID_REFRESH_TOKEN`을 받는다. 이때 클라이언트가 `401`을 곧바로 세션 만료로 해석하면 살아 있는 세션에서 사용자가 강제 로그아웃된다. 진행 중인 재발급이 있으면 그 결과를 공유하도록 구현해야 한다.
-- 검증 범위: 로그인 후 Redis 키 만료 시간 확인, 로그아웃 후 키 삭제 확인은 `backend/src/test/java/com/ssafy/s15p11b104/domain/account/AuthApiTest.java`에서 검증했다. JWT 형식 전환·블랙리스트·단일 세션 덮어쓰기는 `S15P11B104-115`에서 통합 테스트로 검증한다.
+- 검증 범위: 로그인 후 Redis 키 만료 시간, JWT 형식, 단일 세션 덮어쓰기,
+  재발급 회전, 로그아웃의 Refresh Token 삭제와 Access Token 블랙리스트는
+  `backend/src/test/java/com/ssafy/s15p11b104/domain/account/AuthApiTest.java`와
+  `backend/src/test/java/com/ssafy/s15p11b104/global/security/RefreshTokenStoreTest.java`에서 검증한다.
 
 ## 확인이 필요한 질문
 
-- Refresh Token 만료를 회전할 때마다 갱신할지(슬라이딩 만료), 최초 발급 시각을 기준으로 절대 상한을 둘지. 현재 구현은 회전할 때마다 유효 기간을 14일로 다시 설정하므로, 14일 안에 계속 사용하는 사용자의 세션은 무한히 연장되고 재로그인이 강제되는 시점이 없다. 고령 사용자의 편의로는 유리하지만 탈취된 Refresh Token도 같은 방식으로 무한 연장되므로 보안상 상한이 필요한지 판단이 필요하다.
-- 재발급을 병렬로 호출한 클라이언트가 `401`을 받는 동작을 허용할지. 서버는 저장 상태를 일관되게 유지하지만 경합의 패자는 실패한다. 클라이언트 단일 비행 구현을 전제로 둘지, 서버가 직전 토큰을 짧은 유예 시간 동안 허용해야 하는지 결정이 필요하다.
-- Refresh 14일이 팀 정책으로 적절한지. 피보호자(고령 사용자)가 자주 재로그인하지 않도록 더 길게 잡을 필요가 있는지.
+- 승인된 회전 시 14일 TTL 재설정 외에 최초 발급 시각 기준의 절대 세션
+  상한을 추가할지.
+- 승인된 원자적 회전에서 병렬 요청의 패자가 `401`을 받는 현재 서버 동작을
+  전제로 클라이언트 단일 비행을 구현할지, 서버가 직전 토큰을 짧은 유예
+  시간 동안 허용하는 별도 정책을 추가할지.
 - Redis 데이터가 유실되면 전체 사용자가 재로그인해야 한다. 이 운영 특성을 수용할 수 있는지.
 - 회원 탈퇴(`API-USERS-003`) 시 해당 사용자의 Refresh Token을 함께 폐기해야 하는지. `S15P11B104-116`의 범위로 보인다.
 
 ## 결정 및 반영
 
-- 결정:
-- 결정자:
-- 결정일:
-- 반영 문서:
+- 결정: 일부 승인. Access Token JWT·`Bearer`·기본 30분,
+  Refresh Token JWT·`refresh:{userId}` 단일 키·기본 14일 TTL, 새 로그인
+  시 기존 세션 교체, 원자적 회전과 기존 토큰 재사용 거부, 회전 시 14일 TTL
+  재설정, Access Token 블랙리스트와 현재 Refresh Token 폐기를 승인한다.
+  병렬 재발급을 처리할 클라이언트 단일 비행, Redis 유실 수용 여부, 회원
+  탈퇴 시 토큰 폐기는 미구현·미확정이므로 승인 범위에서 제외하고 보류한다.
+- 결정자: 사용자
+- 결정일: 2026-07-29
+- 승인 근거: 사용자가 이미 확정되었거나 구현된 부분만 승인한다고 명시했다.
+- 반영 문서: `docs/specs/COMMON.md`, `docs/specs/contracts/API.md`
 - 반영 커밋:
