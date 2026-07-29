@@ -1,14 +1,28 @@
 package com.ssafy.s15p11b104;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.feed.repository.PostMediaRepository;
+import com.ssafy.s15p11b104.domain.feed.repository.PostAnalysisRepository;
+import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
+import com.ssafy.s15p11b104.domain.feed.repository.CommentRepository;
+import com.ssafy.s15p11b104.domain.feed.repository.PostReactionRepository;
+import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
+import com.ssafy.s15p11b104.domain.group.repository.MemberInterestRepository;
 
 @SpringBootTest(properties = {
 	"spring.autoconfigure.exclude="
@@ -25,6 +39,36 @@ class BackendApplicationContextTests {
 	@Autowired
 	private MockMvc mockMvc;
 
+	@MockitoBean
+	private UserRepository userRepository;
+
+	@MockitoBean
+	private StringRedisTemplate redisTemplate;
+
+	@MockitoBean
+	private GroupMemberRepository groupMemberRepository;
+
+	@MockitoBean
+	private MemberInterestRepository memberInterestRepository;
+
+	@MockitoBean
+	private MemberAliasRepository memberAliasRepository;
+
+	@MockitoBean
+	private PostRepository postRepository;
+
+	@MockitoBean
+	private PostMediaRepository postMediaRepository;
+
+	@MockitoBean
+	private PostAnalysisRepository postAnalysisRepository;
+
+	@MockitoBean
+	private CommentRepository commentRepository;
+
+	@MockitoBean
+	private PostReactionRepository postReactionRepository;
+
 	@Test
 	void healthEndpointIsPublic() throws Exception {
 		mockMvc.perform(get("/actuator/health"))
@@ -38,8 +82,23 @@ class BackendApplicationContextTests {
 	}
 
 	@Test
+	void authEndpointsArePublic() throws Exception {
+		mockMvc.perform(get("/auth/login-id/check").param("loginId", "testuser"))
+			.andExpect(status().isOk());
+	}
+
+	@Test
+	void logoutRequiresAuthentication() throws Exception {
+		mockMvc.perform(post("/auth/logout"))
+			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
 	void unknownEndpointRequiresAuthentication() throws Exception {
 		mockMvc.perform(get("/not-configured"))
-			.andExpect(status().isUnauthorized());
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.success").value(false))
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+			.andExpect(jsonPath("$.errors").isArray());
 	}
 }

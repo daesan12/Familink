@@ -30,3 +30,8 @@ management:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+app:
+  auth:
+    access-token-validity: 30m
+    refresh-token-validity: 14d
