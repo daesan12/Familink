@@ -17,7 +17,10 @@ export interface FamilyGroup {
 }
 
 export interface AppScreenProps {
+  createPostRequestId?: number;
   currentGroup: FamilyGroup;
+  onFullscreenChange?: (isFullscreen: boolean) => void;
+  onHeaderVisibilityChange?: (isVisible: boolean) => void;
   role: GroupRole;
 }
 

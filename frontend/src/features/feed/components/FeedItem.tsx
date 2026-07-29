@@ -11,6 +11,8 @@ interface FeedItemProps {
 }
 
 export function FeedItem({onPress, post}: FeedItemProps) {
+  const handlePress = () => onPress(post.id);
+
   return (
     <View style={styles.container}>
       <View style={styles.authorRow}>
@@ -21,29 +23,17 @@ export function FeedItem({onPress, post}: FeedItemProps) {
           <Text style={styles.authorName}>{post.author.name}</Text>
           <Text style={styles.createdAt}>{post.createdAtLabel}</Text>
         </View>
-        <Pressable
-          accessibilityLabel={`${post.author.name} 게시글 메뉴`}
-          accessibilityRole="button"
-          hitSlop={10}
-          style={styles.iconButton}
-        >
-          <MaterialDesignIcons
-            color={COLORS.textStrong}
-            name="dots-horizontal"
-            size={24}
-          />
-        </Pressable>
       </View>
 
       <Pressable
         accessibilityHint="게시글 상세 화면으로 이동합니다"
         accessibilityLabel={`${post.author.name}님의 게시글: ${post.body}`}
         accessibilityRole="button"
-        onPress={() => onPress(post.id)}
+        onPress={handlePress}
       >
         <Text style={styles.body}>{post.body}</Text>
-        <PostImageCarousel images={post.images} />
       </Pressable>
+      <PostImageCarousel images={post.images} onImagePress={handlePress} />
 
       <View style={styles.metaRow}>
         <View style={styles.reactions}>
@@ -73,7 +63,7 @@ export function FeedItem({onPress, post}: FeedItemProps) {
         <Pressable
           accessibilityLabel={`댓글 ${post.commentCount}개 보기`}
           accessibilityRole="button"
-          onPress={() => onPress(post.id)}
+          onPress={handlePress}
           style={styles.commentButton}
         >
           <Text style={styles.commentText}>댓글 {post.commentCount}</Text>
@@ -154,12 +144,6 @@ const styles = StyleSheet.create({
     color: COLORS.textStrong,
     fontSize: 11,
     lineHeight: 15,
-  },
-  iconButton: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
   },
   metaRow: {
     alignItems: 'center',

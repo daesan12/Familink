@@ -46,6 +46,9 @@ export function AppShell({
   const [activeRoute, setActiveRoute] = useState(initialRoute);
   const [currentGroupId, setCurrentGroupId] = useState(initialGroupId);
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
+  const [createPostRequestId, setCreatePostRequestId] = useState(0);
+  const [isScreenFullscreen, setIsScreenFullscreen] = useState(false);
+  const [isScreenHeaderVisible, setIsScreenHeaderVisible] = useState(true);
   const [isRestoringGroup, setIsRestoringGroup] = useState(
     Boolean(groupStore && !initialGroupId),
   );
@@ -156,7 +159,7 @@ export function AppShell({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
+      {!isScreenFullscreen && isScreenHeaderVisible ? <View style={styles.header}>
         {resolvedRoute === 'feed' ? (
           <View style={styles.headerActions}>
             <Pressable
@@ -173,6 +176,7 @@ export function AppShell({
             <Pressable
               accessibilityLabel="새 게시글 작성"
               accessibilityRole="button"
+              onPress={() => setCreatePostRequestId(requestId => requestId + 1)}
               style={styles.headerIconButton}
             >
               <MaterialDesignIcons
@@ -210,11 +214,17 @@ export function AppShell({
         ) : (
           <View style={styles.headerSide} />
         )}
-      </View>
+      </View> : null}
 
       <View style={styles.content}>
         {Screen ? (
-          <Screen currentGroup={currentGroup} role={currentGroup.role} />
+          <Screen
+            createPostRequestId={createPostRequestId}
+            currentGroup={currentGroup}
+            onFullscreenChange={setIsScreenFullscreen}
+            onHeaderVisibilityChange={setIsScreenHeaderVisible}
+            role={currentGroup.role}
+          />
         ) : (
           <View style={styles.placeholder}>
             <Text style={styles.placeholderTitle}>
@@ -227,11 +237,16 @@ export function AppShell({
         )}
       </View>
 
-      <BottomTabBar
-        activeRoute={resolvedRoute}
-        onSelect={setActiveRoute}
-        role={currentGroup.role}
-      />
+      {!isScreenFullscreen ? (
+        <BottomTabBar
+          activeRoute={resolvedRoute}
+          onSelect={route => {
+            setIsScreenHeaderVisible(true);
+            setActiveRoute(route);
+          }}
+          role={currentGroup.role}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
