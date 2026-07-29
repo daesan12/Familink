@@ -1,7 +1,13 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Calendar from 'lucide-react-native/icons/calendar';
+import CircleUserRound from 'lucide-react-native/icons/circle-user-round';
+import FileChartColumn from 'lucide-react-native/icons/file-chart-column';
+import House from 'lucide-react-native/icons/house';
+import PhoneCall from 'lucide-react-native/icons/phone-call';
+import UsersRound from 'lucide-react-native/icons/users-round';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 
-import type { AppRoute, GroupRole } from './types';
-import { getTabsForRole } from './navigation';
+import type {AppRoute, GroupRole} from './types';
+import {getTabsForRole, type TabIconName} from './navigation';
 
 interface BottomTabBarProps {
   activeRoute: AppRoute;
@@ -10,38 +16,42 @@ interface BottomTabBarProps {
 }
 
 const COLORS = {
-  active: '#6F6B68',
-  border: '#E4E7EC',
-  inactive: '#D6D6D6',
+  active: '#7160E0',
+  border: '#E7E9ED',
+  inactive: '#D9D9D9',
   surface: '#FFFFFF',
 } as const;
 
-export function BottomTabBar({
-  activeRoute,
-  onSelect,
-  role,
-}: BottomTabBarProps) {
+const TAB_ICONS = {
+  calendar: Calendar,
+  'circle-user-round': CircleUserRound,
+  'file-chart-column': FileChartColumn,
+  house: House,
+  'phone-call': PhoneCall,
+  'users-round': UsersRound,
+} satisfies Record<TabIconName, typeof House>;
+
+export function BottomTabBar({activeRoute, onSelect, role}: BottomTabBarProps) {
   const tabs = getTabsForRole(role);
 
   return (
     <View accessibilityRole="tablist" style={styles.container}>
-      {tabs.map(tab => {
+      {tabs.map((tab) => {
         const isActive = tab.route === activeRoute;
         const color = isActive ? COLORS.active : COLORS.inactive;
+        const Icon = TAB_ICONS[tab.icon];
 
         return (
           <Pressable
             accessibilityLabel={`${tab.label} 탭`}
             accessibilityRole="tab"
-            accessibilityState={{ selected: isActive }}
+            accessibilityState={{selected: isActive}}
             key={tab.route}
             onPress={() => onSelect(tab.route)}
             style={styles.tab}
           >
-            <Text accessibilityElementsHidden style={[styles.icon, { color }]}>
-              {tab.icon}
-            </Text>
-            <Text style={[styles.label, { color }]}>{tab.label}</Text>
+            <Icon color={color} size={24} strokeWidth={2} />
+            <Text style={[styles.label, {color}]}>{tab.label}</Text>
           </Pressable>
         );
       })}
@@ -56,25 +66,22 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
-    minHeight: 88,
+    minHeight: 92,
     paddingBottom: 12,
-    paddingHorizontal: 8,
-    paddingTop: 8,
-  },
-  icon: {
-    fontSize: 30,
-    lineHeight: 34,
+    paddingHorizontal: 4,
+    paddingTop: 10,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
+    marginTop: 4,
   },
   tab: {
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center',
-    minHeight: 64,
+    minHeight: 68,
     minWidth: 44,
   },
 });

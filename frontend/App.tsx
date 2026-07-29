@@ -26,11 +26,24 @@ interface AppProps {
   screens?: AppScreenRegistry;
 }
 
+const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
+  {
+    id: 'development-guardian-group',
+    name: '우리 가족',
+    role: 'guardian',
+  },
+  {
+    id: 'development-care-receiver-group',
+    name: '부모님 가족',
+    role: 'careReceiver',
+  },
+];
+
 export default function App({
   groupStore,
-  groups = [],
+  groups,
   initialGroupId,
-  initialRootRoute = 'welcome',
+  initialRootRoute = __DEV__ ? 'appShell' : 'welcome',
   initialShellRoute,
   onCreateGroup,
   onGroupChange,
@@ -38,6 +51,7 @@ export default function App({
   screens,
 }: AppProps) {
   const [route, setRoute] = useState<RootRoute>(initialRootRoute);
+  const resolvedGroups = groups ?? (__DEV__ ? DEVELOPMENT_GROUPS : []);
 
   return (
     <SafeAreaProvider>
@@ -52,7 +66,7 @@ export default function App({
       ) : (
         <AppShell
           groupStore={groupStore}
-          groups={groups}
+          groups={resolvedGroups}
           initialGroupId={initialGroupId}
           initialRoute={initialShellRoute}
           onCreateGroup={onCreateGroup}
