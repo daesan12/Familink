@@ -41,3 +41,7 @@ app:
   auth:
     access-token-validity: 30m
     refresh-token-validity: 14d
+  ai-analysis:
+    enabled: true
+    fixed-delay-ms: 60000
+    initial-delay-ms: 60000
