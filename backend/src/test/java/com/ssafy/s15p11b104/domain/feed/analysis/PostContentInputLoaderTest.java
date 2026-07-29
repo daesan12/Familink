@@ -34,20 +34,21 @@ class PostContentInputLoaderTest {
 
 	@Test
 	void textPostDoesNotRequireMimeProvider() {
-		Post post = post("텍스트 게시글");
+		String content = AnalysisTestFixtures.content();
+		Post post = post(content);
 		when(postRepository.findById(1L)).thenReturn(Optional.of(post));
 		when(postMediaRepository.findAllByPostIdOrderByDisplayOrderAsc(1L)).thenReturn(List.of());
 
 		PostContentInput input = loader().load(1L);
 
-		assertThat(input.content()).isEqualTo("텍스트 게시글");
+		assertThat(input.content()).isEqualTo(content);
 		assertThat(input.mediaType()).isNull();
 		assertThat(input.media()).isEmpty();
 	}
 
 	@Test
 	void mediaPostWithoutMimeProviderIsInvalidInput() {
-		Post post = post("사진 게시글");
+		Post post = post(AnalysisTestFixtures.content());
 		PostMedia media = mock(PostMedia.class);
 		when(postRepository.findById(1L)).thenReturn(Optional.of(post));
 		when(postMediaRepository.findAllByPostIdOrderByDisplayOrderAsc(1L)).thenReturn(List.of(media));
@@ -60,8 +61,8 @@ class PostContentInputLoaderTest {
 
 	@Test
 	void mimeProviderFailureIsUpstreamFailure() {
-		Post post = post("사진 게시글");
-		PostMedia media = media(MediaType.IMAGE, "https://cdn.example.com/image.jpg");
+		Post post = post(AnalysisTestFixtures.content());
+		PostMedia media = media(MediaType.IMAGE, AnalysisTestFixtures.mediaUri("https", "jpg"));
 		when(postRepository.findById(1L)).thenReturn(Optional.of(post));
 		when(postMediaRepository.findAllByPostIdOrderByDisplayOrderAsc(1L)).thenReturn(List.of(media));
 		MediaMimeTypeProvider provider = mock(MediaMimeTypeProvider.class);

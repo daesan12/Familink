@@ -15,31 +15,18 @@ class GeminiPostContentAnalyzerTest {
 
 	private static final String TEXT_MODEL = "gemini-2.5-flash-lite";
 	private static final String MULTIMODAL_MODEL = "gemini-3.5-flash";
-	private static final String TEXT_EXPECTED_SUMMARY =
-		"아이들과 동네 공원에서 봄꽃을 구경하고 즐거운 시간을 보냈다.";
-	private static final String PHOTO_EXPECTED_SUMMARY =
-		"가족들이 어머니의 생일을 축하하며 케이크를 먹고 기념사진을 남겼다.";
-	private static final String VIDEO_EXPECTED_SUMMARY =
-		"아이들이 집 앞 산책로에서 처음으로 자전거를 타며 혼자 달리는 경험을 했다.";
 
 	private final ObjectMapper objectMapper = new ObjectMapper();
-
-	@Test
-	void realisticFixturesUseExpectedSummaries() {
-		assertThat(AnalysisTestFixtures.textPost().expectedSummary()).isEqualTo(TEXT_EXPECTED_SUMMARY);
-		assertThat(AnalysisTestFixtures.photoPost().expectedSummary()).isEqualTo(PHOTO_EXPECTED_SUMMARY);
-		assertThat(AnalysisTestFixtures.videoPost().expectedSummary()).isEqualTo(VIDEO_EXPECTED_SUMMARY);
-	}
 
 	@Test
 	void routesTextOnlyPostToTextModel() {
 		AnalysisTestFixtures.PostFixture fixture = AnalysisTestFixtures.textPost();
 		RecordingGateway gateway = new RecordingGateway(responseWithSummary(
-			"  " + TEXT_EXPECTED_SUMMARY + "  "));
+			"  " + fixture.expectedSummary() + "  "));
 
 		String summary = analyzer(gateway).analyze(fixture.toContentInput());
 
-		assertThat(summary).isEqualTo(TEXT_EXPECTED_SUMMARY);
+		assertThat(summary).isEqualTo(fixture.expectedSummary());
 		assertThat(gateway.request.model()).isEqualTo(TEXT_MODEL);
 		assertThat(gateway.request.media()).isEmpty();
 		assertThat(gateway.request.prompt()).contains(fixture.content());
@@ -48,11 +35,11 @@ class GeminiPostContentAnalyzerTest {
 	@Test
 	void routesImagePostToMultimodalModelAndPreservesMediaOrder() {
 		AnalysisTestFixtures.PostFixture fixture = AnalysisTestFixtures.photoPost();
-		RecordingGateway gateway = new RecordingGateway(responseWithSummary(PHOTO_EXPECTED_SUMMARY));
+		RecordingGateway gateway = new RecordingGateway(responseWithSummary(fixture.expectedSummary()));
 
 		String summary = analyzer(gateway).analyze(fixture.toContentInput());
 
-		assertThat(summary).isEqualTo(PHOTO_EXPECTED_SUMMARY);
+		assertThat(summary).isEqualTo(fixture.expectedSummary());
 		assertThat(gateway.request.model()).isEqualTo(MULTIMODAL_MODEL);
 		assertThat(gateway.request.media()).containsExactlyElementsOf(
 			fixture.media().stream().map(AnalysisTestFixtures.MediaFixture::toContentMedia).toList());
@@ -63,11 +50,11 @@ class GeminiPostContentAnalyzerTest {
 	@Test
 	void routesVideoPostToMultimodalModel() {
 		AnalysisTestFixtures.PostFixture fixture = AnalysisTestFixtures.videoPost();
-		RecordingGateway gateway = new RecordingGateway(responseWithSummary(VIDEO_EXPECTED_SUMMARY));
+		RecordingGateway gateway = new RecordingGateway(responseWithSummary(fixture.expectedSummary()));
 
 		String summary = analyzer(gateway).analyze(fixture.toContentInput());
 
-		assertThat(summary).isEqualTo(VIDEO_EXPECTED_SUMMARY);
+		assertThat(summary).isEqualTo(fixture.expectedSummary());
 		assertThat(gateway.request.model()).isEqualTo(MULTIMODAL_MODEL);
 		assertThat(gateway.request.media()).containsExactlyElementsOf(
 			fixture.media().stream().map(AnalysisTestFixtures.MediaFixture::toContentMedia).toList());
@@ -75,18 +62,18 @@ class GeminiPostContentAnalyzerTest {
 
 	@Test
 	void rejectsImageCountOutsideAllowedRangeWithoutCallingGateway() {
-		RecordingGateway gateway = new RecordingGateway(responseWithSummary("사용되지 않음"));
+		RecordingGateway gateway = new RecordingGateway(null);
 		GeminiPostContentAnalyzer analyzer = analyzer(gateway);
 		String content = AnalysisTestFixtures.photoPost().content();
 
 		assertFailure(analyzer, new PostContentInput(content, MediaType.IMAGE, List.of()),
 			AnalysisFailureType.INVALID_INPUT);
 		assertFailure(analyzer, new PostContentInput(content, MediaType.IMAGE, List.of(
-			media(MediaType.IMAGE, "https://cdn.example.com/1.jpg", "image/jpeg"),
-			media(MediaType.IMAGE, "https://cdn.example.com/2.jpg", "image/jpeg"),
-			media(MediaType.IMAGE, "https://cdn.example.com/3.jpg", "image/jpeg"),
-			media(MediaType.IMAGE, "https://cdn.example.com/4.jpg", "image/jpeg"),
-			media(MediaType.IMAGE, "https://cdn.example.com/5.jpg", "image/jpeg"))),
+			media(MediaType.IMAGE, mediaUri("https", "jpg"), "image/jpeg"),
+			media(MediaType.IMAGE, mediaUri("https", "jpg"), "image/jpeg"),
+			media(MediaType.IMAGE, mediaUri("https", "jpg"), "image/jpeg"),
+			media(MediaType.IMAGE, mediaUri("https", "jpg"), "image/jpeg"),
+			media(MediaType.IMAGE, mediaUri("https", "jpg"), "image/jpeg"))),
 			AnalysisFailureType.INVALID_INPUT);
 
 		assertThat(gateway.request).isNull();
@@ -94,18 +81,18 @@ class GeminiPostContentAnalyzerTest {
 
 	@Test
 	void rejectsVideoCountAndMixedMediaWithoutCallingGateway() {
-		RecordingGateway gateway = new RecordingGateway(responseWithSummary("사용되지 않음"));
+		RecordingGateway gateway = new RecordingGateway(null);
 		GeminiPostContentAnalyzer analyzer = analyzer(gateway);
 		String videoContent = AnalysisTestFixtures.videoPost().content();
 		String photoContent = AnalysisTestFixtures.photoPost().content();
 
 		assertFailure(analyzer, new PostContentInput(videoContent, MediaType.VIDEO, List.of(
-			media(MediaType.VIDEO, "https://cdn.example.com/1.mp4", "video/mp4"),
-			media(MediaType.VIDEO, "https://cdn.example.com/2.mp4", "video/mp4"))),
+			media(MediaType.VIDEO, mediaUri("https", "mp4"), "video/mp4"),
+			media(MediaType.VIDEO, mediaUri("https", "mp4"), "video/mp4"))),
 			AnalysisFailureType.INVALID_INPUT);
 		assertFailure(analyzer, new PostContentInput(photoContent, MediaType.IMAGE, List.of(
-			media(MediaType.IMAGE, "https://cdn.example.com/image.jpg", "image/jpeg"),
-			media(MediaType.VIDEO, "https://cdn.example.com/video.mp4", "video/mp4"))),
+			media(MediaType.IMAGE, mediaUri("https", "jpg"), "image/jpeg"),
+			media(MediaType.VIDEO, mediaUri("https", "mp4"), "video/mp4"))),
 			AnalysisFailureType.INVALID_INPUT);
 
 		assertThat(gateway.request).isNull();
@@ -113,21 +100,21 @@ class GeminiPostContentAnalyzerTest {
 
 	@Test
 	void rejectsUnsupportedUriAndMimeWithoutCallingGateway() {
-		RecordingGateway gateway = new RecordingGateway(responseWithSummary("사용되지 않음"));
+		RecordingGateway gateway = new RecordingGateway(null);
 		GeminiPostContentAnalyzer analyzer = analyzer(gateway);
 		String content = AnalysisTestFixtures.photoPost().content();
 
 		assertFailure(analyzer, new PostContentInput(content, MediaType.IMAGE, List.of(
-			media(MediaType.IMAGE, "http://cdn.example.com/image.jpg", "image/jpeg"))),
+			media(MediaType.IMAGE, mediaUri("http", "jpg"), "image/jpeg"))),
 			AnalysisFailureType.INVALID_INPUT);
 		assertFailure(analyzer, new PostContentInput(content, MediaType.IMAGE, List.of(
-			media(MediaType.IMAGE, "https://cdn.example.com/file.pdf", "application/pdf"))),
+			media(MediaType.IMAGE, mediaUri("https", "pdf"), "application/pdf"))),
 			AnalysisFailureType.INVALID_INPUT);
 		assertFailure(analyzer, new PostContentInput(content, MediaType.IMAGE, List.of(
-			media(MediaType.IMAGE, "https://cdn.example.com/image.jpg", null))),
+			media(MediaType.IMAGE, mediaUri("https", "jpg"), null))),
 			AnalysisFailureType.INVALID_INPUT);
 		assertFailure(analyzer, new PostContentInput(content, MediaType.IMAGE, List.of(
-			media(MediaType.IMAGE, "https://cdn.example.com/image.jpg", "   "))),
+			media(MediaType.IMAGE, mediaUri("https", "jpg"), "   "))),
 			AnalysisFailureType.INVALID_INPUT);
 
 		assertThat(gateway.request).isNull();
@@ -145,11 +132,11 @@ class GeminiPostContentAnalyzerTest {
 
 	@Test
 	void rejectsUnsupportedAudioMime() {
-		RecordingGateway gateway = new RecordingGateway(responseWithSummary("사용되지 않음"));
+		RecordingGateway gateway = new RecordingGateway(null);
 
 		assertFailure(analyzer(gateway), new PostContentInput(
 			AnalysisTestFixtures.photoPost().content(), MediaType.IMAGE, List.of(
-			media(MediaType.IMAGE, "https://cdn.example.com/audio.mp3", "audio/mpeg"))),
+			media(MediaType.IMAGE, mediaUri("https", "mp3"), "audio/mpeg"))),
 			AnalysisFailureType.INVALID_INPUT);
 		assertThat(gateway.request).isNull();
 	}
@@ -174,7 +161,7 @@ class GeminiPostContentAnalyzerTest {
 
 	@Test
 	void mapsGatewayFailureWithoutExposingGatewayMessage() {
-		RecordingGateway gateway = new RecordingGateway(responseWithSummary("사용되지 않음"));
+		RecordingGateway gateway = new RecordingGateway(null);
 		gateway.failure = new GeminiGatewayException("upstream failure test-secret");
 
 		PostContentAnalysisException exception = org.assertj.core.api.Assertions.catchThrowableOfType(
@@ -219,6 +206,10 @@ class GeminiPostContentAnalyzerTest {
 
 	private PostContentMedia media(MediaType mediaType, String uri, String mimeType) {
 		return new PostContentMedia(mediaType, uri, mimeType);
+	}
+
+	private String mediaUri(String scheme, String extension) {
+		return AnalysisTestFixtures.mediaUri(scheme, extension);
 	}
 
 	private String responseWithSummary(String summary) {

@@ -182,7 +182,7 @@ class PostContentAnalysisIntegrationTest extends IntegrationTest {
 	void rejectsFiveImagesWithoutCallingGateway() {
 		Post post = savePost(AnalysisTestFixtures.photoPost().content());
 		List<PostMedia> media = java.util.stream.IntStream.rangeClosed(1, 5)
-			.mapToObj(order -> media(post, "https://test-cdn.example.com/image-" + order + ".jpg", order))
+			.mapToObj(order -> media(post, mediaUri("https", "jpg"), order))
 			.toList();
 		postMediaRepository.saveAll(media);
 		when(mimeTypeProvider.getMimeType(anyString())).thenReturn("image/jpeg");
@@ -195,8 +195,8 @@ class PostContentAnalysisIntegrationTest extends IntegrationTest {
 	void rejectsTwoVideosWithoutCallingGateway() {
 		Post post = savePost(AnalysisTestFixtures.videoPost().content());
 		postMediaRepository.saveAll(List.of(
-			media(post, "https://test-cdn.example.com/first-bike-ride.mp4", 1, MediaType.VIDEO),
-			media(post, "https://test-cdn.example.com/second-bike-ride.mp4", 2, MediaType.VIDEO)));
+			media(post, mediaUri("https", "mp4"), 1, MediaType.VIDEO),
+			media(post, mediaUri("https", "mp4"), 2, MediaType.VIDEO)));
 		when(mimeTypeProvider.getMimeType(anyString())).thenReturn("video/mp4");
 
 		assertFailure(post.getId(), AnalysisFailureType.INVALID_INPUT);
@@ -207,8 +207,8 @@ class PostContentAnalysisIntegrationTest extends IntegrationTest {
 	void rejectsMixedMediaWithoutCallingGateway() {
 		Post post = savePost(AnalysisTestFixtures.photoPost().content());
 		postMediaRepository.saveAll(List.of(
-			media(post, "https://test-cdn.example.com/family-cake.jpg", 1, MediaType.IMAGE),
-			media(post, "https://test-cdn.example.com/birthday-video.mp4", 2, MediaType.VIDEO)));
+			media(post, mediaUri("https", "jpg"), 1, MediaType.IMAGE),
+			media(post, mediaUri("https", "mp4"), 2, MediaType.VIDEO)));
 		when(mimeTypeProvider.getMimeType(anyString())).thenAnswer(invocation ->
 			invocation.getArgument(0, String.class).endsWith(".jpg") ? "image/jpeg" : "video/mp4");
 
@@ -219,7 +219,7 @@ class PostContentAnalysisIntegrationTest extends IntegrationTest {
 	@Test
 	void rejectsHttpUriWithoutCallingGateway() {
 		Post post = savePost(AnalysisTestFixtures.photoPost().content());
-		PostMedia media = media(post, "http://test-cdn.example.com/family-cake.jpg", 1);
+		PostMedia media = media(post, mediaUri("http", "jpg"), 1);
 		postMediaRepository.save(media);
 		when(mimeTypeProvider.getMimeType(media.getFileUrl())).thenReturn("image/jpeg");
 
@@ -230,7 +230,7 @@ class PostContentAnalysisIntegrationTest extends IntegrationTest {
 	@Test
 	void rejectsMissingMimeWithoutCallingGateway() {
 		Post post = savePost(AnalysisTestFixtures.photoPost().content());
-		PostMedia media = media(post, "https://test-cdn.example.com/family-cake.jpg", 1);
+		PostMedia media = media(post, mediaUri("https", "jpg"), 1);
 		postMediaRepository.save(media);
 		when(mimeTypeProvider.getMimeType(media.getFileUrl())).thenReturn(null);
 
@@ -241,7 +241,7 @@ class PostContentAnalysisIntegrationTest extends IntegrationTest {
 	@Test
 	void rejectsImageWithVideoMimeWithoutCallingGateway() {
 		Post post = savePost(AnalysisTestFixtures.photoPost().content());
-		PostMedia media = media(post, "https://test-cdn.example.com/family-cake.jpg", 1);
+		PostMedia media = media(post, mediaUri("https", "jpg"), 1);
 		postMediaRepository.save(media);
 		when(mimeTypeProvider.getMimeType(media.getFileUrl())).thenReturn("video/mp4");
 
@@ -252,7 +252,7 @@ class PostContentAnalysisIntegrationTest extends IntegrationTest {
 	@Test
 	void rejectsVideoWithImageMimeWithoutCallingGateway() {
 		Post post = savePost(AnalysisTestFixtures.videoPost().content());
-		PostMedia media = media(post, "https://test-cdn.example.com/first-bike-ride.mp4", 1, MediaType.VIDEO);
+		PostMedia media = media(post, mediaUri("https", "mp4"), 1, MediaType.VIDEO);
 		postMediaRepository.save(media);
 		when(mimeTypeProvider.getMimeType(media.getFileUrl())).thenReturn("image/jpeg");
 
@@ -292,6 +292,10 @@ class PostContentAnalysisIntegrationTest extends IntegrationTest {
 
 	private PostMedia media(Post post, AnalysisTestFixtures.MediaFixture fixture) {
 		return new PostMedia(post, fixture.mediaType(), fixture.uri(), fixture.displayOrder(), null);
+	}
+
+	private String mediaUri(String scheme, String extension) {
+		return AnalysisTestFixtures.mediaUri(scheme, extension);
 	}
 
 	private String responseWithSummary(String summary) {

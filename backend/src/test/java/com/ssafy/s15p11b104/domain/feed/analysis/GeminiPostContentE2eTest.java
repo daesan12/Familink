@@ -59,7 +59,6 @@ class GeminiPostContentE2eTest extends IntegrationTest {
 
 	private static final String TEXT_MODEL = "gemini-2.5-flash-lite";
 	private static final String MULTIMODAL_MODEL = "gemini-3.5-flash";
-	private static final String[] CORE_KEYWORDS = {"아이들", "공원", "봄꽃", "잔디밭"};
 
 	@Autowired
 	private PostContentAnalysisService analysisService;
@@ -105,8 +104,13 @@ class GeminiPostContentE2eTest extends IntegrationTest {
 			assertThat(connection.getMetaData().getURL()).isEqualTo(postgresJdbcUrl());
 		}
 
-		AnalysisTestFixtures.PostFixture fixture = AnalysisTestFixtures.textPost();
-		Post post = savePost(fixture.content());
+		String content = requiredValue("GEMINI_E2E_TEXT_CONTENT");
+		List<String> coreKeywords = Stream.of(requiredValue("GEMINI_E2E_EXPECTED_KEYWORDS").split(","))
+			.map(String::trim)
+			.filter(keyword -> !keyword.isBlank())
+			.toList();
+		assertThat(coreKeywords).hasSizeGreaterThanOrEqualTo(2);
+		Post post = savePost(content);
 		entityManager.flush();
 		Long postId = post.getId();
 		entityManager.clear();
@@ -118,11 +122,11 @@ class GeminiPostContentE2eTest extends IntegrationTest {
 
 		String summary = analysisService.analyze(postId);
 
-		assertThat(dbInput.content()).isEqualTo(fixture.content());
+		assertThat(dbInput.content()).isEqualTo(content);
 		assertThat(dbInput.media()).isEmpty();
 		assertThat(summary).isNotBlank();
 		assertThat(summary.codePointCount(0, summary.length())).isLessThanOrEqualTo(500);
-		long matchedKeywords = Stream.of(CORE_KEYWORDS).filter(summary::contains).count();
+		long matchedKeywords = coreKeywords.stream().filter(summary::contains).count();
 		assertThat(matchedKeywords).as("summary should preserve the post's core meaning").isGreaterThanOrEqualTo(2);
 
 		writeResultArtifacts(artifactDirectory, postId, textModel, summary, dbInput.media().size());
@@ -133,6 +137,7 @@ class GeminiPostContentE2eTest extends IntegrationTest {
 	@Test
 	void analyzesFourLocalPhotosFromDatabaseWithRealGms() throws Exception {
 		String apiKey = requireApiKey();
+		String content = requiredValue("GEMINI_E2E_PHOTO_CONTENT");
 		List<Path> localPhotos = List.of(
 			requiredPath("GEMINI_E2E_IMAGE1"),
 			requiredPath("GEMINI_E2E_IMAGE2"),
@@ -148,8 +153,7 @@ class GeminiPostContentE2eTest extends IntegrationTest {
 				uploaded.add(upload(gmsClient, photo, "image/jpeg"));
 			}
 
-			AnalysisTestFixtures.PostFixture fixture = AnalysisTestFixtures.photoPost();
-			Post post = savePost(fixture.content());
+			Post post = savePost(content);
 			postMediaRepository.saveAll(List.of(
 				media(post, uploaded.get(2), 3),
 				media(post, uploaded.get(0), 1),
@@ -181,6 +185,7 @@ class GeminiPostContentE2eTest extends IntegrationTest {
 	@Test
 	void analyzesLocalVideoFromDatabaseWithRealGms() throws Exception {
 		String apiKey = requireApiKey();
+		String content = requiredValue("GEMINI_E2E_VIDEO_CONTENT");
 		Path localVideo = requiredPath("GEMINI_E2E_VIDEO");
 		assertThat(Files.isRegularFile(localVideo)).isTrue();
 		assertFileMime(localVideo, "video/mp4");
@@ -189,8 +194,7 @@ class GeminiPostContentE2eTest extends IntegrationTest {
 		List<UploadedMedia> uploaded = new ArrayList<>();
 		try {
 			uploaded.add(upload(gmsClient, localVideo, "video/mp4"));
-			AnalysisTestFixtures.PostFixture fixture = AnalysisTestFixtures.videoPost();
-			Post post = savePost(fixture.content());
+			Post post = savePost(content);
 			postMediaRepository.save(media(post, uploaded.get(0), 1, MediaType.VIDEO));
 			entityManager.flush();
 			Long postId = post.getId();
@@ -253,9 +257,13 @@ class GeminiPostContentE2eTest extends IntegrationTest {
 	}
 
 	private Path requiredPath(String environmentName) {
+		return Path.of(requiredValue(environmentName));
+	}
+
+	private String requiredValue(String environmentName) {
 		String value = System.getenv(environmentName);
 		assertThat(value).as(environmentName + " must be provided for manual GMS E2E").isNotBlank();
-		return Path.of(value);
+		return value;
 	}
 
 	private void assertFileMime(Path path, String expectedMimeType) throws Exception {

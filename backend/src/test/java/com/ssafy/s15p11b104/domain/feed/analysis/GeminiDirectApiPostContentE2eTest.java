@@ -56,9 +56,6 @@ class GeminiDirectApiPostContentE2eTest extends IntegrationTest {
 
 	private static final String DIRECT_BASE_URL = "https://generativelanguage.googleapis.com";
 	private static final String MULTIMODAL_MODEL = "gemini-3.5-flash";
-	private static final String PHOTO_CONTENT =
-		"오늘 카메라 테스트를 하며 안경을 쓰고 나무무늬 벽 앞에서 가족 기록용 사진을 여러 장 남겼다.";
-	private static final String VIDEO_CONTENT = "오늘 카메라로 가족 기록용 짧은 영상을 남겼다.";
 
 	@Autowired
 	private PostContentInputLoader inputLoader;
@@ -87,6 +84,7 @@ class GeminiDirectApiPostContentE2eTest extends IntegrationTest {
 	@Test
 	void analyzesFourLocalPhotosThroughDirectGeminiApi() throws Exception {
 		String apiKey = requireApiKey();
+		String content = requiredValue("GEMINI_E2E_PHOTO_CONTENT");
 		List<Path> localPhotos = List.of(
 			requiredPath("GEMINI_E2E_IMAGE1"),
 			requiredPath("GEMINI_E2E_IMAGE2"),
@@ -103,7 +101,7 @@ class GeminiDirectApiPostContentE2eTest extends IntegrationTest {
 				uploaded.add(upload(client, photo, "image/jpeg"));
 			}
 
-			Post post = savePost(PHOTO_CONTENT);
+			Post post = savePost(content);
 			postMediaRepository.saveAll(List.of(
 				media(post, uploaded.get(2), 3),
 				media(post, uploaded.get(0), 1),
@@ -121,7 +119,7 @@ class GeminiDirectApiPostContentE2eTest extends IntegrationTest {
 
 			String summary = directAnalysisService(apiKey).analyze(postId);
 
-			assertThat(dbInput.content()).isEqualTo(PHOTO_CONTENT);
+			assertThat(dbInput.content()).isEqualTo(content);
 			assertThat(dbInput.media()).extracting(PostContentMedia::uri)
 				.containsExactly(uploaded.get(0).uri(), uploaded.get(1).uri(), uploaded.get(2).uri(), uploaded.get(3).uri());
 			assertThat(summary).isNotBlank();
@@ -136,6 +134,7 @@ class GeminiDirectApiPostContentE2eTest extends IntegrationTest {
 	@Test
 	void analyzesLocalVideoThroughDirectGeminiApi() throws Exception {
 		String apiKey = requireApiKey();
+		String content = requiredValue("GEMINI_E2E_VIDEO_CONTENT");
 		Path localVideo = requiredPath("GEMINI_E2E_VIDEO");
 		assertThat(Files.isRegularFile(localVideo)).isTrue();
 		assertFileMime(localVideo, "video/mp4");
@@ -145,7 +144,7 @@ class GeminiDirectApiPostContentE2eTest extends IntegrationTest {
 		List<UploadedMedia> uploaded = new ArrayList<>();
 		try {
 			uploaded.add(upload(client, localVideo, "video/mp4"));
-			Post post = savePost(VIDEO_CONTENT);
+			Post post = savePost(content);
 			postMediaRepository.save(media(post, uploaded.get(0), 1, MediaType.VIDEO));
 			entityManager.flush();
 			Long postId = post.getId();
@@ -159,7 +158,7 @@ class GeminiDirectApiPostContentE2eTest extends IntegrationTest {
 
 			String summary = directAnalysisService(apiKey).analyze(postId);
 
-			assertThat(dbInput.content()).isEqualTo(VIDEO_CONTENT);
+			assertThat(dbInput.content()).isEqualTo(content);
 			assertThat(dbInput.media()).containsExactly(
 				new PostContentMedia(MediaType.VIDEO, uploaded.get(0).uri(), "video/mp4"));
 			assertThat(summary).isNotBlank();
@@ -292,9 +291,13 @@ class GeminiDirectApiPostContentE2eTest extends IntegrationTest {
 	}
 
 	private Path requiredPath(String environmentName) {
+		return Path.of(requiredValue(environmentName));
+	}
+
+	private String requiredValue(String environmentName) {
 		String value = System.getenv(environmentName);
 		assertThat(value).as(environmentName + " must be provided for manual Gemini E2E").isNotBlank();
-		return Path.of(value);
+		return value;
 	}
 
 	private void assertFileMime(Path path, String expectedMimeType) throws Exception {
