@@ -8,6 +8,7 @@ interface PrimaryButtonProps {
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
+  tone?: 'cream' | 'lavender';
 }
 
 export function PrimaryButton({
@@ -15,15 +16,21 @@ export function PrimaryButton({
   onPress,
   disabled = false,
   loading = false,
+  tone = 'cream',
 }: PrimaryButtonProps) {
   return (
     <AnimatedPressable
+      accessibilityLabel={label}
       accessibilityRole="button"
       accessibilityState={{disabled: disabled || loading, busy: loading}}
       containerStyle={styles.container}
       disabled={disabled || loading}
       onPress={onPress}>
-      <View style={styles.button}>
+      <View
+        style={[
+          styles.button,
+          tone === 'lavender' && styles.lavenderButton,
+        ]}>
         {loading ? (
           <ActivityIndicator color={AUTH_COLORS.body} />
         ) : (
@@ -45,6 +52,10 @@ const styles = StyleSheet.create({
     boxShadow: '0px 7px 16px rgba(177, 145, 53, 0.14)',
     height: AUTH_LAYOUT.buttonHeight,
     justifyContent: 'center',
+  },
+  lavenderButton: {
+    backgroundColor: AUTH_COLORS.primarySoft,
+    boxShadow: '0px 7px 16px rgba(102, 83, 188, 0.12)',
   },
   label: {
     color: AUTH_COLORS.body,

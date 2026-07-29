@@ -9,7 +9,7 @@ import {
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 
 interface FormFieldProps extends TextInputProps {
-  label: string;
+  label?: string;
   trailing?: React.ReactNode;
   invalid?: boolean;
 }
@@ -23,7 +23,9 @@ export function FormField({
 }: FormFieldProps) {
   return (
     <View style={styles.wrapper}>
-      <Text style={styles.label}>{label}</Text>
+      {label !== undefined && label.length > 0 && (
+        <Text style={styles.label}>{label}</Text>
+      )}
       <View style={[styles.field, invalid && styles.invalidField]}>
         <TextInput
           {...props}
