@@ -65,6 +65,27 @@ public class GroupMember extends BaseEntity {
 		this.leftAt = leftAt;
 	}
 
+	/**
+	 * 탈퇴한 구성원을 다시 활성 상태로 되돌린다.
+	 *
+	 * <p>중복 행을 만들지 않기 위해 기존 행의 {@code leftAt}을 비우고 역할과 가입 시각을 갱신한다.
+	 * 관리자 여부는 항상 해제한다. 이전 관리자였던 사람이 재가입만으로 권한을 되찾으면
+	 * {@code uq_group_active_manager}를 위반하거나 현재 관리자의 권한을 조용히 덮어쓴다.
+	 *
+	 * @param role     재가입 시 지정된 역할
+	 * @param joinedAt 재가입 시각
+	 */
+	public void rejoin(GroupRole role, Instant joinedAt) {
+		this.leftAt = null;
+		this.role = role;
+		this.joinedAt = joinedAt;
+		this.manager = false;
+	}
+
+	public boolean isActive() {
+		return leftAt == null;
+	}
+
 	public FamilyGroup getGroup() {
 		return group;
 	}

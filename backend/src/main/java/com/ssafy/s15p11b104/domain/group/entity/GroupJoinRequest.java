@@ -51,6 +51,34 @@ public class GroupJoinRequest extends CreatedAtEntity {
 		this.status = status;
 	}
 
+	/**
+	 * 요청을 승인 상태로 바꾸고 지정된 역할과 처리 시각을 기록한다.
+	 *
+	 * @param assignedRole 관리자가 지정한 역할
+	 * @param processedAt  처리 시각
+	 */
+	public void approve(GroupRole assignedRole, Instant processedAt) {
+		this.status = JoinRequestStatus.APPROVED;
+		this.assignedRole = assignedRole;
+		this.processedAt = processedAt;
+	}
+
+	/**
+	 * 요청을 거절 상태로 바꾸고 처리 시각만 기록한다.
+	 *
+	 * <p>계약에 따라 {@code assignedRole}은 {@code null}로 유지한다.
+	 *
+	 * @param processedAt 처리 시각
+	 */
+	public void reject(Instant processedAt) {
+		this.status = JoinRequestStatus.REJECTED;
+		this.processedAt = processedAt;
+	}
+
+	public boolean isPending() {
+		return status == JoinRequestStatus.PENDING_ADMIN;
+	}
+
 	public FamilyGroup getGroup() {
 		return group;
 	}

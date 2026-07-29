@@ -19,6 +19,7 @@ import com.ssafy.s15p11b104.domain.group.dto.GroupDetailResponse;
 import com.ssafy.s15p11b104.domain.group.dto.GroupListResponse;
 import com.ssafy.s15p11b104.domain.group.dto.GroupUpdateRequest;
 import com.ssafy.s15p11b104.domain.group.dto.GroupUpdateResponse;
+import com.ssafy.s15p11b104.domain.group.dto.InviteCodeResponse;
 import com.ssafy.s15p11b104.domain.group.service.GroupService;
 import com.ssafy.s15p11b104.global.api.ApiResponse;
 import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
@@ -32,6 +33,7 @@ public class GroupController {
 	private static final String LIST_MESSAGE = "내 그룹 목록 조회 성공";
 	private static final String CREATE_MESSAGE = "그룹 생성 성공";
 	private static final String DETAIL_MESSAGE = "그룹 상세 조회 성공";
+	private static final String INVITE_CODE_MESSAGE = "초대 코드 조회 성공";
 	private static final String UPDATE_MESSAGE = "그룹 정보 수정 성공";
 
 	private final GroupService groupService;
@@ -60,6 +62,14 @@ public class GroupController {
 		@PathVariable Long groupId,
 		@AuthenticationPrincipal AuthenticatedUser user) {
 		return ApiResponse.success(DETAIL_MESSAGE, groupService.getDetail(groupId, user.id()));
+	}
+
+	@GetMapping("/{groupId}/invite-code")
+	@ResponseStatus(HttpStatus.OK)
+	public ApiResponse<InviteCodeResponse> getInviteCode(
+		@PathVariable Long groupId,
+		@AuthenticationPrincipal AuthenticatedUser user) {
+		return ApiResponse.success(INVITE_CODE_MESSAGE, groupService.getInviteCode(groupId, user.id()));
 	}
 
 	@PatchMapping("/{groupId}")

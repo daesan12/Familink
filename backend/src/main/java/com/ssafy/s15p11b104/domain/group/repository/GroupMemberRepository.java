@@ -51,6 +51,22 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 		@Param("groupId") Long groupId,
 		@Param("memberId") Long memberId);
 
+	/**
+	 * 탈퇴 여부와 관계없이 그룹·사용자 조합의 멤버십 행을 찾는다.
+	 *
+	 * <p>재가입 시 중복 행을 만들지 않고 기존 행을 재활성화하기 위해 사용한다.
+	 */
+	@Query("""
+		select member
+		from GroupMember member
+		join fetch member.user
+		where member.group.id = :groupId
+		  and member.user.id = :userId
+		""")
+	Optional<GroupMember> findByGroupIdAndUserId(
+		@Param("groupId") Long groupId,
+		@Param("userId") Long userId);
+
 	@Query("""
 		select member
 		from GroupMember member
