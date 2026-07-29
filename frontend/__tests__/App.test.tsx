@@ -61,10 +61,50 @@ test('개발 실행 기본값으로 앱 셸과 하단 탭을 표시한다', asyn
 
   expect(
     renderer!.root.findByProps({
-      children: '부모님 가족',
+      children: '우리 가족의 이야기',
     })
   ).toBeTruthy();
   expect(
     renderer!.root.findByProps({accessibilityRole: 'tablist'})
   ).toBeTruthy();
+});
+
+test('그룹 선택 바텀시트에서 빈 피드 그룹으로 전환한다', async () => {
+  jest.useFakeTimers();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(<App />);
+    jest.runOnlyPendingTimers();
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityHint: '다른 가족 그룹으로 전환합니다'})
+      .props.onPress();
+    jest.runOnlyPendingTimers();
+  });
+
+  expect(renderer!.root.findByProps({children: '그룹 선택'})).toBeTruthy();
+
+  const emptyGroupOption = renderer!.root
+    .findAllByProps({accessibilityRole: 'menuitem'})
+    .find(
+      option =>
+        option.findAllByProps({children: '교회 소모임'}).length > 0
+    );
+
+  expect(emptyGroupOption).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    emptyGroupOption!.props.onPress();
+    jest.runOnlyPendingTimers();
+  });
+
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '게시물이 없는 피드'})
+  ).toBeTruthy();
+
+  await TestRenderer.act(() => renderer!.unmount());
+  jest.useRealTimers();
 });

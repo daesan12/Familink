@@ -6,6 +6,7 @@ import PhoneCall from 'lucide-react-native/icons/phone-call';
 import UsersRound from 'lucide-react-native/icons/users-round';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 
+import {COLORS} from '../design/tokens';
 import type {AppRoute, GroupRole} from './types';
 import {getTabsForRole, type TabIconName} from './navigation';
 
@@ -14,13 +15,6 @@ interface BottomTabBarProps {
   onSelect: (route: AppRoute) => void;
   role: GroupRole;
 }
-
-const COLORS = {
-  active: '#7160E0',
-  border: '#E7E9ED',
-  inactive: '#D9D9D9',
-  surface: '#FFFFFF',
-} as const;
 
 const TAB_ICONS = {
   calendar: Calendar,
@@ -38,7 +32,7 @@ export function BottomTabBar({activeRoute, onSelect, role}: BottomTabBarProps) {
     <View accessibilityRole="tablist" style={styles.container}>
       {tabs.map((tab) => {
         const isActive = tab.route === activeRoute;
-        const color = isActive ? COLORS.active : COLORS.inactive;
+        const color = isActive ? COLORS.purpleDeep : COLORS.inactive;
         const Icon = TAB_ICONS[tab.icon];
 
         return (
@@ -62,8 +56,8 @@ export function BottomTabBar({activeRoute, onSelect, role}: BottomTabBarProps) {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.background,
+    borderTopColor: COLORS.divider,
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     minHeight: 92,
