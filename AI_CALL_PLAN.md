@@ -249,7 +249,7 @@ sequenceDiagram
 
 - 피보호자가 설정한 `member_aliases` 우선
 - 별칭이 없으면 구성원 실제 이름 사용
-- 모델에는 서버 발급 `person_key`와 표시명만 제공
+- 모델에는 서버 발급 `person_key`, 실제 이름과 표시명 제공
 - DB member ID 비노출
 
 ### 당일 가족 게시글 분석

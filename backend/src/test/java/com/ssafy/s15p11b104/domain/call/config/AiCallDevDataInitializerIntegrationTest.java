@@ -42,6 +42,7 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 
 		Long unrelatedPostId = insertUnrelatedPost();
 		markFixturePostsAsStale();
+		markFixtureAliasesAsLegacy();
 
 		initializer.run(null);
 
@@ -50,6 +51,7 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 		assertThat(loadFixtureAnalysisStatuses()).containsExactly("SUCCESS", "SUCCESS");
 		assertThat(countRefreshedFixturePosts()).isEqualTo(2);
 		assertThat(loadUnrelatedPostCreatedAt(unrelatedPostId)).isEqualTo(STALE_CREATED_AT);
+		assertThat(loadFixtureAliases()).containsExactly("딸", "손자");
 
 		GroupMember careReceiver = groupMemberRepository.findActiveCareReceiverByLoginId(
 			"ai-call-user",
@@ -63,6 +65,23 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 				"민지 딸이 오늘 점심으로 된장국을 먹었다는 소식을 전했습니다.",
 				"준호 손자가 주말 야구 경기에서 응원하는 팀이 이겨 기뻤다고 전했습니다."
 			);
+	}
+
+	private void markFixtureAliasesAsLegacy() {
+		jdbcTemplate.update("""
+			update member_aliases alias
+			set alias = case target_user.login_id
+				when 'ai-guardian-1' then '민지 딸'
+				when 'ai-guardian-2' then '준호 손자'
+			end
+			from family_groups family
+			join group_members target on target.group_id = family.id
+			join users target_user on target_user.id = target.user_id
+			where alias.group_id = family.id
+				and alias.target_member_id = target.id
+				and family.invite_code = 'AICALL'
+				and target_user.login_id in ('ai-guardian-1', 'ai-guardian-2')
+			""");
 	}
 
 	private Long insertUnrelatedPost() {
@@ -125,6 +144,19 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 				and post.content in (?, ?)
 			order by post.content
 			""", String.class, FIRST_POST_CONTENT, SECOND_POST_CONTENT);
+	}
+
+	private List<String> loadFixtureAliases() {
+		return jdbcTemplate.queryForList("""
+			select alias.alias
+			from member_aliases alias
+			join family_groups family on family.id = alias.group_id
+			join group_members target on target.id = alias.target_member_id
+			join users target_user on target_user.id = target.user_id
+			where family.invite_code = 'AICALL'
+				and target_user.login_id in ('ai-guardian-1', 'ai-guardian-2')
+			order by target_user.login_id
+			""", String.class);
 	}
 
 	private int countRefreshedFixturePosts() {

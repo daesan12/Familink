@@ -20,6 +20,7 @@ public record AiCallPromptContext(
 
 	public record FamilyMemberContext(
 		String personKey,
+		String name,
 		String displayName
 	) {
 	}

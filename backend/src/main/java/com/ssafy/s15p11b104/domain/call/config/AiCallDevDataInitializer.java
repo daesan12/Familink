@@ -75,13 +75,16 @@ public class AiCallDevDataInitializer implements ApplicationRunner {
 			join users owner_user on owner_user.id = owner.user_id and owner_user.login_id = 'ai-call-user'
 			cross join (
 				values
-					('ai-guardian-1', '민지 딸'),
-					('ai-guardian-2', '준호 손자')
+					('ai-guardian-1', '딸'),
+					('ai-guardian-2', '손자')
 			) as values_to_insert(login_id, alias)
 			join users target_user on target_user.login_id = values_to_insert.login_id
 			join group_members target on target.group_id = family.id and target.user_id = target_user.id
 			where family.invite_code = 'AICALL'
-			on conflict (group_id, owner_member_id, target_member_id) do nothing
+			on conflict (group_id, owner_member_id, target_member_id) do update
+			set alias = excluded.alias,
+				updated_at = current_timestamp
+			where member_aliases.alias is distinct from excluded.alias
 			""");
 	}
 

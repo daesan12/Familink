@@ -1,6 +1,7 @@
 package com.ssafy.s15p11b104.domain.call.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.Mockito.when;
 
 import java.sql.Timestamp;
@@ -112,6 +113,40 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 	}
 
 	@Test
+	void loadsFamilyMemberNamesAndCareReceiverSpecificDisplayNames() {
+		Long groupId = insertGroup("가족표시명", "NAME01");
+		Long careReceiverId = insertMember(
+			groupId,
+			insertUser("name_receiver", "피보호자"),
+			"CARE_RECEIVER"
+		);
+		Long aliasedMemberId = insertMember(
+			groupId,
+			insertUser("name_daughter", "민지"),
+			"GUARDIAN"
+		);
+		insertMember(
+			groupId,
+			insertUser("name_grandson", "준호"),
+			"GUARDIAN"
+		);
+		insertAlias(groupId, careReceiverId, aliasedMemberId, "딸");
+
+		AiCallPromptContext context = promptContextProvider.load(loadMember(careReceiverId));
+
+		assertThat(context.familyMembers())
+			.extracting(
+				AiCallPromptContext.FamilyMemberContext::personKey,
+				AiCallPromptContext.FamilyMemberContext::name,
+				AiCallPromptContext.FamilyMemberContext::displayName
+			)
+			.containsExactly(
+				tuple("person_1", "민지", "딸"),
+				tuple("person_2", "준호", "준호")
+			);
+	}
+
+	@Test
 	void loadsMostRecentEndedReportForCareReceiver() {
 		Long currentGroupId = insertGroup("리포트그룹", "RPT001");
 		Long careReceiverId = insertMember(
@@ -163,6 +198,13 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 			values (?, ?, cast(? as group_role), false, current_timestamp)
 			returning id
 			""", Long.class, groupId, userId, role);
+	}
+
+	private void insertAlias(Long groupId, Long ownerMemberId, Long targetMemberId, String alias) {
+		jdbcTemplate.update("""
+			insert into member_aliases (group_id, owner_member_id, target_member_id, alias)
+			values (?, ?, ?, ?)
+			""", groupId, ownerMemberId, targetMemberId, alias);
 	}
 
 	private void insertSuccessfulPost(Long groupId, Long authorId, String summary, Instant createdAt) {

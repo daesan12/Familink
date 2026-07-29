@@ -101,9 +101,11 @@ public class AiCallPromptContextProvider {
 			if (member.getId().equals(careReceiverId)) {
 				continue;
 			}
-			String displayName = aliases.getOrDefault(member.getId(), member.getUser().getName());
+			String name = member.getUser().getName();
+			String displayName = aliases.getOrDefault(member.getId(), name);
 			contexts.add(new AiCallPromptContext.FamilyMemberContext(
 				"person_" + (contexts.size() + 1),
+				name,
 				displayName
 			));
 		}
