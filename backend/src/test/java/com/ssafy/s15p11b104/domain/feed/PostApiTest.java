@@ -261,6 +261,17 @@ class PostApiTest extends IntegrationTest {
 	}
 
 	@Test
+	void postRejectsMediaUrlOutsideConfiguredStorageHosts() throws Exception {
+		mockMvc.perform(post("/posts")
+				.with(authenticatedAs(authorMember.getUser().getId()))
+				.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+				.content(createJson(List.of(group.getId()), "외부 URL", "IMAGE",
+					List.of(media("https://evil.example/image.jpg", 0)))))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
 	void unauthenticatedRequestIsUnauthorized() throws Exception {
 		mockMvc.perform(post("/posts")
 				.contentType(org.springframework.http.MediaType.APPLICATION_JSON)

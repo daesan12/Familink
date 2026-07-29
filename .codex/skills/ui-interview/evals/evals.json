@@ -1,0 +1,69 @@
+{
+  "skill_name": "ui-interview",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "현재 feature/S15P11B104-201-profile-ui 브랜치에서 프로필 카드 화면을 구현 중이야. 화면 모양은 다 정해졌으니 바로 구현해줘. 아직 카드를 눌렀을 때 동작은 설명하지 않았어.",
+      "expected_output": "The skill recognizes clear UI work without requesting design materials or broad repository inspection and asks one plain-language question about what the user should see after pressing the profile card.",
+      "files": [],
+      "expectations": [
+        "The response starts the interaction interview without asking whether this is UI work.",
+        "No Figma, screenshot, design document, screen inventory, full diff, or broad specification review is requested.",
+        "Exactly one question is asked.",
+        "The question asks what the user should see after pressing the profile card.",
+        "Two or three distinct user-visible outcomes and a direct-input option are offered.",
+        "Unexplained implementation terms such as modal, bottom sheet, routing, dismiss, or toggle are not used as standalone choices."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "게시물 작성 화면을 만드는 중이야. 작성 버튼을 누르면 새 화면으로 이동하고, 완료하면 피드로 돌아가. 제출 중 중복 클릭이나 실패 처리는 일반적인 방식으로 알아서 해줘.",
+      "expected_output": "The skill recognizes that the material interactions are already decided, applies safe conventional submission behavior without further questions, and returns a compact summary separating confirmed behavior from conventionally selected behavior.",
+      "files": [],
+      "expectations": [
+        "No follow-up question is asked.",
+        "The confirmed behavior includes moving to the writing screen and returning to the feed after completion.",
+        "The conventionally selected behavior prevents repeated submission while processing.",
+        "The conventionally selected failure behavior preserves the user's input and allows another attempt.",
+        "The response is a compact summary rather than a long requirements document."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "현재 UI 브랜치에서 설정 화면 제목의 글자 크기와 위아래 간격만 디자인 시안에 맞춰 수정해줘. 클릭 동작이나 화면 이동은 바뀌지 않아.",
+      "expected_output": "The skill identifies a pure visual adjustment with no interaction gap and does not start an interview.",
+      "files": [],
+      "expectations": [
+        "No interaction question is asked.",
+        "No confirmation of UI-work status is requested.",
+        "No new interaction, navigation, error-handling, or state requirement is invented.",
+        "The response allows the original styling task to proceed immediately."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "현재 feature/S15P11B104-202-profile-ui 브랜치야. 화면 작업은 잠시 멈추고 이번에는 프로필 조회 API 응답 형식만 정리해줘.",
+      "expected_output": "The skill treats the current request as non-UI work even though the branch name mentions UI and does not start an interaction interview.",
+      "files": [],
+      "expectations": [
+        "No UI interaction question is asked.",
+        "The UI-looking branch name is not used by itself to override the explicit API task.",
+        "No screen behavior, navigation, or visual requirement is invented.",
+        "The response allows the API response-format task to proceed."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "설정 화면의 회원 탈퇴 버튼을 구현 중이야. 누른 뒤 삭제 처리는 알아서 일반적으로 해줘.",
+      "expected_output": "The skill does not choose a destructive deletion flow on the user's behalf and asks one plain-language question that distinguishes confirmation and consequence behavior.",
+      "files": [],
+      "expectations": [
+        "Exactly one question is asked.",
+        "The skill does not immediately decide or execute account deletion.",
+        "The question describes user-visible confirmation or cancellation behavior without relying on the standalone term modal.",
+        "The choices make the irreversible consequence understandable.",
+        "No unrelated UI or implementation detail is requested."
+      ]
+    }
+  ]
+}
