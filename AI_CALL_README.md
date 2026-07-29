@@ -146,6 +146,9 @@ Invoke-WebRequest -UseBasicParsing http://localhost:8080/ai-call/
 - KST 당일 가족 게시글과 `SUCCESS` 분석 요약
 - 최근 완료 통화와 통화 요약 1건
 
+기존 fixture 게시글은 백엔드를 시작할 때마다 `created_at`과 `updated_at`을
+현재 시각으로 갱신하므로, Docker 볼륨을 유지해도 KST 당일 게시글로 조회된다.
+
 fixture는 프롬프트의 다음 네 블록을 실제 DB 데이터로 확인하기 위해 사용한다.
 
 1. 피보호자 정보

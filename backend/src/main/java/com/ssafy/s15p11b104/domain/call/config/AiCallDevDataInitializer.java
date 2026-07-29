@@ -131,6 +131,20 @@ public class AiCallDevDataInitializer implements ApplicationRunner {
 			select id, 'SUCCESS', ?, current_timestamp
 			from inserted_post
 			""", content, authorLoginId, content, summary);
+
+		jdbcTemplate.update("""
+			update posts fixture_post
+			set created_at = current_timestamp,
+				updated_at = current_timestamp
+			from family_groups family
+			join group_members author on author.group_id = family.id
+			join users author_user on author_user.id = author.user_id
+			where fixture_post.group_id = family.id
+				and fixture_post.author_member_id = author.id
+				and family.invite_code = 'AICALL'
+				and author_user.login_id = ?
+				and fixture_post.content = ?
+			""", authorLoginId, content);
 	}
 
 	private void insertRecentCallReport() {
