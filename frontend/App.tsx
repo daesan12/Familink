@@ -9,6 +9,7 @@ import type {
   CurrentGroupStore,
   FamilyGroup,
 } from './src/app-shell';
+import {FeedScreen} from './src/features/feed';
 import {SignupFlowScreen} from './src/features/auth/screens/SignupFlowScreen';
 import {WelcomeScreen} from './src/features/auth/screens/WelcomeScreen';
 
@@ -28,16 +29,25 @@ interface AppProps {
 
 const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
   {
-    id: 'development-guardian-group',
-    name: '우리 가족',
+    id: 'development-care-receiver-group',
+    name: '동창 모임방',
+    role: 'careReceiver',
+  },
+  {
+    id: 'development-empty-group',
+    name: '교회 소모임',
     role: 'guardian',
   },
   {
-    id: 'development-care-receiver-group',
-    name: '부모님 가족',
-    role: 'careReceiver',
+    id: 'development-guardian-group',
+    name: '우리 가족의 이야기',
+    role: 'guardian',
   },
 ];
+
+const DEFAULT_SCREENS: AppScreenRegistry = {
+  feed: FeedScreen,
+};
 
 export default function App({
   groupStore,
@@ -72,7 +82,7 @@ export default function App({
           onCreateGroup={onCreateGroup}
           onGroupChange={onGroupChange}
           onJoinGroup={onJoinGroup}
-          screens={screens}
+          screens={screens ?? DEFAULT_SCREENS}
         />
       )}
     </SafeAreaProvider>

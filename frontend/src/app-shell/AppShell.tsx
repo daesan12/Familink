@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {
   Pressable,
   StyleSheet,
@@ -7,6 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {COLORS} from '../design/tokens';
 import { BottomTabBar } from './BottomTabBar';
 import { CurrentGroupSwitcher } from './CurrentGroupSwitcher';
 import {
@@ -155,14 +157,59 @@ export function AppShell({
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
+        {resolvedRoute === 'feed' ? (
+          <View style={styles.headerActions}>
+            <Pressable
+              accessibilityLabel="게시글 보관함"
+              accessibilityRole="button"
+              style={styles.headerIconButton}
+            >
+              <MaterialDesignIcons
+                color={COLORS.textStrong}
+                name="folder"
+                size={27}
+              />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="새 게시글 작성"
+              accessibilityRole="button"
+              style={styles.headerIconButton}
+            >
+              <MaterialDesignIcons
+                color={COLORS.textStrong}
+                name="plus"
+                size={29}
+              />
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.headerSide} />
+        )}
         <CurrentGroupSwitcher
           currentGroup={currentGroup}
           groups={groups}
           isOpen={isGroupMenuOpen}
           onClose={() => setIsGroupMenuOpen(false)}
+          onCreateGroup={onCreateGroup}
+          onJoinGroup={onJoinGroup}
           onSelect={handleGroupSelect}
           onToggle={() => setIsGroupMenuOpen(isOpen => !isOpen)}
         />
+        {resolvedRoute === 'feed' ? (
+          <Pressable
+            accessibilityLabel="알림"
+            accessibilityRole="button"
+            style={styles.headerSide}
+          >
+            <MaterialDesignIcons
+              color={COLORS.textStrong}
+              name="bell"
+              size={28}
+            />
+          </Pressable>
+        ) : (
+          <View style={styles.headerSide} />
+        )}
       </View>
 
       <View style={styles.content}>
@@ -233,12 +280,29 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   header: {
-    alignItems: 'flex-start',
-    borderBottomColor: '#E4E7EC',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: 56,
-    paddingHorizontal: 20,
-    paddingVertical: 6,
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 64,
+    paddingHorizontal: 16,
+  },
+  headerActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    width: 80,
+  },
+  headerIconButton: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    width: 40,
+  },
+  headerSide: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    width: 80,
   },
   placeholder: {
     alignItems: 'center',
@@ -270,7 +334,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   safeArea: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.background,
     flex: 1,
   },
   secondaryAction: {

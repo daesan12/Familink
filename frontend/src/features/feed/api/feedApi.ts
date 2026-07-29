@@ -1,1 +1,89 @@
-export {};
+import type {ImageSourcePropType} from 'react-native';
+
+import type {FeedPost} from '../types';
+import {limitPostImages} from '../types';
+
+const GYEONGJU_TEMPLE =
+  require('../../../assets/images/feed-gyeongju-temple.png') as ImageSourcePropType;
+const KOREAN_BARBECUE =
+  require('../../../assets/images/feed-korean-barbecue.png') as ImageSourcePropType;
+
+const DEVELOPMENT_POSTS: readonly FeedPost[] = [
+  {
+    author: {
+      avatarText: '유',
+      id: 'member-yura',
+      name: '유라',
+    },
+    body: '유라네 가족의 행복했던 경주여행 기록!',
+    commentCount: 5,
+    createdAtLabel: '어제 20:30',
+    groupId: 'development-guardian-group',
+    id: 'post-gyeongju',
+    images: limitPostImages([
+      {
+        accessibilityLabel: '경주 불국사 다보탑과 전각 풍경',
+        id: 'gyeongju-temple',
+        source: GYEONGJU_TEMPLE,
+      },
+      {
+        accessibilityLabel: '가족과 함께한 삼겹살 저녁 식사',
+        id: 'family-barbecue',
+        source: KOREAN_BARBECUE,
+      },
+    ]),
+    reactions: [
+      {count: 2, emoji: '♥', id: 'heart'},
+      {count: 1, emoji: '●', id: 'smile'},
+    ],
+  },
+  {
+    author: {
+      avatarText: '대',
+      id: 'member-daesan',
+      name: '대산',
+    },
+    body: '할머니 사랑해요!! 내가 진짜 사랑해!!',
+    commentCount: 4,
+    createdAtLabel: '어제 21:40',
+    groupId: 'development-guardian-group',
+    id: 'post-love',
+    images: [],
+    reactions: [{count: 4, emoji: '●', id: 'smile'}],
+  },
+  {
+    author: {
+      avatarText: '종',
+      id: 'member-jongcheol',
+      name: '종철',
+    },
+    body: '어머니 손주 민수가 오늘 발표회에서 춤 춰서 영상 보여드리고 싶어서 올려봐요',
+    commentCount: 0,
+    createdAtLabel: '어제 14:10',
+    groupId: 'development-guardian-group',
+    id: 'post-recital',
+    images: [],
+    reactions: [],
+  },
+];
+
+export type FeedLoader = (groupId: string) => Promise<readonly FeedPost[]>;
+
+export function normalizeFeedPosts(
+  posts: readonly FeedPost[],
+): readonly FeedPost[] {
+  return posts.map(post => {
+    const images = limitPostImages(post.images);
+
+    return images.length === post.images.length ? post : {...post, images};
+  });
+}
+
+export async function loadFeed(
+  groupId: string,
+): Promise<readonly FeedPost[]> {
+  await Promise.resolve();
+  return normalizeFeedPosts(
+    DEVELOPMENT_POSTS.filter(post => post.groupId === groupId),
+  );
+}
