@@ -26,6 +26,7 @@ export interface FeedPost {
   groupId: string;
   id: string;
   images: readonly FeedImage[];
+  isOwnedByCurrentUser: boolean;
   reactions: readonly FeedReaction[];
 }
 

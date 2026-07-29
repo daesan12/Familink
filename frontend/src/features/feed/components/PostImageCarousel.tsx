@@ -1,5 +1,5 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,27 +9,50 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type ImageSourcePropType,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
-import type {FeedImage} from '../types';
+
+const IMAGE_GAP = 10;
+const NEXT_IMAGE_PEEK = 28;
+
+export interface CarouselImage {
+  accessibilityLabel?: string;
+  id: string;
+  source: ImageSourcePropType;
+}
 
 interface PostImageCarouselProps {
-  images: readonly FeedImage[];
-  variant?: 'feed' | 'detail';
+  images: readonly CarouselImage[];
+  onImagePress?: () => void;
+  onRemove?: (imageId: string) => void;
 }
 
 export function PostImageCarousel({
   images,
-  variant = 'feed',
+  onImagePress,
+  onRemove,
 }: PostImageCarouselProps) {
   const {width: windowWidth} = useWindowDimensions();
-  const horizontalInset = variant === 'detail' ? 32 : 40;
-  const width = Math.min(Math.max(windowWidth - horizontalInset, 1), 520);
-  const height = Math.round(width * 0.632);
+  const containerWidth = Math.min(
+    Math.max(windowWidth - 40, 1),
+    520,
+  );
+  const hasMultipleImages = images.length > 1;
+  const usesPeekLayout = hasMultipleImages;
+  const imageWidth = usesPeekLayout
+    ? containerWidth - NEXT_IMAGE_PEEK
+    : containerWidth;
+  const imageHeight = Math.round(containerWidth * 0.632);
+  const snapInterval = imageWidth + (usesPeekLayout ? IMAGE_GAP : 0);
   const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveIndex(index => Math.min(index, Math.max(images.length - 1, 0)));
+  }, [images.length]);
 
   if (images.length === 0) {
     return null;
@@ -38,57 +61,87 @@ export function PostImageCarousel({
   const handleMomentumScrollEnd = (
     event: NativeSyntheticEvent<NativeScrollEvent>,
   ) => {
-    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / width);
+    const nextIndex = Math.round(
+      event.nativeEvent.contentOffset.x / snapInterval,
+    );
     setActiveIndex(Math.max(0, Math.min(nextIndex, images.length - 1)));
   };
 
   return (
     <View
       accessibilityLabel={`게시글 이미지 ${images.length}장`}
-      style={[styles.carousel, {height, width}]}
+      style={[styles.root, {width: containerWidth}]}
     >
       <FlatList
         bounces={false}
+        contentContainerStyle={
+          usesPeekLayout ? styles.multipleContent : undefined
+        }
         data={images}
         decelerationRate="fast"
         disableIntervalMomentum
         getItemLayout={(_, index) => ({
           index,
-          length: width,
-          offset: width * index,
+          length: snapInterval,
+          offset: snapInterval * index,
         })}
         horizontal
+        ItemSeparatorComponent={
+          usesPeekLayout ? CarouselSeparator : undefined
+        }
         keyExtractor={image => image.id}
+        nestedScrollEnabled
         onMomentumScrollEnd={handleMomentumScrollEnd}
-        pagingEnabled
         renderItem={({item}) => (
-          <FeedImageFrame height={height} image={item} width={width} />
+          <FeedImageFrame
+            height={imageHeight}
+            image={item}
+            onPress={onImagePress}
+            onRemove={onRemove}
+            width={imageWidth}
+          />
         )}
         showsHorizontalScrollIndicator={false}
-        snapToInterval={width}
+        snapToAlignment="start"
+        snapToInterval={snapInterval}
       />
 
-      {images.length > 1 ? (
+      {hasMultipleImages ? (
         <View
           accessibilityLabel={`${images.length}장 중 ${activeIndex + 1}번째 이미지`}
-          style={styles.indicator}
+          style={styles.dots}
         >
-          <Text style={styles.indicatorText}>
-            {activeIndex + 1}/{images.length}
-          </Text>
+          {images.map((image, index) => (
+            <View
+              key={image.id}
+              style={[styles.dot, index === activeIndex && styles.activeDot]}
+            />
+          ))}
         </View>
       ) : null}
     </View>
   );
 }
 
+function CarouselSeparator() {
+  return <View style={styles.separator} />;
+}
+
 interface FeedImageFrameProps {
   height: number;
-  image: FeedImage;
+  image: CarouselImage;
+  onPress?: () => void;
+  onRemove?: (imageId: string) => void;
   width: number;
 }
 
-function FeedImageFrame({height, image, width}: FeedImageFrameProps) {
+function FeedImageFrame({
+  height,
+  image,
+  onPress,
+  onRemove,
+  width,
+}: FeedImageFrameProps) {
   const [loadState, setLoadState] = useState<'loading' | 'loaded' | 'error'>(
     'loading',
   );
@@ -124,32 +177,61 @@ function FeedImageFrame({height, image, width}: FeedImageFrameProps) {
         </View>
       ) : null}
 
-      <Image
-        accessibilityLabel={image.accessibilityLabel}
-        accessibilityRole="image"
-        key={`${image.id}-${retryCount}`}
-        onError={() => setLoadState('error')}
-        onLoad={() => setLoadState('loaded')}
-        onLoadStart={() => setLoadState('loading')}
-        resizeMode="cover"
-        source={image.source}
-        style={[
-          styles.image,
-          loadState !== 'loaded' && styles.hiddenImage,
-          {height, width},
-        ]}
-      />
+      <Pressable
+        accessibilityHint={onPress ? '게시글 상세 화면으로 이동합니다' : undefined}
+        accessibilityRole={onPress ? 'button' : undefined}
+        disabled={!onPress}
+        onPress={onPress}
+      >
+        <Image
+          accessibilityLabel={image.accessibilityLabel}
+          accessibilityRole="image"
+          key={`${image.id}-${retryCount}`}
+          onError={() => setLoadState('error')}
+          onLoad={() => setLoadState('loaded')}
+          onLoadStart={() => setLoadState('loading')}
+          resizeMode="cover"
+          source={image.source}
+          style={[
+            styles.image,
+            loadState !== 'loaded' && styles.hiddenImage,
+            {height, width},
+          ]}
+        />
+      </Pressable>
+
+      {onRemove ? (
+        <Pressable
+          accessibilityLabel="선택한 사진 제거"
+          accessibilityRole="button"
+          onPress={() => onRemove(image.id)}
+          style={styles.removeButton}
+        >
+          <MaterialDesignIcons color={COLORS.background} name="close" size={18} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  carousel: {
-    alignSelf: 'center',
+  activeDot: {
+    backgroundColor: COLORS.purple,
+  },
+  dot: {
+    backgroundColor: COLORS.inactive,
     borderCurve: 'continuous',
-    borderRadius: RADII.medium,
-    overflow: 'hidden',
-    position: 'relative',
+    borderRadius: RADII.pill,
+    height: 6,
+    width: 6,
+  },
+  dots: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    justifyContent: 'center',
+    minHeight: 24,
+    paddingTop: 10,
   },
   errorState: {
     alignItems: 'center',
@@ -173,23 +255,13 @@ const styles = StyleSheet.create({
   },
   imageFrame: {
     backgroundColor: COLORS.surface,
-  },
-  indicator: {
-    backgroundColor: COLORS.imageOverlay,
     borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    bottom: 12,
-    minWidth: 42,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    position: 'absolute',
-    right: 12,
+    borderRadius: RADII.medium,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  indicatorText: {
-    color: COLORS.background,
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
+  multipleContent: {
+    paddingRight: NEXT_IMAGE_PEEK,
   },
   placeholder: {
     alignItems: 'center',
@@ -198,6 +270,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'absolute',
     zIndex: 1,
+  },
+  removeButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.imageOverlay,
+    borderCurve: 'continuous',
+    borderRadius: RADII.pill,
+    height: 36,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 10,
+    top: 10,
+    width: 36,
+    zIndex: 3,
   },
   retryButton: {
     alignItems: 'center',
@@ -215,5 +300,12 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 13,
     fontWeight: '700',
+  },
+  root: {
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  separator: {
+    width: IMAGE_GAP,
   },
 });
