@@ -24,6 +24,10 @@ public class FamilyGroup extends BaseEntity {
 		this.inviteCode = inviteCode;
 	}
 
+	public void rename(String name) {
+		this.name = name;
+	}
+
 	public String getName() {
 		return name;
 	}

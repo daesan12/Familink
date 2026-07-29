@@ -1,48 +1,80 @@
-import React from 'react';
-import {StyleSheet, Text, View} from 'react-native';
-import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
+import {useState} from 'react';
+import {StatusBar} from 'react-native';
+import {SafeAreaProvider} from 'react-native-safe-area-context';
 
-function AppContent() {
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Text style={styles.title}>S15P11B104</Text>
-        <Text style={styles.description}>
-          React Native Android 실행 환경이 준비되었습니다.
-        </Text>
-      </View>
-    </SafeAreaView>
-  );
+import {AppShell} from './src/app-shell';
+import type {
+  AppRoute,
+  AppScreenRegistry,
+  CurrentGroupStore,
+  FamilyGroup,
+} from './src/app-shell';
+import {SignupFlowScreen} from './src/features/auth/screens/SignupFlowScreen';
+import {WelcomeScreen} from './src/features/auth/screens/WelcomeScreen';
+
+type RootRoute = 'welcome' | 'signup' | 'appShell';
+
+interface AppProps {
+  groupStore?: CurrentGroupStore;
+  groups?: readonly FamilyGroup[];
+  initialGroupId?: string | null;
+  initialRootRoute?: RootRoute;
+  initialShellRoute?: AppRoute;
+  onCreateGroup?: () => void;
+  onGroupChange?: (groupId: string) => void;
+  onJoinGroup?: () => void;
+  screens?: AppScreenRegistry;
 }
 
-export default function App() {
+const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
+  {
+    id: 'development-guardian-group',
+    name: '우리 가족',
+    role: 'guardian',
+  },
+  {
+    id: 'development-care-receiver-group',
+    name: '부모님 가족',
+    role: 'careReceiver',
+  },
+];
+
+export default function App({
+  groupStore,
+  groups,
+  initialGroupId,
+  initialRootRoute = __DEV__ ? 'appShell' : 'welcome',
+  initialShellRoute,
+  onCreateGroup,
+  onGroupChange,
+  onJoinGroup,
+  screens,
+}: AppProps) {
+  const [route, setRoute] = useState<RootRoute>(initialRootRoute);
+  const resolvedGroups = groups ?? (__DEV__ ? DEVELOPMENT_GROUPS : []);
+
   return (
     <SafeAreaProvider>
-      <AppContent />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      {route === 'welcome' ? (
+        <WelcomeScreen onStartSignup={() => setRoute('signup')} />
+      ) : route === 'signup' ? (
+        <SignupFlowScreen
+          onCancel={() => setRoute('welcome')}
+          onComplete={() => setRoute('appShell')}
+        />
+      ) : (
+        <AppShell
+          groupStore={groupStore}
+          groups={resolvedGroups}
+          initialGroupId={initialGroupId}
+          initialRoute={initialShellRoute}
+          onCreateGroup={onCreateGroup}
+          onGroupChange={onGroupChange}
+          onJoinGroup={onJoinGroup}
+          screens={screens}
+        />
+      )}
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  title: {
-    color: '#272727',
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  description: {
-    marginTop: 12,
-    color: '#666666',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-});

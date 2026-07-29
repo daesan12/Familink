@@ -23,6 +23,9 @@ Thumbs.db
 .evidence/
 tmp/
 
+# Local KDT retrospective drafts
+/kdt-retrospectives/
+
 # Python
 **/.venv/
 **/__pycache__/

@@ -16,6 +16,13 @@ spring:
 app:
   auth:
     secret: ${JWT_SECRET:local-development-only-access-token-signing-secret}
+  storage:
+    s3:
+      bucket: ${S3_BUCKET:s15p11b104-media}
+      region: ${AWS_REGION:ap-northeast-2}
+      endpoint: ${S3_ENDPOINT:}
+      presigned-url-duration: ${S3_PRESIGNED_URL_DURATION:10m}
+      allowed-hosts: ${S3_ALLOWED_HOSTS:}
 
 openai:
   realtime:
