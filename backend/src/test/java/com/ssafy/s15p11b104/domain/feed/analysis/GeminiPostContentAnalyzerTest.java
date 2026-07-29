@@ -29,7 +29,12 @@ class GeminiPostContentAnalyzerTest {
 		assertThat(summary).isEqualTo(fixture.expectedSummary());
 		assertThat(gateway.request.model()).isEqualTo(TEXT_MODEL);
 		assertThat(gateway.request.media()).isEmpty();
-		assertThat(gateway.request.prompt()).contains(fixture.content());
+		assertThat(gateway.request.prompt())
+			.contains("나중에 가족과 대화할 때 소재로 활용할 수 있도록")
+			.contains("누가 무엇을 했는지와 기억할 만한 경험")
+			.contains("1~2문장")
+			.contains("최대 500자")
+			.contains(fixture.content());
 	}
 
 	@Test
@@ -44,7 +49,7 @@ class GeminiPostContentAnalyzerTest {
 		assertThat(gateway.request.media()).containsExactlyElementsOf(
 			fixture.media().stream().map(AnalysisTestFixtures.MediaFixture::toContentMedia).toList());
 		assertThat(gateway.request.prompt()).contains(fixture.content());
-		assertThat(gateway.request.prompt()).contains("키워드 목록", "메타데이터");
+		assertThat(gateway.request.prompt()).contains("가족과 대화할 때 소재", "1~2문장");
 	}
 
 	@Test
