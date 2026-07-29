@@ -15,6 +15,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.carnation.repository.CarnationRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostMediaRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostAnalysisRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
@@ -68,6 +69,9 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private PostReactionRepository postReactionRepository;
+
+	@MockitoBean
+	private CarnationRepository carnationRepository;
 
 	@Test
 	void healthEndpointIsPublic() throws Exception {
