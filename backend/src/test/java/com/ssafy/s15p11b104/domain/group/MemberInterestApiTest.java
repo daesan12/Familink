@@ -2,6 +2,7 @@ package com.ssafy.s15p11b104.domain.group;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,10 +16,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,6 +34,7 @@ import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 import com.ssafy.s15p11b104.domain.group.entity.MemberInterest;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberInterestRepository;
+import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
 import jakarta.persistence.EntityManager;
@@ -230,6 +234,57 @@ class MemberInterestApiTest extends IntegrationTest {
 			.andExpect(status().isForbidden());
 	}
 
+	/**
+	 * 로그인으로 발급받은 Access Token으로 호출해 인증 필터까지 함께 통과시킨다. 주체를 직접 주입하는
+	 * 다른 테스트와 달리, 컨트롤러가 받는 주체 타입이 필터가 넣는 타입과 실제로 맞는지 확인한다.
+	 */
+	@Test
+	void interestsCanBeReadWithAnAccessTokenIssuedByLogin() throws Exception {
+		saveInterests("music");
+		String accessToken = signupAndLoginAsActiveGuardian();
+
+		mockMvc.perform(get(path(careReceiverMember))
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.memberId").value(careReceiverMember.getId()))
+			.andExpect(jsonPath("$.data.interests[0]").value("music"));
+	}
+
+	private String signupAndLoginAsActiveGuardian() throws Exception {
+		mockMvc.perform(post("/auth/signup")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "loginId": "interestuser",
+					  "password": "password123",
+					  "name": "실사용자",
+					  "birthDate": "1995-03-17",
+					  "gender": "MALE"
+					}
+					"""))
+			.andExpect(status().isCreated());
+
+		User joined = userRepository.findByLoginIdAndWithdrawnAtIsNull("interestuser").orElseThrow();
+		groupMemberRepository.save(new GroupMember(
+			entityManager.find(FamilyGroup.class, group.getId()),
+			joined,
+			GroupRole.GUARDIAN,
+			false,
+			Instant.now()));
+		entityManager.flush();
+
+		MvcResult result = mockMvc.perform(post("/auth/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"loginId\": \"interestuser\", \"password\": \"password123\"}"))
+			.andExpect(status().isOk())
+			.andReturn();
+
+		return objectMapper.readTree(result.getResponse().getContentAsString())
+			.path("data")
+			.path("accessToken")
+			.asText();
+	}
+
 	private void saveInterests(String... interests) {
 		memberInterestRepository.saveAll(java.util.Arrays.stream(interests)
 			.map(interest -> new MemberInterest(careReceiverMember, interest))
@@ -241,8 +296,13 @@ class MemberInterestApiTest extends IntegrationTest {
 		return BASE_PATH.formatted(group.getId(), member.getId());
 	}
 
+	/**
+	 * 인증 필터가 넣는 것과 같은 주체 타입을 주입한다. 사용자 ID만 넣으면 컨트롤러가 선언한 타입과
+	 * 어긋나도 테스트가 통과해, 실제 요청에서만 주체가 {@code null}이 되는 결함을 놓친다.
+	 */
 	private RequestPostProcessor authenticatedAs(Long userId) {
-		return authentication(new UsernamePasswordAuthenticationToken(userId, null, List.of()));
+		AuthenticatedUser principal = new AuthenticatedUser(userId, "test-access-token");
+		return authentication(new UsernamePasswordAuthenticationToken(principal, null, List.of()));
 	}
 
 	private String json(String field, Object value) throws Exception {
