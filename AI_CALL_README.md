@@ -71,6 +71,8 @@ REDIS_PORT=6379
 
 OPENAI_API_KEY=실제_API_키
 OPENAI_REALTIME_MODEL=gpt-realtime-2
+OPENAI_REALTIME_TRANSCRIPTION_MODEL=gpt-transcribe
+OPENAI_REALTIME_TRANSCRIPTION_LANGUAGE=ko
 ```
 
 주의 사항:
@@ -280,6 +282,8 @@ Docker Desktop이 완전히 실행됐는지 확인한다. 환경 변수 PATH를 
 - `backend/.env`의 `OPENAI_API_KEY`
 - OpenAI 프로젝트의 API 사용 가능 상태와 결제 한도
 - `OPENAI_REALTIME_MODEL=gpt-realtime-2`
+- `OPENAI_REALTIME_TRANSCRIPTION_MODEL=gpt-transcribe`
+- `OPENAI_REALTIME_TRANSCRIPTION_LANGUAGE=ko`
 - 방화벽·프록시의 `api.openai.com`, `wss://api.openai.com` 접근
 - Backend 로그의 OpenAI 또는 Sideband 연결 오류
 

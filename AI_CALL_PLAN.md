@@ -6,15 +6,15 @@
 선택한 페르소나와 현재 가족 그룹의 DB 컨텍스트를 반영한 시스템 프롬프트를
 사용한다.
 
-현재는 **1단계 코드 구현 완료** 상태다. 실제 마이크를 사용하는 여섯
-페르소나 전체 수동 E2E 검증은 별도로 수행해야 한다.
+현재는 **1·2단계 코드 구현 완료** 상태다. 실제 마이크를 사용하는 여섯
+페르소나 전체 통화와 OpenAI 전사 저장 수동 E2E 검증은 별도로 수행해야 한다.
 
 ## 2. 단계별 상태
 
 | 단계 | 범위 | 상태 |
 | ---: | --- | --- |
 | 1 | 실제 WebRTC 통화, Sideband, 페르소나 프롬프트, DB 컨텍스트 주입, 임시 Web UI | 구현 완료·수동 음성 E2E 필요 |
-| 2 | 사용자·AI 완료 전사 순차 저장 | 미구현 |
+| 2 | 사용자·AI 완료 전사 순차 저장 | 구현 완료·실통화 전사 E2E 필요 |
 | 3 | 특정 가족 구성원 게시글 조회 Tool | 미구현 |
 | 4 | 일정 조회와 KST 날짜 표현 해석 Tool | 미구현 |
 | 5 | 장시간 통화, 무응답, 장애 복구와 품질 평가 강화 | 미구현 |
@@ -22,6 +22,7 @@
 기본 Realtime 설정:
 
 - 모델: `gpt-realtime-2`
+- 입력 전사: `gpt-transcribe`, `languages=["ko"]`
 - 추론 강도: `reasoning.effort=low`
 - 턴 감지: `server_vad`
 - 출력 모달리티: 오디오
@@ -304,12 +305,90 @@ IN_PROGRESS -> INCOMPLETE
 
 ### 2단계: 통화 전사 저장
 
-- 사용자 입력 완료 전사 수신
-- AI 출력 완료 전사 수신
-- Sideband 이벤트의 서버 순번 부여
-- `call_transcripts`에 사용자·AI 발화를 순서대로 저장
-- 중복 이벤트와 부분 delta 저장 방지
-- 종료 시 마지막 완료 전사 반영
+#### 목표와 성공 기준
+
+- 사용자와 AI의 발화가 한 발화당 `call_transcripts` 한 행으로 저장된다.
+- DB 조회 결과가 실제 대화 순서와 같은 `sequence` 오름차순으로 정렬된다.
+- 부분 `delta`와 빈 전사는 저장하지 않고, 같은 완료 이벤트의 재수신은 새
+  행을 만들지 않는다.
+- 정상 통화 종료 직전에 수신한 마지막 완료 전사까지 저장된다.
+- 통화 종료나 전사 저장 실패가 다른 통화 세션의 저장을 막지 않는다.
+
+#### 확정 결정
+
+- 사용자 입력 전사 모델은 `gpt-transcribe`, 예상 언어는 `languages=["ko"]`를
+  사용한다.
+- 사용자 완료 전사는
+  `conversation.item.input_audio_transcription.completed`만 저장한다.
+- AI 완료 전사는 `response.output_audio_transcript.done`만 저장한다.
+- 두 이벤트의 `delta` 버전은 실시간 자막에만 사용하고 DB에는 저장하지 않는다.
+- OpenAI `item_id`를 `call_transcripts.openai_item_id`에 함께 저장한다.
+- 이번 단계에서는 DB 스키마와 공개 REST API를 변경하지 않는다.
+- 같은 Sideband 연결의 이벤트를 순차 처리하므로 통화 세션 행 잠금은 사용하지
+  않는다. 재연결·이벤트 재생과 병렬 저장은 5단계에서 잠금 또는
+  `(call_session_id, openai_item_id)` 유니크 제약과 함께 다시 검토한다.
+
+#### 이벤트 처리 흐름
+
+1. Sideband 연결마다 텍스트 메시지 버퍼, 1부터 시작하는 다음 `sequence`,
+   아이템별 순번 예약과 처리 완료 `item_id` 집합을 관리한다.
+2. `WebSocket.Listener.onText(data, last)`가 호출될 때마다 `data`를 현재
+   버퍼에 추가한다.
+3. `last=false`이면 JSON을 파싱하지 않고 다음 조각을 기다린다.
+4. `last=true`이면 버퍼 전체를 JSON 이벤트 하나로 파싱한 뒤 버퍼를 비운다.
+5. `conversation.item.added` 중 사용자·AI의 오디오 메시지에만
+   `item_id -> (speaker, sequence)`를 대화 순서대로 예약한다.
+6. 사용자 또는 AI 완료 전사가 오면 예약된 `sequence`와 이벤트의
+   `item_id`, `transcript`를 전사 저장 서비스에 전달한다.
+7. 저장 서비스는 같은 통화 세션과 `openai_item_id`가 이미 존재하면
+   중복으로 판단해 종료하고, 아니면 완료 전사를 한 행으로 저장한다.
+8. 모르는 이벤트와 `delta` 이벤트는 무시하며, 파싱·전사 실패는 해당
+   `event_id`, `item_id`, 통화 세션을 식별할 수 있게 기록한다.
+9. 종료 요청은 이미 수신한 완료 이벤트의 저장이 끝난 뒤 Sideband를 닫는다.
+   종료 뒤 늦게 도착할 수 있는 미완료 `delta`는 저장 대상으로 보지 않는다.
+
+입력 전사는 응답 생성과 비동기로 완료될 수 있으므로 완료 이벤트의 도착
+시각으로 `sequence`를 만들지 않는다. `conversation.item.added`에서 예약한
+대화 순서를 사용해 사용자와 AI 전사의 저장 완료 시점이 바뀌어도 순서를
+유지한다.
+
+#### 구현 단위
+
+1. Realtime 세션 입력 오디오 설정에
+   `transcription.model=gpt-transcribe`, `languages=["ko"]`를 추가한다.
+2. `SidebandSessionManager.ManagedSocket`에 메시지 재조립과 이벤트 분기,
+   아이템별 순번 예약 상태를 추가한다.
+3. Sideband와 DB 저장을 분리하는 전사 저장 서비스를 추가하고 트랜잭션
+   경계를 이 서비스에 둔다.
+4. `CallTranscript`가 생성 시 `openaiItemId`를 필수 입력으로 받게 한다.
+5. `CallTranscriptRepository`에 동일 통화 세션과 OpenAI 아이템 ID의
+   존재 여부 조회를 추가한다.
+6. Sideband 종료 시 연결별 버퍼와 인메모리 순번 상태를 함께 정리한다.
+
+#### 테스트 계획
+
+- `onText` 한 번에 완전한 JSON이 오면 이벤트를 한 번 처리한다.
+- JSON 하나가 `last=false, false, true`로 나뉘어도 한 번만 처리한다.
+- 서로 다른 JSON 메시지를 하나로 합치지 않는다.
+- 사용자 완료 이벤트는 `USER`, AI 완료 이벤트는 `ASSISTANT`로 저장한다.
+- 사용자 전사 완료가 AI 이벤트보다 늦게 와도 `conversation.item.added`
+  기준 순서가 유지된다.
+- 사용자·AI `delta`, 알 수 없는 이벤트와 빈 전사는 저장하지 않는다.
+- 같은 `item_id` 완료 이벤트를 두 번 받아도 한 행만 저장한다.
+- 두 통화 세션의 순번과 중복 처리 상태가 서로 섞이지 않는다.
+- 저장 실패가 발생해도 WebSocket 이벤트 수신 루프가 비정상 종료되지 않는다.
+- 통화 종료 직전에 받은 완료 이벤트가 저장된 뒤 Sideband 상태가 정리된다.
+- 실제 OpenAI E2E에서 `gpt-transcribe` 세션 설정 수락, 한국어 사용자 전사와
+  AI 전사 저장, `sequence` 순서를 확인한다.
+
+#### 이번 단계의 제외 범위
+
+- 전사 `delta`의 DB 저장
+- 부분 자막 조회용 공개 API
+- Sideband 재연결 후 이벤트 재생
+- AI 발화 중단 시 실제 재생된 구간만 남기는 정밀 보정
+- `(call_session_id, openai_item_id)` DB 유니크 제약 추가
+- 통화 세션 행 잠금을 이용한 병렬 저장
 
 ### 3단계: 가족 게시글 조회 Tool
 
@@ -351,6 +430,9 @@ IN_PROGRESS -> INCOMPLETE
 - [x] OpenAI Gateway 성공·오류 테스트
 - [x] 임시 Web UI 반응형·페르소나 선택 확인
 - [x] 연결 취소·단절 시 세션 정리
+- [x] Sideband 텍스트 분할 재조립과 완료 전사 이벤트 처리 테스트
+- [x] 전사 순번·중복 방지 PostgreSQL 통합 테스트
+- [x] `gpt-transcribe`, `languages=["ko"]` 세션 설정 테스트
 - [x] 전체 Gradle 빌드와 테스트
 - [x] 리뷰 에이전트 전체 변경 검토
 
@@ -362,6 +444,7 @@ IN_PROGRESS -> INCOMPLETE
 - [ ] 가장 최근 `call_reports` 한 건 선택 통합 테스트
 - [ ] API 동시 요청 기반 활성 통화 중복 방지 통합 테스트
 - [ ] 실제 OpenAI Sideband 장애·제한 시간 E2E
+- [ ] 실제 OpenAI의 한국어 사용자·AI 완료 전사 순차 저장 E2E
 
 실제 통화 실행 절차는 [AI_CALL_README.md](./AI_CALL_README.md)를 따른다.
 

@@ -98,8 +98,13 @@ public class OpenAiRealtimeGateway {
 		Map<String, Object> turnDetection = new LinkedHashMap<>();
 		turnDetection.put("type", "server_vad");
 
+		Map<String, Object> transcription = new LinkedHashMap<>();
+		transcription.put("model", properties.getTranscriptionModel());
+		transcription.put("languages", List.of(properties.getTranscriptionLanguage()));
+
 		Map<String, Object> inputAudio = new LinkedHashMap<>();
 		inputAudio.put("turn_detection", turnDetection);
+		inputAudio.put("transcription", transcription);
 
 		Map<String, Object> outputAudio = new LinkedHashMap<>();
 		outputAudio.put("voice", persona.voice());

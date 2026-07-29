@@ -16,6 +16,7 @@ import java.util.function.LongConsumer;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.s15p11b104.domain.call.config.OpenAiRealtimeProperties;
 
 @Component
@@ -23,11 +24,20 @@ public class SidebandSessionManager {
 
 	private final HttpClient httpClient;
 	private final OpenAiRealtimeProperties properties;
+	private final ObjectMapper objectMapper;
+	private final CallTranscriptService callTranscriptService;
 	private final Map<Long, ManagedSocket> sessions = new ConcurrentHashMap<>();
 
-	public SidebandSessionManager(HttpClient openAiSidebandHttpClient, OpenAiRealtimeProperties properties) {
+	public SidebandSessionManager(
+		HttpClient openAiSidebandHttpClient,
+		OpenAiRealtimeProperties properties,
+		ObjectMapper objectMapper,
+		CallTranscriptService callTranscriptService
+	) {
 		this.httpClient = openAiSidebandHttpClient;
 		this.properties = properties;
+		this.objectMapper = objectMapper;
+		this.callTranscriptService = callTranscriptService;
 	}
 
 	public void connect(Long sessionId, String callId, LongConsumer unexpectedDisconnectHandler) {
@@ -81,12 +91,18 @@ public class SidebandSessionManager {
 		private final AtomicBoolean closedByServer = new AtomicBoolean();
 		private final AtomicBoolean disconnected = new AtomicBoolean();
 		private final Long sessionId;
+		private final SidebandTranscriptHandler transcriptHandler;
 		private volatile WebSocket webSocket;
 
 		private ManagedSocket(Long sessionId, String callId, LongConsumer unexpectedDisconnectHandler) {
 			this.sessionId = sessionId;
 			this.callId = callId;
 			this.unexpectedDisconnectHandler = unexpectedDisconnectHandler;
+			this.transcriptHandler = new SidebandTranscriptHandler(
+				sessionId,
+				objectMapper,
+				callTranscriptService
+			);
 		}
 
 		private void attach(WebSocket webSocket) {
@@ -103,6 +119,7 @@ public class SidebandSessionManager {
 
 		private void close() {
 			closedByServer.set(true);
+			transcriptHandler.close();
 			WebSocket socket = webSocket;
 			if (socket != null) {
 				socket.sendClose(WebSocket.NORMAL_CLOSURE, "server end");
@@ -116,7 +133,12 @@ public class SidebandSessionManager {
 
 		@Override
 		public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-			webSocket.request(1);
+			if (!closedByServer.get() && !disconnected.get()) {
+				transcriptHandler.acceptText(data, last);
+			}
+			if (!closedByServer.get() && !disconnected.get()) {
+				webSocket.request(1);
+			}
 			return null;
 		}
 
@@ -139,6 +161,7 @@ public class SidebandSessionManager {
 
 		private void handleUnexpectedDisconnect() {
 			disconnected.set(true);
+			transcriptHandler.close();
 			if (closedByServer.get()) {
 				return;
 			}

@@ -10,6 +10,8 @@ public class OpenAiRealtimeProperties {
 
 	private String apiKey;
 	private String model = "gpt-realtime-2";
+	private String transcriptionModel = "gpt-transcribe";
+	private String transcriptionLanguage = "ko";
 	private URI baseUrl = URI.create("https://api.openai.com");
 	private URI sidebandUrl = URI.create("wss://api.openai.com/v1/realtime");
 	private Duration connectTimeout = Duration.ofSeconds(5);
@@ -29,6 +31,22 @@ public class OpenAiRealtimeProperties {
 
 	public void setModel(String model) {
 		this.model = model;
+	}
+
+	public String getTranscriptionModel() {
+		return transcriptionModel;
+	}
+
+	public void setTranscriptionModel(String transcriptionModel) {
+		this.transcriptionModel = transcriptionModel;
+	}
+
+	public String getTranscriptionLanguage() {
+		return transcriptionLanguage;
+	}
+
+	public void setTranscriptionLanguage(String transcriptionLanguage) {
+		this.transcriptionLanguage = transcriptionLanguage;
 	}
 
 	public URI getBaseUrl() {

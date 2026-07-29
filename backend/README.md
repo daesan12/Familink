@@ -58,6 +58,8 @@ AI 전화 개발 UI와 로컬 fixture를 함께 실행하려면 OpenAI API 키�
 | `REDIS_PORT` | `6379` | 로컬 Redis 포트 |
 | `OPENAI_API_KEY` | 없음 | OpenAI Realtime 서버 인증 키 |
 | `OPENAI_REALTIME_MODEL` | `gpt-realtime-2` | Realtime 통화 모델 |
+| `OPENAI_REALTIME_TRANSCRIPTION_MODEL` | `gpt-transcribe` | 사용자 입력 전사 모델 |
+| `OPENAI_REALTIME_TRANSCRIPTION_LANGUAGE` | `ko` | 사용자 입력 전사 언어 |
 
 기본값은 로컬 개발 전용입니다. 운영 환경에서는 모든 비밀값을 환경변수 또는
 비밀 관리 시스템으로 주입합니다.

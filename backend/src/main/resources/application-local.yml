@@ -28,6 +28,8 @@ openai:
   realtime:
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_REALTIME_MODEL:gpt-realtime-2}
+    transcription-model: ${OPENAI_REALTIME_TRANSCRIPTION_MODEL:gpt-transcribe}
+    transcription-language: ${OPENAI_REALTIME_TRANSCRIPTION_LANGUAGE:ko}
     base-url: ${OPENAI_REALTIME_BASE_URL:https://api.openai.com}
     sideband-url: ${OPENAI_REALTIME_SIDEBAND_URL:wss://api.openai.com/v1/realtime}
     connect-timeout: 5s

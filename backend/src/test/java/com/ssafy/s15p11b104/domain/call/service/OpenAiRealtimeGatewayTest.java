@@ -2,6 +2,8 @@ package com.ssafy.s15p11b104.domain.call.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -40,6 +42,9 @@ class OpenAiRealtimeGatewayTest {
 			.andExpect(method(HttpMethod.POST))
 			.andExpect(header("Authorization", "Bearer test-key"))
 			.andExpect(header("OpenAI-Safety-Identifier", org.hamcrest.Matchers.hasLength(64)))
+			.andExpect(content().string(containsString(
+				"\"transcription\":{\"model\":\"gpt-transcribe\",\"languages\":[\"ko\"]}"
+			)))
 			.andRespond(withSuccess("v=0\r\ns=openai\r\n", MediaType.parseMediaType("application/sdp"))
 				.header("Location", "/v1/realtime/calls/rtc_test_123"));
 
