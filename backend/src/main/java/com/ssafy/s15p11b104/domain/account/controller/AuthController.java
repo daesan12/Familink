@@ -1,6 +1,7 @@
 package com.ssafy.s15p11b104.domain.account.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -13,10 +14,13 @@ import com.ssafy.s15p11b104.domain.account.dto.LoginIdAvailabilityResponse;
 import com.ssafy.s15p11b104.domain.account.dto.LoginRequest;
 import com.ssafy.s15p11b104.domain.account.dto.LoginResponse;
 import com.ssafy.s15p11b104.domain.account.dto.LogoutRequest;
+import com.ssafy.s15p11b104.domain.account.dto.ReissueRequest;
+import com.ssafy.s15p11b104.domain.account.dto.ReissueResponse;
 import com.ssafy.s15p11b104.domain.account.dto.SignupRequest;
 import com.ssafy.s15p11b104.domain.account.dto.SignupResponse;
 import com.ssafy.s15p11b104.domain.account.service.AuthService;
 import com.ssafy.s15p11b104.global.api.ApiResponse;
+import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -24,7 +28,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
- * 로그인 ID 확인, 회원가입, 로그인, 로그아웃 API를 제공한다.
+ * 로그인 ID 확인, 회원가입, 로그인, 토큰 재발급, 로그아웃 API를 제공한다.
  */
 @RestController
 @RequestMapping("/auth")
@@ -33,6 +37,7 @@ public class AuthController {
 	private static final String LOGIN_ID_CHECK_MESSAGE = "로그인 아이디 중복 확인 성공";
 	private static final String SIGNUP_MESSAGE = "회원가입 성공";
 	private static final String LOGIN_MESSAGE = "로그인 성공";
+	private static final String REISSUE_MESSAGE = "토큰 재발급 성공";
 
 	private final AuthService authService;
 
@@ -78,13 +83,27 @@ public class AuthController {
 	}
 
 	/**
-	 * Refresh Token을 폐기해 로그아웃한다.
+	 * Refresh Token으로 Access Token과 Refresh Token을 재발급받는다.
 	 *
+	 * <p>Access Token이 만료된 상태에서 호출하므로 Refresh Token만 검증한다.
+	 *
+	 * @param request 재발급 요청
+	 * @return 새로 발급된 인증 정보
+	 */
+	@PostMapping("/reissue")
+	public ApiResponse<ReissueResponse> reissue(@Valid @RequestBody ReissueRequest request) {
+		return ApiResponse.success(REISSUE_MESSAGE, authService.reissue(request));
+	}
+
+	/**
+	 * 로그아웃해 현재 세션의 Access Token과 Refresh Token을 모두 사용할 수 없게 한다.
+	 *
+	 * @param user    인증된 요청 주체
 	 * @param request 로그아웃 요청
 	 */
 	@PostMapping("/logout")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void logout(@Valid @RequestBody LogoutRequest request) {
-		authService.logout(request.refreshToken());
+	public void logout(@AuthenticationPrincipal AuthenticatedUser user, @Valid @RequestBody LogoutRequest request) {
+		authService.logout(user, request.refreshToken());
 	}
 }

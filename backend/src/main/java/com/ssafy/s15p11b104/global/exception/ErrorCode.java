@@ -12,8 +12,10 @@ public enum ErrorCode {
 	FORBIDDEN(HttpStatus.FORBIDDEN, "\uad8c\ud55c\uc774 \uc5c6\uc2b5\ub2c8\ub2e4."),
 
 	INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청 형식 또는 검증 실패"),
-	UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
+	UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "Access Token 없음·만료·위조"),
 	INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 일치하지 않습니다."),
+	INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "Refresh Token 만료·위조·폐기"),
+	FORBIDDEN(HttpStatus.FORBIDDEN, "역할 또는 리소스 접근 권한 부족"),
 	LOGIN_ID_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 로그인 아이디");
 
 	private final HttpStatus status;

@@ -1,6 +1,8 @@
 package com.ssafy.s15p11b104;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
@@ -62,8 +64,17 @@ class BackendApplicationContextTests {
 	}
 
 	@Test
+	void logoutRequiresAuthentication() throws Exception {
+		mockMvc.perform(post("/auth/logout"))
+			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
 	void unknownEndpointRequiresAuthentication() throws Exception {
 		mockMvc.perform(get("/not-configured"))
-			.andExpect(status().isUnauthorized());
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.success").value(false))
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+			.andExpect(jsonPath("$.errors").isArray());
 	}
 }
