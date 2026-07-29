@@ -53,4 +53,8 @@ public class MemberAlias extends BaseEntity {
 	public String getAlias() {
 		return alias;
 	}
+
+	public void updateAlias(String alias) {
+		this.alias = alias;
+	}
 }
