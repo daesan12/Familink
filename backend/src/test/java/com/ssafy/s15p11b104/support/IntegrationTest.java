@@ -48,4 +48,8 @@ public abstract class IntegrationTest {
 		registry.add("spring.data.redis.password", () -> TEST_REDIS_PASSWORD);
 		registry.add("management.health.redis.enabled", () -> true);
 	}
+
+	protected static String postgresJdbcUrl() {
+		return POSTGRES.getJdbcUrl();
+	}
 }

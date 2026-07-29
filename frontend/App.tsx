@@ -1,33 +1,88 @@
-import {useState} from 'react';
-import {Alert, StatusBar} from 'react-native';
-import {SafeAreaProvider} from 'react-native-safe-area-context';
+import { useState } from "react";
+import { Alert, StatusBar } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import {mockAuthGateway} from './src/features/auth/api/mockAuthGateway';
-import {LoginBottomSheet} from './src/features/auth/components/LoginBottomSheet';
-import {GroupOnboardingScreen} from './src/features/auth/screens/GroupOnboardingScreen';
-import {SignedInWelcomeScreen} from './src/features/auth/screens/SignedInWelcomeScreen';
-import {SignupFlowScreen} from './src/features/auth/screens/SignupFlowScreen';
-import {WelcomeScreen} from './src/features/auth/screens/WelcomeScreen';
+import { AppShell } from "./src/app-shell";
+import type {
+  AppRoute,
+  AppScreenRegistry,
+  CurrentGroupStore,
+  FamilyGroup,
+} from "./src/app-shell";
+import { mockAuthGateway } from "./src/features/auth/api/mockAuthGateway";
+import { LoginBottomSheet } from "./src/features/auth/components/LoginBottomSheet";
+import { GroupOnboardingScreen } from "./src/features/auth/screens/GroupOnboardingScreen";
+import { SignedInWelcomeScreen } from "./src/features/auth/screens/SignedInWelcomeScreen";
+import { SignupFlowScreen } from "./src/features/auth/screens/SignupFlowScreen";
+import { WelcomeScreen } from "./src/features/auth/screens/WelcomeScreen";
 import type {
   AuthenticatedUser,
   AuthGateway,
   LoginCredentials,
-} from './src/features/auth/types';
+} from "./src/features/auth/types";
+import { FeedScreen } from "./src/features/feed";
 
-type AppRoute = 'welcome' | 'signup' | 'signedInWelcome' | 'groupOnboarding';
+type RootRoute =
+  | "welcome"
+  | "signup"
+  | "signedInWelcome"
+  | "groupOnboarding"
+  | "appShell";
 
 interface AppProps {
   authGateway?: AuthGateway;
+  groupStore?: CurrentGroupStore;
+  groups?: readonly FamilyGroup[];
+  initialGroupId?: string | null;
+  initialRootRoute?: RootRoute;
+  initialShellRoute?: AppRoute;
+  onCreateGroup?: () => void;
+  onGroupChange?: (groupId: string) => void;
+  onJoinGroup?: () => void;
   onOpenActiveGroup?: (activeGroupId: string) => void;
+  screens?: AppScreenRegistry;
 }
+
+const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
+  {
+    id: "development-care-receiver-group",
+    name: "동창 모임방",
+    role: "careReceiver",
+  },
+  {
+    id: "development-empty-group",
+    name: "교회 소모임",
+    role: "guardian",
+  },
+  {
+    id: "development-guardian-group",
+    name: "우리 가족의 이야기",
+    role: "guardian",
+  },
+];
+
+const DEFAULT_SCREENS: AppScreenRegistry = {
+  feed: FeedScreen,
+};
 
 export default function App({
   authGateway = mockAuthGateway,
+  groupStore,
+  groups,
+  initialGroupId,
+  initialRootRoute = "welcome",
+  initialShellRoute,
+  onCreateGroup,
+  onGroupChange,
+  onJoinGroup,
   onOpenActiveGroup,
+  screens,
 }: AppProps) {
-  const [route, setRoute] = useState<AppRoute>('welcome');
+  const [route, setRoute] = useState<RootRoute>(initialRootRoute);
   const [loginVisible, setLoginVisible] = useState(false);
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [activeGroupId, setActiveGroupId] = useState(initialGroupId);
+  const resolvedGroups = groups ?? (__DEV__ ? DEVELOPMENT_GROUPS : []);
 
   const handleLogin = async (credentials: LoginCredentials) => {
     const authenticatedUser = await authGateway.login(credentials);
@@ -35,41 +90,33 @@ export default function App({
     setLoginVisible(false);
 
     if (authenticatedUser.activeGroupId !== null) {
-      if (onOpenActiveGroup !== undefined) {
-        onOpenActiveGroup(authenticatedUser.activeGroupId);
-        return;
-      }
-
-      setUser(null);
-      setRoute('welcome');
-      Alert.alert(
-        '그룹 화면 준비 중',
-        '활성 그룹 진입은 후속 인증·내비게이션 작업에서 연결됩니다.',
-      );
+      setActiveGroupId(authenticatedUser.activeGroupId);
+      onOpenActiveGroup?.(authenticatedUser.activeGroupId);
+      setRoute("appShell");
       return;
     }
 
-    setRoute('signedInWelcome');
+    setRoute("signedInWelcome");
   };
 
   const handleLogout = async () => {
     await authGateway.logout();
     setUser(null);
-    setRoute('welcome');
+    setRoute("welcome");
   };
 
   const showDeferredFeature = (title: string) => {
-    Alert.alert(title, '후속 작업에서 연결될 화면입니다.');
+    Alert.alert(title, "후속 작업에서 연결될 화면입니다.");
   };
 
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      {route === 'welcome' && (
+      {route === "welcome" && (
         <>
           <WelcomeScreen
             onStartLogin={() => setLoginVisible(true)}
-            onStartSignup={() => setRoute('signup')}
+            onStartSignup={() => setRoute("signup")}
           />
           <LoginBottomSheet
             onDismiss={() => setLoginVisible(false)}
@@ -78,25 +125,51 @@ export default function App({
           />
         </>
       )}
-      {route === 'signup' && (
+      {route === "signup" && (
         <SignupFlowScreen
-          onCancel={() => setRoute('welcome')}
-          onComplete={() => setRoute('welcome')}
+          onCancel={() => setRoute("welcome")}
+          onComplete={() => setRoute("welcome")}
         />
       )}
-      {route === 'signedInWelcome' && user !== null && (
+      {route === "appShell" && (
+        <AppShell
+          groupStore={groupStore}
+          groups={resolvedGroups}
+          initialGroupId={activeGroupId}
+          initialRoute={initialShellRoute}
+          onCreateGroup={onCreateGroup}
+          onGroupChange={onGroupChange}
+          onJoinGroup={onJoinGroup}
+          screens={screens ?? DEFAULT_SCREENS}
+        />
+      )}
+      {route === "signedInWelcome" && user !== null && (
         <SignedInWelcomeScreen
           onLogout={handleLogout}
-          onRequestWithdrawal={() => showDeferredFeature('회원 탈퇴')}
-          onStartGroupOnboarding={() => setRoute('groupOnboarding')}
+          onRequestWithdrawal={() => showDeferredFeature("회원 탈퇴")}
+          onStartGroupOnboarding={() => setRoute("groupOnboarding")}
           userName={user.name}
         />
       )}
-      {route === 'groupOnboarding' && (
+      {route === "groupOnboarding" && (
         <GroupOnboardingScreen
-          onBack={() => setRoute('signedInWelcome')}
-          onCreateGroup={() => showDeferredFeature('새 그룹 만들기')}
-          onJoinByCode={() => showDeferredFeature('코드로 참여')}
+          onBack={() => setRoute("signedInWelcome")}
+          onCreateGroup={() => {
+            if (onCreateGroup !== undefined) {
+              onCreateGroup();
+              return;
+            }
+
+            showDeferredFeature("새 그룹 만들기");
+          }}
+          onJoinByCode={() => {
+            if (onJoinGroup !== undefined) {
+              onJoinGroup();
+              return;
+            }
+
+            showDeferredFeature("코드로 참여");
+          }}
           pendingRequests={[]}
         />
       )}

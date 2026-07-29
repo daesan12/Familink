@@ -3,6 +3,7 @@ import { AccessibilityInfo, Alert, Image } from "react-native";
 import TestRenderer from "react-test-renderer";
 
 import App from "../App";
+import { SignupFlowScreen } from "../src/features/auth/screens/SignupFlowScreen";
 import type { AuthGateway } from "../src/features/auth/types";
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
@@ -20,6 +21,12 @@ afterEach(async () => {
 });
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
+jest.mock("lucide-react-native/icons/calendar", () => "Icon");
+jest.mock("lucide-react-native/icons/circle-user-round", () => "Icon");
+jest.mock("lucide-react-native/icons/file-chart-column", () => "Icon");
+jest.mock("lucide-react-native/icons/house", () => "Icon");
+jest.mock("lucide-react-native/icons/phone-call", () => "Icon");
+jest.mock("lucide-react-native/icons/users-round", () => "Icon");
 jest.mock("react-native-image-picker", () => ({
   launchImageLibrary: jest.fn(),
 }));
@@ -95,6 +102,14 @@ test("회원가입 시작 화면을 표시하고 기존 회원가입으로 이�
     renderer.root.findByProps({
       children: "기본 정보를\n입력해주세요",
     })
+  ).toBeTruthy();
+
+  await TestRenderer.act(() => {
+    renderer.root.findByType(SignupFlowScreen).props.onComplete();
+  });
+
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })
   ).toBeTruthy();
 });
 
@@ -257,7 +272,7 @@ test("활성 그룹 사용자는 A-10을 건너뛰고 그룹 진입을 요청한
   ).toHaveLength(0);
 });
 
-test("활성 그룹 진입이 연결되지 않아도 안전하게 A-1을 유지한다", async () => {
+test("활성 그룹 사용자는 연결된 앱 셸로 이동한다", async () => {
   const alertSpy = jest.spyOn(Alert, "alert");
   const authGateway = createAuthGateway();
   authGateway.login.mockResolvedValueOnce({
@@ -268,7 +283,18 @@ test("활성 그룹 진입이 연결되지 않아도 안전하게 A-1을 유지�
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(() => {
-    renderer = TestRenderer.create(<App authGateway={authGateway} />);
+    renderer = TestRenderer.create(
+      <App
+        authGateway={authGateway}
+        groups={[
+          {
+            id: "active-group-1",
+            name: "우리 가족",
+            role: "guardian",
+          },
+        ]}
+      />
+    );
   });
   mountedRenderers.push(renderer!);
   await openLogin(renderer!);
@@ -280,12 +306,10 @@ test("활성 그룹 진입이 연결되지 않아도 안전하게 A-1을 유지�
       .props.onPress();
   });
 
-  expect(alertSpy).toHaveBeenCalledWith(
-    "그룹 화면 준비 중",
-    "활성 그룹 진입은 후속 인증·내비게이션 작업에서 연결됩니다."
-  );
+  expect(alertSpy).not.toHaveBeenCalled();
+  expect(renderer!.root.findByProps({ children: "우리 가족" })).toBeTruthy();
   expect(
-    renderer!.root.findByProps({ accessibilityLabel: "로그인 시작" })
+    renderer!.root.findByProps({ accessibilityRole: "tablist" })
   ).toBeTruthy();
   alertSpy.mockRestore();
 });
@@ -344,4 +368,80 @@ test("로그아웃 확인 후 A-1로 돌아온다", async () => {
     renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })
   ).toBeTruthy();
   alertSpy.mockRestore();
+});
+
+test("앱 셸에 참여 중인 그룹이 없으면 빈 상태를 표시한다", async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App initialRootRoute="appShell" groups={[]} />
+    );
+  });
+
+  expect(
+    renderer!.root.findByProps({
+      children: "참여 중인 그룹이 없어요",
+    })
+  ).toBeTruthy();
+
+  mountedRenderers.push(renderer!);
+});
+
+test("앱 셸을 명시하면 개발 그룹과 하단 탭을 표시한다", async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(<App initialRootRoute="appShell" />);
+  });
+
+  expect(
+    renderer!.root.findByProps({
+      children: "우리 가족의 이야기",
+    })
+  ).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({ accessibilityRole: "tablist" })
+  ).toBeTruthy();
+
+  mountedRenderers.push(renderer!);
+});
+
+test("그룹 선택 바텀시트에서 빈 피드 그룹으로 전환한다", async () => {
+  jest.useFakeTimers();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(<App initialRootRoute="appShell" />);
+    jest.runOnlyPendingTimers();
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityHint: "다른 가족 그룹으로 전환합니다" })
+      .props.onPress();
+    jest.runOnlyPendingTimers();
+  });
+
+  expect(renderer!.root.findByProps({ children: "그룹 선택" })).toBeTruthy();
+
+  const emptyGroupOption = renderer!.root
+    .findAllByProps({ accessibilityRole: "menuitem" })
+    .find(
+      (option) => option.findAllByProps({ children: "교회 소모임" }).length > 0
+    );
+
+  expect(emptyGroupOption).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    emptyGroupOption!.props.onPress();
+    jest.runOnlyPendingTimers();
+  });
+
+  expect(
+    renderer!.root.findByProps({ accessibilityLabel: "게시물이 없는 피드" })
+  ).toBeTruthy();
+
+  mountedRenderers.push(renderer!);
+  jest.useRealTimers();
 });

@@ -31,7 +31,18 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
+gemini:
+  analysis:
+    api-key: ${GMS_API_KEY:}
+    base-url: ${GMS_API_BASE_URL:https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com}
+    text-model: ${GEMINI_TEXT_MODEL:gemini-2.5-flash-lite}
+    multimodal-model: ${GEMINI_MULTIMODAL_MODEL:gemini-3.5-flash}
+
 app:
   auth:
     access-token-validity: 30m
     refresh-token-validity: 14d
+  ai-analysis:
+    enabled: true
+    fixed-delay-ms: 60000
+    initial-delay-ms: 60000

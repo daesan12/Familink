@@ -1,5 +1,6 @@
 package com.ssafy.s15p11b104.domain.feed.service;
 
+import java.net.URI;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -19,6 +20,8 @@ import com.ssafy.s15p11b104.domain.feed.entity.PostMedia;
 import com.ssafy.s15p11b104.domain.feed.repository.PostAnalysisRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostMediaRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
+import com.ssafy.s15p11b104.domain.carnation.service.CarnationService;
+import com.ssafy.s15p11b104.domain.file.config.S3Properties;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
@@ -31,16 +34,22 @@ public class PostService {
 	private final PostRepository postRepository;
 	private final PostMediaRepository postMediaRepository;
 	private final PostAnalysisRepository postAnalysisRepository;
+	private final S3Properties s3Properties;
+	private final CarnationService carnationService;
 
 	public PostService(
 		GroupMemberRepository groupMemberRepository,
 		PostRepository postRepository,
 		PostMediaRepository postMediaRepository,
-		PostAnalysisRepository postAnalysisRepository) {
+		PostAnalysisRepository postAnalysisRepository,
+		S3Properties s3Properties,
+		CarnationService carnationService) {
 		this.groupMemberRepository = groupMemberRepository;
 		this.postRepository = postRepository;
 		this.postMediaRepository = postMediaRepository;
 		this.postAnalysisRepository = postAnalysisRepository;
+		this.s3Properties = s3Properties;
+		this.carnationService = carnationService;
 	}
 
 	@Transactional
@@ -84,6 +93,7 @@ public class PostService {
 		GroupMember author = getActiveMember(groupId, authenticatedUserId);
 		Post post = postRepository.save(new Post(author.getGroup(), author, request.content()));
 		replaceMedia(post, request.mediaType(), request.media());
+		carnationService.earnForPost(author);
 		return new PostCreatedItem(post.getId(), groupId);
 	}
 
@@ -146,6 +156,21 @@ public class PostService {
 			if (!displayOrders.add(item.displayOrder())) {
 				throw new BusinessException(ErrorCode.INVALID_REQUEST);
 			}
+			validateMediaUrl(item.fileUrl());
+			if (item.thumbnailUrl() != null) {
+				validateMediaUrl(item.thumbnailUrl());
+			}
+		}
+	}
+
+	private void validateMediaUrl(String value) {
+		try {
+			URI uri = URI.create(value);
+			if (!s3Properties.isAllowedUri(uri)) {
+				throw new BusinessException(ErrorCode.INVALID_REQUEST);
+			}
+		} catch (IllegalArgumentException exception) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST);
 		}
 	}
 }
