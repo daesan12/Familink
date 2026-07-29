@@ -1,47 +1,49 @@
 package com.ssafy.s15p11b104.global.security;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.Instant;
-import java.util.Date;
-
-import javax.crypto.SecretKey;
+import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
+import com.ssafy.s15p11b104.global.security.JwtProvider.JwtPayload;
 
 /**
- * 사용자 인증에 사용하는 Access Token을 발급한다.
+ * 사용자 인증에 사용하는 Access Token을 발급하고 검증한다.
  *
- * <p>Access Token은 서버에 저장하지 않는 자체 검증 토큰이며 사용자 ID를 subject로 담는다.
+ * <p>Access Token은 서버에 저장하지 않는 자체 검증 토큰이며, 로그아웃된 토큰은
+ * {@link AccessTokenBlacklist}에서 따로 차단한다.
  */
 @Component
 public class AccessTokenProvider {
 
-	private final SecretKey signingKey;
+	private static final String TOKEN_USE = "access";
+
+	private final JwtProvider jwtProvider;
 	private final Duration validity;
 
-	AccessTokenProvider(AuthTokenProperties properties) {
-		this.signingKey = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
+	AccessTokenProvider(JwtProvider jwtProvider, AuthTokenProperties properties) {
+		this.jwtProvider = jwtProvider;
 		this.validity = properties.accessTokenValidity();
 	}
 
 	/**
-	 * 지정한 사용자를 subject로 하는 Access Token을 발급한다.
+	 * 지정한 사용자의 Access Token을 발급한다.
 	 *
 	 * @param userId 토큰 소유자의 사용자 ID
 	 * @return 서명된 Access Token 문자열
 	 */
 	public String issue(Long userId) {
-		Instant issuedAt = Instant.now();
-		return Jwts.builder()
-			.subject(String.valueOf(userId))
-			.issuedAt(Date.from(issuedAt))
-			.expiration(Date.from(issuedAt.plus(validity)))
-			.signWith(signingKey)
-			.compact();
+		return jwtProvider.issue(userId, validity, TOKEN_USE);
+	}
+
+	/**
+	 * Access Token의 서명, 만료, 용도를 검증한다.
+	 *
+	 * @param accessToken 검증할 Access Token
+	 * @return 검증에 성공하면 토큰 내용, 실패하면 빈 값
+	 */
+	public Optional<JwtPayload> verify(String accessToken) {
+		return jwtProvider.verify(accessToken, TOKEN_USE);
 	}
 
 	/**
