@@ -21,6 +21,7 @@
 - 140은 게시글 조회·미디어 정렬·MIME 결합·Gemini 분석과 PostgreSQL 통합 테스트를 책임진다.
 - 130은 분석 상태와 결과 요약을 `post_analyses`에 저장하는 책임을 유지한다. 140에는 저장 로직을 중복 구현하지 않는다.
 - 외부 HTTP API는 추가하지 않는다. 130의 내부 호출자가 140의 분석 진입점을 사용한다.
+- 140의 `PostContentAnalysisService`가 130의 `PostAnalysisGateway`를 구현하여 Scheduler부터 분석 결과 저장까지 내부 Spring 빈으로 연결한다.
 
 ## MIME 메타데이터 경계
 
@@ -30,6 +31,10 @@
 - 텍스트 전용 분석은 Provider 없이 수행할 수 있다.
 - 미디어 분석에서 Provider가 없거나 MIME이 누락·공백·미디어 종류와 불일치하면 Gemini Gateway를 호출하지 않고 `INVALID_INPUT`으로 처리한다.
 - Provider 조회 자체의 외부 오류는 `UPSTREAM_FAILURE`로 변환한다.
+- 운영 Provider는 게시글 등록 시 허용된 S3 URI를 bucket과 object key로 변환하고, S3 `HeadObject` 메타데이터의 `Content-Type`을 사용한다.
+- 기본 AWS S3 URL, 설정된 path-style endpoint 및 명시적으로 허용된 CDN 호스트를 지원한다.
+- 잘못됐거나 허용되지 않은 URI와 빈 object key는 MIME을 제공하지 않으며, S3 객체 조회·권한·자격 증명 오류는 `UPSTREAM_FAILURE`로 처리한다.
+- URL 확장자 추측, 파일 바이트 탐지, MIME 캐시와 별도 재시도는 이 변경에 포함하지 않는다.
 
 ## GMS 호출 경계
 
@@ -42,6 +47,7 @@
 
 - 단위 테스트에서 모델명, 본문, 미디어 순서, URI, MIME 및 Gateway 미호출 조건을 검증한다.
 - PostgreSQL Testcontainers 통합 테스트에서 실제 `PostRepository`, `PostMediaRepository`, 140 분석 서비스 및 Gemini Mock Gateway를 사용한다.
+- Scheduler부터 130 저장 서비스, 140 분석 서비스, S3 MIME Provider까지 실제 Spring 빈을 연결하고 S3 Client와 Gemini Gateway만 Mock으로 교체한다.
 - 통합 테스트는 기존 `IntegrationTest`와 Flyway 마이그레이션·Ryuk 정리 구조를 재사용하고, `test` 프로필 및 Testcontainers JDBC URL을 검증한다.
 - 실제 Gemini API, 네트워크 및 `GMS_API_KEY`는 자동 테스트에서 사용하지 않는다.
 
