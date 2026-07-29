@@ -154,16 +154,16 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | IA | B-4 피보호자&보호자 / 그룹 선택 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 승인 대기 카드 |
 | IA | C-1 피보호자 / 관심사 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 최소 선택 개수 없음, 0~10개 |
 | IA | D-1 피보호자&보호자 / 피드 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 다중 사진 가로 넘김 |
-| IA | B-3 피보호자&보호자 / 그룹 선택 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 승인 대기 |
+| IA | B-3 피보호자&보호자 / 그룹 선택 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 무그룹 선택·승인 대기 통합 |
 | IA | D-0 피보호자&보호자 / 피드 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 빈 피드 |
-| IA | B-1 피보호자&보호자 / 그룹 선택 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 무그룹 선택 |
+| IA | B-1 피보호자&보호자 / 그룹 선택 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 대체 | B-3 통합 화면으로 대체 |
 | IA | A-1 피보호자&보호자 / 메인 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 비로그인 진입 |
 | IA | A-5 피보호자&보호자 / 회원가입 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 성별 |
 | IA | B-2p 피보호자&보호자 / 그룹 참가 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 초대 코드 요청 |
 | IA | A-3 피보호자&보호자 / 회원가입 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 가입 입력 |
 | IA | A-6 피보호자&보호자 / 회원가입 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 생년월일 |
 | IA | 00 공통 기준·전체 화면 목록·검토 체크리스트 | [UI](./UI_AND_NAVIGATION.md) | 반영 | 공통 기준 |
-| IA | A-4 피보호자&보호자 / 메인 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 로그인 후 무그룹 |
+| IA | A-4 피보호자&보호자 / 메인 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 로그인 후 A-10 무그룹 안내 경유 |
 | IA | A-2 피보호자&보호자 / 로그인 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 |  |
 | IA | J-7 피보호자 / 프로필 · 생년월일 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 |  |
 | IA | J-6 피보호자 / 프로필 · 성별 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 |  |
