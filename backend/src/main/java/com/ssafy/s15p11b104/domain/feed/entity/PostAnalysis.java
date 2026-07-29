@@ -58,4 +58,22 @@ public class PostAnalysis extends CreatedAtEntity {
 	public Instant getAnalyzedAt() {
 		return analyzedAt;
 	}
+
+	public void resetToPending() {
+		status = AnalysisStatus.PENDING;
+		summary = null;
+		analyzedAt = null;
+	}
+
+	public void complete(String summary, Instant analyzedAt) {
+		this.status = AnalysisStatus.SUCCESS;
+		this.summary = summary;
+		this.analyzedAt = analyzedAt;
+	}
+
+	public void fail() {
+		status = AnalysisStatus.FAILED;
+		summary = null;
+		analyzedAt = null;
+	}
 }
