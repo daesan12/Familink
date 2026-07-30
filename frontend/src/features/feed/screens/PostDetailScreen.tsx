@@ -43,6 +43,7 @@ interface PostDetailScreenProps {
   onCreateComment: (input: CreateCommentInput) => void;
   onDeleteComment: (input: DeleteCommentInput) => void;
   onMenuPress: () => void;
+  onOpenNotifications?: () => void;
   onScrollBeginDrag: () => void;
   onToggleReactionPicker: (
     postId: string,
@@ -65,6 +66,7 @@ export function PostDetailScreen({
   onCreateComment,
   onDeleteComment,
   onMenuPress,
+  onOpenNotifications,
   onScrollBeginDrag,
   onToggleReactionPicker,
   onUpdateComment,
@@ -181,7 +183,22 @@ export function PostDetailScreen({
         <Text numberOfLines={1} style={styles.title}>
           {currentGroupName}
         </Text>
-        <View accessibilityElementsHidden style={styles.headerSpacer} />
+        {onOpenNotifications ? (
+          <Pressable
+            accessibilityLabel="알림"
+            accessibilityRole="button"
+            onPress={onOpenNotifications}
+            style={styles.notificationButton}
+          >
+            <MaterialDesignIcons
+              color={COLORS.textStrong}
+              name="bell"
+              size={28}
+            />
+          </Pressable>
+        ) : (
+          <View accessibilityElementsHidden style={styles.headerSpacer} />
+        )}
       </View>
 
       <ScrollView
@@ -523,6 +540,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 44,
     paddingHorizontal: 20,
+  },
+  notificationButton: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
   },
   readOnlyNotice: {
     alignItems: 'center',

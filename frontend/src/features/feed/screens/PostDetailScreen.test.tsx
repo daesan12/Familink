@@ -97,6 +97,35 @@ test('currentUserId와 authorId가 같은 댓글에만 액션 메뉴를 표시�
   });
 });
 
+test('onOpenNotifications가 있으면 헤더 알림 벨로 알림 화면을 연다', async () => {
+  const onOpenNotifications = jest.fn();
+  const renderer = await renderScreen({onOpenNotifications});
+
+  const bell = renderer.root.findByProps({accessibilityLabel: '알림'});
+
+  TestRenderer.act(() => {
+    bell.props.onPress();
+  });
+
+  expect(onOpenNotifications).toHaveBeenCalledTimes(1);
+
+  await TestRenderer.act(() => {
+    renderer.unmount();
+  });
+});
+
+test('onOpenNotifications가 없으면 알림 벨을 표시하지 않는다', async () => {
+  const renderer = await renderScreen();
+
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '알림'}),
+  ).toHaveLength(0);
+
+  await TestRenderer.act(() => {
+    renderer.unmount();
+  });
+});
+
 test('댓글 입력을 50자로 제한하고 유효한 입력을 등록한 뒤 비운다', async () => {
   const onCreateComment = jest.fn();
   const renderer = await renderScreen({onCreateComment});
