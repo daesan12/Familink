@@ -11,12 +11,16 @@ public record S3Properties(
 	String region,
 	String endpoint,
 	Duration presignedUrlDuration,
+	Duration downloadUrlDuration,
 	List<String> allowedHosts) {
 
 	public S3Properties {
-		bucket = bucket == null || bucket.isBlank() ? "s15p11b104-media" : bucket;
+		bucket = bucket == null || bucket.isBlank()
+			? "s15p11b104-media-580779787807-ap-northeast-2-an"
+			: bucket;
 		region = region == null || region.isBlank() ? "ap-northeast-2" : region;
 		presignedUrlDuration = presignedUrlDuration == null ? Duration.ofMinutes(10) : presignedUrlDuration;
+		downloadUrlDuration = downloadUrlDuration == null ? Duration.ofMinutes(30) : downloadUrlDuration;
 		allowedHosts = allowedHosts == null ? List.of() : List.copyOf(allowedHosts);
 	}
 

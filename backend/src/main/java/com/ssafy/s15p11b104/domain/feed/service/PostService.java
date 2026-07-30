@@ -22,6 +22,7 @@ import com.ssafy.s15p11b104.domain.feed.repository.PostMediaRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
 import com.ssafy.s15p11b104.domain.carnation.service.CarnationService;
 import com.ssafy.s15p11b104.domain.file.config.S3Properties;
+import com.ssafy.s15p11b104.domain.file.service.S3MediaValidator;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
@@ -35,6 +36,7 @@ public class PostService {
 	private final PostMediaRepository postMediaRepository;
 	private final PostAnalysisRepository postAnalysisRepository;
 	private final S3Properties s3Properties;
+	private final S3MediaValidator s3MediaValidator;
 	private final CarnationService carnationService;
 
 	public PostService(
@@ -43,21 +45,24 @@ public class PostService {
 		PostMediaRepository postMediaRepository,
 		PostAnalysisRepository postAnalysisRepository,
 		S3Properties s3Properties,
+		S3MediaValidator s3MediaValidator,
 		CarnationService carnationService) {
 		this.groupMemberRepository = groupMemberRepository;
 		this.postRepository = postRepository;
 		this.postMediaRepository = postMediaRepository;
 		this.postAnalysisRepository = postAnalysisRepository;
 		this.s3Properties = s3Properties;
+		this.s3MediaValidator = s3MediaValidator;
 		this.carnationService = carnationService;
 	}
 
 	@Transactional
 	public PostCreateResponse create(PostCreateRequest request, Long authenticatedUserId) {
-		validateMedia(request.mediaType(), request.media());
 		if (request.groupIds().size() != request.groupIds().stream().distinct().count()) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST);
 		}
+		request.groupIds().forEach(groupId -> getActiveMember(groupId, authenticatedUserId));
+		validateMedia(request.mediaType(), request.media());
 
 		List<PostCreatedItem> createdPosts = request.groupIds().stream()
 			.map(groupId -> createForGroup(groupId, authenticatedUserId, request))
@@ -70,9 +75,9 @@ public class PostService {
 
 	@Transactional
 	public PostUpdateResponse update(Long postId, PostUpdateRequest request, Long authenticatedUserId) {
-		validateMedia(request.mediaType(), request.media());
 		Post post = getPost(postId);
 		assertAuthor(post, authenticatedUserId);
+		validateMedia(request.mediaType(), request.media());
 
 		post.updateContent(request.content());
 		postAnalysisRepository.findByPostId(postId).ifPresent(analysis -> analysis.resetToPending());
@@ -157,8 +162,10 @@ public class PostService {
 				throw new BusinessException(ErrorCode.INVALID_REQUEST);
 			}
 			validateMediaUrl(item.fileUrl());
+			s3MediaValidator.validate(mediaType, item.fileUrl());
 			if (item.thumbnailUrl() != null) {
 				validateMediaUrl(item.thumbnailUrl());
+				s3MediaValidator.validate(MediaType.IMAGE, item.thumbnailUrl());
 			}
 		}
 	}

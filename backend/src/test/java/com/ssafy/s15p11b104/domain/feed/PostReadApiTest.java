@@ -1,6 +1,9 @@
 package com.ssafy.s15p11b104.domain.feed;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -32,6 +35,7 @@ import com.ssafy.s15p11b104.domain.feed.repository.CommentRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostMediaRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostReactionRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
+import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
@@ -74,6 +78,9 @@ class PostReadApiTest extends IntegrationTest {
 	@Autowired
 	private MemberAliasRepository memberAliasRepository;
 
+	@org.springframework.boot.test.mock.mockito.MockBean
+	private MediaDownloadUrlProvider mediaDownloadUrlProvider;
+
 	private FamilyGroup group;
 	private FamilyGroup otherGroup;
 	private GroupMember viewer;
@@ -83,6 +90,8 @@ class PostReadApiTest extends IntegrationTest {
 
 	@BeforeEach
 	void setUp() {
+		given(mediaDownloadUrlProvider.issueDownloadUrl(anyString()))
+			.willAnswer(invocation -> invocation.getArgument(0));
 		commentRepository.deleteAll();
 		memberAliasRepository.deleteAll();
 		postReactionRepository.deleteAll();
@@ -142,6 +151,49 @@ class PostReadApiTest extends IntegrationTest {
 			.andExpect(jsonPath("$.data.media[0].thumbnailUrl").value("https://cdn/thumb.jpg"))
 			.andExpect(jsonPath("$.data.reactions.HEART").value(1))
 			.andExpect(jsonPath("$.data.commentCount").value(1));
+	}
+
+	@Test
+	void postMediaUrlsAreResolvedThroughDownloadUrlProvider() throws Exception {
+		given(mediaDownloadUrlProvider.issueDownloadUrl("https://cdn/image.jpg"))
+			.willReturn("https://signed.example/image.jpg");
+		given(mediaDownloadUrlProvider.issueDownloadUrl("https://cdn/thumb.jpg"))
+			.willReturn("https://signed.example/thumb.jpg");
+
+		mockMvc.perform(get("/posts/{postId}", imagePost.getId())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.media[0].fileUrl").value("https://signed.example/image.jpg"))
+			.andExpect(jsonPath("$.data.media[0].thumbnailUrl").value("https://signed.example/thumb.jpg"));
+
+		verify(mediaDownloadUrlProvider).issueDownloadUrl("https://cdn/image.jpg");
+		verify(mediaDownloadUrlProvider).issueDownloadUrl("https://cdn/thumb.jpg");
+	}
+
+	@Test
+	void listAndArchiveMediaUrlsAreResolvedThroughDownloadUrlProvider() throws Exception {
+		given(mediaDownloadUrlProvider.issueDownloadUrl(anyString()))
+			.willAnswer(invocation -> "https://signed.example/" + invocation.getArgument(0, String.class).substring(8));
+
+		mockMvc.perform(get("/groups/{groupId}/posts", group.getId())
+				.param("size", "1")
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.content[0].media[0].fileUrl")
+				.value("https://signed.example/cdn/image.jpg"))
+			.andExpect(jsonPath("$.data.content[0].media[0].thumbnailUrl")
+				.value("https://signed.example/cdn/thumb.jpg"));
+
+		mockMvc.perform(get("/groups/{groupId}/archive", group.getId())
+				.param("type", "IMAGE")
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.dates[0].items[0].thumbnailUrl")
+				.value("https://signed.example/cdn/thumb.jpg"));
+
+		verify(mediaDownloadUrlProvider).issueDownloadUrl("https://cdn/image.jpg");
+		verify(mediaDownloadUrlProvider, org.mockito.Mockito.times(2))
+			.issueDownloadUrl("https://cdn/thumb.jpg");
 	}
 
 	@Test
