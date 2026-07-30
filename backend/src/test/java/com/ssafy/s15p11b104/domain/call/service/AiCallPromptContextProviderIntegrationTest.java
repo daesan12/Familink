@@ -66,7 +66,7 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 		insertSuccessfulPost(groupId, authorId, "종료 직전", KST_NEXT_DAY_START.minusSeconds(1));
 		insertSuccessfulPost(groupId, authorId, "종료 시각", KST_NEXT_DAY_START);
 
-		AiCallPromptContext context = promptContextProvider.load(loadMember(careReceiverId));
+		AiCallPromptContext context = promptContextProvider.load(loadMember(careReceiverId)).promptContext();
 
 		assertThat(context.careReceiver().currentDateKst()).isEqualTo(LocalDate.of(2026, 7, 29));
 		assertThat(context.todayPosts())
@@ -105,7 +105,7 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 		insertPostAnalysis(currentGroupId, currentAuthorId, "현재 그룹 실패", FIXED_NOW, "FAILED", null);
 		insertSuccessfulPost(otherGroupId, otherAuthorId, "다른 그룹 성공", FIXED_NOW);
 
-		AiCallPromptContext context = promptContextProvider.load(loadMember(careReceiverId));
+		AiCallPromptContext context = promptContextProvider.load(loadMember(careReceiverId)).promptContext();
 
 		assertThat(context.todayPosts())
 			.extracting(AiCallPromptContext.TodayPostContext::summary)
@@ -125,14 +125,15 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 			insertUser("name_daughter", "민지"),
 			"GUARDIAN"
 		);
-		insertMember(
+		Long plainMemberId = insertMember(
 			groupId,
 			insertUser("name_grandson", "준호"),
 			"GUARDIAN"
 		);
 		insertAlias(groupId, careReceiverId, aliasedMemberId, "딸");
 
-		AiCallPromptContext context = promptContextProvider.load(loadMember(careReceiverId));
+		AiCallSessionContext sessionContext = promptContextProvider.load(loadMember(careReceiverId));
+		AiCallPromptContext context = sessionContext.promptContext();
 
 		assertThat(context.familyMembers())
 			.extracting(
@@ -144,6 +145,9 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 				tuple("person_1", "민지", "딸"),
 				tuple("person_2", "준호", "준호")
 			);
+		assertThat(sessionContext.personReferences())
+			.containsEntry("person_1", new AiCallPersonReference(aliasedMemberId, "민지", "딸"))
+			.containsEntry("person_2", new AiCallPersonReference(plainMemberId, "준호", "준호"));
 	}
 
 	@Test
@@ -169,7 +173,7 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 			"2026-07-30T10:00:00Z", "COMPLETED");
 		insertReport(currentGroupId, careReceiverId, "종료되지 않은 통화 요약", null, "CONNECTING");
 
-		AiCallPromptContext context = promptContextProvider.load(loadMember(careReceiverId));
+		AiCallPromptContext context = promptContextProvider.load(loadMember(careReceiverId)).promptContext();
 
 		assertThat(context.recentCall()).isNotNull();
 		assertThat(context.recentCall().summary()).isEqualTo("최신 요약");

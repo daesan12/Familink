@@ -6,7 +6,9 @@ import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -26,26 +28,39 @@ public class SidebandSessionManager {
 	private final OpenAiRealtimeProperties properties;
 	private final ObjectMapper objectMapper;
 	private final CallTranscriptService callTranscriptService;
+	private final AiCallPostToolService postToolService;
 	private final Map<Long, ManagedSocket> sessions = new ConcurrentHashMap<>();
 
 	public SidebandSessionManager(
 		HttpClient openAiSidebandHttpClient,
 		OpenAiRealtimeProperties properties,
 		ObjectMapper objectMapper,
-		CallTranscriptService callTranscriptService
+		CallTranscriptService callTranscriptService,
+		AiCallPostToolService postToolService
 	) {
 		this.httpClient = openAiSidebandHttpClient;
 		this.properties = properties;
 		this.objectMapper = objectMapper;
 		this.callTranscriptService = callTranscriptService;
+		this.postToolService = postToolService;
 	}
 
-	public void connect(Long sessionId, String callId, LongConsumer unexpectedDisconnectHandler) {
+	public void connect(
+		Long sessionId,
+		String callId,
+		Map<String, AiCallPersonReference> personReferences,
+		LongConsumer unexpectedDisconnectHandler
+	) {
 		if (!StringUtils.hasText(properties.getApiKey())) {
 			throw new OpenAiRealtimeException("OPENAI_API_KEY가 설정되지 않았습니다.");
 		}
 
-		ManagedSocket managedSocket = new ManagedSocket(sessionId, callId, unexpectedDisconnectHandler);
+		ManagedSocket managedSocket = new ManagedSocket(
+			sessionId,
+			callId,
+			personReferences,
+			unexpectedDisconnectHandler
+		);
 		ManagedSocket previous = sessions.put(sessionId, managedSocket);
 		if (previous != null) {
 			previous.close();
@@ -92,9 +107,15 @@ public class SidebandSessionManager {
 		private final AtomicBoolean disconnected = new AtomicBoolean();
 		private final Long sessionId;
 		private final SidebandTranscriptHandler transcriptHandler;
+		private final SidebandToolHandler toolHandler;
 		private volatile WebSocket webSocket;
 
-		private ManagedSocket(Long sessionId, String callId, LongConsumer unexpectedDisconnectHandler) {
+		private ManagedSocket(
+			Long sessionId,
+			String callId,
+			Map<String, AiCallPersonReference> personReferences,
+			LongConsumer unexpectedDisconnectHandler
+		) {
 			this.sessionId = sessionId;
 			this.callId = callId;
 			this.unexpectedDisconnectHandler = unexpectedDisconnectHandler;
@@ -102,6 +123,12 @@ public class SidebandSessionManager {
 				sessionId,
 				objectMapper,
 				callTranscriptService
+			);
+			this.toolHandler = new SidebandToolHandler(
+				sessionId,
+				personReferences,
+				objectMapper,
+				postToolService
 			);
 		}
 
@@ -120,6 +147,7 @@ public class SidebandSessionManager {
 		private void close() {
 			closedByServer.set(true);
 			transcriptHandler.close();
+			toolHandler.close();
 			WebSocket socket = webSocket;
 			if (socket != null) {
 				socket.sendClose(WebSocket.NORMAL_CLOSURE, "server end");
@@ -133,13 +161,30 @@ public class SidebandSessionManager {
 
 		@Override
 		public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+			List<String> clientEvents = List.of();
 			if (!closedByServer.get() && !disconnected.get()) {
 				transcriptHandler.acceptText(data, last);
+				clientEvents = toolHandler.acceptText(data, last);
 			}
-			if (!closedByServer.get() && !disconnected.get()) {
-				webSocket.request(1);
+			if (clientEvents.isEmpty()) {
+				if (!closedByServer.get() && !disconnected.get()) {
+					webSocket.request(1);
+				}
+				return null;
 			}
-			return null;
+
+			CompletionStage<WebSocket> sendStage = CompletableFuture.completedFuture(webSocket);
+			for (String clientEvent : clientEvents) {
+				sendStage = sendStage.thenCompose(socket -> socket.sendText(clientEvent, true));
+			}
+			return sendStage.handle((socket, error) -> {
+				if (error != null) {
+					handleUnexpectedDisconnect();
+				} else if (!closedByServer.get() && !disconnected.get()) {
+					webSocket.request(1);
+				}
+				return null;
+			});
 		}
 
 		@Override
@@ -162,6 +207,7 @@ public class SidebandSessionManager {
 		private void handleUnexpectedDisconnect() {
 			disconnected.set(true);
 			transcriptHandler.close();
+			toolHandler.close();
 			if (closedByServer.get()) {
 				return;
 			}

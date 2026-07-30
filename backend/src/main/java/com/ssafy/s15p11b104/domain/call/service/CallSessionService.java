@@ -2,6 +2,7 @@ package com.ssafy.s15p11b104.domain.call.service;
 
 import java.time.Instant;
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -80,6 +81,7 @@ public class CallSessionService {
 			sidebandSessionManager.connect(
 				preparedCall.callSessionId(),
 				openAiCall.callId(),
+				preparedCall.personReferences(),
 				this::handleUnexpectedDisconnect
 			);
 			return new CreateCallSessionResponse(preparedCall.callSessionId(), openAiCall.sdpAnswer());
@@ -149,9 +151,13 @@ public class CallSessionService {
 			persona.id(),
 			CallStatus.CONNECTING
 		));
-		AiCallPromptContext context = promptContextProvider.load(careReceiver);
-		String instructions = promptComposer.compose(persona, careReceiver.getUser().getGender(), context);
-		return new PreparedCall(session.getId(), instructions);
+		AiCallSessionContext sessionContext = promptContextProvider.load(careReceiver);
+		String instructions = promptComposer.compose(
+			persona,
+			careReceiver.getUser().getGender(),
+			sessionContext.promptContext()
+		);
+		return new PreparedCall(session.getId(), instructions, sessionContext.personReferences());
 	}
 
 	private CallSession findOwnedSessionForUpdate(Long callSessionId, CallActor actor) {
@@ -206,7 +212,8 @@ public class CallSessionService {
 
 	private record PreparedCall(
 		Long callSessionId,
-		String instructions
+		String instructions,
+		Map<String, AiCallPersonReference> personReferences
 	) {
 	}
 }

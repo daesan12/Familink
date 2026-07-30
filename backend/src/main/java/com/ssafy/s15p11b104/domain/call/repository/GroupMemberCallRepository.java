@@ -49,4 +49,16 @@ public interface GroupMemberCallRepository extends JpaRepository<GroupMember, Lo
 		order by member.id
 		""")
 	List<GroupMember> findActiveMembers(@Param("groupId") Long groupId);
+
+	@Query("""
+		select member
+		from GroupMember member
+		where member.id = :memberId
+			and member.group.id = :groupId
+			and member.leftAt is null
+		""")
+	Optional<GroupMember> findActiveInGroup(
+		@Param("memberId") Long memberId,
+		@Param("groupId") Long groupId
+	);
 }

@@ -15,6 +15,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.call.service.AiCallPostToolService;
 import com.ssafy.s15p11b104.domain.call.service.AiCallPromptContextProvider;
 import com.ssafy.s15p11b104.domain.call.service.CallSessionService;
 import com.ssafy.s15p11b104.domain.call.service.CallTranscriptService;
@@ -52,6 +53,9 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private AiCallPromptContextProvider promptContextProvider;
+
+	@MockitoBean
+	private AiCallPostToolService postToolService;
 
 	@Autowired
 	private MockMvc mockMvc;

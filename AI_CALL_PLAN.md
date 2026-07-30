@@ -6,8 +6,8 @@
 선택한 페르소나와 현재 가족 그룹의 DB 컨텍스트를 반영한 시스템 프롬프트를
 사용한다.
 
-현재는 **1·2단계 코드 구현 완료** 상태다. 실제 마이크를 사용하는 여섯
-페르소나 전체 통화와 OpenAI 전사 저장 수동 E2E 검증은 별도로 수행해야 한다.
+현재는 **1·2·3단계 코드 구현 완료** 상태다. 실제 마이크를 사용하는 여섯
+페르소나 전체 통화와 OpenAI Tool 호출 수동 E2E 검증은 별도로 수행해야 한다.
 
 ## 2. 단계별 상태
 
@@ -15,7 +15,7 @@
 | ---: | --- | --- |
 | 1 | 실제 WebRTC 통화, Sideband, 페르소나 프롬프트, DB 컨텍스트 주입, 임시 Web UI | 구현 완료·수동 음성 E2E 필요 |
 | 2 | 사용자·AI 완료 전사 순차 저장 | 구현 완료·실통화 전사 E2E 필요 |
-| 3 | 특정 가족 구성원 게시글 조회 Tool | 미구현 |
+| 3 | 특정 가족 구성원 게시글 조회 Tool | 구현 완료·실통화 Tool E2E 필요 |
 | 4 | 일정 조회와 KST 날짜 표현 해석 Tool | 미구현 |
 | 5 | 장시간 통화, 무응답, 장애 복구와 품질 평가 강화 | 미구현 |
 
@@ -26,7 +26,7 @@
 - 추론 강도: `reasoning.effort=low`
 - 턴 감지: `server_vad`
 - 출력 모달리티: 오디오
-- 비즈니스 Tool: 1단계에서는 없음
+- 비즈니스 Tool: `get_person_recent_post_summaries`
 
 ## 3. 1단계 구현 범위
 
@@ -393,11 +393,13 @@ IN_PROGRESS -> INCOMPLETE
 ### 3단계: 가족 게시글 조회 Tool
 
 - `get_person_recent_post_summaries(person_key)` 등록
-- 통화 시작 시 발급한 `person_key`만 허용
-- 현재 그룹의 분석 완료 게시글만 조회
-- 최신 최대 5건 반환
+- 프롬프트용 인물 정보와 서버 전용 `person_key → groupMemberId` 매핑을 같은 가족 조회에서 생성
+- 통화 시작 시 발급하고 Sideband 연결에 보관한 `person_key`만 허용
+- 현재 그룹에서 선택된 특정 활성 구성원의 분석 완료 게시글만 조회
+- 작성일과 게시글 ID 내림차순으로 최신 최대 5건 반환
 - 모델에 DB member ID 비노출
 - 존재하지 않거나 모호한 표시명 재확인
+- Tool 호출 실패를 전사 처리와 Sideband 수신 루프에서 격리
 
 ### 4단계: 일정 조회 Tool
 
@@ -433,6 +435,9 @@ IN_PROGRESS -> INCOMPLETE
 - [x] Sideband 텍스트 분할 재조립과 완료 전사 이벤트 처리 테스트
 - [x] 전사 순번·중복 방지 PostgreSQL 통합 테스트
 - [x] `gpt-transcribe`, `languages=["ko"]` 세션 설정 테스트
+- [x] 프롬프트 인물 정보와 서버 전용 `person_key → groupMemberId` 매핑 일관성 테스트
+- [x] Realtime 게시글 Tool 스키마와 Sideband 분할·중복·다중 호출 처리 테스트
+- [x] 특정 구성원의 `SUCCESS` 게시글 최신 5건 PostgreSQL 통합 테스트
 - [x] 전체 Gradle 빌드와 테스트
 - [x] 리뷰 에이전트 전체 변경 검토
 
@@ -445,6 +450,7 @@ IN_PROGRESS -> INCOMPLETE
 - [x] API 동시 요청 기반 활성 통화 중복 방지 통합 테스트
 - [ ] 실제 OpenAI Sideband 장애·제한 시간 E2E
 - [x] 실제 OpenAI의 한국어 사용자·AI 완료 전사 순차 저장 E2E
+- [ ] 실제 OpenAI의 특정 가족 게시글 조회와 중복 표시명 재확인 E2E
 
 실제 통화 실행 절차는 [AI_CALL_README.md](./AI_CALL_README.md)를 따른다.
 
@@ -470,6 +476,8 @@ IN_PROGRESS -> INCOMPLETE
 | 통화 오케스트레이션 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/CallSessionService.java` |
 | Realtime SDP 교환 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/OpenAiRealtimeGateway.java` |
 | Sideband 관리 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/SidebandSessionManager.java` |
+| Sideband Tool 처리 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/SidebandToolHandler.java` |
+| 가족 게시글 조회 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/AiCallPostToolService.java` |
 | 페르소나 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/PersonaCatalog.java` |
 | 프롬프트 구성 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/AiCallPromptComposer.java` |
 | DB 컨텍스트 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/AiCallPromptContextProvider.java` |

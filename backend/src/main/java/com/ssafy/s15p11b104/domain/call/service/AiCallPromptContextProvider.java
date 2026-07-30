@@ -8,6 +8,7 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -55,7 +56,7 @@ public class AiCallPromptContextProvider {
 	}
 
 	@Transactional(readOnly = true)
-	public AiCallPromptContext load(GroupMember careReceiver) {
+	public AiCallSessionContext load(GroupMember careReceiver) {
 		Long careReceiverId = careReceiver.getId();
 		Long groupId = careReceiver.getGroup().getId();
 		LocalDate today = LocalDate.now(clock.withZone(KST));
@@ -69,18 +70,19 @@ public class AiCallPromptContextProvider {
 			.toList();
 
 		Map<Long, String> aliases = loadAliases(groupId, careReceiverId);
-		List<AiCallPromptContext.FamilyMemberContext> familyMembers = loadFamilyMembers(
+		FamilyMemberContexts familyMemberContexts = loadFamilyMembers(
 			groupId, careReceiverId, aliases);
 		List<AiCallPromptContext.TodayPostContext> todayPosts = loadTodayPosts(
 			groupId, startOfDay, endOfDay, aliases);
 		AiCallPromptContext.RecentCallContext recentCall = loadRecentCall(careReceiverId);
 
-		return new AiCallPromptContext(
+		AiCallPromptContext promptContext = new AiCallPromptContext(
 			new AiCallPromptContext.CareReceiverContext(careReceiver.getUser().getName(), interests, today),
-			familyMembers,
+			familyMemberContexts.promptContexts(),
 			todayPosts,
 			recentCall
 		);
+		return new AiCallSessionContext(promptContext, familyMemberContexts.personReferences());
 	}
 
 	private Map<Long, String> loadAliases(Long groupId, Long careReceiverId) {
@@ -91,25 +93,28 @@ public class AiCallPromptContextProvider {
 		return aliases;
 	}
 
-	private List<AiCallPromptContext.FamilyMemberContext> loadFamilyMembers(
+	private FamilyMemberContexts loadFamilyMembers(
 		Long groupId,
 		Long careReceiverId,
 		Map<Long, String> aliases
 	) {
 		List<AiCallPromptContext.FamilyMemberContext> contexts = new ArrayList<>();
+		Map<String, AiCallPersonReference> references = new LinkedHashMap<>();
 		for (GroupMember member : groupMemberRepository.findActiveMembers(groupId)) {
 			if (member.getId().equals(careReceiverId)) {
 				continue;
 			}
+			String personKey = "person_" + (contexts.size() + 1);
 			String name = member.getUser().getName();
 			String displayName = aliases.getOrDefault(member.getId(), name);
 			contexts.add(new AiCallPromptContext.FamilyMemberContext(
-				"person_" + (contexts.size() + 1),
+				personKey,
 				name,
 				displayName
 			));
+			references.put(personKey, new AiCallPersonReference(member.getId(), name, displayName));
 		}
-		return List.copyOf(contexts);
+		return new FamilyMemberContexts(List.copyOf(contexts), references);
 	}
 
 	private List<AiCallPromptContext.TodayPostContext> loadTodayPosts(
@@ -149,5 +154,11 @@ public class AiCallPromptContextProvider {
 		CallReport report = reports.getFirst();
 		LocalDate endedDate = report.getCallSession().getEndedAt().atZone(KST).toLocalDate();
 		return new AiCallPromptContext.RecentCallContext(report.getSummary(), endedDate);
+	}
+
+	private record FamilyMemberContexts(
+		List<AiCallPromptContext.FamilyMemberContext> promptContexts,
+		Map<String, AiCallPersonReference> personReferences
+	) {
 	}
 }

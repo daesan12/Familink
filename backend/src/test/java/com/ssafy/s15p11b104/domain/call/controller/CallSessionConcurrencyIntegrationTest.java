@@ -153,6 +153,7 @@ class CallSessionConcurrencyIntegrationTest extends IntegrationTest {
 		verify(sidebandSessionManager, times(1)).connect(
 			anyLong(),
 			eq(OPEN_AI_CALL_ID),
+			any(),
 			any()
 		);
 	}

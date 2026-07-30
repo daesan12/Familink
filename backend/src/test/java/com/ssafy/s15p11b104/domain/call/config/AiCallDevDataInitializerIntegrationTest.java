@@ -57,7 +57,7 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 			"ai-call-user",
 			GroupRole.CARE_RECEIVER
 		).orElseThrow();
-		AiCallPromptContext context = promptContextProvider.load(careReceiver);
+		AiCallPromptContext context = promptContextProvider.load(careReceiver).promptContext();
 
 		assertThat(context.todayPosts())
 			.extracting(AiCallPromptContext.TodayPostContext::summary)

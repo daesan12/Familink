@@ -116,6 +116,28 @@ public class OpenAiRealtimeGateway {
 		Map<String, Object> reasoning = new LinkedHashMap<>();
 		reasoning.put("effort", "low");
 
+		Map<String, Object> personKeyProperty = new LinkedHashMap<>();
+		personKeyProperty.put("type", "string");
+		personKeyProperty.put("description", "세션 컨텍스트에 제공된 가족 구성원 식별 키");
+
+		Map<String, Object> toolProperties = new LinkedHashMap<>();
+		toolProperties.put("person_key", personKeyProperty);
+
+		Map<String, Object> toolParameters = new LinkedHashMap<>();
+		toolParameters.put("type", "object");
+		toolParameters.put("properties", toolProperties);
+		toolParameters.put("required", List.of("person_key"));
+		toolParameters.put("additionalProperties", false);
+
+		Map<String, Object> recentPostTool = new LinkedHashMap<>();
+		recentPostTool.put("type", "function");
+		recentPostTool.put("name", "get_person_recent_post_summaries");
+		recentPostTool.put(
+			"description",
+			"현재 통화의 특정 가족 구성원이 작성한 최근 분석 완료 게시글 요약을 조회합니다."
+		);
+		recentPostTool.put("parameters", toolParameters);
+
 		Map<String, Object> session = new LinkedHashMap<>();
 		session.put("type", "realtime");
 		session.put("model", properties.getModel());
@@ -123,6 +145,8 @@ public class OpenAiRealtimeGateway {
 		session.put("output_modalities", List.of("audio"));
 		session.put("audio", audio);
 		session.put("reasoning", reasoning);
+		session.put("tools", List.of(recentPostTool));
+		session.put("tool_choice", "auto");
 
 		try {
 			return objectMapper.writeValueAsString(session);

@@ -32,4 +32,22 @@ public interface PostAnalysisCallRepository extends JpaRepository<PostAnalysis, 
 		@Param("toExclusive") Instant toExclusive,
 		Pageable pageable
 	);
+
+	@Query("""
+		select analysis.summary
+		from PostAnalysis analysis
+		join analysis.post post
+		join post.authorMember author
+		where post.group.id = :groupId
+			and author.id = :authorMemberId
+			and author.leftAt is null
+			and analysis.status = :status
+		order by post.createdAt desc, post.id desc
+		""")
+	List<String> findRecentSuccessfulSummariesByAuthor(
+		@Param("groupId") Long groupId,
+		@Param("authorMemberId") Long authorMemberId,
+		@Param("status") AnalysisStatus status,
+		Pageable pageable
+	);
 }

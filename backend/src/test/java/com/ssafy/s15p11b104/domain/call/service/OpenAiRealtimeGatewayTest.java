@@ -45,6 +45,13 @@ class OpenAiRealtimeGatewayTest {
 			.andExpect(content().string(containsString(
 				"\"transcription\":{\"model\":\"gpt-transcribe\",\"languages\":[\"ko\"]}"
 			)))
+			.andExpect(content().string(containsString(
+				"\"name\":\"get_person_recent_post_summaries\""
+			)))
+			.andExpect(content().string(containsString(
+				"\"required\":[\"person_key\"],\"additionalProperties\":false"
+			)))
+			.andExpect(content().string(containsString("\"tool_choice\":\"auto\"")))
 			.andRespond(withSuccess("v=0\r\ns=openai\r\n", MediaType.parseMediaType("application/sdp"))
 				.header("Location", "/v1/realtime/calls/rtc_test_123"));
 
