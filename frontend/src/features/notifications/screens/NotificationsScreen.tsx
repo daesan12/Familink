@@ -35,6 +35,8 @@ export interface NotificationsScreenProps extends AppScreenProps {
   initialView?: 'list' | 'settings';
 }
 
+const NO_READ_IDS: readonly string[] = [];
+
 export function NotificationsScreen({
   initialNotifications,
   initialPermissionStatus = 'allowed',
@@ -42,11 +44,23 @@ export function NotificationsScreen({
   initialTokenStatus = 'active',
   initialView = 'list',
   onCloseNotifications,
+  onNotificationRead,
   onOpenPost,
+  readNotificationIds = NO_READ_IDS,
 }: NotificationsScreenProps) {
-  const [notifications, setNotifications] = useState(
-    initialNotifications ?? (__DEV__ ? DEVELOPMENT_NOTIFICATIONS : []),
-  );
+  const [notifications, setNotifications] = useState(() => {
+    const source =
+      initialNotifications ?? (__DEV__ ? DEVELOPMENT_NOTIFICATIONS : []);
+    if (readNotificationIds.length === 0) {
+      return source;
+    }
+    // 화면을 벗어났다 돌아와도 읽음 상태가 유지되도록 상위에 보존된 읽음 id를 덮어쓴다.
+    return source.map(notification =>
+      notification.isRead || readNotificationIds.includes(notification.id)
+        ? {...notification, isRead: true}
+        : notification,
+    );
+  });
   const [settings, setSettings] = useState(initialSettings);
   const [view, setView] = useState(initialView);
   const [decision, setDecision] = useState<{
@@ -66,6 +80,7 @@ export function NotificationsScreen({
           : notification,
       ),
     );
+    onNotificationRead?.(notificationId);
   };
 
   const handleNotificationPress = (notification: AppNotification) => {
@@ -135,14 +150,19 @@ export function NotificationsScreen({
         <Pressable
           accessibilityRole="button"
           disabled={unreadCount === 0}
-          onPress={() =>
+          onPress={() => {
+            notifications.forEach(notification => {
+              if (!notification.isRead) {
+                onNotificationRead?.(notification.id);
+              }
+            });
             setNotifications(current =>
               current.map(notification => ({
                 ...notification,
                 isRead: true,
               })),
-            )
-          }
+            );
+          }}
           style={styles.readAllButton}
         >
           <Text

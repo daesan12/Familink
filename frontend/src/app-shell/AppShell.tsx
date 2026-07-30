@@ -51,6 +51,9 @@ export function AppShell({
   const [isScreenHeaderVisible, setIsScreenHeaderVisible] = useState(true);
   const [openPostId, setOpenPostId] = useState<string | null>(null);
   const [openPostRequestId, setOpenPostRequestId] = useState(0);
+  const [readNotificationIds, setReadNotificationIds] = useState<
+    readonly string[]
+  >([]);
   const [isRestoringGroup, setIsRestoringGroup] = useState(
     Boolean(groupStore && !initialGroupId),
   );
@@ -159,6 +162,14 @@ export function AppShell({
     }
   };
 
+  const handleNotificationRead = (notificationId: string) => {
+    setReadNotificationIds(current =>
+      current.includes(notificationId)
+        ? current
+        : [...current, notificationId],
+    );
+  };
+
   const handleOpenPost = (postId: string, groupId?: string) => {
     if (
       groupId &&
@@ -243,9 +254,11 @@ export function AppShell({
             onCloseNotifications={() => setActiveRoute('feed')}
             onFullscreenChange={setIsScreenFullscreen}
             onHeaderVisibilityChange={setIsScreenHeaderVisible}
+            onNotificationRead={handleNotificationRead}
             onOpenPost={handleOpenPost}
             openPostId={openPostId}
             openPostRequestId={openPostRequestId}
+            readNotificationIds={readNotificationIds}
             role={currentGroup.role}
           />
         ) : (

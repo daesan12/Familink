@@ -63,6 +63,53 @@ test('알림을 읽음 처리하고 연결된 게시글을 연다', () => {
   ).toBe(true);
 });
 
+test('보존된 읽음 id는 다시 진입해도 읽음으로 표시한다', () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        initialNotifications={DEVELOPMENT_NOTIFICATIONS}
+        readNotificationIds={['post-reaction-love']}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(
+    renderer!.root
+      .findAllByType(Text)
+      .some(node => node.props.children?.join?.('') === '읽지 않은 알림 1개'),
+  ).toBe(true);
+});
+
+test('알림을 읽으면 읽음 id를 상위로 보고한다', () => {
+  const onNotificationRead = jest.fn();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        initialNotifications={DEVELOPMENT_NOTIFICATIONS}
+        onNotificationRead={onNotificationRead}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityLabel: '게시글에 새로운 반응이 있어요, 1시간 전',
+      })
+      .props.onPress();
+  });
+
+  expect(onNotificationRead).toHaveBeenCalledWith('post-reaction-love');
+});
+
 test('그룹 요청 승인과 거부 팝업을 표시한다', async () => {
   let renderer: TestRenderer.ReactTestRenderer;
 

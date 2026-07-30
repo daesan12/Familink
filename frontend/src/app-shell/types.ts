@@ -23,9 +23,11 @@ export interface AppScreenProps {
   onCloseNotifications?: () => void;
   onFullscreenChange?: (isFullscreen: boolean) => void;
   onHeaderVisibilityChange?: (isVisible: boolean) => void;
+  onNotificationRead?: (notificationId: string) => void;
   onOpenPost?: (postId: string, groupId?: string) => void;
   openPostId?: string | null;
   openPostRequestId?: number;
+  readNotificationIds?: readonly string[];
   role: GroupRole;
 }
 
