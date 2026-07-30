@@ -147,7 +147,8 @@ export default function App({
 
   const handleJoinGroup = async (inviteCode: string) => {
     if (onJoinGroup === undefined) {
-      throw new Error("Group join gateway is unavailable");
+      showDeferredFeature("코드로 참여");
+      return;
     }
 
     const request = await onJoinGroup(inviteCode);

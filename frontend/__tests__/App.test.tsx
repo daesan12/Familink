@@ -356,6 +356,52 @@ test("초대 코드 참여 요청이 실패하면 입력창을 유지하고 대�
   );
 });
 
+test("가입 게이트웨이가 없으면 코드 오류 대신 후속 연동을 안내한다", async () => {
+  const alertSpy = jest.spyOn(Alert, "alert");
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App initialRootRoute="groupOnboarding" />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+      })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "6자리 초대 코드" })
+      .props.onChangeText("123456");
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "참여 요청 보내기" })
+      .props.onPress();
+  });
+
+  expect(alertSpy).toHaveBeenCalledWith(
+    "코드로 참여",
+    "후속 작업에서 연결될 화면입니다."
+  );
+  expect(
+    renderer!.root.findAllByProps({
+      children: "초대 코드를 확인하고 다시 시도해주세요.",
+    })
+  ).toHaveLength(0);
+  expect(
+    renderer!.root.findAllByProps({
+      accessibilityLabel: "6자리 초대 코드",
+    })
+  ).toHaveLength(0);
+  alertSpy.mockRestore();
+});
+
 test("앱 셸에서 그룹 연결 화면을 열었다가 기존 앱 셸로 돌아온다", async () => {
   let renderer: TestRenderer.ReactTestRenderer;
 
