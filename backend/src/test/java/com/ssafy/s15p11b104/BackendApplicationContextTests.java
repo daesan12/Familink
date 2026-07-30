@@ -31,6 +31,7 @@ import com.ssafy.s15p11b104.domain.group.repository.GroupJoinRequestRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberInterestRepository;
+import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationService;
 
 import jakarta.persistence.EntityManager;
 
@@ -54,6 +55,9 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private CallReportGenerationService callReportGenerationService;
+
+	@MockitoBean
+	private DailyReportGenerationService dailyReportGenerationService;
 
 	@MockitoBean
 	private AiCallPromptContextProvider promptContextProvider;

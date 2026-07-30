@@ -26,6 +26,7 @@ import type {
   LoginCredentials,
 } from "./src/features/auth/types";
 import { FeedScreen } from "./src/features/feed";
+import { NotificationsScreen } from "./src/features/notifications";
 
 type RootRoute =
   | "welcome"
@@ -71,6 +72,7 @@ const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
 
 const DEFAULT_SCREENS: AppScreenRegistry = {
   feed: FeedScreen,
+  notifications: NotificationsScreen,
 };
 
 export default function App({

@@ -39,6 +39,8 @@ gemini:
     multimodal-model: ${GEMINI_MULTIMODAL_MODEL:gemini-3.5-flash}
   call-report:
     model: ${GEMINI_CALL_REPORT_MODEL:gemini-3.5-flash}
+  daily-report:
+    model: ${GEMINI_DAILY_REPORT_MODEL:gemini-3.5-flash}
 
 app:
   auth:

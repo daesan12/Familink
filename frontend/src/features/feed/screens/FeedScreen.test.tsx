@@ -158,3 +158,33 @@ test('D-2와 D-3가 같은 postId의 반응 상태를 공유한다', async () =>
     renderer!.unmount();
   });
 });
+
+test('알림에서 전달된 postId의 게시글 상세를 바로 연다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <FeedScreen
+        currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+        currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+        initialCommentsByPostId={{'post-1': []}}
+        loader={jest.fn().mockResolvedValue([post])}
+        openPostId="post-1"
+        openPostRequestId={1}
+        role="guardian"
+      />,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(
+    renderer!.root.findByProps({
+      accessibilityLabel: '피드로 돌아가기',
+    }),
+  ).toBeTruthy();
+
+  await TestRenderer.act(() => {
+    renderer!.unmount();
+  });
+});
