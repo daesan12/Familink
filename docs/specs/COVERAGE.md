@@ -46,7 +46,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-015 가족 게시글 기반 AI 대화 | [피드](./domains/FEED_AND_MEDIA.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 텍스트 모델·품질 기준·대체 모델은 미결정 유지 |
 | 요구사항 | REQ-016 장기 개인화 대화 기억 | [AI 통화](./domains/AI_CALL.md) | 반영·미결정 유지 | MVP 제외, 확장 정책 미결정 |
 | 요구사항 | REQ-017 통화 건별 요약 리포트 | [리포트](./domains/REPORTS.md) | 반영·확정 |  |
-| 요구사항 | REQ-018 22시 일일 리포트 생성 | [리포트](./domains/REPORTS.md) | 반영·확정 | Spring Scheduler `Asia/Seoul` 22시, UTC 저장; 22시 이후 통화의 `report_date`만 미결정 |
+| 요구사항 | REQ-018 22시 일일 리포트 생성 | [리포트](./domains/REPORTS.md) | 반영·확정 | Spring Scheduler `Asia/Seoul` 22시, UTC 저장; `report_date=D`는 `[D-1 22:00, D 22:00)` 구간 |
 | 요구사항 | REQ-019 피보호자별 리포트 조회 | [리포트](./domains/REPORTS.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 | 좌측 넘김, 구성원 필터 없음 |
 | 요구사항 | REQ-020 통화 녹음 원본 미저장 및 전체 전문 미제공 | [공통](./COMMON.md), [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영·확정 |  |
 | 요구사항 | REQ-021 가족 피드 게시글 관리 | [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 |  |
@@ -283,7 +283,6 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 이 항목의 내용은 “반영 대기 규칙”이 아니라 구현자가 임의로 결정해서는 안
 되는 경계다. 상세 맥락은 연결된 도메인의 `미결정 사항`에 있다.
 
-- 22시 이후 종료 통화의 `report_date`
 - 텍스트 게시글용 `Gemini 2.5 Flash Lite`의 최종 채택 여부·정확한 버전, 품질 통과 기준,
   대체 모델
 - 게시글 분석 실패의 재시도 횟수·백오프·서버 복구·추가 오류 정책

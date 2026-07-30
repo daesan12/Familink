@@ -51,13 +51,19 @@ public class DailyReport extends CreatedAtEntity {
 	}
 
 	public DailyReport(FamilyGroup group, GroupMember careReceiverMember, LocalDate reportDate,
-		String summary, EmotionCategory emotionCategory, String emotionSubcategory) {
+		String summary, EmotionCategory emotionCategory, String emotionSubcategory, String guardianMessage) {
 		this.group = group;
 		this.careReceiverMember = careReceiverMember;
 		this.reportDate = reportDate;
 		this.summary = summary;
 		this.emotionCategory = emotionCategory;
 		this.emotionSubcategory = emotionSubcategory;
+		this.guardianMessage = guardianMessage;
+	}
+
+	public DailyReport(FamilyGroup group, GroupMember careReceiverMember, LocalDate reportDate,
+		String summary, EmotionCategory emotionCategory, String emotionSubcategory) {
+		this(group, careReceiverMember, reportDate, summary, emotionCategory, emotionSubcategory, null);
 	}
 
 	public FamilyGroup getGroup() {

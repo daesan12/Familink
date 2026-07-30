@@ -211,6 +211,9 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   `emotion_category EMOTION_CATEGORY`,
   `emotion_subcategory VARCHAR(50)`, `created_at` NOT NULL;
   `guardian_message VARCHAR(200) NULL`
+- `report_date=D`는 `Asia/Seoul` 기준 `[D-1 22:00, D 22:00)` 집계
+  구간의 기준일이다. 구간 시작은 포함하고 종료는 제외하며, 종료 시각
+  조건은 UTC `Instant`로 변환해 `call_sessions.ended_at`을 조회한다.
 - Unique: `(care_receiver_member_id, report_date)`
 
 ## 활동·알림
