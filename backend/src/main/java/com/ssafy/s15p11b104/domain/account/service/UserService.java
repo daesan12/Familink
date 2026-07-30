@@ -6,6 +6,8 @@ import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.ssafy.s15p11b104.domain.account.dto.ProfileResponse;
 import com.ssafy.s15p11b104.domain.account.dto.ProfileUpdateRequest;
@@ -102,14 +104,15 @@ public class UserService {
 	 * 없는 그룹이 생기지 않도록 먼저 권한을 위임해야 한다.
 	 *
 	 * <p>토큰도 함께 끊는다. Refresh Token은 사용자 키를 삭제해 재발급을 막고, 요청에 사용된 Access
-	 * Token은 남은 만료 시간만큼 차단한다. 차단 범위는 이 요청에 실린 토큰 하나이므로, 재발급으로
-	 * 이미 받아 둔 다른 Access Token은 만료될 때까지 서명 검증을 통과한다. 팀이 확정한 블랙리스트
-	 * 설계가 토큰 단위 키(`blacklist:{accessToken}`)여서 현 범위에서는 사용자 단위로 무효화하지
-	 * 않는다. 이 잔여 위험은 변경 제안에 기록했다.
+	 * Token은 남은 만료 시간만큼 차단하며, 사용자 단위 차단 키로 이미 발급된 나머지 Access Token까지
+	 * 함께 끊는다. 요청에 실린 토큰만 차단하면 재발급으로 미리 받아 둔 다른 Access Token이 만료될
+	 * 때까지 서명 검증을 통과하기 때문이다. 탈퇴 후에는 로그인과 재발급이 모두 막히므로 사용자 단위
+	 * 차단이 풀리는 시점에는 유효한 토큰이 남지 않는다.
 	 *
 	 * <p>Redis 조작을 커밋보다 먼저 수행한다. 이 순서에서는 Redis가 실패하면 트랜잭션이 롤백되어
 	 * 계정이 활성 상태로 남고, 반대로 커밋이 실패하면 세션만 끊겨 재로그인으로 복구된다. 순서를
-	 * 뒤집으면 커밋된 탈퇴에 살아 있는 세션이 남을 수 있다.
+	 * 뒤집으면 커밋된 탈퇴에 살아 있는 세션이 남을 수 있다. 다만 사용자 단위 차단은 재로그인까지
+	 * 막으므로 롤백 시 해제한다.
 	 *
 	 * @param user 인증된 요청 주체
 	 * @throws BusinessException 활성 계정이 아니거나 활성 그룹의 관리자인 경우
@@ -128,8 +131,27 @@ public class UserService {
 		account.withdraw(now);
 
 		refreshTokenStore.revoke(account.getId());
+		blockIssuedAccessTokens(account.getId());
 		accessTokenProvider.verify(user.accessToken())
 			.ifPresent(payload -> accessTokenBlacklist.register(user.accessToken(), payload.expiresAt()));
+	}
+
+	/**
+	 * 사용자 단위 차단을 등록하고, 탈퇴가 커밋되지 않으면 되돌린다.
+	 *
+	 * <p>사용자 단위 차단은 재로그인으로 받은 새 Access Token까지 막는다. 탈퇴가 롤백되어 계정이
+	 * 활성으로 남았는데 차단만 남으면 정상 계정이 TTL이 끝날 때까지 아무 요청도 보낼 수 없다.
+	 */
+	private void blockIssuedAccessTokens(Long userId) {
+		accessTokenBlacklist.registerUser(userId);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCompletion(int status) {
+				if (status != STATUS_COMMITTED) {
+					accessTokenBlacklist.removeUser(userId);
+				}
+			}
+		});
 	}
 
 	private User getActiveUser(Long userId) {

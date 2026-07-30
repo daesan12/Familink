@@ -23,6 +23,9 @@ import jakarta.servlet.http.HttpServletResponse;
  *
  * <p>블랙리스트 조회는 서명·만료 검증을 통과한 토큰에만 수행한다. 위조된 토큰이 Redis 조회를
  * 유발하지 못하게 하고, 서블릿 필터 체인에 중복 등록되지 않도록 빈으로 노출하지 않는다.
+ *
+ * <p>토큰 단위 차단과 사용자 단위 차단을 모두 확인한다. 토큰 단위만 확인하면 탈퇴한 사용자가 탈퇴
+ * 이전에 재발급으로 받아 둔 다른 Access Token으로 계속 인증된다.
  */
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -60,6 +63,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	private Optional<Authentication> authenticate(String accessToken) {
 		return accessTokenProvider.verify(accessToken)
 			.filter(payload -> !accessTokenBlacklist.contains(accessToken))
+			.filter(payload -> !accessTokenBlacklist.containsUser(payload.userId()))
 			.map(payload -> new AuthenticatedUser(payload.userId(), accessToken))
 			.map(user -> new UsernamePasswordAuthenticationToken(user, null, List.of()));
 	}
