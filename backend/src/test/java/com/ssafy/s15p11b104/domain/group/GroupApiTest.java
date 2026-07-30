@@ -397,6 +397,108 @@ class GroupApiTest extends IntegrationTest {
 	}
 
 	@Test
+	void memberCanLeaveGroupKeepingMembershipHistory() throws Exception {
+		entityManager.persist(new MemberAlias(
+			entityManager.find(FamilyGroup.class, group.getId()),
+			entityManager.find(GroupMember.class, managerMember.getId()),
+			entityManager.find(GroupMember.class, careReceiverMember.getId()),
+			"엄마"));
+		entityManager.persist(new MemberInterest(
+			entityManager.find(GroupMember.class, careReceiverMember.getId()), "등산"));
+		entityManager.persist(new Post(
+			entityManager.find(FamilyGroup.class, group.getId()),
+			entityManager.find(GroupMember.class, careReceiverMember.getId()),
+			"탈퇴해도 남는 게시글"));
+		entityManager.flush();
+
+		mockMvc.perform(delete("/groups/" + group.getId() + "/leave")
+				.with(authenticatedAs(memberUser.getId())))
+			.andExpect(status().isNoContent());
+
+		entityManager.flush();
+		entityManager.clear();
+		GroupMember left = groupMemberRepository.findById(careReceiverMember.getId()).orElseThrow();
+		assertThat(left.getLeftAt()).isNotNull();
+		assertThat(left.getRole()).isEqualTo(GroupRole.CARE_RECEIVER);
+		assertThat(countMembershipRows(group.getId(), memberUser.getId())).isEqualTo(1);
+		assertThat(groupMemberRepository.findAllActiveByGroupId(group.getId()))
+			.extracting(GroupMember::getId)
+			.containsExactly(managerMember.getId());
+
+		assertThat(countByGroup("member_aliases", group.getId())).isEqualTo(1);
+		assertThat(countByGroup("posts", group.getId())).isEqualTo(1);
+		assertThat(countRemainingInterests()).isEqualTo(1);
+	}
+
+	@Test
+	void managerCannotLeaveBeforeTransferringManagerRole() throws Exception {
+		mockMvc.perform(delete("/groups/" + group.getId() + "/leave")
+				.with(authenticatedAs(managerUser.getId())))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("MANAGER_TRANSFER_REQUIRED"));
+
+		entityManager.clear();
+		assertThat(groupMemberRepository
+			.findActiveByGroupIdAndUserId(group.getId(), managerUser.getId())).isPresent();
+	}
+
+	@Test
+	void soleManagerCannotLeaveEither() throws Exception {
+		FamilyGroup soloGroup = familyGroupRepository.save(new FamilyGroup("혼자가족", "SOLO12"));
+		entityManager.flush();
+		groupMemberRepository.save(
+			new GroupMember(soloGroup, outsiderUser, GroupRole.GUARDIAN, true, Instant.now()));
+		entityManager.flush();
+
+		mockMvc.perform(delete("/groups/" + soloGroup.getId() + "/leave")
+				.with(authenticatedAs(outsiderUser.getId())))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("MANAGER_TRANSFER_REQUIRED"));
+	}
+
+	@Test
+	void outsiderAndAlreadyLeftMemberCannotLeave() throws Exception {
+		mockMvc.perform(delete("/groups/" + group.getId() + "/leave")
+				.with(authenticatedAs(outsiderUser.getId())))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+		leave(careReceiverMember.getId());
+		mockMvc.perform(delete("/groups/" + group.getId() + "/leave")
+				.with(authenticatedAs(memberUser.getId())))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("FORBIDDEN"));
+	}
+
+	@Test
+	void leftMemberIsReactivatedOnRejoinApprovalWithoutDuplicateRow() throws Exception {
+		mockMvc.perform(delete("/groups/" + group.getId() + "/leave")
+				.with(authenticatedAs(memberUser.getId())))
+			.andExpect(status().isNoContent());
+
+		entityManager.flush();
+		GroupJoinRequest rejoinRequest = groupJoinRequestRepository.save(new GroupJoinRequest(
+			entityManager.find(FamilyGroup.class, group.getId()),
+			entityManager.find(User.class, memberUser.getId()),
+			JoinRequestStatus.PENDING_ADMIN));
+		entityManager.flush();
+
+		mockMvc.perform(patch("/groups/" + group.getId() + "/join-requests/" + rejoinRequest.getId())
+				.with(authenticatedAs(managerUser.getId()))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"decision\": \"APPROVE\", \"assignedRole\": \"GUARDIAN\"}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.memberId").value(careReceiverMember.getId()));
+
+		entityManager.flush();
+		entityManager.clear();
+		GroupMember reactivated = groupMemberRepository.findById(careReceiverMember.getId()).orElseThrow();
+		assertThat(reactivated.getLeftAt()).isNull();
+		assertThat(reactivated.getRole()).isEqualTo(GroupRole.GUARDIAN);
+		assertThat(countMembershipRows(group.getId(), memberUser.getId())).isEqualTo(1);
+	}
+
+	@Test
 	void unauthenticatedRequestsAreRejected() throws Exception {
 		mockMvc.perform(get("/groups")).andExpect(status().isUnauthorized());
 		mockMvc.perform(get("/groups/" + group.getId())).andExpect(status().isUnauthorized());
@@ -404,6 +506,18 @@ class GroupApiTest extends IntegrationTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"name\": \"가족\", \"myRole\": \"GUARDIAN\"}"))
 			.andExpect(status().isUnauthorized());
+		mockMvc.perform(delete("/groups/" + group.getId() + "/leave"))
+			.andExpect(status().isUnauthorized());
+	}
+
+	private long countMembershipRows(Long groupId, Long userId) {
+		Number count = (Number) entityManager
+			.createNativeQuery(
+				"SELECT count(*) FROM group_members WHERE group_id = :groupId AND user_id = :userId")
+			.setParameter("groupId", groupId)
+			.setParameter("userId", userId)
+			.getSingleResult();
+		return count.longValue();
 	}
 
 	private long countByGroup(String table, Long groupId) {
