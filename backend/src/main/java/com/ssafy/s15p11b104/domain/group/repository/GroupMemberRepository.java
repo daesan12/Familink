@@ -14,6 +14,15 @@ import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 
 public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> {
 
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+		select member
+		from GroupMember member
+		join fetch member.group
+		where member.id = :memberId
+		""")
+	Optional<GroupMember> findByIdForUpdate(@Param("memberId") Long memberId);
+
 	@Query("""
 		select member
 		from GroupMember member
