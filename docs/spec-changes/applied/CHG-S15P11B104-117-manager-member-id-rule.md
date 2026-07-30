@@ -1,6 +1,6 @@
 # managerMemberId 구성 규칙 확정
 
-- 상태: 제안
+- 상태: 승인·반영 완료
 - 제안자: 이경호
 - 작성일: 2026-07-29
 - 차단 변경: 예
@@ -52,8 +52,14 @@
 
 ## 결정 및 반영
 
-- 결정:
-- 결정자:
-- 결정일:
-- 반영 문서:
+- 결정: 전체 승인. `managerMemberId`는 활성 관리자
+  `group_members.id`이며, 활성 관리자가 없으면 `null`을 반환한다.
+  `API-GROUPS-002`는 생성자의 새 멤버십 ID를 반환하고,
+  `API-GROUPS-004`의 `isManager`는 요청자 멤버십에서 별도 계산한다.
+- 결정자: 사용자
+- 결정일: 2026-07-30
+- 승인 근거: 사용자가 ERD 관련 승인 대기 2번을 제안 내용 그대로
+  승인했다.
+- 반영 문서: `docs/specs/contracts/API.md`,
+  `docs/specs/contracts/DATA_MODEL.md`
 - 반영 커밋:
