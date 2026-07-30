@@ -102,7 +102,9 @@ public class JoinRequestService {
 		requireActiveManager(groupId, authenticatedUserId);
 
 		String decision = normalizeDecision(request.decision());
-		GroupJoinRequest joinRequest = groupJoinRequestRepository.findByIdAndGroupId(joinRequestId, groupId)
+		GroupJoinRequest joinRequest = groupJoinRequestRepository
+			.findForUpdateByIdAndGroupId(joinRequestId, groupId)
+			.filter(candidate -> candidate.getApplicant().getWithdrawnAt() == null)
 			.orElseThrow(() -> new BusinessException(ErrorCode.JOIN_REQUEST_NOT_FOUND));
 		if (!joinRequest.isPending()) {
 			throw new BusinessException(ErrorCode.JOIN_REQUEST_ALREADY_PROCESSED);

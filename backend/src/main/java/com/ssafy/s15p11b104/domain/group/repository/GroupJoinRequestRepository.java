@@ -4,8 +4,11 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 import com.ssafy.s15p11b104.domain.group.entity.GroupJoinRequest;
 import com.ssafy.s15p11b104.domain.group.entity.JoinRequestStatus;
@@ -50,16 +53,26 @@ public interface GroupJoinRequestRepository extends JpaRepository<GroupJoinReque
 		@Param("groupId") Long groupId,
 		@Param("status") JoinRequestStatus status);
 
+	/**
+	 * 승인·거절 처리를 위해 가입 요청 행을 잠근 뒤 찾는다.
+	 *
+	 * <p>잠그지 않으면 같은 요청을 동시에 처리하는 두 트랜잭션이 모두 대기 상태를 읽어 통과하고,
+	 * 나중에 커밋한 쪽이 앞선 결정을 덮어쓴다. 그 결과 거절된 요청에 활성 멤버십이 남을 수 있다.
+	 *
+	 * <p>연관 엔티티는 함께 조회하지 않는다. PostgreSQL은 조인한 테이블의 행까지 잠그므로, 신청자
+	 * 계정을 함께 잠그면 이 경로는 `users` 다음 `group_members`를 잠그게 된다. 반대로
+	 * {@code GroupMemberRepository.findActiveForUpdateByGroupIdAndUserId}는 `group_members`와
+	 * `users`를 함께 잠근다. 두 순서가 엇갈리면 교착 상태가 된다. 신청자 탈퇴 여부는 호출자가
+	 * 확인한다.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 		select request
 		from GroupJoinRequest request
-		join fetch request.group
-		join fetch request.applicant applicant
 		where request.id = :joinRequestId
 		  and request.group.id = :groupId
-		  and applicant.withdrawnAt is null
 		""")
-	Optional<GroupJoinRequest> findByIdAndGroupId(
+	Optional<GroupJoinRequest> findForUpdateByIdAndGroupId(
 		@Param("joinRequestId") Long joinRequestId,
 		@Param("groupId") Long groupId);
 
