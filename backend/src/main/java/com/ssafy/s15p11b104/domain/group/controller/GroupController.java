@@ -81,6 +81,14 @@ public class GroupController {
 		return ApiResponse.success(UPDATE_MESSAGE, groupService.update(groupId, user.id(), request));
 	}
 
+	@DeleteMapping("/{groupId}/leave")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	public void leave(
+		@PathVariable Long groupId,
+		@AuthenticationPrincipal AuthenticatedUser user) {
+		groupService.leave(groupId, user.id());
+	}
+
 	@DeleteMapping("/{groupId}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void delete(
