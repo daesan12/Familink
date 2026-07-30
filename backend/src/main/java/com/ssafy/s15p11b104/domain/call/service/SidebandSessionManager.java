@@ -24,6 +24,8 @@ import com.ssafy.s15p11b104.domain.call.config.OpenAiRealtimeProperties;
 @Component
 public class SidebandSessionManager {
 
+	private static final long FINAL_EVENT_DRAIN_TIMEOUT_SECONDS = 2;
+
 	private final HttpClient httpClient;
 	private final OpenAiRealtimeProperties properties;
 	private final ObjectMapper objectMapper;
@@ -99,12 +101,32 @@ public class SidebandSessionManager {
 		return managedSocket.callId();
 	}
 
+	public String prepareClose(Long sessionId) {
+		ManagedSocket managedSocket = sessions.get(sessionId);
+		if (managedSocket == null) {
+			return null;
+		}
+		managedSocket.expectClose();
+		return managedSocket.callId();
+	}
+
+	public void finishClose(Long sessionId) {
+		ManagedSocket managedSocket = sessions.remove(sessionId);
+		if (managedSocket == null) {
+			return;
+		}
+		managedSocket.awaitRemoteClose();
+		managedSocket.close();
+	}
+
 	private final class ManagedSocket implements WebSocket.Listener {
 
 		private final String callId;
 		private final LongConsumer unexpectedDisconnectHandler;
 		private final AtomicBoolean closedByServer = new AtomicBoolean();
+		private final AtomicBoolean closeExpected = new AtomicBoolean();
 		private final AtomicBoolean disconnected = new AtomicBoolean();
+		private final CompletableFuture<Void> remoteCloseSignal = new CompletableFuture<>();
 		private final Long sessionId;
 		private final SidebandTranscriptHandler transcriptHandler;
 		private final SidebandToolHandler toolHandler;
@@ -142,6 +164,18 @@ public class SidebandSessionManager {
 
 		private boolean isDisconnected() {
 			return disconnected.get();
+		}
+
+		private void expectClose() {
+			closeExpected.set(true);
+		}
+
+		private void awaitRemoteClose() {
+			remoteCloseSignal.completeOnTimeout(
+				null,
+				FINAL_EVENT_DRAIN_TIMEOUT_SECONDS,
+				TimeUnit.SECONDS
+			).join();
 		}
 
 		private void close() {
@@ -208,7 +242,8 @@ public class SidebandSessionManager {
 			disconnected.set(true);
 			transcriptHandler.close();
 			toolHandler.close();
-			if (closedByServer.get()) {
+			remoteCloseSignal.complete(null);
+			if (closedByServer.get() || closeExpected.get()) {
 				return;
 			}
 			Long currentSessionId = sessionId;

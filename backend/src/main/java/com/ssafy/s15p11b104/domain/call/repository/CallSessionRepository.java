@@ -17,6 +17,8 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
 
 	boolean existsByCareReceiverMemberIdAndStatusIn(Long careReceiverMemberId, Collection<CallStatus> statuses);
 
+	Optional<CallSession> findByIdAndCareReceiverMemberId(Long id, Long careReceiverMemberId);
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 		select session

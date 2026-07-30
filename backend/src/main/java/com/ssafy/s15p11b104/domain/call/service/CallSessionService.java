@@ -18,6 +18,7 @@ import com.ssafy.s15p11b104.domain.call.dto.CreateCallSessionRequest;
 import com.ssafy.s15p11b104.domain.call.dto.CreateCallSessionResponse;
 import com.ssafy.s15p11b104.domain.call.entity.CallSession;
 import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
+import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationDispatcher;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.call.repository.GroupMemberCallRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
@@ -39,6 +40,7 @@ public class CallSessionService {
 	private final AiCallPromptComposer promptComposer;
 	private final OpenAiRealtimeGateway realtimeGateway;
 	private final SidebandSessionManager sidebandSessionManager;
+	private final CallReportGenerationDispatcher callReportGenerationDispatcher;
 	private final TransactionTemplate transactionTemplate;
 
 	public CallSessionService(
@@ -50,6 +52,7 @@ public class CallSessionService {
 		AiCallPromptComposer promptComposer,
 		OpenAiRealtimeGateway realtimeGateway,
 		SidebandSessionManager sidebandSessionManager,
+		CallReportGenerationDispatcher callReportGenerationDispatcher,
 		TransactionTemplate transactionTemplate
 	) {
 		this.callActorResolver = callActorResolver;
@@ -60,6 +63,7 @@ public class CallSessionService {
 		this.promptComposer = promptComposer;
 		this.realtimeGateway = realtimeGateway;
 		this.sidebandSessionManager = sidebandSessionManager;
+		this.callReportGenerationDispatcher = callReportGenerationDispatcher;
 		this.transactionTemplate = transactionTemplate;
 	}
 
@@ -114,17 +118,23 @@ public class CallSessionService {
 
 	public CallSessionIdResponse end(Long callSessionId, CallTerminationType terminationType) {
 		CallActor actor = callActorResolver.resolve();
-		Objects.requireNonNull(transactionTemplate.execute(status -> {
+		TerminationResult result = Objects.requireNonNull(transactionTemplate.execute(status -> {
 			CallSession session = findOwnedSessionForUpdate(callSessionId, actor);
+			CallStatus previousStatus = session.getStatus();
 			try {
 				applyTermination(session, terminationType);
 			} catch (IllegalStateException exception) {
 				throw CallApiException.invalidCallStatus();
 			}
-			return session.getId();
+			boolean reportGenerationRequired = previousStatus == CallStatus.IN_PROGRESS
+				&& session.getStatus() == CallStatus.COMPLETED;
+			return new TerminationResult(session.getId(), reportGenerationRequired);
 		}));
 		hangUp(callSessionId);
-		return new CallSessionIdResponse(callSessionId);
+		if (result.reportGenerationRequired()) {
+			callReportGenerationDispatcher.dispatch(result.callSessionId());
+		}
+		return new CallSessionIdResponse(result.callSessionId());
 	}
 
 	private void applyTermination(CallSession session, CallTerminationType terminationType) {
@@ -191,8 +201,9 @@ public class CallSessionService {
 	}
 
 	private void hangUp(Long callSessionId) {
-		String openAiCallId = sidebandSessionManager.close(callSessionId);
+		String openAiCallId = sidebandSessionManager.prepareClose(callSessionId);
 		realtimeGateway.hangUp(openAiCallId);
+		sidebandSessionManager.finishClose(callSessionId);
 	}
 
 	private void validateSdp(String sdpOffer) {
@@ -215,5 +226,8 @@ public class CallSessionService {
 		String instructions,
 		Map<String, AiCallPersonReference> personReferences
 	) {
+	}
+
+	private record TerminationResult(Long callSessionId, boolean reportGenerationRequired) {
 	}
 }

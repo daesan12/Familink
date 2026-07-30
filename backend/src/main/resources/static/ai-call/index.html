@@ -91,6 +91,30 @@
 				<strong id="endedDuration">00 : 00</strong>
 				<h2>통화가 종료되었습니다.</h2>
 				<p id="endedMessage">편안한 대화가 되었기를 바랍니다.</p>
+
+				<section class="report-panel" aria-labelledby="reportTitle" aria-live="polite">
+					<div class="report-heading">
+						<div>
+							<p class="report-eyebrow">AI CALL REPORT</p>
+							<h3 id="reportTitle">통화 요약</h3>
+						</div>
+						<span id="reportStatus" class="report-status is-pending">생성 중</span>
+					</div>
+					<p id="reportSummary" class="report-summary">통화 내용을 정리하고 있습니다.</p>
+					<dl id="reportDetails" class="report-details is-hidden">
+						<div>
+							<dt>감정</dt>
+							<dd><span id="reportEmotionCategory"></span> · <span id="reportEmotionSubcategory"></span></dd>
+						</div>
+						<div>
+							<dt>보호자 메시지</dt>
+							<dd id="reportGuardianMessage"></dd>
+						</div>
+					</dl>
+					<p id="reportCreatedAt" class="report-created-at"></p>
+					<button id="reportRetryButton" class="report-retry is-hidden" type="button">다시 확인</button>
+				</section>
+
 				<button id="backButton" class="secondary-button" type="button">페르소나 다시 선택</button>
 			</section>
 		</section>
