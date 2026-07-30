@@ -189,7 +189,8 @@ export function AppShell({
       {!isScreenFullscreen &&
       isScreenHeaderVisible &&
       resolvedRoute !== 'notifications' &&
-      resolvedRoute !== 'archive' ? <View style={styles.header}>
+      resolvedRoute !== 'archive' &&
+      resolvedRoute !== 'groupInfo' ? <View style={styles.header}>
         {resolvedRoute === 'feed' ? (
           <View style={styles.headerActions}>
             <Pressable
