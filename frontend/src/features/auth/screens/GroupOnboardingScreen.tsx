@@ -1,8 +1,13 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
+import {useState} from 'react';
 import {Animated, Image, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
 import {AnimatedPressable} from '../components/AnimatedPressable';
+import {
+  CreateGroupSheet,
+  type CreateGroupInput,
+} from '../components/CreateGroupSheet';
 import {useScreenEntrance} from '../hooks/useScreenEntrance';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 
@@ -15,7 +20,7 @@ export interface PendingJoinRequest {
 
 interface GroupOnboardingScreenProps {
   onBack: () => void;
-  onCreateGroup: () => void;
+  onCreateGroup: (input: CreateGroupInput) => void;
   onJoinByCode: () => void;
   pendingRequests: readonly PendingJoinRequest[];
 }
@@ -27,6 +32,7 @@ export function GroupOnboardingScreen({
   pendingRequests,
 }: GroupOnboardingScreenProps) {
   const entranceStyle = useScreenEntrance('group-onboarding');
+  const [createGroupVisible, setCreateGroupVisible] = useState(false);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -63,7 +69,7 @@ export function GroupOnboardingScreen({
             <GroupActionCard
               description="우리 가족만의 공간을 시작해요"
               label="새 그룹 만들기"
-              onPress={onCreateGroup}
+              onPress={() => setCreateGroupVisible(true)}
             />
             <GroupActionCard
               description="받은 코드로 기존 그룹에 들어가요"
@@ -102,6 +108,12 @@ export function GroupOnboardingScreen({
             </View>
           )}
         </ScrollView>
+
+        <CreateGroupSheet
+          onDismiss={() => setCreateGroupVisible(false)}
+          onSubmit={onCreateGroup}
+          visible={createGroupVisible}
+        />
       </Animated.View>
     </SafeAreaView>
   );

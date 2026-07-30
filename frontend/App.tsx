@@ -10,6 +10,7 @@ import type {
   FamilyGroup,
 } from "./src/app-shell";
 import { mockAuthGateway } from "./src/features/auth/api/mockAuthGateway";
+import type { CreateGroupInput } from "./src/features/auth/components/CreateGroupSheet";
 import { LoginBottomSheet } from "./src/features/auth/components/LoginBottomSheet";
 import { GroupOnboardingScreen } from "./src/features/auth/screens/GroupOnboardingScreen";
 import { SignedInWelcomeScreen } from "./src/features/auth/screens/SignedInWelcomeScreen";
@@ -36,7 +37,7 @@ interface AppProps {
   initialGroupId?: string | null;
   initialRootRoute?: RootRoute;
   initialShellRoute?: AppRoute;
-  onCreateGroup?: () => void;
+  onCreateGroup?: (input: CreateGroupInput) => FamilyGroup | void;
   onGroupChange?: (groupId: string) => void;
   onJoinGroup?: () => void;
   onOpenActiveGroup?: (activeGroupId: string) => void;
@@ -79,10 +80,16 @@ export default function App({
   screens,
 }: AppProps) {
   const [route, setRoute] = useState<RootRoute>(initialRootRoute);
+  const [groupOnboardingReturnRoute, setGroupOnboardingReturnRoute] =
+    useState<Exclude<RootRoute, "groupOnboarding">>("welcome");
   const [loginVisible, setLoginVisible] = useState(false);
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [activeGroupId, setActiveGroupId] = useState(initialGroupId);
-  const resolvedGroups = groups ?? (__DEV__ ? DEVELOPMENT_GROUPS : []);
+  const [createdGroups, setCreatedGroups] = useState<FamilyGroup[]>([]);
+  const resolvedGroups = [
+    ...(groups ?? (__DEV__ ? DEVELOPMENT_GROUPS : [])),
+    ...createdGroups,
+  ];
 
   const handleLogin = async (credentials: LoginCredentials) => {
     const authenticatedUser = await authGateway.login(credentials);
@@ -107,6 +114,32 @@ export default function App({
 
   const showDeferredFeature = (title: string) => {
     Alert.alert(title, "후속 작업에서 연결될 화면입니다.");
+  };
+
+  const handleCreateGroup = (input: CreateGroupInput) => {
+    const providedGroup = onCreateGroup?.(input);
+    const createdGroup: FamilyGroup = providedGroup ?? {
+      id: `created-group-${Date.now()}`,
+      name: input.name,
+      role: input.role,
+    };
+
+    setCreatedGroups((current) => [...current, createdGroup]);
+    setActiveGroupId(createdGroup.id);
+    onGroupChange?.(createdGroup.id);
+    if (providedGroup !== undefined) {
+      groupStore?.save(createdGroup.id).catch(() => {
+        // 서버가 확정한 그룹만 저장하고 오류 처리는 상위 앱 계층에 위임한다.
+      });
+    }
+    setRoute("appShell");
+  };
+
+  const openGroupOnboarding = (
+    returnRoute: Exclude<RootRoute, "groupOnboarding">
+  ) => {
+    setGroupOnboardingReturnRoute(returnRoute);
+    setRoute("groupOnboarding");
   };
 
   return (
@@ -137,7 +170,7 @@ export default function App({
           groups={resolvedGroups}
           initialGroupId={activeGroupId}
           initialRoute={initialShellRoute}
-          onCreateGroup={onCreateGroup}
+          onCreateGroup={() => openGroupOnboarding("appShell")}
           onGroupChange={onGroupChange}
           onJoinGroup={onJoinGroup}
           screens={screens ?? DEFAULT_SCREENS}
@@ -147,21 +180,16 @@ export default function App({
         <SignedInWelcomeScreen
           onLogout={handleLogout}
           onRequestWithdrawal={() => showDeferredFeature("회원 탈퇴")}
-          onStartGroupOnboarding={() => setRoute("groupOnboarding")}
+          onStartGroupOnboarding={() =>
+            openGroupOnboarding("signedInWelcome")
+          }
           userName={user.name}
         />
       )}
       {route === "groupOnboarding" && (
         <GroupOnboardingScreen
-          onBack={() => setRoute("signedInWelcome")}
-          onCreateGroup={() => {
-            if (onCreateGroup !== undefined) {
-              onCreateGroup();
-              return;
-            }
-
-            showDeferredFeature("새 그룹 만들기");
-          }}
+          onBack={() => setRoute(groupOnboardingReturnRoute)}
+          onCreateGroup={handleCreateGroup}
           onJoinByCode={() => {
             if (onJoinGroup !== undefined) {
               onJoinGroup();

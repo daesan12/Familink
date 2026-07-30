@@ -3,6 +3,7 @@ import { AccessibilityInfo, Alert, Image } from "react-native";
 import TestRenderer from "react-test-renderer";
 
 import App from "../App";
+import { AppShell } from "../src/app-shell";
 import { SignupFlowScreen } from "../src/features/auth/screens/SignupFlowScreen";
 import type { AuthGateway } from "../src/features/auth/types";
 
@@ -37,6 +38,12 @@ jest.mock("react-native-safe-area-context", () => {
   return {
     SafeAreaProvider: View,
     SafeAreaView: View,
+    useSafeAreaInsets: () => ({
+      bottom: 0,
+      left: 0,
+      right: 0,
+      top: 0,
+    }),
   };
 });
 
@@ -213,6 +220,74 @@ test("로그인 후 A-10을 거쳐 B-3으로 이동하고 다시 돌아온다", 
 
   expect(
     renderer.root.findByProps({ children: "이종철 님,\n안녕하세요" })
+  ).toBeTruthy();
+});
+
+test("새 그룹을 만들면 입력한 그룹으로 앱 셸에 진입한다", async () => {
+  const onCreateGroup = jest.fn();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        initialRootRoute="groupOnboarding"
+        onCreateGroup={onCreateGroup}
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: "우리 가족만의 공간을 시작해요",
+      })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹 이름" })
+      .props.onChangeText("행복한 가족");
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "생성하기" })
+      .props.onPress();
+  });
+
+  expect(onCreateGroup).toHaveBeenCalledWith({
+    name: "행복한 가족",
+    role: "guardian",
+  });
+  expect(renderer!.root.findByProps({ children: "행복한 가족" })).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({ accessibilityRole: "tablist" })
+  ).toBeTruthy();
+});
+
+test("앱 셸에서 그룹 생성 화면을 열었다가 기존 앱 셸로 돌아온다", async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App initialRootRoute="appShell" groups={[]} />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(() => {
+    renderer!.root.findByType(AppShell).props.onCreateGroup();
+  });
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "A-10으로 돌아가기" })
+      .props.onPress();
+  });
+
+  expect(renderer!.root.findByType(AppShell)).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({ children: "참여 중인 그룹이 없어요" })
   ).toBeTruthy();
 });
 
