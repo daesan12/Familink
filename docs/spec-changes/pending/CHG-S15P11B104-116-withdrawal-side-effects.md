@@ -4,8 +4,8 @@
 - 제안자: 이경호
 - 작성일: 2026-07-29
 - 차단 변경: 아니오
-- 영향 스펙·계약: `domains/ACCOUNT_AND_PROFILE.md` 「확정된 동작」 8번, `contracts/API.md` `API-USERS-003`, `contracts/DATA_MODEL.md` `group_members`·탈퇴 정책
-- 관련 작업: S15P11B104-116
+- 영향 스펙·계약: `domains/ACCOUNT_AND_PROFILE.md` 「확정된 동작」 8번, `contracts/API.md` `API-USERS-003`, `contracts/DATA_MODEL.md` `group_members`·탈퇴 정책. 미결 질문 1번은 `contracts/API.md` `API-GROUPS-013`과 `domains/GROUPS_AND_MEMBERSHIP.md` 「확정된 동작」 10·11번에도 걸친다.
+- 관련 작업: S15P11B104-116, S15P11B104-120(미결 질문 1번 보강)
 - 관련 제안: [`CHG-S15P11B104-114-auth-token-storage-and-ttl.md`](./CHG-S15P11B104-114-auth-token-storage-and-ttl.md), [`CHG-S15P11B104-116-profile-partial-update.md`](./CHG-S15P11B104-116-profile-partial-update.md)
 
 ## 기존 내용
@@ -54,6 +54,7 @@ Notion에도 정의되지 않아 이번 구현에서 판단한 사항은 다음 
 ## 확인이 필요한 질문
 
 - 그룹의 유일한 활성 구성원인 관리자는 위임할 대상이 없어 탈퇴할 수 없다. 이 경우 그룹을 먼저 삭제(`API-GROUPS-014`)하도록 안내할지, 아니면 마지막 구성원의 탈퇴는 그룹 삭제를 함께 수행할지 결정이 필요하다. 현재 구현은 Notion 규칙을 문자 그대로 적용해 `409 MANAGER_TRANSFER_REQUIRED`를 반환한다.
+  - 2026-07-30 보강(S15P11B104-120): 같은 결정이 그룹 탈퇴 `API-GROUPS-013`에도 그대로 적용된다. 이 계약의 「명시 오류」에도 `409 MANAGER_TRANSFER_REQUIRED` 하나만 정의되어 있어, `domains/GROUPS_AND_MEMBERSHIP.md` 「확정된 동작」 10번(다른 구성원이 있으면 먼저 위임)과 11번(관리자가 혼자면 그룹 삭제 확인으로 연결)이 서로 다른 후속 화면을 요구하는데도 서버 응답이 구분되지 않는다. 현재 구현(`GroupService.leave`)은 두 경우 모두 `409 MANAGER_TRANSFER_REQUIRED`를 반환하며, 계약이 이 엔드포인트에 허용한 유일한 `409`이므로 계약 위반은 아니다. 클라이언트는 `API-GROUPS-004`의 `memberCount`로 단독 여부를 판별할 수 있어 흐름이 막히지는 않는다. 결정이 필요한 것은 두 경우에 서로 다른 오류 코드를 둘지, 아니면 단일 코드를 유지하고 분기를 클라이언트에 맡길지이며, 이는 회원 탈퇴 경로와 같은 결정으로 함께 판단해야 한다. 검증 위치: `backend/src/main/java/com/ssafy/s15p11b104/domain/group/service/GroupService.java`의 `leave()`, `backend/src/test/java/com/ssafy/s15p11b104/domain/group/GroupApiTest.java`의 `managerCannotLeaveBeforeTransferringManagerRole`·`soleManagerCannotLeaveEither`.
 - 탈퇴한 사용자가 남긴 게시글·댓글의 작성자를 화면에 어떻게 표시할지. 2026-07-29 백엔드 담당자가 확인한 의도는 「탈퇴한 사용자」와 기본 프로필 이미지를 표시하는 것이다. 이때 판별 기준은 `group_members.left_at`이 아니라 `users.withdrawn_at`이어야 한다. 그룹만 나간 사용자는 `users`의 이름·프로필이 그대로 남아 있어 기존처럼 표시되지만, 탈퇴한 사용자는 이름이 NULL이므로 `left_at`만 확인하는 로직은 빈 이름을 노출한다. 이 표시 규칙은 피드 API를 구현하는 작업에서 확정해야 한다.
 - 탈퇴 시 활성 `group_join_requests`(`PENDING_ADMIN`)를 어떻게 처리할지. Notion과 로컬 스펙 모두 정의하지 않으며, 이번 범위에서는 손대지 않았다.
 - 탈퇴한 사용자의 Access Token을 사용자 단위로 무효화할지. 확정된 블랙리스트 설계가 토큰 단위 키(`blacklist:{accessToken}`)이므로 현재 구현은 탈퇴 요청에 실린 Access Token 하나만 차단한다. 클라이언트가 `API-AUTH-004` 재발급으로 새 Access Token을 받은 뒤 그 토큰으로 탈퇴하면, 직전에 쓰던 Access Token은 최대 30분 동안 서명·만료·블랙리스트 검사를 모두 통과한다. 인증 필터는 계정 상태를 조회하지 않으므로, `withdrawn_at IS NULL` 조건을 검사하지 않는 API가 추가되면 익명화된 사용자의 요청이 처리될 수 있다. 현재 구현된 API 중에는 해당 경로가 없다. `API-USERS-001`~`003`은 활성 계정을 조회해 `401`을 반환하고, `API-INTERESTS-*`·`API-ALIASES-001`은 활성 그룹 멤버십을 요구하므로 위 `left_at` 기록으로 함께 차단된다. 해결 방법으로는 인증 필터에서 계정 활성 여부를 확인하거나, 사용자별 무효화 기준 시각을 두고 그 이전에 발급된 토큰을 거부하는 방식이 있다. 두 방법 모두 Redis 키 설계 또는 요청당 조회 비용을 바꾸므로 팀 결정이 필요하다.
