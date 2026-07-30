@@ -38,7 +38,7 @@ export type PendingJoinRequest =
 interface GroupOnboardingScreenProps {
   onBack: () => void;
   onCreateGroup: (input: CreateGroupInput) => void;
-  onJoinByCode: (inviteCode: string) => void;
+  onJoinByCode: (inviteCode: string) => Promise<void> | void;
   onOpenApprovedGroup?: (request: ApprovedJoinRequest) => void;
   pendingRequests: readonly PendingJoinRequest[];
 }
@@ -214,7 +214,12 @@ function JoinRequestCard({
           ]}>
           {request.groupName}
         </Text>
-        {!approved && (
+        {approved ? (
+          <Text style={styles.approvedDescription}>
+            가입이 승인되었어요{'\n'}
+            눌러서 입장하기
+          </Text>
+        ) : (
           <Text style={styles.pendingDescription}>
             참여 요청을 보냈어요{'\n'}
             관리자 승인을 기다리고 있어요
@@ -388,6 +393,12 @@ const styles = StyleSheet.create({
   },
   approvedGroupName: {
     marginTop: 0,
+  },
+  approvedDescription: {
+    color: AUTH_COLORS.body,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 2,
   },
   pendingDescription: {
     color: AUTH_COLORS.body,

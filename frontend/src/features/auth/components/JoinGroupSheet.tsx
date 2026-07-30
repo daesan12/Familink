@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState} from 'react';
+import {useEffect, useState} from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,25 +7,27 @@ import {
 } from 'react-native';
 
 import {AUTH_COLORS} from '../theme';
-import {AnimatedPressable} from './AnimatedPressable';
 import {GroupBottomSheet} from './GroupBottomSheet';
 import {PrimaryButton} from './PrimaryButton';
 
 interface JoinGroupSheetProps {
   onDismiss: () => void;
-  onSubmit: (inviteCode: string) => void;
+  onSubmit: (inviteCode: string) => Promise<void> | void;
   visible: boolean;
 }
 
 const INVITE_CODE_LENGTH = 6;
+const JOIN_REQUEST_ERROR_MESSAGE =
+  '초대 코드를 확인하고 다시 시도해주세요.';
 
 export function JoinGroupSheet({
   onDismiss,
   onSubmit,
   visible,
 }: JoinGroupSheetProps) {
-  const inputRef = useRef<TextInput>(null);
   const [inviteCode, setInviteCode] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) {
@@ -33,9 +35,12 @@ export function JoinGroupSheet({
     }
 
     setInviteCode('');
+    setIsSubmitting(false);
+    setSubmitError(null);
   }, [visible]);
 
   const handleChangeText = (value: string) => {
+    setSubmitError(null);
     setInviteCode(
       value
         .toUpperCase()
@@ -44,13 +49,25 @@ export function JoinGroupSheet({
     );
   };
 
-  const handleSubmit = () => {
-    if (inviteCode.length !== INVITE_CODE_LENGTH) {
+  const handleSubmit = async () => {
+    if (
+      inviteCode.length !== INVITE_CODE_LENGTH ||
+      isSubmitting
+    ) {
       return;
     }
 
-    onSubmit(inviteCode);
-    onDismiss();
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      await onSubmit(inviteCode);
+      onDismiss();
+    } catch {
+      setSubmitError(JOIN_REQUEST_ERROR_MESSAGE);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -63,14 +80,11 @@ export function JoinGroupSheet({
         가족에게 받은 6자리 코드를 입력해주세요
       </Text>
 
-      <AnimatedPressable
-        accessibilityLabel="초대 코드 입력칸 열기"
-        accessibilityRole="button"
-        containerStyle={styles.codeButton}
-        onPress={() => inputRef.current?.focus()}>
+      <View style={styles.codeInputArea}>
         <View pointerEvents="none" style={styles.codeRow}>
           {Array.from({length: INVITE_CODE_LENGTH}, (_, index) => {
             const character = inviteCode[index] ?? '';
+            const filled = character.length > 0;
             const active =
               inviteCode.length === index ||
               (inviteCode.length === INVITE_CODE_LENGTH &&
@@ -79,32 +93,51 @@ export function JoinGroupSheet({
             return (
               <View
                 key={`invite-code-${index}`}
-                style={[styles.codeCell, active && styles.activeCodeCell]}>
+                style={[
+                  styles.codeCell,
+                  filled && styles.filledCodeCell,
+                  active && styles.activeCodeCell,
+                  submitError !== null && styles.errorCodeCell,
+                ]}
+                testID={`invite-code-cell-${index}`}>
                 <Text style={styles.codeCharacter}>{character}</Text>
               </View>
             );
           })}
         </View>
-      </AnimatedPressable>
 
-      <TextInput
-        accessibilityLabel="6자리 초대 코드"
-        autoCapitalize="characters"
-        autoCorrect={false}
-        autoFocus
-        caretHidden
-        onChangeText={handleChangeText}
-        onSubmitEditing={handleSubmit}
-        ref={inputRef}
-        returnKeyType="done"
-        style={styles.hiddenInput}
-        value={inviteCode}
-      />
+        <TextInput
+          accessibilityLabel="6자리 초대 코드"
+          autoCapitalize="characters"
+          autoCorrect={false}
+          autoFocus
+          caretHidden
+          editable={!isSubmitting}
+          keyboardType="visible-password"
+          onChangeText={handleChangeText}
+          onSubmitEditing={handleSubmit}
+          returnKeyType="done"
+          selectionColor="transparent"
+          style={styles.codeInput}
+          value={inviteCode}
+        />
+      </View>
+
+      <View style={styles.feedback}>
+        {submitError !== null && (
+          <Text
+            accessibilityLiveRegion="polite"
+            style={styles.errorText}>
+            {submitError}
+          </Text>
+        )}
+      </View>
 
       <View style={styles.submit}>
         <PrimaryButton
           disabled={inviteCode.length !== INVITE_CODE_LENGTH}
           label="참여 요청 보내기"
+          loading={isSubmitting}
           onPress={handleSubmit}
           tone="lavender"
         />
@@ -128,8 +161,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-  codeButton: {
+  codeInputArea: {
     marginTop: 36,
+    position: 'relative',
     width: '100%',
   },
   codeRow: {
@@ -151,19 +185,42 @@ const styles = StyleSheet.create({
   activeCodeCell: {
     borderColor: AUTH_COLORS.primarySoft,
   },
+  filledCodeCell: {
+    backgroundColor: AUTH_COLORS.primarySoft,
+    borderColor: AUTH_COLORS.primarySoft,
+  },
+  errorCodeCell: {
+    borderColor: AUTH_COLORS.error,
+  },
   codeCharacter: {
     color: '#13141C',
     fontSize: 23,
     fontVariant: ['tabular-nums'],
     fontWeight: '700',
   },
-  hiddenInput: {
-    height: 1,
+  codeInput: {
+    backgroundColor: 'transparent',
+    bottom: 0,
+    color: 'transparent',
+    fontSize: 1,
+    left: 0,
     opacity: 0.01,
     position: 'absolute',
-    width: 1,
+    right: 0,
+    top: 0,
+    zIndex: 1,
+  },
+  feedback: {
+    minHeight: 20,
+    marginTop: 10,
+  },
+  errorText: {
+    color: AUTH_COLORS.error,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
   },
   submit: {
-    marginTop: 84,
+    marginTop: 54,
   },
 });

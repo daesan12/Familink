@@ -44,7 +44,9 @@ interface AppProps {
   initialShellRoute?: AppRoute;
   onCreateGroup?: (input: CreateGroupInput) => FamilyGroup | void;
   onGroupChange?: (groupId: string) => void;
-  onJoinGroup?: (inviteCode: string) => PendingJoinRequest | void;
+  onJoinGroup?: (
+    inviteCode: string
+  ) => PendingJoinRequest | Promise<PendingJoinRequest>;
   onOpenActiveGroup?: (activeGroupId: string) => void;
   screens?: AppScreenRegistry;
 }
@@ -143,14 +145,12 @@ export default function App({
     setRoute("appShell");
   };
 
-  const handleJoinGroup = (inviteCode: string) => {
-    const providedRequest = onJoinGroup?.(inviteCode);
-    const request: PendingJoinRequest = providedRequest ?? {
-      groupName: "우리 가족",
-      id: `join-request-${inviteCode}`,
-      status: "PENDING_ADMIN",
-    };
+  const handleJoinGroup = async (inviteCode: string) => {
+    if (onJoinGroup === undefined) {
+      throw new Error("Group join gateway is unavailable");
+    }
 
+    const request = await onJoinGroup(inviteCode);
     setJoinRequests((current) => {
       const withoutDuplicate = current.filter((item) => item.id !== request.id);
       return [...withoutDuplicate, request];
