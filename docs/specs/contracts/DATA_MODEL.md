@@ -84,6 +84,8 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   `target_member_id -> group_members.id`
 - 컬럼: `alias VARCHAR(10)`, `created_at`, `updated_at` NOT NULL
 - Unique: `(group_id, owner_member_id, target_member_id)`
+- CHECK: `owner_member_id <> target_member_id` — 자기 자신에게는 별칭을
+  붙일 수 없다. 본인 표시 이름을 바꾸려면 별칭이 아니라 이름을 수정한다.
 
 ### `member_interests`
 
@@ -151,7 +153,8 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   `creator_member_id -> group_members.id`,
   `last_editor_member_id -> group_members.id`
 - 컬럼: `title VARCHAR(20)`, `event_date DATE`, `created_at`, `updated_at`
-  NOT NULL; `description VARCHAR(50) NULL`, `start_at NULL`, `end_at NULL`
+  NOT NULL; `description VARCHAR(50) NULL`, `start_at TIMESTAMPTZ NULL`,
+  `end_at TIMESTAMPTZ NULL`
 - 시간 쌍 CHECK:
   - 날짜 일정은 `start_at`, `end_at`이 모두 NULL이다.
   - 시간 일정은 두 값이 모두 존재하고 `end_at >= start_at`이다.
