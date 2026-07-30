@@ -51,7 +51,7 @@ class PostAnalysisPipelineIntegrationTest extends IntegrationTest {
 
 	private static final Instant STABLE_UPDATED_AT = Instant.parse("2026-07-29T00:00:00Z");
 	private static final String MEDIA_BASE_URL =
-		"https://s15p11b104-media.s3.ap-northeast-2.amazonaws.com/posts/";
+		"https://s15p11b104-media-580779787807-ap-northeast-2-an.s3.ap-northeast-2.amazonaws.com/posts/";
 	private static final AtomicLong VALUE_SEQUENCE = new AtomicLong();
 
 	@Autowired

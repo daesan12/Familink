@@ -13,7 +13,7 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 @Configuration
-@EnableConfigurationProperties(S3Properties.class)
+@EnableConfigurationProperties({S3Properties.class, MediaUploadProperties.class})
 public class S3Config {
 
 	@Bean(destroyMethod = "close")
