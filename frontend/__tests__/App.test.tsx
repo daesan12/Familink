@@ -265,7 +265,144 @@ test("새 그룹을 만들면 입력한 그룹으로 앱 셸에 진입한다", a
   ).toBeTruthy();
 });
 
-test("앱 셸에서 그룹 생성 화면을 열었다가 기존 앱 셸로 돌아온다", async () => {
+test("초대 코드 참여 요청을 보내면 승인 대기 카드를 표시한다", async () => {
+  const onJoinGroup = jest.fn().mockReturnValue({
+    groupName: "가족 소모임",
+    id: "request-family",
+    status: "PENDING_ADMIN",
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App initialRootRoute="groupOnboarding" onJoinGroup={onJoinGroup} />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+      })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "6자리 초대 코드" })
+      .props.onChangeText("fa12bc");
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "참여 요청 보내기" })
+      .props.onPress();
+  });
+
+  expect(onJoinGroup).toHaveBeenCalledWith("FA12BC");
+  expect(
+    renderer!.root.findByProps({ children: "가족 소모임" })
+  ).toBeTruthy();
+  expect(JSON.stringify(renderer!.toJSON())).toContain(
+    "관리자 승인을 기다리고 있어요"
+  );
+});
+
+test("초대 코드 참여 요청이 실패하면 입력창을 유지하고 대기 카드를 추가하지 않는다", async () => {
+  const onJoinGroup = jest
+    .fn()
+    .mockRejectedValue(new Error("invalid invite code"));
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App initialRootRoute="groupOnboarding" onJoinGroup={onJoinGroup} />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+      })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "6자리 초대 코드" })
+      .props.onChangeText("123456");
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "참여 요청 보내기" })
+      .props.onPress();
+  });
+
+  expect(
+    renderer!.root.findByProps({
+      children: "초대 코드를 확인하고 다시 시도해주세요.",
+    })
+  ).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({
+      accessibilityLabel: "6자리 초대 코드",
+    }).props.value
+  ).toBe("123456");
+  expect(renderer!.root.findAllByProps({ children: "우리 가족" })).toHaveLength(
+    0
+  );
+  expect(JSON.stringify(renderer!.toJSON())).toContain(
+    "아직 참가한 그룹이 없어요"
+  );
+});
+
+test("가입 게이트웨이가 없으면 코드 오류 대신 후속 연동을 안내한다", async () => {
+  const alertSpy = jest.spyOn(Alert, "alert");
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App initialRootRoute="groupOnboarding" />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+      })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "6자리 초대 코드" })
+      .props.onChangeText("123456");
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "참여 요청 보내기" })
+      .props.onPress();
+  });
+
+  expect(alertSpy).toHaveBeenCalledWith(
+    "코드로 참여",
+    "후속 작업에서 연결될 화면입니다."
+  );
+  expect(
+    renderer!.root.findAllByProps({
+      children: "초대 코드를 확인하고 다시 시도해주세요.",
+    })
+  ).toHaveLength(0);
+  expect(
+    renderer!.root.findAllByProps({
+      accessibilityLabel: "6자리 초대 코드",
+    })
+  ).toHaveLength(0);
+  alertSpy.mockRestore();
+});
+
+test("앱 셸에서 그룹 연결 화면을 열었다가 기존 앱 셸로 돌아온다", async () => {
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(() => {
@@ -276,8 +413,11 @@ test("앱 셸에서 그룹 생성 화면을 열었다가 기존 앱 셸로 돌�
   mountedRenderers.push(renderer!);
 
   await TestRenderer.act(() => {
-    renderer!.root.findByType(AppShell).props.onCreateGroup();
+    renderer!.root.findByType(AppShell).props.onJoinGroup();
   });
+  expect(
+    renderer!.root.findByProps({ children: "가족과\n연결해볼까요?" })
+  ).toBeTruthy();
 
   await TestRenderer.act(() => {
     renderer!.root
@@ -289,6 +429,48 @@ test("앱 셸에서 그룹 생성 화면을 열었다가 기존 앱 셸로 돌�
   expect(
     renderer!.root.findByProps({ children: "참여 중인 그룹이 없어요" })
   ).toBeTruthy();
+});
+
+test("승인된 피보호자는 지정된 역할로 그룹에 진입한다", async () => {
+  const groupStore = {
+    load: jest.fn().mockResolvedValue(null),
+    save: jest.fn().mockResolvedValue(undefined),
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        groupStore={groupStore}
+        initialJoinRequests={[
+          {
+            groupId: "approved-care-group",
+            groupName: "돌봄 가족",
+            id: "approved-request",
+            role: "careReceiver",
+            status: "APPROVED",
+          },
+        ]}
+        initialRootRoute="groupOnboarding"
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(JSON.stringify(renderer!.toJSON())).toContain(
+    "가입이 승인되었어요"
+  );
+  expect(JSON.stringify(renderer!.toJSON())).toContain("눌러서 입장하기");
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "돌봄 가족 열기" })
+      .props.onPress();
+  });
+
+  expect(renderer!.root.findByProps({ children: "돌봄 가족" })).toBeTruthy();
+  expect(renderer!.root.findAllByProps({ children: "리포트" })).toHaveLength(0);
+  expect(groupStore.save).toHaveBeenCalledWith("approved-care-group");
 });
 
 test("로그인 응답의 현재 회원 이름을 A-10 인사말에 표시한다", async () => {
