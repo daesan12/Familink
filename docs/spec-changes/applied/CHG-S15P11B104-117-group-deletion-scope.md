@@ -1,12 +1,12 @@
 # 그룹 삭제의 데이터 삭제 범위와 순서 확정
 
-- 상태: 제안
+- 상태: 승인·반영 완료
 - 제안자: 이경호
 - 작성일: 2026-07-29
 - 차단 변경: 예
 - 영향 스펙·계약: `contracts/DATA_MODEL.md` 「삭제 정책」·「미결정」, `contracts/API.md` `API-GROUPS-014`, `domains/GROUPS_AND_MEMBERSHIP.md` 「미결정 사항」
 - 관련 작업: S15P11B104-117
-- 관련 제안: [`CHG-S15P11B104-116-withdrawal-side-effects.md`](./CHG-S15P11B104-116-withdrawal-side-effects.md)
+- 관련 제안: [`CHG-S15P11B104-116-withdrawal-side-effects.md`](../pending/CHG-S15P11B104-116-withdrawal-side-effects.md)
 
 ## 기존 내용
 
@@ -54,18 +54,26 @@
 - 영향 도메인: 그룹·멤버십의 그룹 삭제. 피드, 일정, 통화, 리포트, 카네이션, 알림의 데이터 수명주기
 - 영향 계약: `contracts/DATA_MODEL.md` 「삭제 정책」에 그룹 삭제 범위와 순서를 추가하고 「미결정」에서 해당 항목을 제거한다. `domains/GROUPS_AND_MEMBERSHIP.md` 「미결정 사항」의 외래키 처리 항목도 함께 정리한다. `API-GROUPS-014`의 Method·Path·요청·응답은 변경하지 않는다.
 - 영향 화면: 확인 필요. 삭제 확인 화면에 "그룹의 게시글·일정·리포트가 함께 삭제된다"는 안내가 필요하다.
-- 검증 범위: `GroupApiTest`에서 게시글과 가입 요청이 남아 있는 단독 관리자 그룹의 삭제가 `204`로 성공하고 관련 행이 모두 제거되는 것을 검증했다. 일정·통화·리포트·카네이션은 해당 도메인이 아직 구현되지 않아 삭제문 실행만 확인했고 데이터가 있는 상태의 검증은 각 도메인 구현 시점에 필요하다.
+- 검증 범위: `GroupApiTest`에서 게시글과 가입 요청이 남아 있는 단독 관리자 그룹의 삭제가 `204`로 성공하고 관련 행이 모두 제거되는 것을 검증했다. FK 가드 테스트에서는 일정·통화·리포트·카네이션을 포함한 승인된 모든 삭제 경로에 실제 데이터를 넣고 `GroupService.delete` 호출 후 정리 결과를 검증했다.
 
 ## 확인이 필요한 질문
 
-- 삭제 대신 보관(소프트 삭제) 정책을 도입할지. 도입한다면 `family_groups`에 상태 컬럼과 마이그레이션이 필요하다.
-- 삭제된 그룹을 참조하던 알림을 사용자에게 계속 노출할지. 현재는 `group_id`가 NULL이 된 상태로 남는다.
-- 그룹 범위 삭제를 애플리케이션 삭제문으로 유지할지, 스키마에 `ON DELETE CASCADE`를 추가해 DB에 위임할지.
+- 없음. 현행 애플리케이션 명시적 삭제 방식과 기존 FK의
+  `NO ACTION`·`CASCADE`·`SET NULL` 정책을 유지한다.
 
 ## 결정 및 반영
 
-- 결정:
-- 결정자:
-- 결정일:
-- 반영 문서:
+- 결정: 전체 승인. 그룹 범위 데이터는 현행 Spring Boot 명시적 삭제 순서를
+  유지하고, 기존 FK의 `NO ACTION`·`ON DELETE CASCADE`·
+  `ON DELETE SET NULL` 정책을 변경하지 않는다. 실제 PostgreSQL·Flyway
+  스키마의 `information_schema`를 조회하는 가드 테스트에서 승인된 FK 목록,
+  `delete_rule`과 정리 방식을 검증하며, 미등록 FK 추가 또는 정책 변경 시
+  실패시킨다.
+- 결정자: 사용자
+- 결정일: 2026-07-30
+- 반영 문서: `docs/specs/domains/GROUPS_AND_MEMBERSHIP.md`,
+  `docs/specs/contracts/DATA_MODEL.md`,
+  `backend/src/test/java/com/ssafy/s15p11b104/domain/group/GroupDeletionForeignKeyContractTest.java`
 - 반영 커밋:
+- 검증: PostgreSQL 16 Testcontainers·Flyway 기준 FK 가드 테스트 3건과
+  기존 그룹 API 통합 테스트 18건 통과
