@@ -85,6 +85,7 @@ export function FeedScreen({
   onDeleteComment,
   onFullscreenChange,
   onHeaderVisibilityChange,
+  onOpenNotifications,
   onSubmitPost,
   onUpdateComment,
   openPostId,
@@ -370,6 +371,7 @@ export function FeedScreen({
             onDeleteComment?.(input);
           }}
           onMenuPress={() => setMenuPostId(selectedPost.id)}
+          onOpenNotifications={onOpenNotifications}
           onScrollBeginDrag={closeReactionPicker}
           onToggleReactionPicker={handleToggleReactionPicker}
           onUpdateComment={input => {

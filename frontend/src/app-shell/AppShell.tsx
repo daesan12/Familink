@@ -255,6 +255,7 @@ export function AppShell({
             onFullscreenChange={setIsScreenFullscreen}
             onHeaderVisibilityChange={setIsScreenHeaderVisible}
             onNotificationRead={handleNotificationRead}
+            onOpenNotifications={() => setActiveRoute('notifications')}
             onOpenPost={handleOpenPost}
             openPostId={openPostId}
             openPostRequestId={openPostRequestId}
