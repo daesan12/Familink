@@ -1,4 +1,5 @@
 import {
+  canSubmitLogin,
   canSubmitSignup,
   doPasswordsMatch,
   isBirthDateNotInFuture,
@@ -34,6 +35,21 @@ describe('signup validation', () => {
   it('requires matching passwords', () => {
     expect(doPasswordsMatch('abcdefgh', 'abcdefgh')).toBe(true);
     expect(doPasswordsMatch('abcdefgh', 'abcdefgi')).toBe(false);
+  });
+
+  it('enables login only when both credentials are valid', () => {
+    expect(
+      canSubmitLogin({
+        loginId: 'hello1',
+        password: 'abcd1234',
+      }),
+    ).toBe(true);
+    expect(
+      canSubmitLogin({
+        loginId: 'short',
+        password: 'invalid!',
+      }),
+    ).toBe(false);
   });
 
   it('rejects future and invalid calendar dates', () => {

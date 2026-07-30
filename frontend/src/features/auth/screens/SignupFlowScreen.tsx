@@ -1,9 +1,7 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useLayoutEffect, useRef, useState} from 'react';
+import {useRef, useState} from 'react';
 import {
-  AccessibilityInfo,
   Animated,
-  Easing,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -13,7 +11,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import type {ImageStyle, StyleProp, ViewStyle} from 'react-native';
 import {launchImageLibrary} from 'react-native-image-picker';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
@@ -23,10 +20,12 @@ import {
 } from '../api/mockSignupApi';
 import {AnimatedPressable} from '../components/AnimatedPressable';
 import {DatePickerSheet} from '../components/DatePickerSheet';
+import {FloatingIllustration} from '../components/FloatingIllustration';
 import {FormField} from '../components/FormField';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {StepHeader} from '../components/StepHeader';
 import {ValidationMessage} from '../components/ValidationMessage';
+import {useScreenEntrance} from '../hooks/useScreenEntrance';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 import type {
   Gender,
@@ -44,13 +43,11 @@ import {
 
 const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
 const PASSWORD_ILLUSTRATION = require('../../../assets/images/password-setup.png');
-const ILLUSTRATION_SHADOW = require('../../../assets/images/illustration-shadow.png');
 const BIRTHDATE_ILLUSTRATION = require('../../../assets/images/birthdate-calendar.png');
 const MALE_ILLUSTRATION = require('../../../assets/images/gender-male.png');
 const FEMALE_ILLUSTRATION = require('../../../assets/images/gender-female.png');
 const COMPLETE_ILLUSTRATION = require('../../../assets/images/signup-complete-family.png');
 const FAMILINK_LOGO = require('../../../assets/images/familink-logo.png');
-
 const INITIAL_DRAFT: SignupDraft = {
   profileImageUri: null,
   name: '',
@@ -78,37 +75,7 @@ export function SignupFlowScreen({
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const loginIdRef = useRef(draft.loginId);
-  const [reduceMotion, setReduceMotion] = useState(false);
-  const opacity = useRef(new Animated.Value(1)).current;
-  const translateY = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReduceMotion,
-    );
-    return () => subscription.remove();
-  }, []);
-
-  useLayoutEffect(() => {
-    opacity.setValue(0);
-    translateY.setValue(reduceMotion ? 0 : 6);
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: reduceMotion ? 140 : 200,
-        easing: Easing.bezier(0.23, 1, 0.32, 1),
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: reduceMotion ? 0 : 200,
-        easing: Easing.bezier(0.23, 1, 0.32, 1),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [opacity, reduceMotion, step, translateY]);
+  const screenEntranceStyle = useScreenEntrance(step);
 
   const updateDraft = <Key extends keyof SignupDraft>(
     key: Key,
@@ -195,7 +162,7 @@ export function SignupFlowScreen({
         <Animated.View
           style={[
             styles.flex,
-            {opacity, transform: [{translateY}]},
+            screenEntranceStyle,
           ]}>
           {step === 1 && (
             <BasicInfoStep
@@ -627,107 +594,6 @@ function CompleteStep({onBack, onComplete}: CompleteStepProps) {
   );
 }
 
-interface FloatingIllustrationProps {
-  accessibilityIgnoresInvertColors?: boolean;
-  containerStyle?: StyleProp<ViewStyle>;
-  groundShadowStyle: StyleProp<ImageStyle>;
-  source: number;
-  style: StyleProp<ImageStyle>;
-}
-
-function FloatingIllustration({
-  accessibilityIgnoresInvertColors,
-  containerStyle,
-  groundShadowStyle,
-  source,
-  style,
-}: FloatingIllustrationProps) {
-  const floatY = useRef(new Animated.Value(0)).current;
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReduceMotion,
-    );
-
-    return () => subscription.remove();
-  }, []);
-
-  useEffect(() => {
-    if (reduceMotion) {
-      floatY.stopAnimation();
-      floatY.setValue(0);
-      return;
-    }
-
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatY, {
-          duration: 1600,
-          easing: Easing.inOut(Easing.sin),
-          toValue: 1,
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatY, {
-          duration: 1600,
-          easing: Easing.inOut(Easing.sin),
-          toValue: 0,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-
-    animation.start();
-    return () => animation.stop();
-  }, [floatY, reduceMotion]);
-
-  const shadowOpacity = floatY.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.9, 0.65],
-  });
-  const shadowScale = floatY.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0.88],
-  });
-  const animatedShadowStyle = {
-    opacity: reduceMotion ? 0.82 : shadowOpacity,
-    transform: [{scaleX: shadowScale}],
-  };
-  const translateY = floatY.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -9],
-  });
-  const rotate = floatY.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['-0.6deg', '0.6deg'],
-  });
-  const animatedIllustrationStyle = {
-    transform: [{translateY}, {rotate}],
-  };
-
-  return (
-    <View style={[styles.floatingIllustration, containerStyle]}>
-      <Animated.Image
-        resizeMode="stretch"
-        source={ILLUSTRATION_SHADOW}
-        style={[groundShadowStyle, animatedShadowStyle]}
-      />
-      <Animated.View style={animatedIllustrationStyle}>
-        <Image
-          accessibilityIgnoresInvertColors={
-            accessibilityIgnoresInvertColors
-          }
-          resizeMode="contain"
-          source={source}
-          style={style}
-        />
-      </Animated.View>
-    </View>
-  );
-}
-
 interface ArtworkStageProps {
   accessibilityIgnoresInvertColors?: boolean;
   source: number;
@@ -866,13 +732,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     position: 'relative',
     width: 240,
-  },
-  floatingIllustration: {
-    alignItems: 'center',
-    height: '100%',
-    justifyContent: 'center',
-    position: 'relative',
-    width: '100%',
   },
   artworkGroundShadow: {
     bottom: 25,

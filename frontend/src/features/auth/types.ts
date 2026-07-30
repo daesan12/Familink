@@ -17,3 +17,19 @@ export type LoginIdAvailability =
   | 'checking'
   | 'available'
   | 'duplicated';
+
+export interface LoginCredentials {
+  loginId: string;
+  password: string;
+}
+
+export interface AuthenticatedUser {
+  activeGroupId: string | null;
+  id: string;
+  name: string;
+}
+
+export interface AuthGateway {
+  login(credentials: LoginCredentials): Promise<AuthenticatedUser>;
+  logout(): Promise<void>;
+}

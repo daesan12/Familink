@@ -7,24 +7,37 @@ import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 const FAMILINK_LOGO = require('../../../assets/images/familink-logo.png');
 
 interface WelcomeScreenProps {
+  onStartLogin: () => void;
   onStartSignup: () => void;
 }
 
-export function WelcomeScreen({onStartSignup}: WelcomeScreenProps) {
+export function WelcomeScreen({
+  onStartLogin,
+  onStartSignup,
+}: WelcomeScreenProps) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.content}>
-        <Image
-          accessibilityLabel="Familink"
-          resizeMode="contain"
-          source={FAMILINK_LOGO}
-          style={styles.logo}
-        />
+        <View style={styles.logoStage}>
+          <Image
+            accessibilityLabel="Familink"
+            resizeMode="contain"
+            source={FAMILINK_LOGO}
+            style={styles.logo}
+          />
+        </View>
         <View style={styles.actions}>
-          <View accessibilityState={{disabled: true}} style={styles.loginButton}>
-            <Text style={styles.loginText}>로그인</Text>
-          </View>
           <AnimatedPressable
+            accessibilityLabel="로그인 시작"
+            accessibilityRole="button"
+            containerStyle={styles.loginButtonContainer}
+            onPress={onStartLogin}>
+            <View style={styles.loginButton}>
+              <Text style={styles.loginText}>로그인</Text>
+            </View>
+          </AnimatedPressable>
+          <AnimatedPressable
+            accessibilityLabel="회원가입 시작"
             accessibilityRole="button"
             hitSlop={8}
             onPress={onStartSignup}>
@@ -50,8 +63,14 @@ const styles = StyleSheet.create({
     paddingTop: 130,
   },
   logo: {
-    height: 240,
-    width: 240,
+    height: 220,
+    width: 220,
+  },
+  logoStage: {
+    alignItems: 'center',
+    height: 260,
+    justifyContent: 'center',
+    width: 260,
   },
   actions: {
     alignItems: 'center',
@@ -65,7 +84,9 @@ const styles = StyleSheet.create({
     boxShadow: '0px 7px 16px rgba(102, 83, 188, 0.12)',
     height: AUTH_LAYOUT.buttonHeight,
     justifyContent: 'center',
-    opacity: 0.72,
+    width: '100%',
+  },
+  loginButtonContainer: {
     width: '100%',
   },
   loginText: {

@@ -1,4 +1,4 @@
-import type {SignupDraft} from './types';
+import type {LoginCredentials, SignupDraft} from './types';
 
 export const SIGNUP_LIMITS = {
   nameMin: 2,
@@ -75,5 +75,12 @@ export function canSubmitSignup(draft: SignupDraft): boolean {
     doPasswordsMatch(draft.password, draft.passwordConfirmation) &&
     isBirthDateNotInFuture(draft.birthDate) &&
     draft.gender !== null
+  );
+}
+
+export function canSubmitLogin(credentials: LoginCredentials): boolean {
+  return (
+    isValidLoginId(credentials.loginId) &&
+    isValidPassword(credentials.password)
   );
 }
