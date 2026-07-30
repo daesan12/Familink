@@ -8,20 +8,38 @@ import {
   CreateGroupSheet,
   type CreateGroupInput,
 } from '../components/CreateGroupSheet';
+import {JoinGroupSheet} from '../components/JoinGroupSheet';
 import {useScreenEntrance} from '../hooks/useScreenEntrance';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 
 const FAMILINK_LOGO = require('../../../assets/images/familink-logo.png');
 
-export interface PendingJoinRequest {
+interface JoinRequestBase {
   groupName: string;
   id: string;
 }
 
+export interface ApprovedJoinRequest extends JoinRequestBase {
+  groupId: string;
+  role: CreateGroupInput['role'];
+  status: 'APPROVED';
+}
+
+interface UnapprovedJoinRequest extends JoinRequestBase {
+  groupId?: string;
+  role?: CreateGroupInput['role'];
+  status?: 'PENDING_ADMIN' | 'REJECTED';
+}
+
+export type PendingJoinRequest =
+  | ApprovedJoinRequest
+  | UnapprovedJoinRequest;
+
 interface GroupOnboardingScreenProps {
   onBack: () => void;
   onCreateGroup: (input: CreateGroupInput) => void;
-  onJoinByCode: () => void;
+  onJoinByCode: (inviteCode: string) => void;
+  onOpenApprovedGroup?: (request: ApprovedJoinRequest) => void;
   pendingRequests: readonly PendingJoinRequest[];
 }
 
@@ -29,10 +47,18 @@ export function GroupOnboardingScreen({
   onBack,
   onCreateGroup,
   onJoinByCode,
+  onOpenApprovedGroup,
   pendingRequests,
 }: GroupOnboardingScreenProps) {
   const entranceStyle = useScreenEntrance('group-onboarding');
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
+  const [joinGroupVisible, setJoinGroupVisible] = useState(false);
+  const visibleRequests = pendingRequests.filter(
+    request => request.status !== 'REJECTED',
+  );
+  const hasApprovedRequest = visibleRequests.some(
+    request => request.status === 'APPROVED',
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -74,12 +100,14 @@ export function GroupOnboardingScreen({
             <GroupActionCard
               description="받은 코드로 기존 그룹에 들어가요"
               label="코드로 참여"
-              onPress={onJoinByCode}
+              onPress={() => setJoinGroupVisible(true)}
             />
           </View>
 
-          <Text style={styles.pendingTitle}>승인 요청 대기</Text>
-          {pendingRequests.length === 0 ? (
+          {!hasApprovedRequest && (
+            <Text style={styles.pendingTitle}>승인 요청 대기</Text>
+          )}
+          {visibleRequests.length === 0 ? (
             <View
               accessibilityLiveRegion="polite"
               style={styles.emptyState}>
@@ -89,22 +117,28 @@ export function GroupOnboardingScreen({
               </Text>
             </View>
           ) : (
-            <View style={styles.pendingList}>
-              {pendingRequests.map(request => (
-                <View key={request.id} style={styles.pendingCard}>
-                  <View style={styles.pendingCopy}>
-                    <Text style={styles.pendingGroupName}>
-                      {request.groupName}
-                    </Text>
-                    <Text style={styles.pendingDescription}>
-                      관리자 승인을 기다리고 있어요
-                    </Text>
-                  </View>
-                  <View style={styles.pendingBadge}>
-                    <Text style={styles.pendingBadgeText}>대기 중</Text>
-                  </View>
-                </View>
-              ))}
+            <View
+              style={[
+                styles.pendingList,
+                hasApprovedRequest && styles.approvedList,
+              ]}>
+              {visibleRequests.map(request => {
+                const approved = request.status === 'APPROVED';
+
+                return (
+                  <JoinRequestCard
+                    approved={approved}
+                    key={request.id}
+                    onPress={
+                      request.status === 'APPROVED' &&
+                      onOpenApprovedGroup !== undefined
+                        ? () => onOpenApprovedGroup(request)
+                        : undefined
+                    }
+                    request={request}
+                  />
+                );
+              })}
             </View>
           )}
         </ScrollView>
@@ -113,6 +147,11 @@ export function GroupOnboardingScreen({
           onDismiss={() => setCreateGroupVisible(false)}
           onSubmit={onCreateGroup}
           visible={createGroupVisible}
+        />
+        <JoinGroupSheet
+          onDismiss={() => setJoinGroupVisible(false)}
+          onSubmit={onJoinByCode}
+          visible={joinGroupVisible}
         />
       </Animated.View>
     </SafeAreaView>
@@ -149,6 +188,59 @@ function GroupActionCard({
           />
         </View>
       </View>
+    </AnimatedPressable>
+  );
+}
+
+interface JoinRequestCardProps {
+  approved: boolean;
+  onPress?: () => void;
+  request: PendingJoinRequest;
+}
+
+function JoinRequestCard({
+  approved,
+  onPress,
+  request,
+}: JoinRequestCardProps) {
+  const content = (
+    <View style={[styles.pendingCard, approved && styles.approvedCard]}>
+      <View style={[styles.requestAvatar, approved && styles.approvedAvatar]} />
+      <View style={styles.pendingCopy}>
+        <Text
+          style={[
+            styles.pendingGroupName,
+            approved && styles.approvedGroupName,
+          ]}>
+          {request.groupName}
+        </Text>
+        {!approved && (
+          <Text style={styles.pendingDescription}>
+            참여 요청을 보냈어요{'\n'}
+            관리자 승인을 기다리고 있어요
+          </Text>
+        )}
+      </View>
+      <MaterialDesignIcons
+        color={approved ? '#FFE273' : AUTH_COLORS.body}
+        name="chevron-right"
+        size={34}
+      />
+    </View>
+  );
+
+  if (onPress === undefined) {
+    return content;
+  }
+
+  return (
+    <AnimatedPressable
+      accessibilityHint="승인된 가족 그룹으로 이동합니다"
+      accessibilityLabel={`${request.groupName} 열기`}
+      accessibilityRole="button"
+      containerStyle={styles.pendingCardContainer}
+      onPress={onPress}>
+      {content}
     </AnimatedPressable>
   );
 }
@@ -206,6 +298,7 @@ const styles = StyleSheet.create({
   optionCard: {
     alignItems: 'center',
     backgroundColor: AUTH_COLORS.surfaceTint,
+    borderCurve: 'continuous',
     borderRadius: 20,
     flexDirection: 'row',
     height: 129,
@@ -226,6 +319,7 @@ const styles = StyleSheet.create({
   optionArrow: {
     alignItems: 'center',
     backgroundColor: AUTH_COLORS.primarySoft,
+    borderCurve: 'continuous',
     borderRadius: 23,
     height: 46,
     justifyContent: 'center',
@@ -253,40 +347,51 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 18,
   },
+  approvedList: {
+    marginTop: 58,
+  },
+  pendingCardContainer: {
+    width: '100%',
+  },
   pendingCard: {
     alignItems: 'center',
-    backgroundColor: AUTH_COLORS.surface,
-    borderColor: AUTH_COLORS.hairline,
+    backgroundColor: '#FAFAFA',
+    borderCurve: 'continuous',
     borderRadius: 18,
-    borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    minHeight: 88,
-    paddingHorizontal: 18,
+    minHeight: 110,
+    paddingHorizontal: 16,
+  },
+  approvedCard: {
+    backgroundColor: AUTH_COLORS.action,
+  },
+  requestAvatar: {
+    backgroundColor: '#D9D9D9',
+    borderCurve: 'continuous',
+    borderRadius: 30,
+    height: 59,
+    marginRight: 16,
+    width: 59,
+  },
+  approvedAvatar: {
+    backgroundColor: '#FFEB98',
   },
   pendingCopy: {
     flex: 1,
   },
   pendingGroupName: {
     color: AUTH_COLORS.body,
-    fontSize: 17,
+    fontSize: 19,
     fontWeight: '700',
+    lineHeight: 26,
+  },
+  approvedGroupName: {
+    marginTop: 0,
   },
   pendingDescription: {
-    color: AUTH_COLORS.muted,
-    fontSize: 13,
-    marginTop: 5,
-  },
-  pendingBadge: {
-    backgroundColor: AUTH_COLORS.primarySoft,
-    borderRadius: 14,
-    marginLeft: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  pendingBadgeText: {
-    color: AUTH_COLORS.primaryDeep,
-    fontSize: 12,
-    fontWeight: '700',
+    color: AUTH_COLORS.body,
+    fontSize: 14,
+    lineHeight: 20,
   },
 });

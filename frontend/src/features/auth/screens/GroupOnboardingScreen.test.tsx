@@ -38,6 +38,7 @@ test('가입 승인 대기 요청이 있으면 대기 카드를 표시한다', a
           {
             groupName: '우리 가족',
             id: 'request-1',
+            status: 'PENDING_ADMIN',
           },
         ]}
       />,
@@ -45,12 +46,9 @@ test('가입 승인 대기 요청이 있으면 대기 카드를 표시한다', a
   });
 
   expect(renderer!.root.findByProps({children: '우리 가족'})).toBeTruthy();
-  expect(
-    renderer!.root.findByProps({
-      children: '관리자 승인을 기다리고 있어요',
-    }),
-  ).toBeTruthy();
-  expect(renderer!.root.findByProps({children: '대기 중'})).toBeTruthy();
+  expect(JSON.stringify(renderer!.toJSON())).toContain(
+    '관리자 승인을 기다리고 있어요',
+  );
 });
 
 test('새 그룹 이름과 역할을 입력해 생성 요청을 전달한다', async () => {
@@ -98,4 +96,77 @@ test('새 그룹 이름과 역할을 입력해 생성 요청을 전달한다', a
     name: '행복한 우리집',
     role: 'careReceiver',
   });
+});
+
+test('초대 코드를 영문 대문자와 숫자 6자리로 정리해 전달한다', async () => {
+  const onJoinByCode = jest.fn();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupOnboardingScreen
+        onBack={jest.fn()}
+        onCreateGroup={jest.fn()}
+        onJoinByCode={onJoinByCode}
+        pendingRequests={[]}
+      />,
+    );
+  });
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: '받은 코드로 기존 그룹에 들어가요',
+      })
+      .props.onPress();
+  });
+
+  const inviteCodeInput = renderer!.root.findByProps({
+    accessibilityLabel: '6자리 초대 코드',
+  });
+  expect(inviteCodeInput.props.maxLength).toBeUndefined();
+
+  await TestRenderer.act(() => {
+    inviteCodeInput.props.onChangeText('ab-12c3');
+  });
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '참여 요청 보내기'})
+      .props.onPress();
+  });
+
+  expect(onJoinByCode).toHaveBeenCalledWith('AB12C3');
+});
+
+test('승인된 그룹 카드를 누르면 해당 그룹 진입을 요청한다', async () => {
+  const onOpenApprovedGroup = jest.fn();
+  const request = {
+    groupId: 'group-1',
+    groupName: '우리 가족',
+    id: 'request-1',
+    role: 'careReceiver' as const,
+    status: 'APPROVED' as const,
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupOnboardingScreen
+        onBack={jest.fn()}
+        onCreateGroup={jest.fn()}
+        onJoinByCode={jest.fn()}
+        onOpenApprovedGroup={onOpenApprovedGroup}
+        pendingRequests={[request]}
+      />,
+    );
+  });
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '우리 가족 열기'})
+      .props.onPress();
+  });
+
+  expect(onOpenApprovedGroup).toHaveBeenCalledWith(request);
 });

@@ -10,9 +10,13 @@ import type {
   FamilyGroup,
 } from "./src/app-shell";
 import { mockAuthGateway } from "./src/features/auth/api/mockAuthGateway";
-import type { CreateGroupInput } from "./src/features/auth/components/CreateGroupSheet";
 import { LoginBottomSheet } from "./src/features/auth/components/LoginBottomSheet";
-import { GroupOnboardingScreen } from "./src/features/auth/screens/GroupOnboardingScreen";
+import type { CreateGroupInput } from "./src/features/auth/components/CreateGroupSheet";
+import {
+  type ApprovedJoinRequest,
+  GroupOnboardingScreen,
+  type PendingJoinRequest,
+} from "./src/features/auth/screens/GroupOnboardingScreen";
 import { SignedInWelcomeScreen } from "./src/features/auth/screens/SignedInWelcomeScreen";
 import { SignupFlowScreen } from "./src/features/auth/screens/SignupFlowScreen";
 import { WelcomeScreen } from "./src/features/auth/screens/WelcomeScreen";
@@ -35,11 +39,12 @@ interface AppProps {
   groupStore?: CurrentGroupStore;
   groups?: readonly FamilyGroup[];
   initialGroupId?: string | null;
+  initialJoinRequests?: readonly PendingJoinRequest[];
   initialRootRoute?: RootRoute;
   initialShellRoute?: AppRoute;
   onCreateGroup?: (input: CreateGroupInput) => FamilyGroup | void;
   onGroupChange?: (groupId: string) => void;
-  onJoinGroup?: () => void;
+  onJoinGroup?: (inviteCode: string) => PendingJoinRequest | void;
   onOpenActiveGroup?: (activeGroupId: string) => void;
   screens?: AppScreenRegistry;
 }
@@ -71,6 +76,7 @@ export default function App({
   groupStore,
   groups,
   initialGroupId,
+  initialJoinRequests = [],
   initialRootRoute = "welcome",
   initialShellRoute,
   onCreateGroup,
@@ -86,6 +92,8 @@ export default function App({
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [activeGroupId, setActiveGroupId] = useState(initialGroupId);
   const [createdGroups, setCreatedGroups] = useState<FamilyGroup[]>([]);
+  const [joinRequests, setJoinRequests] =
+    useState<readonly PendingJoinRequest[]>(initialJoinRequests);
   const resolvedGroups = [
     ...(groups ?? (__DEV__ ? DEVELOPMENT_GROUPS : [])),
     ...createdGroups,
@@ -118,12 +126,12 @@ export default function App({
 
   const handleCreateGroup = (input: CreateGroupInput) => {
     const providedGroup = onCreateGroup?.(input);
+
     const createdGroup: FamilyGroup = providedGroup ?? {
       id: `created-group-${Date.now()}`,
       name: input.name,
       role: input.role,
     };
-
     setCreatedGroups((current) => [...current, createdGroup]);
     setActiveGroupId(createdGroup.id);
     onGroupChange?.(createdGroup.id);
@@ -132,6 +140,44 @@ export default function App({
         // 서버가 확정한 그룹만 저장하고 오류 처리는 상위 앱 계층에 위임한다.
       });
     }
+    setRoute("appShell");
+  };
+
+  const handleJoinGroup = (inviteCode: string) => {
+    const providedRequest = onJoinGroup?.(inviteCode);
+    const request: PendingJoinRequest = providedRequest ?? {
+      groupName: "우리 가족",
+      id: `join-request-${inviteCode}`,
+      status: "PENDING_ADMIN",
+    };
+
+    setJoinRequests((current) => {
+      const withoutDuplicate = current.filter((item) => item.id !== request.id);
+      return [...withoutDuplicate, request];
+    });
+  };
+
+  const handleOpenApprovedGroup = (request: ApprovedJoinRequest) => {
+    const groupId = request.groupId;
+    setCreatedGroups((current) => {
+      if (current.some((group) => group.id === groupId)) {
+        return current;
+      }
+
+      return [
+        ...current,
+        {
+          id: groupId,
+          name: request.groupName,
+          role: request.role,
+        },
+      ];
+    });
+    setActiveGroupId(groupId);
+    onGroupChange?.(groupId);
+    groupStore?.save(groupId).catch(() => {
+      // 그룹 진입은 유지하고 영속화 오류 처리는 상위 앱 계층에 위임한다.
+    });
     setRoute("appShell");
   };
 
@@ -172,7 +218,7 @@ export default function App({
           initialRoute={initialShellRoute}
           onCreateGroup={() => openGroupOnboarding("appShell")}
           onGroupChange={onGroupChange}
-          onJoinGroup={onJoinGroup}
+          onJoinGroup={() => openGroupOnboarding("appShell")}
           screens={screens ?? DEFAULT_SCREENS}
         />
       )}
@@ -190,15 +236,9 @@ export default function App({
         <GroupOnboardingScreen
           onBack={() => setRoute(groupOnboardingReturnRoute)}
           onCreateGroup={handleCreateGroup}
-          onJoinByCode={() => {
-            if (onJoinGroup !== undefined) {
-              onJoinGroup();
-              return;
-            }
-
-            showDeferredFeature("코드로 참여");
-          }}
-          pendingRequests={[]}
+          onJoinByCode={handleJoinGroup}
+          onOpenApprovedGroup={handleOpenApprovedGroup}
+          pendingRequests={joinRequests}
         />
       )}
     </SafeAreaProvider>
