@@ -46,9 +46,9 @@
     않고 확인에 필요한 상태를 반환한다.
 12. 서버가 사용자·그룹·세션·권한·시간대 컨텍스트와 `person_key` 매핑을
     주입하며, 모델이 이 값을 사용자 입력으로 받아 신뢰하지 않는다.
-13. 연결 결과는 `CONNECTED` 또는 `FAILED`로 처리한다. 세션 상태는 `CONNECTING`, `IN_PROGRESS`, `COMPLETED`, `INCOMPLETE`, `CANCELLED`, `FAILED`를 사용한다. `CONNECTING` 중 연결 성공은 `IN_PROGRESS`, 종료 요청은 `CANCELLED`, 연결 오류는 `FAILED`가 된다. `IN_PROGRESS` 중 종료 요청은 `COMPLETED`, 종료 요청 없이 연결이 끊기면 `INCOMPLETE`가 된다.
+13. 연결 결과는 `CONNECTED` 또는 `FAILED`로 처리한다. 세션 상태는 `CONNECTING`, `IN_PROGRESS`, `COMPLETED`, `INCOMPLETE`, `CANCELLED`, `FAILED`를 사용한다. 종료 원인 `termination_type`은 `USER_REQUESTED` 또는 `CONNECTION_LOST`를 사용하며, 요청 body나 값이 없으면 `USER_REQUESTED`로 처리한다. `CONNECTING` 중 연결 성공은 `IN_PROGRESS`, `USER_REQUESTED`는 `CANCELLED`, 연결 오류 또는 `CONNECTION_LOST`는 `FAILED`가 된다. `IN_PROGRESS` 중 `USER_REQUESTED`는 `COMPLETED`, `CONNECTION_LOST`는 `INCOMPLETE`가 된다.
 14. `COMPLETED` 통화는 건별 리포트를 생성한다. `INCOMPLETE`는 충분한 transcript가 있을 때만 생성하며, `CANCELLED`·`FAILED`는 리포트를 생성하지 않는다.
-15. 통화 종료 요청은 비동기로 접수하고 중복 종료로 세션·리포트를 중복 생성하지 않는다.
+15. 통화 종료 요청은 비동기로 접수한다. 클라이언트와 Sideband의 종료 처리가 겹치면 먼저 확정된 종결 상태를 보존하고, 중복 종료로 세션·리포트를 중복 생성하지 않는다.
 16. 녹음 원본은 저장하지 않는다. 보호자에게 전체 통화 전문·원본 음성을 노출하지 않고 건별 요약과 보호자 전달 메시지만 제공한다.
 17. Spring Boot는 Sideband의 발화 완료 이벤트를 기준으로 사용자와 AI
     전사를 `call_transcripts`에 순서대로 저장하고, 통화 종료 상태에 따라
@@ -69,11 +69,33 @@
   현재 그룹, 피보호자 권한을 검증한다.
 - `persona_id`는 1~6의 고정 번호로 검증하고, 페르소나 테이블이나 DB
   외래 키를 사용하지 않는다.
-- 상태와 전이: 위 확정 전이만 사용한다. `CANCELLED`는 연결 전 종료, `FAILED`는 연결 실패, `INCOMPLETE`는 연결 후 비정상 종료를 구분한다.
+- 고정 페르소나 매핑:
+
+  | `persona_id` | 표시명 | OpenAI 음성 | 말투 |
+  |---:|---|---|---|
+  | 1 | 사랑스러운 아들 | `ash` | 부모 호칭과 `-요` 존댓말 |
+  | 2 | 사랑스러운 딸 | `sage` | 부모 호칭과 `-요` 존댓말 |
+  | 3 | 남자 비서 | `cedar` | 사용자 역할 호칭과 격식 높은 존댓말 |
+  | 4 | 여자 비서 | `marin` | 사용자 역할 호칭과 격식 높은 존댓말 |
+  | 5 | 친구 학수 | `verse` | 반말과 약한 경상도 사투리 |
+  | 6 | 친구 복희 | `ballad` | 반말과 약한 전라도 사투리 |
+
+- 자식 페르소나는 계정 성별이 `MALE`이면 `아빠`, `FEMALE`이면 `엄마`,
+  비서 페르소나는 `MALE`이면 `회장님`, `FEMALE`이면 `사모님`이라고
+  부른다. Spring Boot가 성별을 최종 호칭으로 변환하며 모델에는 성별을
+  전달하지 않는다.
+- 친구 페르소나는 고정 직함 없이 동년배처럼 대화한다. 사투리는 한 응답에
+  최대 한 번만 사용하고 매 응답에 강제하지 않는다.
+- 모든 페르소나는 관계형 말투만 사용하며 실제 가족·지인·고용인이라고
+  주장하지 않는다. 정체를 물으면 해당 말투로 AI 말동무임을 밝힌다.
+- 페르소나 프롬프트는 `Persona`, `Identity Boundary`, `Address`,
+  `Speech Style`, `Dialect`, `Variety`, `Sample Phrases`로 구분하고,
+  예시 발화는 그대로 반복하지 않고 말투 참고용으로만 사용한다.
+- 상태와 전이: 위 확정 전이만 사용한다. `CANCELLED`는 연결 전 사용자 종료, `FAILED`는 연결 실패 또는 연결 전 비정상 단절, `INCOMPLETE`는 연결 후 비정상 단절을 구분한다.
 - API:
   - 처리 주체: Spring Boot 단일 백엔드
   - Method와 Path: `API-CALLS-001`~`API-CALLS-003`의 Method·Path·요청·결과는 [`../contracts/API.md`](../contracts/API.md)를 참조한다. 확인된 세션 생성 경로는 `POST /call-sessions`다.
-  - 핵심 입력·결과: `persona_id`, `sdp_offer`, 연결 결과와 종료 상태를 계약에 맞게 교환한다.
+  - 핵심 입력·결과: `persona_id`, `sdp_offer`, 연결 결과, 종료 원인 `termination_type`과 종료 상태를 계약에 맞게 교환한다.
 - 데이터:
   - 관련 엔티티: `call_sessions`, `call_transcripts`, `call_reports`
   - 읽기·쓰기 소유자: Spring Boot가 세션·transcript·AI 결과를 직접
@@ -108,7 +130,7 @@
 
 ## 미결정 사항
 
-- 초기 페르소나 목록과 음성 예시·고지 방식
+- 페르소나별 음성 예시 재생 방식과 AI 고지·동의 방식
 - 통화 transcript 보존 기간과 삭제 정책
 - 장기 기억의 도입 시점과 저장 범위
 - 주제 기반 게시글 검색 Tool의 확장 계약

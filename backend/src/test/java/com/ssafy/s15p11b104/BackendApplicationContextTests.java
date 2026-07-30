@@ -15,11 +15,15 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.call.service.AiCallPostToolService;
+import com.ssafy.s15p11b104.domain.call.service.AiCallPromptContextProvider;
+import com.ssafy.s15p11b104.domain.call.service.CallSessionService;
+import com.ssafy.s15p11b104.domain.call.service.CallTranscriptService;
 import com.ssafy.s15p11b104.domain.carnation.repository.CarnationRepository;
-import com.ssafy.s15p11b104.domain.feed.repository.PostMediaRepository;
-import com.ssafy.s15p11b104.domain.feed.repository.PostAnalysisRepository;
-import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.CommentRepository;
+import com.ssafy.s15p11b104.domain.feed.repository.PostAnalysisRepository;
+import com.ssafy.s15p11b104.domain.feed.repository.PostMediaRepository;
+import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostReactionRepository;
 import com.ssafy.s15p11b104.domain.group.repository.FamilyGroupRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupJoinRequestRepository;
@@ -40,6 +44,18 @@ import jakarta.persistence.EntityManager;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class BackendApplicationContextTests {
+
+	@MockitoBean
+	private CallSessionService callSessionService;
+
+	@MockitoBean
+	private CallTranscriptService callTranscriptService;
+
+	@MockitoBean
+	private AiCallPromptContextProvider promptContextProvider;
+
+	@MockitoBean
+	private AiCallPostToolService postToolService;
 
 	@Autowired
 	private MockMvc mockMvc;

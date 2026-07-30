@@ -2,13 +2,20 @@ package com.ssafy.s15p11b104;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.ssafy.s15p11b104.domain.call.repository.GroupMemberCallRepository;
+import com.ssafy.s15p11b104.domain.call.repository.PostAnalysisCallRepository;
+import com.ssafy.s15p11b104.domain.feed.entity.AnalysisStatus;
+import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
 class BackendApplicationTests extends IntegrationTest {
@@ -18,6 +25,12 @@ class BackendApplicationTests extends IntegrationTest {
 
 	@Autowired
 	private StringRedisTemplate redisTemplate;
+
+	@Autowired
+	private GroupMemberCallRepository groupMemberRepository;
+
+	@Autowired
+	private PostAnalysisCallRepository postAnalysisRepository;
 
 	@Test
 	void infrastructureConnectionsAreAvailable() {
@@ -40,5 +53,54 @@ class BackendApplicationTests extends IntegrationTest {
 			"member_interests", "posts", "post_media", "comments", "post_reactions", "post_analyses",
 			"calendar_events", "event_participants", "call_sessions", "call_transcripts", "call_reports",
 			"daily_reports", "carnations", "notifications", "notification_settings", "device_tokens");
+	}
+
+	@Test
+	@Transactional
+	void bindsCallQueryEnumsUsingPostgreSqlTypes() {
+		Long userId = jdbcTemplate.queryForObject("""
+			INSERT INTO users (login_id, password_hash, name, birth_date, gender)
+			VALUES ('call-test-user', 'unused', '테스트', DATE '1950-01-01', 'MALE')
+			RETURNING id
+			""", Long.class);
+		Long groupId = jdbcTemplate.queryForObject("""
+			INSERT INTO family_groups (name, invite_code)
+			VALUES ('테스트가족', 'TST001')
+			RETURNING id
+			""", Long.class);
+		jdbcTemplate.update("""
+			INSERT INTO group_members (group_id, user_id, role, is_manager, joined_at)
+			VALUES (?, ?, 'CARE_RECEIVER', FALSE, CURRENT_TIMESTAMP)
+			""", groupId, userId);
+
+		var member = groupMemberRepository.findActiveCareReceiverByLoginId(
+			"call-test-user",
+			GroupRole.CARE_RECEIVER
+		);
+		assertThat(member).isPresent();
+		assertThat(member.orElseThrow().getRole()).isEqualTo(GroupRole.CARE_RECEIVER);
+
+		Long postId = jdbcTemplate.queryForObject("""
+			INSERT INTO posts (group_id, author_member_id, content)
+			VALUES (?, ?, '테스트 게시글')
+			RETURNING id
+			""", Long.class, groupId, member.orElseThrow().getId());
+		jdbcTemplate.update("""
+			INSERT INTO post_analyses (post_id, status, summary, analyzed_at)
+			VALUES (?, 'SUCCESS', '테스트 게시글 요약', CURRENT_TIMESTAMP)
+			""", postId);
+
+		var analyses = postAnalysisRepository.findSuccessfulToday(
+			groupId,
+			AnalysisStatus.SUCCESS,
+			Instant.EPOCH,
+			Instant.now().plusSeconds(60),
+			PageRequest.of(0, 10)
+		);
+
+		assertThat(analyses)
+			.singleElement()
+			.extracting(analysis -> analysis.getSummary())
+			.isEqualTo("테스트 게시글 요약");
 	}
 }

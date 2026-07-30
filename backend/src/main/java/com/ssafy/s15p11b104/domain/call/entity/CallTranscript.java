@@ -39,11 +39,18 @@ public class CallTranscript extends CreatedAtEntity {
 	protected CallTranscript() {
 	}
 
-	public CallTranscript(CallSession callSession, SpeakerType speaker, String content, int sequenceNumber) {
+	public CallTranscript(
+		CallSession callSession,
+		SpeakerType speaker,
+		String content,
+		int sequenceNumber,
+		String openaiItemId
+	) {
 		this.callSession = callSession;
 		this.speaker = speaker;
 		this.content = content;
 		this.sequenceNumber = sequenceNumber;
+		this.openaiItemId = openaiItemId;
 	}
 
 	public CallSession getCallSession() {

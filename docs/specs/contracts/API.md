@@ -147,7 +147,7 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 |---|---|---|---|---|---|
 | `API-CALLS-001` | `POST /call-sessions` | Spring Boot · 피보호자 본인 | `persona_id`, `sdp_offer` | `201`: `call_session_id`, `sdp_answer` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `409 ACTIVE_CALL_EXISTS`; `502 AI_CONNECTION_FAILED` |
 | `API-CALLS-002` | `POST /call-sessions/{callSessionId}/connection-result` | Spring Boot · 통화 당사자 본인 | `result=CONNECTED\|FAILED`; `FAILED`일 때 `error_code` | `200`: `call_session_id`; `CONNECTING`에서 `IN_PROGRESS` 또는 `FAILED`로 전이 | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `404 CALL_SESSION_NOT_FOUND`; `409 INVALID_CALL_STATUS` |
-| `API-CALLS-003` | `POST /call-sessions/{callSessionId}/end` | Spring Boot · 통화 당사자 본인 | body 없음 | `202`: `call_session_id`; `CONNECTING -> CANCELLED`, `IN_PROGRESS -> COMPLETED`; 마지막 전사·리포트는 접수 후 처리 | `401 UNAUTHORIZED`; `403 FORBIDDEN`; `404 CALL_SESSION_NOT_FOUND`; `409 INVALID_CALL_STATUS` |
+| `API-CALLS-003` | `POST /call-sessions/{callSessionId}/end` | Spring Boot · 통화 당사자 본인 | 선택 `termination_type=USER_REQUESTED\|CONNECTION_LOST`; body 또는 값이 없으면 `USER_REQUESTED` | `202`: `call_session_id`; `USER_REQUESTED`는 `CONNECTING -> CANCELLED`, `IN_PROGRESS -> COMPLETED`; `CONNECTION_LOST`는 `CONNECTING -> FAILED`, `IN_PROGRESS -> INCOMPLETE`; 먼저 확정된 종결 상태를 보존하고 중복 요청도 동일 성공 응답; 마지막 전사·리포트는 접수 후 처리 | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `404 CALL_SESSION_NOT_FOUND` |
 
 ## 리포트·카네이션
 
