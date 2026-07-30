@@ -2,6 +2,7 @@ import {
   buildPostSubmitPayload,
   canAddMedia,
   hasComposerChanges,
+  validatePickedMedia,
   type ComposerMedia,
   type PostComposerInitialValue,
 } from './postComposerModel';
@@ -24,12 +25,12 @@ const initial: PostComposerInitialValue = {
   postId: 'post-1',
 };
 
-test('사진과 영상을 함께 선택하지 않고 사진은 네 장으로 제한한다', () => {
+test('images and videos cannot be selected together and image count is limited', () => {
   expect(canAddMedia([remote], 'video')).toBe('confirm-replace');
   expect(canAddMedia([local, local, local, local], 'image')).toBe('image-limit');
 });
 
-test('수정 payload가 유지, 삭제, 신규 미디어를 구분한다', () => {
+test('edit payload separates retained, deleted, and new media', () => {
   const result = buildPostSubmitPayload(initial, '변경 본문', [local]);
 
   expect(result).toMatchObject({
@@ -40,4 +41,35 @@ test('수정 payload가 유지, 삭제, 신규 미디어를 구분한다', () =>
   });
   expect(result.newMedia).toEqual([local]);
   expect(hasComposerChanges(initial, '변경 본문', [local])).toBe(true);
+});
+
+test('media size, type, and video duration are validated before upload', () => {
+  expect(
+    validatePickedMedia('image', {
+      contentType: 'image/jpeg',
+      fileSizeBytes: 10 * 1024 * 1024,
+    }),
+  ).toBeNull();
+  expect(
+    validatePickedMedia('image', {
+      contentType: 'image/jpeg',
+      fileSizeBytes: 10 * 1024 * 1024 + 1,
+    }),
+  ).toBe('size');
+  expect(
+    validatePickedMedia('video', {
+      contentType: 'video/mp4',
+      fileSizeBytes: 100 * 1024 * 1024,
+      durationSeconds: 60,
+    }),
+  ).toBeNull();
+  expect(
+    validatePickedMedia('video', {
+      contentType: 'video/mp4',
+      durationSeconds: 60.01,
+    }),
+  ).toBe('duration');
+  expect(validatePickedMedia('video', {contentType: 'video/webm'})).toBe(
+    'type',
+  );
 });

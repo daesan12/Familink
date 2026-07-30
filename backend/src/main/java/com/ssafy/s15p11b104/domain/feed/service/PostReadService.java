@@ -34,6 +34,7 @@ import com.ssafy.s15p11b104.domain.feed.repository.CommentRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostMediaRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostReactionRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
+import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
@@ -51,6 +52,7 @@ public class PostReadService {
 	private final PostReactionRepository postReactionRepository;
 	private final CommentRepository commentRepository;
 	private final MemberAliasRepository memberAliasRepository;
+	private final MediaDownloadUrlProvider mediaDownloadUrlProvider;
 
 	public PostReadService(
 		GroupMemberRepository groupMemberRepository,
@@ -58,13 +60,15 @@ public class PostReadService {
 		PostMediaRepository postMediaRepository,
 		PostReactionRepository postReactionRepository,
 		CommentRepository commentRepository,
-		MemberAliasRepository memberAliasRepository) {
+		MemberAliasRepository memberAliasRepository,
+		MediaDownloadUrlProvider mediaDownloadUrlProvider) {
 		this.groupMemberRepository = groupMemberRepository;
 		this.postRepository = postRepository;
 		this.postMediaRepository = postMediaRepository;
 		this.postReactionRepository = postReactionRepository;
 		this.commentRepository = commentRepository;
 		this.memberAliasRepository = memberAliasRepository;
+		this.mediaDownloadUrlProvider = mediaDownloadUrlProvider;
 	}
 
 	@Transactional(readOnly = true)
@@ -182,18 +186,31 @@ public class PostReadService {
 		return new ArchiveItemResponse(
 			post.getId(),
 			actualType,
-			firstMedia == null ? null : firstMedia.getThumbnailUrl(),
+			firstMedia == null || firstMedia.getThumbnailUrl() == null
+				? null
+				: mediaDownloadUrlProvider.issueDownloadUrl(firstMedia.getThumbnailUrl()),
 			post.getContent());
 	}
 
 	private List<PostMediaResponse> mediaOf(Post post) {
 		return postMediaRepository.findAllByPostIdOrderByDisplayOrderAsc(post.getId()).stream()
-			.map(PostMediaResponse::from)
+			.map(this::toMediaResponse)
 			.toList();
 	}
 
 	private List<PostMediaResponse> mediaOf(List<PostMedia> media) {
-		return media.stream().map(PostMediaResponse::from).toList();
+		return media.stream().map(this::toMediaResponse).toList();
+	}
+
+	private PostMediaResponse toMediaResponse(PostMedia media) {
+		return new PostMediaResponse(
+			media.getId(),
+			media.getMediaType(),
+			mediaDownloadUrlProvider.issueDownloadUrl(media.getFileUrl()),
+			media.getThumbnailUrl() == null
+				? null
+				: mediaDownloadUrlProvider.issueDownloadUrl(media.getThumbnailUrl()),
+			media.getDisplayOrder());
 	}
 
 	private Map<Long, List<PostMedia>> mediaByPost(List<Post> posts) {

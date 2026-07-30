@@ -25,6 +25,7 @@ import {
   buildPostSubmitPayload,
   canAddMedia,
   hasComposerChanges,
+  validatePickedMedia,
   type ComposerMedia,
   type LocalMedia,
   type PostComposerInitialValue,
@@ -107,16 +108,48 @@ export function PostComposerScreen({
     kind: LocalMedia['kind'],
     shouldReplace: boolean,
   ) => {
+    const invalidReasons = new Set<string>();
     const picked = assets
       .filter((asset): asset is Asset & {uri: string} => Boolean(asset.uri))
+      .filter(asset => {
+        const reason = validatePickedMedia(kind, {
+          contentType: asset.type,
+          durationSeconds: asset.duration,
+          fileSizeBytes: asset.fileSize,
+        });
+        if (reason) {
+          invalidReasons.add(reason);
+          return false;
+        }
+        return true;
+      })
       .map<LocalMedia>((asset, index) => ({
+        contentType: asset.type,
         durationSeconds: asset.duration,
+        fileSizeBytes: asset.fileSize,
         fileName: asset.fileName,
         id: `${kind}-${asset.uri}-${index}`,
         kind,
         source: {uri: asset.uri},
         sourceType: 'local',
       }));
+
+    if (invalidReasons.size > 0) {
+      const messages = [
+        invalidReasons.has('size')
+          ? '사진은 10MB, 영상은 100MB 이하만 선택할 수 있어요.'
+          : null,
+        invalidReasons.has('duration')
+          ? '영상은 최대 60초까지 선택할 수 있어요.'
+          : null,
+        invalidReasons.has('type') ? '지원하지 않는 파일 형식이에요.' : null,
+      ].filter((message): message is string => Boolean(message));
+      Alert.alert('미디어 제한', messages.join('\n'));
+    }
+
+    if (picked.length === 0) {
+      return;
+    }
 
     if (kind === 'video') {
       setMedia(picked.slice(0, 1));

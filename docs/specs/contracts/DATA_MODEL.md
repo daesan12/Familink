@@ -35,8 +35,14 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   - `created_at`, `updated_at` NOT NULL
   - `withdrawn_at NULL`
 - 활성 조건: `withdrawn_at IS NULL`
-- 활성 계정 제약: 아이디 5~15자, 이름 2~10자이며 필수 회원정보는 NULL일
-  수 없다. 원문 비밀번호는 API에서 8~16자로 검증하고 해시만 저장한다.
+- 활성 계정 제약: 로그인 ID는 5~15자의 ASCII 영문 대·소문자와
+  숫자(`[A-Za-z0-9]`)만 허용한다. 대소문자를 구분하고 소문자로 정규화하지
+  않으며 입력값 그대로 저장·비교한다. 이름은 2~10자이며 필수 회원정보는
+  NULL일 수 없다. 원문 비밀번호는 API에서 8~16자의 ASCII 영문 대·소문자와
+  숫자만 허용하고 영문·숫자를 각각 최소 1자 포함하도록 검증하며 해시만
+  저장한다.
+- 로그인 ID 문자 규칙은 신규 가입과 로그인 ID 변경에 적용하며 기존 저장
+  계정을 일괄 변환하거나 마이그레이션하지 않는다.
 - 탈퇴 시 `login_id`, `password_hash`, `name`, `birth_date`, `gender`,
   `profile_image_url`을 NULL로 바꾸고 `withdrawn_at`을 기록한다.
 
@@ -61,6 +67,9 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
     `uq_user_active_care_receiver(user_id) WHERE role = 'CARE_RECEIVER' AND left_at IS NULL`
 - `role`과 `is_manager`는 서로 독립된 축이다.
 - 관리자 판정은 `left_at IS NULL AND is_manager = true`이며, 그룹 생성·위임·나가기 트랜잭션 완료 시 활성 관리자 1명을 유지한다. 이 규칙을 별도 DB `CHECK`로 추가한다고 확정하지 않는다.
+- 그룹 API의 `managerMemberId`는 활성 관리자
+  `group_members.id`이며 `users.id`가 아니다. 활성 관리자가 없으면
+  `null`을 반환하고 별도 `family_groups` 컬럼을 추가하지 않는다.
 - 탈퇴·내보내기는 `left_at`을 기록하고, 재가입은 기존 행의 `left_at`을
   NULL로 되돌린 뒤 역할과 가입 시각을 갱신한다.
 
@@ -113,6 +122,8 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - Unique: `(post_id, display_order)`
 - 한 게시글은 이미지 1~4장 또는 영상 1개만 가질 수 있고 이미지와 영상을
   섞지 않는다. 저장 URL은 최적화 파일 기준이다.
+- MIME은 컬럼으로 저장하지 않는다. 게시글 분석 시 허용된 저장소
+  메타데이터의 `Content-Type`을 조회하며 URL 확장자로 추측하지 않는다.
 
 ### `comments`
 
@@ -312,5 +323,3 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 
 - `openai_item_id`에 Unique를 둘지는 검토 중이다.
 - 통화 전사 보존 기간과 삭제 시점은 확정되지 않았다.
-- 그룹 API의 `managerMemberId`는 `family_groups` 컬럼이 아니다.
-  `group_members.is_manager`에서 응답을 구성하는 정확한 규칙은 확정되지 않았다.

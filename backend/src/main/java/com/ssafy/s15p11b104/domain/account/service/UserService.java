@@ -101,7 +101,9 @@ public class UserService {
 	 *
 	 * <p>계정 행과 작성 기록은 남기고 개인정보만 익명화한다. 활성 그룹 구성원 자격은 함께 종료해
 	 * 익명화된 사용자가 활성 구성원 목록과 인원수에 남지 않게 한다. 활성 그룹의 관리자는 관리자가
-	 * 없는 그룹이 생기지 않도록 먼저 권한을 위임해야 한다.
+	 * 없는 그룹이 생기지 않도록 먼저 권한을 위임해야 한다. 관리자 판정은 비활성화할 멤버십 행을
+	 * 잠근 뒤 그 행에서 읽는다. 잠금 없이 별도로 세면 확인과 비활성화 사이에 다른 트랜잭션이
+	 * 이 사용자를 관리자로 승격시켜 관리자가 없는 그룹이 남는다.
 	 *
 	 * <p>토큰도 함께 끊는다. Refresh Token은 사용자 키를 삭제해 재발급을 막고, 요청에 사용된 Access
 	 * Token은 남은 만료 시간만큼 차단하며, 사용자 단위 차단 키로 이미 발급된 나머지 Access Token까지
@@ -121,12 +123,13 @@ public class UserService {
 	public void withdraw(AuthenticatedUser user) {
 		User account = getActiveUser(user.id());
 
-		if (groupMemberRepository.existsActiveManagerByUserId(account.getId())) {
+		List<GroupMember> activeMemberships = groupMemberRepository
+			.findAllActiveForUpdateByUserId(account.getId());
+		if (activeMemberships.stream().anyMatch(GroupMember::isManager)) {
 			throw new BusinessException(ErrorCode.MANAGER_TRANSFER_REQUIRED);
 		}
 
 		Instant now = Instant.now();
-		List<GroupMember> activeMemberships = groupMemberRepository.findAllActiveByUserId(account.getId());
 		activeMemberships.forEach(membership -> membership.leave(now));
 		account.withdraw(now);
 
