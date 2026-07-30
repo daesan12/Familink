@@ -9,7 +9,8 @@ export type AppRoute =
   | 'aiCall'
   | 'groupInfo'
   | 'profile'
-  | 'notifications';
+  | 'notifications'
+  | 'archive';
 
 export interface FamilyGroup {
   id: string;
@@ -20,6 +21,7 @@ export interface FamilyGroup {
 export interface AppScreenProps {
   createPostRequestId?: number;
   currentGroup: FamilyGroup;
+  onCloseArchive?: () => void;
   onCloseNotifications?: () => void;
   onFullscreenChange?: (isFullscreen: boolean) => void;
   onHeaderVisibilityChange?: (isVisible: boolean) => void;

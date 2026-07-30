@@ -44,6 +44,7 @@ export function getTabsForRole(role: GroupRole): readonly TabDefinition[] {
 export function isRouteAllowed(role: GroupRole, route: AppRoute): boolean {
   return (
     route === 'notifications' ||
+    route === 'archive' ||
     getTabsForRole(role).some((tab) => tab.route === route)
   );
 }

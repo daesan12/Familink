@@ -25,6 +25,7 @@ import type {
   AuthGateway,
   LoginCredentials,
 } from "./src/features/auth/types";
+import { ArchiveScreen } from "./src/features/archive";
 import { FeedScreen } from "./src/features/feed";
 import { NotificationsScreen } from "./src/features/notifications";
 
@@ -71,6 +72,7 @@ const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
 ];
 
 const DEFAULT_SCREENS: AppScreenRegistry = {
+  archive: ArchiveScreen,
   feed: FeedScreen,
   notifications: NotificationsScreen,
 };

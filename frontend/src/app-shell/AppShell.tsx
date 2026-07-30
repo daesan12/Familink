@@ -188,12 +188,14 @@ export function AppShell({
     <SafeAreaView style={styles.safeArea}>
       {!isScreenFullscreen &&
       isScreenHeaderVisible &&
-      resolvedRoute !== 'notifications' ? <View style={styles.header}>
+      resolvedRoute !== 'notifications' &&
+      resolvedRoute !== 'archive' ? <View style={styles.header}>
         {resolvedRoute === 'feed' ? (
           <View style={styles.headerActions}>
             <Pressable
               accessibilityLabel="게시글 보관함"
               accessibilityRole="button"
+              onPress={() => setActiveRoute('archive')}
               style={styles.headerIconButton}
             >
               <MaterialDesignIcons
@@ -251,6 +253,7 @@ export function AppShell({
           <Screen
             createPostRequestId={createPostRequestId}
             currentGroup={currentGroup}
+            onCloseArchive={() => setActiveRoute('feed')}
             onCloseNotifications={() => setActiveRoute('feed')}
             onFullscreenChange={setIsScreenFullscreen}
             onHeaderVisibilityChange={setIsScreenHeaderVisible}
@@ -276,7 +279,7 @@ export function AppShell({
 
       {!isScreenFullscreen ? (
         <BottomTabBar
-          activeRoute={resolvedRoute}
+          activeRoute={resolvedRoute === 'archive' ? 'feed' : resolvedRoute}
           onSelect={route => {
             setIsScreenHeaderVisible(true);
             setOpenPostId(null);
@@ -298,6 +301,7 @@ function getPlaceholderTitle(route: AppRoute): string {
     profile: '프로필',
     report: '리포트',
     notifications: '알림',
+    archive: '보관함',
   };
 
   return titles[route];
