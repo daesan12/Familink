@@ -690,7 +690,7 @@ test("그룹 선택 바텀시트에서 빈 피드 그룹으로 전환한다", as
   const emptyGroupOption = renderer!.root
     .findAllByProps({ accessibilityRole: "menuitem" })
     .find(
-      (option) => option.findAllByProps({ children: "교회 소모임" }).length > 0
+      (option) => option.findAllByProps({ children: "외갓집 식구들" }).length > 0
     );
 
   expect(emptyGroupOption).toBeTruthy();

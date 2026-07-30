@@ -27,6 +27,7 @@ import type {
 } from "./src/features/auth/types";
 import { ArchiveScreen } from "./src/features/archive";
 import { FeedScreen } from "./src/features/feed";
+import { GroupInfoScreen } from "./src/features/group-info";
 import { NotificationsScreen } from "./src/features/notifications";
 
 type RootRoute =
@@ -56,12 +57,12 @@ interface AppProps {
 const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
   {
     id: "development-care-receiver-group",
-    name: "동창 모임방",
+    name: "할머니랑 사촌들",
     role: "careReceiver",
   },
   {
     id: "development-empty-group",
-    name: "교회 소모임",
+    name: "외갓집 식구들",
     role: "guardian",
   },
   {
@@ -74,6 +75,7 @@ const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
 const DEFAULT_SCREENS: AppScreenRegistry = {
   archive: ArchiveScreen,
   feed: FeedScreen,
+  groupInfo: GroupInfoScreen,
   notifications: NotificationsScreen,
 };
 
