@@ -238,9 +238,11 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   - `related_call_report_id -> call_reports.id`
   - `related_daily_report_id -> daily_reports.id`
 - 컬럼: `type NOTIFICATION_TYPE`, `title TEXT`,
-  `body TEXT`, `created_at` NOT NULL; `read_at NULL`
+  `body TEXT`, `created_at` NOT NULL; `read_at NULL`,
+  `reminder_slot NULL` (`DAY_BEFORE` | `HOUR_BEFORE`,
+  `EVENT_REMINDER` 알림에만 사용하고 그 외에는 NULL)
 - 일정 시작 알림 중복 방지 부분 Unique:
-  `(receiver_user_id, related_event_id, type)
+  `(receiver_user_id, related_event_id, type, reminder_slot)
   WHERE type = 'EVENT_REMINDER' AND related_event_id IS NOT NULL`
 - `title`, `body`는 스냅샷으로 유지한다. 관련 대상 삭제 시 해당 FK를
   `ON DELETE SET NULL`로 바꾸고 스냅샷은 유지한다.

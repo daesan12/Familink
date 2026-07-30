@@ -136,8 +136,11 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 | `API-CALENDAR-004` | `PATCH /events/{eventId}` | Spring Boot · 작성자 또는 그룹 관리자 | `title`, `description`, `eventDate`, `startAt`, `endAt`, `participantMemberIds` | `200`: `id`, `lastEditorMemberId`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-CALENDAR-005` | `DELETE /events/{eventId}` | Spring Boot · 작성자 또는 그룹 관리자 | path `eventId` | `204 No Content` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 
-- 날짜 일정 알림은 전날 09:00 KST, 시간 일정 알림은 시작 1시간 전에
-  생성한다.
+- 모든 일정은 전날 09:00 KST에 알림을 생성하고, 시간 일정은 추가로
+  시작 1시간 전에 생성한다.
+- 하루종일(날짜) 일정은 `startAt`, `endAt`을 보내지 않거나 null로 보낸다.
+- `API-CALENDAR-004`는 핵심 요청의 전체 필드 세트를 보내는 전체 갱신이며,
+  `startAt`·`endAt`이 없거나 null이면 날짜 일정으로 저장한다.
 - 일정 삭제 시 참여자를 삭제한다. 기존 알림은 `title`, `body` 스냅샷을
   유지하며 관련 FK 처리의 세부 방식은 데이터 계약의 미결정 사항을 따른다.
 
