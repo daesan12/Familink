@@ -8,6 +8,9 @@ const personas = [
 	{ id: 6, name: "친구 복희", voice: "ballad", initial: "복", description: "친구처럼 반말과 자연스러운 전라도 사투리로 대화해요." },
 ];
 
+const REPORT_POLL_INTERVAL_MS = 1000;
+const REPORT_POLL_MAX_ATTEMPTS = 30;
+
 // 화면 전환과 상태 갱신에 사용하는 DOM 요소를 시작 시 한 번만 조회한다.
 const ui = {
 	selectionScreen: document.querySelector("#selectionScreen"),
@@ -28,6 +31,14 @@ const ui = {
 	endCallButton: document.querySelector("#endCallButton"),
 	endedDuration: document.querySelector("#endedDuration"),
 	endedMessage: document.querySelector("#endedMessage"),
+	reportStatus: document.querySelector("#reportStatus"),
+	reportSummary: document.querySelector("#reportSummary"),
+	reportDetails: document.querySelector("#reportDetails"),
+	reportEmotionCategory: document.querySelector("#reportEmotionCategory"),
+	reportEmotionSubcategory: document.querySelector("#reportEmotionSubcategory"),
+	reportGuardianMessage: document.querySelector("#reportGuardianMessage"),
+	reportCreatedAt: document.querySelector("#reportCreatedAt"),
+	reportRetryButton: document.querySelector("#reportRetryButton"),
 	backButton: document.querySelector("#backButton"),
 	remoteAudio: document.querySelector("#remoteAudio"),
 	logEntries: document.querySelector("#logEntries"),
@@ -54,6 +65,7 @@ const call = {
 	speakerOn: true,
 	captionDraft: "",
 	captionHistory: [],
+	reportPollingRunId: 0,
 };
 
 // 페르소나 목록을 접근 가능한 radio 형태의 버튼으로 구성한다.
@@ -299,23 +311,111 @@ async function endCall() {
 			const payload = await call.sessionCreationPromise;
 			call.callSessionId = payload.call_session_id;
 		}
+		const reportExpected = call.startedAt !== null;
 		await requestCallEnd("USER_REQUESTED");
-		finishLocally("편안한 대화가 되었기를 바랍니다.");
+		finishLocally("편안한 대화가 되었기를 바랍니다.", reportExpected);
+		if (reportExpected) {
+			void pollForCallReport(call.callSessionId);
+		}
 	} catch (error) {
 		log(`종료 API 실패: ${safeErrorMessage(error)}`);
-		finishLocally("브라우저 연결은 종료했지만 서버 상태 확인이 필요합니다.");
+		finishLocally("브라우저 연결은 종료했지만 서버 상태 확인이 필요합니다.", false);
 	}
 }
 
-function finishLocally(message) {
+function finishLocally(message, reportExpected = false) {
 	call.ending = true;
 	updateDuration();
 	const duration = formatDuration(call.durationSeconds);
 	cleanupMedia();
 	ui.endedDuration.textContent = duration;
 	ui.endedMessage.textContent = message;
+	if (reportExpected) {
+		renderReportPending();
+	} else {
+		renderReportUnavailable("이 통화는 요약 생성 대상이 아닙니다.", false);
+	}
 	showScreen("ended");
 	log("브라우저 통화 자원 정리 완료");
+}
+
+async function pollForCallReport(callSessionId) {
+	const runId = ++call.reportPollingRunId;
+	renderReportPending();
+	log(`통화 요약 생성 확인 시작 #${callSessionId}`);
+
+	for (let attempt = 0; attempt < REPORT_POLL_MAX_ATTEMPTS; attempt += 1) {
+		if (runId !== call.reportPollingRunId) {
+			return;
+		}
+
+		try {
+			const report = await fetchCallReport(callSessionId);
+			if (runId !== call.reportPollingRunId) {
+				return;
+			}
+			if (report.report_status === "READY") {
+				renderReportReady(report);
+				log(`통화 요약 생성 완료 #${callSessionId}`);
+				return;
+			}
+			if (report.report_status === "NOT_APPLICABLE") {
+				renderReportUnavailable("이 통화는 요약 생성 대상이 아닙니다.", false);
+				log(`통화 요약 생성 대상 아님 #${callSessionId}`);
+				return;
+			}
+		} catch (error) {
+			log(`통화 요약 확인 실패: ${safeErrorMessage(error)}`);
+		}
+
+		await wait(REPORT_POLL_INTERVAL_MS);
+	}
+
+	if (runId === call.reportPollingRunId) {
+		renderReportUnavailable("요약 생성이 지연되고 있습니다. 잠시 후 다시 확인해 주세요.", true);
+		log(`통화 요약 생성 확인 시간 초과 #${callSessionId}`);
+	}
+}
+
+async function fetchCallReport(callSessionId) {
+	const response = await fetch(`/ai-call/dev/call-sessions/${callSessionId}/report`);
+	return readApiResponse(response);
+}
+
+function renderReportPending() {
+	ui.reportStatus.textContent = "생성 중";
+	ui.reportStatus.className = "report-status is-pending";
+	ui.reportSummary.textContent = "통화 내용을 정리하고 있습니다.";
+	ui.reportDetails.classList.add("is-hidden");
+	ui.reportCreatedAt.textContent = "";
+	ui.reportRetryButton.classList.add("is-hidden");
+}
+
+function renderReportReady(report) {
+	ui.reportStatus.textContent = "생성 완료";
+	ui.reportStatus.className = "report-status is-ready";
+	ui.reportSummary.textContent = report.summary;
+	ui.reportEmotionCategory.textContent = report.emotion_category;
+	ui.reportEmotionSubcategory.textContent = report.emotion_subcategory;
+	ui.reportGuardianMessage.textContent = report.guardian_message || "전달할 별도 메시지가 없습니다.";
+	ui.reportDetails.classList.remove("is-hidden");
+	ui.reportCreatedAt.textContent = report.created_at
+		? `${new Date(report.created_at).toLocaleString("ko-KR")} 생성`
+		: "";
+	ui.reportRetryButton.classList.add("is-hidden");
+}
+
+function renderReportUnavailable(message, retryable) {
+	ui.reportStatus.textContent = retryable ? "확인 지연" : "생성 안 함";
+	ui.reportStatus.className = "report-status is-unavailable";
+	ui.reportSummary.textContent = message;
+	ui.reportDetails.classList.add("is-hidden");
+	ui.reportCreatedAt.textContent = "";
+	ui.reportRetryButton.classList.toggle("is-hidden", !retryable);
+}
+
+function wait(milliseconds) {
+	return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 function toggleMicrophone() {
@@ -488,6 +588,7 @@ function resetCallRuntime() {
 	call.speakerOn = true;
 	call.captionDraft = "";
 	call.captionHistory = [];
+	call.reportPollingRunId += 1;
 	ui.timer.textContent = "00 : 00";
 	ui.captionHistory.textContent = "연결되면 AI의 말이 이곳에 표시됩니다.";
 	ui.captionCurrent.textContent = "";
@@ -495,6 +596,7 @@ function resetCallRuntime() {
 	ui.microphoneButton.setAttribute("aria-pressed", "true");
 	ui.speakerButton.setAttribute("aria-pressed", "true");
 	ui.endCallButton.disabled = false;
+	renderReportPending();
 }
 
 class CallCancelledError extends Error {
@@ -548,6 +650,11 @@ ui.startCallButton.addEventListener("click", startCall);
 ui.endCallButton.addEventListener("click", endCall);
 ui.microphoneButton.addEventListener("click", toggleMicrophone);
 ui.speakerButton.addEventListener("click", toggleSpeaker);
+ui.reportRetryButton.addEventListener("click", () => {
+	if (call.callSessionId) {
+		void pollForCallReport(call.callSessionId);
+	}
+});
 ui.backButton.addEventListener("click", returnToSelection);
 
 window.addEventListener("beforeunload", () => {
