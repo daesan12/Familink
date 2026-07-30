@@ -87,6 +87,8 @@ export function FeedScreen({
   onHeaderVisibilityChange,
   onSubmitPost,
   onUpdateComment,
+  openPostId,
+  openPostRequestId = 0,
 }: FeedScreenProps) {
   const feed = useFeed(currentGroup.id, loader);
   const posts = feed.status === 'success' ? feed.posts : EMPTY_POSTS;
@@ -113,6 +115,7 @@ export function FeedScreen({
   const [openReactionPicker, setOpenReactionPicker] =
     useState<OpenReactionPicker | null>(null);
   const lastCreateRequestId = useRef(createPostRequestId);
+  const lastOpenPostRequestId = useRef(0);
   const isDeleteConfirmationOpen = useRef(false);
   const isDeleteSubmitting = useRef(false);
   const feedScrollOffset = useRef(0);
@@ -127,6 +130,18 @@ export function FeedScreen({
       setOpenReactionPicker(null);
     }
   }, [createPostRequestId]);
+
+  useEffect(() => {
+    if (
+      openPostId &&
+      openPostRequestId > 0 &&
+      openPostRequestId !== lastOpenPostRequestId.current
+    ) {
+      lastOpenPostRequestId.current = openPostRequestId;
+      setSelectedPostId(openPostId);
+      setOpenReactionPicker(null);
+    }
+  }, [openPostId, openPostRequestId]);
 
   useEffect(() => {
     onFullscreenChange?.(Boolean(composer));

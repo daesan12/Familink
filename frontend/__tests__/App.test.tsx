@@ -23,11 +23,16 @@ afterEach(async () => {
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
 jest.mock("lucide-react-native/icons/calendar", () => "Icon");
+jest.mock("lucide-react-native/icons/bell-off", () => "Icon");
+jest.mock("lucide-react-native/icons/check", () => "Icon");
+jest.mock("lucide-react-native/icons/chevron-left", () => "Icon");
 jest.mock("lucide-react-native/icons/circle-user-round", () => "Icon");
 jest.mock("lucide-react-native/icons/file-chart-column", () => "Icon");
 jest.mock("lucide-react-native/icons/house", () => "Icon");
 jest.mock("lucide-react-native/icons/phone-call", () => "Icon");
+jest.mock("lucide-react-native/icons/settings", () => "Icon");
 jest.mock("lucide-react-native/icons/users-round", () => "Icon");
+jest.mock("lucide-react-native/icons/x", () => "Icon");
 jest.mock("react-native-image-picker", () => ({
   launchImageLibrary: jest.fn(),
 }));
