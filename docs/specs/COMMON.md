@@ -54,8 +54,12 @@
   발화 완료 전사와 통화 상태를 처리한다.
 - Spring Boot는 마지막 수정 후 10분이 지난 게시글을 직접 조회해 Gemini로
   분석하고 `post_analyses`에 저장한다.
+- 게시글 분석의 Gemini 호출은 SSAFY GMS 프록시를 사용한다.
+  `GMS_API_KEY`는 프록시 인증 키로 서버에서만 보관하며
+  `x-goog-api-key` 헤더로 전달한다.
 - Spring Boot는 통화 세션·전사·건별 리포트·일일 리포트를 생성·갱신하고,
-  게시글 분석과 리포트 생성 시 Gemini를 직접 호출한다.
+  게시글 분석과 리포트 생성 시 별도 백엔드를 두지 않고 각 도메인의
+  Gemini Gateway를 호출한다.
 - PostgreSQL이 공용 데이터 저장소다. 상세 테이블·관계·쓰기 소유권은 [`contracts/DATA_MODEL.md`](./contracts/DATA_MODEL.md)를 기준으로 한다.
 
 ## 시간과 날짜

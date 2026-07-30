@@ -1,12 +1,12 @@
 # 로그인 ID 허용 문자 규칙 확정
 
-- 상태: 일부 승인
+- 상태: 승인·반영 완료
 - 제안자: 이경호
 - 작성일: 2026-07-28
 - 차단 변경: 아니오
 - 영향 스펙·계약: `contracts/DATA_MODEL.md` `users` 활성 계정 제약, `contracts/API.md` `API-AUTH-001`·`API-AUTH-002`·`API-USERS-002`
 - 관련 작업: S15P11B104-114
-- 관련 제안: [`CHG-S15P11B104-114-common-response-envelope.md`](./CHG-S15P11B104-114-common-response-envelope.md), [`CHG-S15P11B104-114-auth-token-storage-and-ttl.md`](./CHG-S15P11B104-114-auth-token-storage-and-ttl.md)
+- 관련 제안: [`CHG-S15P11B104-114-common-response-envelope.md`](../pending/CHG-S15P11B104-114-common-response-envelope.md), [`CHG-S15P11B104-114-auth-token-storage-and-ttl.md`](../pending/CHG-S15P11B104-114-auth-token-storage-and-ttl.md)
 
 ## 기존 내용
 
@@ -40,21 +40,19 @@
 - 영향 화면: 확인 필요. 회원가입과 프로필 수정 화면의 로그인 ID 입력 검증 문구와 조건에 영향을 준다.
 - 검증 범위: 결정된 문자 집합의 경계값에 대한 `API-AUTH-001`·`API-AUTH-002` 통합 테스트. 현재는 공백 포함 로그인 ID 거부만 검증되어 있다.
 
-## 확인이 필요한 질문
-
-- 세 안 중 어느 것을 채택할지. 고령 사용자가 입력하기 쉬운 쪽을 우선한다면 안 1이 가장 단순하다.
-- 로그인 ID의 대소문자를 구분할지. 구분하지 않는다면 저장·조회 시 소문자로 정규화하는 규칙이 필요하고, `login_id` UNIQUE 제약만으로는 `TestUser`와 `testuser`의 공존을 막을 수 없다.
-- 이미 저장된 계정에 소급 적용할지. 현재 개발 단계에서는 대상 데이터가 없다.
-
 ## 결정 및 반영
 
-- 결정: 일부 승인. 현재 `API-AUTH-001`과 `API-AUTH-002`에 동일하게
-  구현·검증된 5~15자 및 `\S+` 공백 금지 규칙만 승인한다. 안 1~3의 최종
-  허용 문자 집합, 대소문자 구분·정규화, 기존 계정 소급 적용과
-  `API-USERS-002` 적용은 미구현·미확정이므로 승인 범위에서 제외하고
-  보류한다.
+- 결정: 전체 승인. 2026-07-29에는 `API-AUTH-001`·`002`의 5~15자와
+  `\S+` 공백 금지만 승인했다. 2026-07-30에는 기존 세 안 대신
+  ASCII 영문 대·소문자와 숫자(`[A-Za-z0-9]`)를 허용하고 대소문자를
+  구분하며 소문자로 정규화하지 않는 규칙을 승인했다. 이 규칙은
+  `API-AUTH-001`·`002`·`003`과 `API-USERS-002`에 동일하게 적용한다.
+  기존 저장 계정에는 소급 적용하거나 마이그레이션하지 않는다.
 - 결정자: 사용자
-- 결정일: 2026-07-29
-- 승인 근거: 사용자가 이미 확정되었거나 구현된 부분만 승인한다고 명시했다.
-- 반영 문서: `docs/specs/contracts/API.md`
+- 결정일: 2026-07-29, 2026-07-30
+- 승인 근거: 사용자가 2026-07-29에는 구현·확정된 부분만 승인했고,
+  2026-07-30에는 영문·숫자 허용, 대소문자 구분, 소문자 정규화 안 함을
+  명시한 뒤 기존 계정 소급 적용은 하지 않아도 된다고 결정했다.
+- 반영 문서: `docs/specs/domains/ACCOUNT_AND_PROFILE.md`,
+  `docs/specs/contracts/API.md`, `docs/specs/contracts/DATA_MODEL.md`
 - 반영 커밋:

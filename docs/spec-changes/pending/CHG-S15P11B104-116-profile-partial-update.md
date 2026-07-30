@@ -6,7 +6,7 @@
 - 차단 변경: 아니오
 - 영향 스펙·계약: `contracts/API.md` `API-USERS-001`·`API-USERS-002` 및 「공통 경계」의 확인된 성공 문구, `domains/ACCOUNT_AND_PROFILE.md` 「확정된 동작」 7번
 - 관련 작업: S15P11B104-116
-- 관련 제안: [`CHG-S15P11B104-114-common-response-envelope.md`](./CHG-S15P11B104-114-common-response-envelope.md), [`CHG-S15P11B104-114-login-id-character-rule.md`](./CHG-S15P11B104-114-login-id-character-rule.md), [`CHG-S15P11B104-116-withdrawal-side-effects.md`](./CHG-S15P11B104-116-withdrawal-side-effects.md)
+- 관련 제안: [`CHG-S15P11B104-114-common-response-envelope.md`](./CHG-S15P11B104-114-common-response-envelope.md), [`CHG-S15P11B104-114-login-id-character-rule.md`](../applied/CHG-S15P11B104-114-login-id-character-rule.md), [`CHG-S15P11B104-116-withdrawal-side-effects.md`](./CHG-S15P11B104-116-withdrawal-side-effects.md)
 
 ## 기존 내용
 
@@ -50,7 +50,10 @@ Notion에도 정의되지 않아 이번 구현에서 판단한 사항은 다음 
 - "전달하지 않음"과 "명시적 `null`"을 구분하지 못하면 `profileImageUrl` 삭제 규칙을 만족할 수 없다. 이름만 수정하는 요청이 프로필 이미지를 함께 지우는 결과가 되기 때문이다. 이 때문에 `ProfileUpdateRequest`만 레코드가 아닌 일반 클래스로 두고 이 필드의 전달 여부를 `@JsonSetter`로 기록했다. 다른 DTO는 레코드를 유지한다.
 - 2026-07-29 백엔드 담당자가 부분 수정 방식을 선택했고, 이후 Notion 확정 명세에서 같은 규칙이 확인되었다.
 - 성공 문구는 `CHG-S15P11B104-114-common-response-envelope.md`가 확정한 공통 응답 봉투의 `message` 값이다. 해당 제안은 2026-07-29 일부 승인되었고 "나머지 API의 성공 `message` 목록은 미확정이므로 승인 범위에서 제외하고 보류"되었다. 이 제안이 그중 `API-USERS-001`·`API-USERS-002` 두 건을 채운다.
-- `CHG-S15P11B104-114-login-id-character-rule.md`의 2026-07-29 일부 승인은 "`API-USERS-002` 적용은 미구현·미확정이므로 승인 범위에서 제외하고 보류"했다. 이 제안이 그 보류분을 채운다. Notion 「입력 제약」이 "회원가입과 동일하게 5~15자이며 로그인 아이디 변경 시에도 같은 형식 검증을 적용한다"고 명시하므로, 승인된 회원가입 규칙(5~15자, `\S+` 공백 금지)을 그대로 적용했다. 최종 허용 문자 집합과 대소문자 정규화는 그 제안에서 계속 미확정이며, 결정되면 회원가입과 프로필 수정에 함께 반영해야 한다.
+- `CHG-S15P11B104-114-login-id-character-rule.md`는 2026-07-30에
+  `API-USERS-002`를 포함해 5~15자의 `[A-Za-z0-9]`, 대소문자 구분,
+  정규화 없음으로 승인·반영됐다. 프로필의 로그인 ID 변경도 같은 규칙을
+  사용하며 이 제안에서 별도 문자 정책을 결정하지 않는다.
 - 구현과 검증 위치: `backend/src/main/java/com/ssafy/s15p11b104/domain/account/dto/ProfileUpdateRequest.java`, `backend/src/main/java/com/ssafy/s15p11b104/domain/account/service/UserService.java`, `backend/src/test/java/com/ssafy/s15p11b104/domain/account/UserApiTest.java`
 
 ## 확인된 영향

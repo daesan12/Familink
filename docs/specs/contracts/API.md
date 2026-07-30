@@ -38,9 +38,18 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
   사용한다.
 - 회원가입과 로그인은 `loginId`와 `password`를 사용한다. 이메일
   회원가입·로그인·인증은 지원하지 않는다.
-- `API-AUTH-001`과 `API-AUTH-002`의 `loginId`는 5~15자이며 현재
-  `\S+` 검증이 인식하는 공백 문자를 거부한다. 최종 허용 문자 집합,
-  대소문자 구분과 정규화 규칙은 확정하지 않는다.
+- `API-AUTH-001`·`API-AUTH-002`·`API-USERS-002`의 `loginId`는
+  5~15자의 ASCII 영문 대·소문자와 숫자(`[A-Za-z0-9]`)만 허용한다.
+  한글·공백·특수문자는 `400 INVALID_REQUEST`로 거부한다. 로그인 ID는
+  대소문자를 구분하고 소문자로 정규화하지 않으며 입력값 그대로 저장·
+  비교한다. `API-AUTH-003` 로그인도 같은 대소문자 구분으로 조회한다.
+- `API-AUTH-002`의 `password`는 8~16자의 ASCII 영문 대·소문자와
+  숫자만 허용하며 영문과 숫자를 각각 최소 1자 포함해야 한다.
+  한글·공백·특수문자 또는 한 종류만 사용한 값은
+  `400 INVALID_REQUEST`로 거부한다.
+- 로그인 ID 문자 규칙은 신규 가입과 `API-USERS-002`의 로그인 ID 변경에
+  적용한다. 기존 저장 계정은 일괄 변환하지 않으며 로그인 시 입력값 그대로
+  대소문자를 구분해 비교한다.
 - 그룹 데이터는 해당 그룹의 활성 구성원 범위에서만 접근한다.
 - Spring Boot 통화 API는 Access Token으로 사용자, 현재 그룹, 피보호자
   구성원과 권한을 확인한다. 클라이언트가 이 값을 별도 식별자로 보내지 않는다.
@@ -96,6 +105,12 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 - 승인 시 `group_join_requests.status=APPROVED`, 거절 시
   `status=REJECTED`와 `processed_at`을 기록한다. 거절 시 `assigned_role`은
   `NULL`로 유지하며 `group_members`는 생성하거나 변경하지 않는다.
+- `API-GROUPS-002`·`API-GROUPS-004`의 `managerMemberId`는 해당 그룹에서
+  `left_at IS NULL AND is_manager = true`인 `group_members.id`다.
+  `users.id`가 아니며 활성 관리자가 없으면 `null`을 반환한다.
+  `API-GROUPS-002`에서는 생성자의 새 멤버십 ID를 반환한다.
+  `API-GROUPS-004`의 `isManager`는 조회 요청자 본인의 활성 멤버십
+  `is_manager` 값으로 별도 계산한다.
 - 관심사는 0~10개를 허용한다. 각 값은 trim 후 1~10자이며 공백만 있는
   값은 거부하고, trim 후 중복 문자열은 한 번만 저장한다.
 
@@ -197,5 +212,3 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 
 - `API-FILES-001`의 `purpose` 값, MIME 허용 목록과 파일별 최대 크기
 - 동일 기기 토큰을 다시 등록할 때 기존 행을 갱신하는 세부 정책
-- `API-GROUPS-002`·`004`의 `managerMemberId`를
-  `group_members.is_manager`에서 구성하는 정확한 규칙
