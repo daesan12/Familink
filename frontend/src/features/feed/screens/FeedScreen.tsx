@@ -4,6 +4,8 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Pressable,
   StyleSheet,
   Text,
@@ -16,18 +18,49 @@ import type {FeedLoader} from '../api/feedApi';
 import {FeedItem} from '../components/FeedItem';
 import {PostActionsSheet} from '../components/PostActionsSheet';
 import {
+  ReactionPopover,
+} from '../components/ReactionPopover';
+import type {ReactionAnchor} from '../components/ReactionBar';
+import {
   createEditInitialValue,
   type PostComposerInitialValue,
   type PostSubmitPayload,
 } from '../composer/postComposerModel';
+import {
+  DEVELOPMENT_COMMENTS_BY_POST_ID,
+  DEVELOPMENT_CURRENT_USER,
+} from '../fixtures/commentFixtures';
 import {useFeed} from '../hooks/useFeed';
+import {usePostInteractions} from '../hooks/usePostInteractions';
+import type {
+  ChangeReactionInput,
+  CreateCommentInput,
+  DeleteCommentInput,
+  FeedMember,
+  FeedPost,
+  PostComment,
+  UpdateCommentInput,
+} from '../types';
 import {PostComposerScreen} from './PostComposerScreen';
 import {PostDetailScreen} from './PostDetailScreen';
 
-interface FeedScreenProps extends AppScreenProps {
+const EMPTY_COMMENTS_BY_POST_ID: Readonly<
+  Record<string, readonly PostComment[]>
+> = {};
+const EMPTY_POSTS: readonly FeedPost[] = [];
+
+export interface FeedScreenProps extends AppScreenProps {
+  currentUser?: FeedMember | null;
+  initialCommentsByPostId?: Readonly<
+    Record<string, readonly PostComment[]>
+  >;
   loader?: FeedLoader;
+  onChangeReaction?: (input: ChangeReactionInput) => void;
   onConfirmDelete?: (postId: string) => Promise<void> | void;
+  onCreateComment?: (input: CreateCommentInput) => void;
+  onDeleteComment?: (input: DeleteCommentInput) => void;
   onSubmitPost?: (payload: PostSubmitPayload) => void;
+  onUpdateComment?: (input: UpdateCommentInput) => void;
 }
 
 interface ComposerState {
@@ -35,22 +68,54 @@ interface ComposerState {
   mode: 'create' | 'edit';
 }
 
+interface OpenReactionPicker {
+  anchor: ReactionAnchor;
+  postId: string;
+}
+
 export function FeedScreen({
   createPostRequestId = 0,
   currentGroup,
+  currentUser,
+  initialCommentsByPostId,
   loader,
+  onChangeReaction,
   onConfirmDelete,
+  onCreateComment,
+  onDeleteComment,
   onFullscreenChange,
   onHeaderVisibilityChange,
   onSubmitPost,
+  onUpdateComment,
 }: FeedScreenProps) {
   const feed = useFeed(currentGroup.id, loader);
+  const posts = feed.status === 'success' ? feed.posts : EMPTY_POSTS;
+  const resolvedCurrentUser =
+    currentUser === undefined
+      ? __DEV__
+        ? DEVELOPMENT_CURRENT_USER
+        : null
+      : currentUser;
+  const resolvedInitialComments =
+    initialCommentsByPostId ??
+    (__DEV__
+      ? DEVELOPMENT_COMMENTS_BY_POST_ID
+      : EMPTY_COMMENTS_BY_POST_ID);
+  // TODO: 그룹장·관리자별 추가 권한 정책이 확정되면 멤버십 권한을 주입한다.
+  const canInteract = resolvedCurrentUser !== null;
+  const interactions = usePostInteractions(
+    posts,
+    resolvedInitialComments,
+  );
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [menuPostId, setMenuPostId] = useState<string | null>(null);
   const [composer, setComposer] = useState<ComposerState | null>(null);
+  const [openReactionPicker, setOpenReactionPicker] =
+    useState<OpenReactionPicker | null>(null);
   const lastCreateRequestId = useRef(createPostRequestId);
   const isDeleteConfirmationOpen = useRef(false);
   const isDeleteSubmitting = useRef(false);
+  const feedScrollOffset = useRef(0);
 
   useEffect(() => {
     if (
@@ -59,6 +124,7 @@ export function FeedScreen({
     ) {
       lastCreateRequestId.current = createPostRequestId;
       setComposer({mode: 'create'});
+      setOpenReactionPicker(null);
     }
   }, [createPostRequestId]);
 
@@ -76,6 +142,49 @@ export function FeedScreen({
     () => () => onHeaderVisibilityChange?.(true),
     [onHeaderVisibilityChange],
   );
+
+  const closeReactionPicker = () => setOpenReactionPicker(null);
+
+  const handleToggleReactionPicker = (
+    postId: string,
+    anchor: ReactionAnchor,
+  ) => {
+    setOpenReactionPicker(current =>
+      current?.postId === postId ? null : {anchor, postId},
+    );
+  };
+
+  const handleSelectReaction = (
+    postId: string,
+    reactionId: ChangeReactionInput['nextReactionId'],
+  ) => {
+    if (!reactionId || !resolvedCurrentUser) {
+      return;
+    }
+
+    const previousReactionId =
+      interactions.selectedReactionByPostId[postId] ?? null;
+    const nextReactionId =
+      previousReactionId === reactionId ? null : reactionId;
+    interactions.changeReaction(postId, reactionId);
+    onChangeReaction?.({
+      nextReactionId,
+      postId,
+      previousReactionId,
+    });
+    closeReactionPicker();
+  };
+
+  const handleOpenPost = (postId: string) => {
+    closeReactionPicker();
+    setSelectedPostId(postId);
+  };
+
+  const handleFeedScroll = (
+    event: NativeSyntheticEvent<NativeScrollEvent>,
+  ) => {
+    feedScrollOffset.current = event.nativeEvent.contentOffset.y;
+  };
 
   if (composer) {
     return (
@@ -200,16 +309,65 @@ export function FeedScreen({
   };
 
   if (selectedPost) {
+    const comments =
+      interactions.commentsByPostId[selectedPost.id] ?? [];
+    const reactions =
+      interactions.reactionsByPostId[selectedPost.id] ??
+      selectedPost.reactions;
+    const selectedReactionId =
+      interactions.selectedReactionByPostId[selectedPost.id] ?? null;
+
     return (
       <View style={styles.feedRoot}>
         <PostDetailScreen
+          canInteract={canInteract}
+          commentCount={
+            interactions.commentCountByPostId[selectedPost.id] ??
+            selectedPost.commentCount
+          }
+          comments={comments}
           currentGroupName={currentGroup.name}
+          currentUser={resolvedCurrentUser}
+          isReactionPickerOpen={
+            openReactionPicker?.postId === selectedPost.id
+          }
           onBack={() => {
+            closeReactionPicker();
             setMenuPostId(null);
             setSelectedPostId(null);
           }}
+          onCreateComment={input => {
+            if (!resolvedCurrentUser) {
+              return;
+            }
+            interactions.addComment(
+              input.postId,
+              input.body,
+              resolvedCurrentUser,
+            );
+            onCreateComment?.(input);
+          }}
+          onDeleteComment={input => {
+            interactions.deleteComment(
+              input.postId,
+              input.commentId,
+            );
+            onDeleteComment?.(input);
+          }}
           onMenuPress={() => setMenuPostId(selectedPost.id)}
+          onScrollBeginDrag={closeReactionPicker}
+          onToggleReactionPicker={handleToggleReactionPicker}
+          onUpdateComment={input => {
+            interactions.updateComment(
+              input.postId,
+              input.commentId,
+              input.body,
+            );
+            onUpdateComment?.(input);
+          }}
           post={selectedPost}
+          reactions={reactions}
+          selectedReactionId={selectedReactionId}
         />
         <PostActionsSheet
           isOpen={menuPost?.id === selectedPost.id}
@@ -217,25 +375,91 @@ export function FeedScreen({
           onDelete={handleDelete}
           onEdit={handleEdit}
         />
+        <ReactionPopover
+          anchor={
+            openReactionPicker?.anchor ?? {
+              height: 0,
+              width: 0,
+              x: 0,
+              y: 0,
+            }
+          }
+          onClose={closeReactionPicker}
+          onSelect={reactionId =>
+            handleSelectReaction(selectedPost.id, reactionId)
+          }
+          selectedReactionId={selectedReactionId}
+          visible={openReactionPicker?.postId === selectedPost.id}
+        />
       </View>
     );
   }
 
   return (
-    <FlatList
-      contentContainerStyle={[
-        styles.listContent,
-        feed.posts.length === 0 && styles.emptyListContent,
-      ]}
-      contentInsetAdjustmentBehavior="automatic"
-      data={feed.posts}
-      keyExtractor={post => post.id}
-      ListEmptyComponent={<EmptyFeedState />}
-      renderItem={({item}) => (
-        <FeedItem onPress={setSelectedPostId} post={item} />
-      )}
-      showsVerticalScrollIndicator={false}
-    />
+    <View style={styles.feedRoot}>
+      <FlatList
+        contentContainerStyle={[
+          styles.listContent,
+          feed.posts.length === 0 && styles.emptyListContent,
+        ]}
+        contentInsetAdjustmentBehavior="automatic"
+        contentOffset={{x: 0, y: feedScrollOffset.current}}
+        data={feed.posts}
+        keyExtractor={post => post.id}
+        ListEmptyComponent={<EmptyFeedState />}
+        onScroll={handleFeedScroll}
+        onScrollBeginDrag={closeReactionPicker}
+        renderItem={({item}) => {
+          const reactions =
+            interactions.reactionsByPostId[item.id] ?? item.reactions;
+
+          return (
+            <FeedItem
+              canInteract={canInteract}
+              commentCount={
+                interactions.commentCountByPostId[item.id] ??
+                item.commentCount
+              }
+              isReactionPickerOpen={
+                openReactionPicker?.postId === item.id
+              }
+              onPress={handleOpenPost}
+              onToggleReactionPicker={handleToggleReactionPicker}
+              post={{...item, reactions}}
+              selectedReactionId={
+                interactions.selectedReactionByPostId[item.id] ?? null
+              }
+            />
+          );
+        }}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+      />
+      <ReactionPopover
+        anchor={
+          openReactionPicker?.anchor ?? {
+            height: 0,
+            width: 0,
+            x: 0,
+            y: 0,
+          }
+        }
+        onClose={closeReactionPicker}
+        onSelect={reactionId => {
+          if (openReactionPicker) {
+            handleSelectReaction(openReactionPicker.postId, reactionId);
+          }
+        }}
+        selectedReactionId={
+          openReactionPicker
+            ? interactions.selectedReactionByPostId[
+                openReactionPicker.postId
+              ] ?? null
+            : null
+        }
+        visible={openReactionPicker !== null}
+      />
+    </View>
   );
 }
 

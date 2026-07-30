@@ -1,6 +1,20 @@
 import type {ImageSourcePropType} from 'react-native';
 
 export const MAX_POST_IMAGES = 4;
+export const MAX_COMMENT_LENGTH = 50;
+
+export type ReactionId =
+  | 'love'
+  | 'happy'
+  | 'laugh'
+  | 'hug'
+  | 'cheer';
+
+export interface FeedMember {
+  avatarText: string;
+  id: string;
+  name: string;
+}
 
 export interface FeedImage {
   accessibilityLabel: string;
@@ -11,17 +25,43 @@ export interface FeedImage {
 export interface FeedReaction {
   count: number;
   emoji: string;
+  id: ReactionId;
+  label: string;
+}
+
+export interface PostComment {
+  author: FeedMember;
+  body: string;
+  createdAtLabel: string;
   id: string;
+  postId: string;
+}
+
+export interface CreateCommentInput {
+  body: string;
+  postId: string;
+}
+
+export interface UpdateCommentInput extends CreateCommentInput {
+  commentId: string;
+}
+
+export interface DeleteCommentInput {
+  commentId: string;
+  postId: string;
+}
+
+export interface ChangeReactionInput {
+  nextReactionId: ReactionId | null;
+  postId: string;
+  previousReactionId: ReactionId | null;
 }
 
 export interface FeedPost {
-  author: {
-    avatarText: string;
-    id: string;
-    name: string;
-  };
+  author: FeedMember;
   body: string;
   commentCount: number;
+  currentUserReactionId?: ReactionId | null;
   createdAtLabel: string;
   groupId: string;
   id: string;
