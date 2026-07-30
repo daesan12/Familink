@@ -118,8 +118,11 @@ function RoleOption({label, onPress, selected}: RoleOptionProps) {
       accessibilityState={{checked: selected}}
       containerStyle={styles.roleOptionContainer}
       onPress={onPress}
-      style={styles.roleOptionPressable}>
-      <View style={[styles.roleOption, selected && styles.selectedRole]}>
+      style={[
+        styles.roleOptionPressable,
+        selected && styles.selectedRole,
+      ]}>
+      <View style={styles.roleOption}>
         <Text
           style={[
             styles.roleLabel,
@@ -173,18 +176,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     height: 56,
-    padding: 2,
+    overflow: 'hidden',
+    padding: 3,
   },
   roleOptionContainer: {
+    borderRadius: 24,
     flex: 1,
+    overflow: 'hidden',
   },
   roleOptionPressable: {
+    borderRadius: 24,
     flex: 1,
+    overflow: 'hidden',
   },
   roleOption: {
     alignItems: 'center',
-    borderCurve: 'continuous',
-    borderRadius: 26,
     flex: 1,
     justifyContent: 'center',
   },
