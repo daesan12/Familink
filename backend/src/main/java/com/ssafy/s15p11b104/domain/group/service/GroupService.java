@@ -133,9 +133,7 @@ public class GroupService {
 
 	@Transactional(readOnly = true)
 	public InviteCodeResponse getInviteCode(Long groupId, Long authenticatedUserId) {
-		GroupMember requester = groupMemberRepository
-			.findActiveByGroupIdAndUserId(groupId, authenticatedUserId)
-			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+		GroupMember requester = getActiveMember(groupId, authenticatedUserId);
 		return new InviteCodeResponse(requester.getGroup().getInviteCode());
 	}
 
@@ -167,6 +165,23 @@ public class GroupService {
 	}
 
 	/**
+	 * 본인 멤버십을 비활성화해 그룹에서 탈퇴한다.
+	 *
+	 * <p>행을 삭제하지 않고 {@code left_at}만 기록해 과거 연결 데이터를 보존한다. 관리자는
+	 * 관리자 없는 그룹이 생기지 않도록 이 API로 탈퇴할 수 없다. 다른 구성원이 있으면 먼저
+	 * 위임하고, 혼자 남은 관리자는 탈퇴 대신 그룹 삭제 절차를 사용한다.
+	 */
+	@Transactional
+	public void leave(Long groupId, Long authenticatedUserId) {
+		GroupMember membership = getActiveMember(groupId, authenticatedUserId);
+		if (membership.isManager()) {
+			throw new BusinessException(ErrorCode.MANAGER_TRANSFER_REQUIRED);
+		}
+
+		membership.leave(Instant.now());
+	}
+
+	/**
 	 * 그룹과 그룹에 종속된 데이터를 FK 제약을 위반하지 않는 순서로 하드 삭제한다.
 	 *
 	 * <p>posts·calendar_events·call_sessions의 자식 테이블과 notifications의 관련 컬럼은
@@ -194,10 +209,14 @@ public class GroupService {
 		entityManager.clear();
 	}
 
-	private GroupMember getActiveManager(Long groupId, Long authenticatedUserId) {
-		GroupMember requester = groupMemberRepository
+	private GroupMember getActiveMember(Long groupId, Long authenticatedUserId) {
+		return groupMemberRepository
 			.findActiveByGroupIdAndUserId(groupId, authenticatedUserId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+	}
+
+	private GroupMember getActiveManager(Long groupId, Long authenticatedUserId) {
+		GroupMember requester = getActiveMember(groupId, authenticatedUserId);
 		if (!requester.isManager()) {
 			throw new BusinessException(ErrorCode.FORBIDDEN);
 		}

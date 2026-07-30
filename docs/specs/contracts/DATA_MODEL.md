@@ -240,7 +240,7 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   `(receiver_user_id, related_event_id, type)
   WHERE type = 'EVENT_REMINDER' AND related_event_id IS NOT NULL`
 - `title`, `body`는 스냅샷으로 유지한다. 관련 대상 삭제 시 해당 FK를
-  NULL로 바꾸거나 스냅샷만 유지한다는 원칙까지만 확정되어 있다.
+  `ON DELETE SET NULL`로 바꾸고 스냅샷은 유지한다.
 
 ### `notification_settings`
 
@@ -283,13 +283,25 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   일정과 과거 그룹 관계는 보존한다.
 - 그룹 나가기·내보내기: `group_members.left_at`을 기록한다.
 - 그룹 삭제: 관리자이면서 다른 활성 구성원이 없을 때만 하드 삭제할 수 있다.
+  Spring Boot는 한 트랜잭션에서 `member_interests`, `member_aliases`, `posts`,
+  `calendar_events`, `call_sessions`, `daily_reports`, `carnations`,
+  `group_join_requests`, `group_members`, `family_groups` 순서로 명시적으로
+  삭제한다. `post_media`, `comments`, `post_reactions`, `post_analyses`,
+  `event_participants`, `call_transcripts`, `call_reports`는 기존 FK의
+  `ON DELETE CASCADE`로 정리한다. `notifications`의 그룹 및 관련 대상 FK는
+  기존 `ON DELETE SET NULL`을 유지하고 알림 스냅샷은 보존한다. 그 밖의
+  `family_groups`·`group_members` 참조 FK는 기존 `NO ACTION`을 유지하며,
+  애플리케이션이 참조 행을 먼저 삭제한다. `users`와 다른 그룹의 데이터는
+  삭제하지 않는다.
+- Flyway가 생성한 실제 PostgreSQL 스키마의 `information_schema`를 조회하는
+  가드 테스트로 `family_groups`·`group_members` 참조 FK의 등록 목록,
+  `delete_rule`과 정리 방식을 고정한다. 미등록 FK가 추가되거나
+  `NO ACTION`·`CASCADE`·`SET NULL` 정책이 바뀌면 테스트가 실패해야 한다.
 - 게시글·일정·댓글: 위 각 테이블에 명시된 방식으로 하드 삭제한다.
 - 푸시 성공·실패 전송 이력은 현재 저장하지 않는다.
 
 ## 미결정·충돌
 
-- `notifications`의 관련 일정 등 대상이 삭제될 때 “FK를 NULL 처리”와
-  “스냅샷만 유지” 중 정확한 FK 동작은 확정되지 않았다.
 - `openai_item_id`에 Unique를 둘지는 검토 중이다.
 - 통화 전사 보존 기간과 삭제 시점은 확정되지 않았다.
 - 그룹 API의 `managerMemberId`는 `family_groups` 컬럼이 아니다.

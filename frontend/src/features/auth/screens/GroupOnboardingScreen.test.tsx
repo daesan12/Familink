@@ -78,7 +78,16 @@ test('새 그룹 이름과 역할을 입력해 생성 요청을 전달한다', a
   const groupNameInput = renderer!.root.findByProps({
     accessibilityLabel: '그룹 이름',
   });
+  const guardianOption = renderer!.root.findByProps({
+    accessibilityLabel: '보호자',
+  });
   expect(groupNameInput.props.maxLength).toBe(10);
+  expect(StyleSheet.flatten(guardianOption.props.style)).toEqual(
+    expect.objectContaining({
+      borderRadius: 24,
+      overflow: 'hidden',
+    }),
+  );
 
   await TestRenderer.act(() => {
     groupNameInput.props.onChangeText('행복한 우리집');
@@ -86,6 +95,13 @@ test('새 그룹 이름과 역할을 입력해 생성 요청을 전달한다', a
       .findByProps({accessibilityLabel: '피보호자'})
       .props.onPress();
   });
+
+  const careReceiverOption = renderer!.root.findByProps({
+    accessibilityLabel: '피보호자',
+  });
+  expect(
+    StyleSheet.flatten(careReceiverOption.props.style).backgroundColor,
+  ).toBeDefined();
 
   await TestRenderer.act(() => {
     renderer!.root

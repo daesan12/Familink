@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#f7f8fa">
+	<title>AI 전화 개발 UI</title>
+	<link rel="stylesheet" href="/ai-call/app.css">
+</head>
+<body>
+	<main class="app-shell">
+		<section class="phone" aria-label="AI 전화">
+			<header class="status-bar" aria-hidden="true">
+				<span>9:41</span>
+				<span class="notch"></span>
+				<span>LTE&nbsp; 86%</span>
+			</header>
+
+			<section id="selectionScreen" class="screen selection-screen">
+				<div class="title-row">
+					<div>
+						<p class="eyebrow">AI CALL</p>
+						<h1>AI 전화</h1>
+					</div>
+					<span class="availability"><span></span>통화 가능</span>
+				</div>
+
+				<div class="call-hero">
+					<button id="startCallButton" class="start-call" type="button" aria-label="선택한 페르소나로 전화 걸기">
+						<svg viewBox="0 0 24 24" aria-hidden="true">
+							<path d="M7.4 3.2 9.8 7a1.6 1.6 0 0 1-.2 1.9l-1.4 1.4a14.2 14.2 0 0 0 5.5 5.5l1.4-1.4a1.6 1.6 0 0 1 1.9-.2l3.8 2.4a1.6 1.6 0 0 1 .7 1.8l-.6 2.3a1.8 1.8 0 0 1-1.8 1.3C9.7 21.5 2.5 14.3 2 4.9a1.8 1.8 0 0 1 1.3-1.8l2.3-.6a1.6 1.6 0 0 1 1.8.7Z"/>
+						</svg>
+					</button>
+					<strong>전화걸기</strong>
+					<p id="selectedPersonaDescription">회장님·사모님이라고 부르며 격식 있게 보좌해요.</p>
+				</div>
+
+				<div id="personaGrid" class="persona-grid" role="radiogroup" aria-label="대화 페르소나 선택"></div>
+			</section>
+
+			<section id="callScreen" class="screen call-screen is-hidden" aria-live="polite">
+				<div class="call-background"></div>
+				<div class="call-content">
+					<div class="caller">
+						<div id="callerAvatar" class="caller-avatar">비</div>
+						<h2 id="callerName">남자 비서</h2>
+						<p id="callStatus">연결 준비 중</p>
+					</div>
+
+					<div class="call-timer">
+						<strong id="timer">00 : 00</strong>
+						<span id="turnLabel">OpenAI Realtime에 연결하고 있습니다</span>
+					</div>
+
+					<div class="captions" aria-label="AI 실시간 자막">
+						<p id="captionHistory" class="caption-history">연결되면 AI의 말이 이곳에 표시됩니다.</p>
+						<p id="captionCurrent" class="caption-current"></p>
+					</div>
+
+					<div class="call-controls">
+						<button id="speakerButton" class="control-button" type="button" aria-label="스피커 끄기" aria-pressed="true">
+							<svg viewBox="0 0 24 24" aria-hidden="true">
+								<path d="M4 9v6h4l5 4V5L8 9H4Z"/>
+								<path class="stroke" d="M16 9.5a4 4 0 0 1 0 5M18.5 7a7.5 7.5 0 0 1 0 10"/>
+							</svg>
+							<span>스피커</span>
+						</button>
+						<button id="endCallButton" class="control-button end-button" type="button" aria-label="통화 종료">
+							<svg viewBox="0 0 24 24" aria-hidden="true">
+								<path d="M4.5 15.5c4.8-3.4 10.2-3.4 15 0l-2.1 3.1-3.4-1.4v-2.5a13.8 13.8 0 0 0-4 0v2.5l-3.4 1.4-2.1-3.1Z"/>
+							</svg>
+							<span>종료</span>
+						</button>
+						<button id="microphoneButton" class="control-button" type="button" aria-label="마이크 끄기" aria-pressed="true">
+							<svg viewBox="0 0 24 24" aria-hidden="true">
+								<rect x="8.5" y="3" width="7" height="12" rx="3.5"/>
+								<path class="stroke" d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/>
+							</svg>
+							<span>마이크</span>
+						</button>
+					</div>
+				</div>
+			</section>
+
+			<section id="endedScreen" class="screen ended-screen is-hidden">
+				<div class="ended-mark">
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path d="m7 12 3.2 3.2L17.5 8"/>
+					</svg>
+				</div>
+				<strong id="endedDuration">00 : 00</strong>
+				<h2>통화가 종료되었습니다.</h2>
+				<p id="endedMessage">편안한 대화가 되었기를 바랍니다.</p>
+				<button id="backButton" class="secondary-button" type="button">페르소나 다시 선택</button>
+			</section>
+		</section>
+
+		<details class="developer-log">
+			<summary>
+				<span>개발 로그</span>
+				<span id="logState">대기 중</span>
+			</summary>
+			<ol id="logEntries"></ol>
+		</details>
+	</main>
+
+	<audio id="remoteAudio" autoplay></audio>
+	<div id="toast" class="toast is-hidden" role="alert"></div>
+	<script src="/ai-call/app.js" defer></script>
+</body>
+</html>

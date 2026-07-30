@@ -30,11 +30,19 @@ docker compose --env-file .env -f compose.local.yml up -d
 .\gradlew.bat bootRun
 ```
 
+AI 전화 개발 UI와 로컬 fixture를 함께 실행하려면 OpenAI API 키를 `.env`의
+`OPENAI_API_KEY`에 설정하고 다음 프로필을 사용합니다.
+
+```powershell
+.\gradlew.bat bootRun --args='--spring.profiles.active=local,ai-call-dev'
+```
+
 확인 주소:
 
 - Health: `http://localhost:8080/actuator/health`
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
 - OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+- AI 전화 개발 UI: `http://localhost:8080/ai-call/`
 
 ## 환경변수
 
@@ -48,6 +56,10 @@ docker compose --env-file .env -f compose.local.yml up -d
 | `REDIS_HOST` | `localhost` | Redis 호스트 |
 | `REDIS_PASSWORD` | `local_redis_password` | 로컬 Redis 비밀번호 |
 | `REDIS_PORT` | `6379` | 로컬 Redis 포트 |
+| `OPENAI_API_KEY` | 없음 | OpenAI Realtime 서버 인증 키 |
+| `OPENAI_REALTIME_MODEL` | `gpt-realtime-2` | Realtime 통화 모델 |
+| `OPENAI_REALTIME_TRANSCRIPTION_MODEL` | `gpt-transcribe` | 사용자 입력 전사 모델 |
+| `OPENAI_REALTIME_TRANSCRIPTION_LANGUAGE` | `ko` | 사용자 입력 전사 언어 |
 
 기본값은 로컬 개발 전용입니다. 운영 환경에서는 모든 비밀값을 환경변수 또는
 비밀 관리 시스템으로 주입합니다.

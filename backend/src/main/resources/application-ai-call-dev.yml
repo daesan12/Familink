@@ -1,0 +1,5 @@
+app:
+  ai-call:
+    dev:
+      enabled: true
+      care-receiver-login-id: ai-call-user
