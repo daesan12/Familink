@@ -3,6 +3,7 @@ package com.ssafy.s15p11b104;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,18 @@ class BackendApplicationTests extends IntegrationTest {
 
 		assertThat(databaseResult).isEqualTo(1);
 		assertThat(redisResult).isEqualTo("PONG");
+	}
+
+	@Test
+	void calendarEventTimeColumnsAreTimestamptz() {
+		List<String> dataTypes = jdbcTemplate.queryForList(
+			"SELECT data_type FROM information_schema.columns "
+				+ "WHERE table_schema = 'public' AND table_name = 'calendar_events' "
+				+ "AND column_name IN ('start_at', 'end_at')",
+			String.class);
+
+		assertThat(dataTypes).containsExactlyInAnyOrder(
+			"timestamp with time zone", "timestamp with time zone");
 	}
 
 	@Test

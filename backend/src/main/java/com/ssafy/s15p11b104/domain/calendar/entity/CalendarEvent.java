@@ -1,7 +1,7 @@
 package com.ssafy.s15p11b104.domain.calendar.entity;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
 
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
@@ -40,10 +40,10 @@ public class CalendarEvent extends BaseEntity {
 	private LocalDate eventDate;
 
 	@Column(name = "start_at")
-	private LocalTime startAt;
+	private Instant startAt;
 
 	@Column(name = "end_at")
-	private LocalTime endAt;
+	private Instant endAt;
 
 	protected CalendarEvent() {
 	}
@@ -80,11 +80,11 @@ public class CalendarEvent extends BaseEntity {
 		return eventDate;
 	}
 
-	public LocalTime getStartAt() {
+	public Instant getStartAt() {
 		return startAt;
 	}
 
-	public LocalTime getEndAt() {
+	public Instant getEndAt() {
 		return endAt;
 	}
 }
