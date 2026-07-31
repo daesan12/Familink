@@ -15,26 +15,26 @@ import type {
 } from './types';
 
 interface AppShellProps {
+  currentUserId?: number;
+  currentUserName?: string;
   groupStore?: CurrentGroupStore;
   groups: readonly FamilyGroup[];
   initialGroupId?: string | null;
   initialRoute?: AppRoute;
-  onCreateCalendarEvent?: () => void;
   onCreateGroup?: () => void;
-  onEditCalendarEvent?: (eventId: string) => void;
   onGroupChange?: (groupId: string) => void;
   onJoinGroup?: () => void;
   screens?: AppScreenRegistry;
 }
 
 export function AppShell({
+  currentUserId,
+  currentUserName,
   groupStore,
   groups,
   initialGroupId,
   initialRoute = 'feed',
-  onCreateCalendarEvent,
   onCreateGroup,
-  onEditCalendarEvent,
   onGroupChange,
   onJoinGroup,
   screens = {},
@@ -43,6 +43,8 @@ export function AppShell({
   const [currentGroupId, setCurrentGroupId] = useState(initialGroupId);
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
   const [createPostRequestId, setCreatePostRequestId] = useState(0);
+  const [createCalendarEventRequestId, setCreateCalendarEventRequestId] =
+    useState(0);
   const [isScreenFullscreen, setIsScreenFullscreen] = useState(false);
   const [isScreenHeaderVisible, setIsScreenHeaderVisible] = useState(true);
   const [openPostId, setOpenPostId] = useState<string | null>(null);
@@ -233,12 +235,12 @@ export function AppShell({
             <Pressable
               accessibilityLabel="일정 추가"
               accessibilityRole="button"
-              disabled={!onCreateCalendarEvent}
-              onPress={onCreateCalendarEvent}
+              onPress={() =>
+                setCreateCalendarEventRequestId(requestId => requestId + 1)
+              }
               style={({ pressed }) => [
                 styles.calendarAddButton,
                 pressed && styles.calendarAddButtonPressed,
-                !onCreateCalendarEvent && styles.disabledAction,
               ]}
             >
               <MaterialDesignIcons
@@ -281,13 +283,15 @@ export function AppShell({
       <View style={styles.content}>
         {Screen ? (
           <Screen
+            createCalendarEventRequestId={createCalendarEventRequestId}
             createPostRequestId={createPostRequestId}
             currentGroup={currentGroup}
+            currentUserId={currentUserId}
+            currentUserName={currentUserName}
             onCloseArchive={() => setActiveRoute('feed')}
             onCloseNotifications={() => setActiveRoute('feed')}
             onFullscreenChange={setIsScreenFullscreen}
             onHeaderVisibilityChange={setIsScreenHeaderVisible}
-            onEditCalendarEvent={onEditCalendarEvent}
             onNotificationRead={handleNotificationRead}
             onOpenNotifications={() => setActiveRoute('notifications')}
             onOpenPost={handleOpenPost}

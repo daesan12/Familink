@@ -32,7 +32,22 @@ export interface CalendarQuery {
   startDate: DateKey;
 }
 
+export interface CalendarEventWriteInput {
+  description: string | null;
+  endAt: string | null;
+  endDate: DateKey;
+  eventDate: DateKey;
+  participantMemberIds: readonly string[];
+  startAt: string | null;
+  title: string;
+}
+
 export interface CalendarGateway {
+  createEvent(
+    groupId: string,
+    input: CalendarEventWriteInput,
+    signal?: AbortSignal
+  ): Promise<string>;
   deleteEvent(eventId: string, signal?: AbortSignal): Promise<void>;
   getEvent(eventId: string, signal?: AbortSignal): Promise<CalendarEventDetail>;
   listEvents(query: CalendarQuery): Promise<readonly CalendarEventSummary[]>;
@@ -40,4 +55,9 @@ export interface CalendarGateway {
     groupId: string,
     signal?: AbortSignal
   ): Promise<readonly CalendarMember[]>;
+  updateEvent(
+    eventId: string,
+    input: CalendarEventWriteInput,
+    signal?: AbortSignal
+  ): Promise<void>;
 }

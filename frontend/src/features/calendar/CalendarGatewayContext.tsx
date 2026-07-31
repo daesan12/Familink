@@ -4,6 +4,9 @@ import { CalendarApiError } from "./api/calendarApi";
 import type { CalendarGateway } from "./types";
 
 const unavailableGateway: CalendarGateway = {
+  async createEvent() {
+    throw new CalendarApiError("일정 API가 연결되지 않았어요.");
+  },
   async deleteEvent() {
     throw new CalendarApiError("일정 API가 연결되지 않았어요.");
   },
@@ -14,6 +17,9 @@ const unavailableGateway: CalendarGateway = {
     throw new CalendarApiError("일정 API가 연결되지 않았어요.");
   },
   async listMembers() {
+    throw new CalendarApiError("일정 API가 연결되지 않았어요.");
+  },
+  async updateEvent() {
     throw new CalendarApiError("일정 API가 연결되지 않았어요.");
   },
 };

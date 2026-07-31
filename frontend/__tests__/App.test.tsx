@@ -914,7 +914,7 @@ test("앱 셸을 명시하면 개발 그룹과 하단 탭을 표시한다", asyn
 });
 
 test("캘린더 헤더는 일정 추가 버튼과 그룹 전환만 표시한다", async () => {
-  const alertSpy = jest.spyOn(Alert, "alert");
+  let createCalendarEventRequestId = 0;
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(() => {
@@ -922,7 +922,13 @@ test("캘린더 헤더는 일정 추가 버튼과 그룹 전환만 표시한다"
       <App
         initialRootRoute="appShell"
         initialShellRoute="calendar"
-        screens={{ calendar: () => null }}
+        screens={{
+          calendar: (props) => {
+            createCalendarEventRequestId =
+              props.createCalendarEventRequestId ?? 0;
+            return null;
+          },
+        }}
       />
     );
   });
@@ -957,11 +963,7 @@ test("캘린더 헤더는 일정 추가 버튼과 그룹 전환만 표시한다"
     addButton.props.onPress();
   });
 
-  expect(alertSpy).toHaveBeenCalledWith(
-    "일정 추가",
-    "후속 작업에서 연결될 화면입니다."
-  );
-  alertSpy.mockRestore();
+  expect(createCalendarEventRequestId).toBe(1);
 });
 
 test("그룹 선택 바텀시트에서 빈 피드 그룹으로 전환한다", async () => {

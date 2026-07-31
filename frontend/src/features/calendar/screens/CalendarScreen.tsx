@@ -32,6 +32,7 @@ import {
   CalendarMonthGrid,
 } from "../components/CalendarMonthGrid";
 import { toErrorMessage, useCalendarData } from "../hooks/useCalendarData";
+import { CalendarEventFormScreen } from "./CalendarEventFormScreen";
 import type { CalendarEventDetail, CalendarGateway, DateKey } from "../types";
 
 const SWIPE_THRESHOLD = 48;
@@ -52,6 +53,10 @@ interface DetailState {
   visible: boolean;
 }
 
+interface EditorState {
+  detail: CalendarEventDetail | null;
+}
+
 const CLOSED_DETAIL: DetailState = {
   deleteErrorMessage: null,
   deleting: false,
@@ -63,11 +68,15 @@ const CLOSED_DETAIL: DetailState = {
 };
 
 export function CalendarScreen({
+  createCalendarEventRequestId,
   currentGroup,
+  currentUserId,
+  currentUserName = "사용자",
   gateway,
   initialDateKey,
   now,
-  onEditCalendarEvent,
+  onFullscreenChange,
+  onHeaderVisibilityChange,
 }: CalendarScreenProps) {
   const contextGateway = useCalendarGateway();
   const resolvedGateway = gateway ?? contextGateway;
@@ -82,10 +91,12 @@ export function CalendarScreen({
     useState<DateKey>(initialSelectedDate);
   const [isSheetVisible, setIsSheetVisible] = useState(false);
   const [detailState, setDetailState] = useState<DetailState>(CLOSED_DETAIL);
+  const [editorState, setEditorState] = useState<EditorState | null>(null);
   const [isAnimatingMonth, setIsAnimatingMonth] = useState(false);
   const translateY = useRef(new Animated.Value(0)).current;
   const detailController = useRef<AbortController | null>(null);
   const deleteController = useRef<AbortController | null>(null);
+  const lastCreateRequestId = useRef(createCalendarEventRequestId ?? 0);
   const calendarMonth = useMemo(
     () => createCalendarMonth(visibleMonth.year, visibleMonth.month),
     [visibleMonth]
@@ -101,13 +112,50 @@ export function CalendarScreen({
     () => eventsForDate(events, selectedDate),
     [events, selectedDate]
   );
+  const currentMember = useMemo(
+    () =>
+      currentUserId === undefined
+        ? null
+        : members.find((member) => member.userId === String(currentUserId)) ??
+          null,
+    [currentUserId, members]
+  );
+  const canManageSelectedEvent = Boolean(
+    detailState.detail &&
+      currentMember &&
+      (currentMember.isManager ||
+        currentMember.memberId === detailState.detail.creatorMemberId)
+  );
 
   useEffect(() => {
     detailController.current?.abort();
     deleteController.current?.abort();
     setDetailState(CLOSED_DETAIL);
+    setEditorState(null);
     setIsSheetVisible(false);
   }, [currentGroup.id]);
+
+  useEffect(() => {
+    const requestId = createCalendarEventRequestId ?? 0;
+    if (requestId > 0 && requestId !== lastCreateRequestId.current) {
+      lastCreateRequestId.current = requestId;
+      setDetailState(CLOSED_DETAIL);
+      setIsSheetVisible(false);
+      setEditorState({ detail: null });
+    }
+  }, [createCalendarEventRequestId]);
+
+  useEffect(() => {
+    if (!editorState) {
+      return;
+    }
+    onFullscreenChange?.(true);
+    onHeaderVisibilityChange?.(false);
+    return () => {
+      onFullscreenChange?.(false);
+      onHeaderVisibilityChange?.(true);
+    };
+  }, [editorState, onFullscreenChange, onHeaderVisibilityChange]);
 
   useEffect(
     () => () => {
@@ -277,8 +325,10 @@ export function CalendarScreen({
   };
 
   const handleEditDetail = () => {
-    if (detailState.detail) {
-      onEditCalendarEvent?.(detailState.detail.id);
+    if (detailState.detail && canManageSelectedEvent) {
+      setEditorState({ detail: detailState.detail });
+      setDetailState(CLOSED_DETAIL);
+      setIsSheetVisible(false);
     }
   };
 
@@ -317,6 +367,9 @@ export function CalendarScreen({
   }, [detailState.deleting, detailState.detail, removeEvent, resolvedGateway]);
 
   const handleRequestDelete = () => {
+    if (!canManageSelectedEvent) {
+      return;
+    }
     Alert.alert("일정을 삭제할까요?", "삭제한 일정은 다시 복구할 수 없어요.", [
       { style: "cancel", text: "취소" },
       {
@@ -326,6 +379,28 @@ export function CalendarScreen({
       },
     ]);
   };
+
+  if (editorState) {
+    return (
+      <CalendarEventFormScreen
+        currentMember={currentMember}
+        currentUserName={currentUserName}
+        gateway={resolvedGateway}
+        groupId={currentGroup.id}
+        initialDate={selectedDate}
+        initialDetail={editorState.detail ?? undefined}
+        members={members}
+        now={now}
+        onCancel={() => setEditorState(null)}
+        onSaved={() => {
+          setEditorState(null);
+          setDetailState(CLOSED_DETAIL);
+          setIsSheetVisible(true);
+          reload();
+        }}
+      />
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -409,6 +484,7 @@ export function CalendarScreen({
         visible={isSheetVisible}
       />
       <CalendarEventDetailModal
+        canManage={canManageSelectedEvent}
         deleteErrorMessage={detailState.deleteErrorMessage}
         deleting={detailState.deleting}
         detail={detailState.detail}

@@ -6,6 +6,11 @@ import type { CalendarGateway } from "../types";
 import { CalendarScreen } from "./CalendarScreen";
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
+jest.mock("@react-native-community/datetimepicker", () => ({
+  DateTimePickerAndroid: { open: jest.fn() },
+}));
+
+jest.setTimeout(10_000);
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
 
@@ -18,6 +23,7 @@ afterEach(() => {
 
 function createGateway(): jest.Mocked<CalendarGateway> {
   return {
+    createEvent: jest.fn().mockResolvedValue("15"),
     deleteEvent: jest.fn().mockResolvedValue(undefined),
     getEvent: jest.fn().mockResolvedValue({
       creatorMemberId: "7",
@@ -67,11 +73,14 @@ function createGateway(): jest.Mocked<CalendarGateway> {
         userId: "80",
       },
     ]),
+    updateEvent: jest.fn().mockResolvedValue(undefined),
   };
 }
 
 const baseProps = {
   currentGroup: { id: "3", name: "우리 가족", role: "guardian" } as const,
+  currentUserId: 70,
+  currentUserName: "이종철",
   initialDateKey: "2026-07-31",
   now: new Date("2026-07-31T03:00:00Z"),
   role: "guardian" as const,
@@ -194,13 +203,10 @@ test("날짜 바텀시트에서 일정을 열고 작성자·참여자 상세를 
   ).toBeTruthy();
 });
 
-test("상세에서 수정을 요청하고 확인 후 일정을 삭제한다", async () => {
-  const onEditCalendarEvent = jest.fn();
+test("상세에서 기존 값으로 수정한 뒤 확인 후 일정을 삭제한다", async () => {
   const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
   const gateway = createGateway();
-  const { renderer } = await renderCalendar(gateway, {
-    onEditCalendarEvent,
-  });
+  const { renderer } = await renderCalendar(gateway);
 
   await openEventDetail(renderer);
 
@@ -209,7 +215,22 @@ test("상세에서 수정을 요청하고 확인 후 일정을 삭제한다", as
       .findByProps({ accessibilityLabel: "일정 수정" })
       .props.onPress();
   });
-  expect(onEditCalendarEvent).toHaveBeenCalledWith("12");
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "일정 제목" }).props.value
+  ).toBe("홍박사 정형외과");
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "일정 저장" })
+      .props.onPress();
+    await Promise.resolve();
+  });
+  expect(gateway.updateEvent).toHaveBeenCalledWith(
+    "12",
+    expect.objectContaining({ title: "홍박사 정형외과" })
+  );
+
+  await openEventDetail(renderer);
 
   await TestRenderer.act(async () => {
     renderer.root
@@ -238,6 +259,48 @@ test("상세에서 수정을 요청하고 확인 후 일정을 삭제한다", as
   ).toHaveLength(0);
 });
 
+test("상단 추가 요청은 선택 날짜의 시간 설정이 꺼진 새 폼을 연다", async () => {
+  const gateway = createGateway();
+  const { renderer } = await renderCalendar(gateway, {
+    createCalendarEventRequestId: 0,
+  });
+
+  await TestRenderer.act(async () => {
+    renderer.update(
+      <CalendarScreen
+        {...baseProps}
+        createCalendarEventRequestId={1}
+        gateway={gateway}
+      />
+    );
+  });
+
+  expect(renderer.root.findByProps({ children: "새 일정" })).toBeTruthy();
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "시간 설정" }).props.value
+  ).toBe(false);
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "시작 날짜 2026년 7월 31일",
+    })
+  ).toBeTruthy();
+});
+
+test("작성자나 관리자가 아니면 상세의 수정·삭제 동작을 숨긴다", async () => {
+  const { renderer } = await renderCalendar(createGateway(), {
+    currentUserId: 80,
+  });
+
+  await openEventDetail(renderer);
+
+  expect(
+    renderer.root.findAllByProps({ accessibilityLabel: "일정 수정" })
+  ).toHaveLength(0);
+  expect(
+    renderer.root.findAllByProps({ accessibilityLabel: "일정 삭제" })
+  ).toHaveLength(0);
+});
+
 test("삭제 확인을 취소하면 요청하지 않고 상세를 유지한다", async () => {
   const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
   const gateway = createGateway();
@@ -250,7 +313,7 @@ test("삭제 확인을 취소하면 요청하지 않고 상세를 유지한다",
       .props.onPress();
   });
   const buttons = alertSpy.mock.calls[0]?.[2] ?? [];
-  const cancelButton = buttons.find(button => button.style === "cancel");
+  const cancelButton = buttons.find((button) => button.style === "cancel");
 
   await TestRenderer.act(async () => {
     cancelButton?.onPress?.();
@@ -275,16 +338,19 @@ test("삭제 실패 시 상세와 일정을 유지하고 오류를 표시한다"
       .props.onPress();
   });
   const buttons = alertSpy.mock.calls[0]?.[2] ?? [];
-  const deleteButton = buttons.find(button => button.style === "destructive");
+  const deleteButton = buttons.find((button) => button.style === "destructive");
 
   await TestRenderer.act(async () => {
     deleteButton?.onPress?.();
     await Promise.resolve();
   });
 
-  expect(renderer.root.findByProps({ children: "삭제 요청 실패" })).toBeTruthy();
   expect(
-    renderer.root.findByProps({ accessibilityLabel: "일정 삭제" }).props.disabled
+    renderer.root.findByProps({ children: "삭제 요청 실패" })
+  ).toBeTruthy();
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "일정 삭제" }).props
+      .disabled
   ).toBe(false);
 });
 

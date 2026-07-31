@@ -373,13 +373,13 @@ export default function App({
         )}
         {route === "appShell" && (
           <AppShell
+            currentUserId={user?.id}
+            currentUserName={user?.name}
             groupStore={groupStore}
             groups={resolvedGroups}
             initialGroupId={activeGroupId}
             initialRoute={initialShellRoute}
-            onCreateCalendarEvent={() => showDeferredFeature("일정 추가")}
             onCreateGroup={() => openGroupOnboarding("appShell")}
-            onEditCalendarEvent={() => showDeferredFeature("일정 수정")}
             onGroupChange={onGroupChange}
             onJoinGroup={() => openGroupOnboarding("appShell")}
             screens={screens ?? DEFAULT_SCREENS}

@@ -10,6 +10,7 @@ export {CalendarScreen} from './screens/CalendarScreen';
 export type {
   CalendarEventDetail,
   CalendarEventSummary,
+  CalendarEventWriteInput,
   CalendarGateway,
   CalendarMember,
   CalendarQuery,
