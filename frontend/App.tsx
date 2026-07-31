@@ -17,6 +17,7 @@ import {
   GroupOnboardingScreen,
   type PendingJoinRequest,
 } from "./src/features/auth/screens/GroupOnboardingScreen";
+import { InterestSelectionScreen } from "./src/features/auth/screens/InterestSelectionScreen";
 import { SignedInWelcomeScreen } from "./src/features/auth/screens/SignedInWelcomeScreen";
 import { SignupFlowScreen } from "./src/features/auth/screens/SignupFlowScreen";
 import { WelcomeScreen } from "./src/features/auth/screens/WelcomeScreen";
@@ -35,6 +36,7 @@ type RootRoute =
   | "signup"
   | "signedInWelcome"
   | "groupOnboarding"
+  | "interestSetup"
   | "appShell";
 
 interface AppProps {
@@ -51,6 +53,10 @@ interface AppProps {
     inviteCode: string
   ) => PendingJoinRequest | Promise<PendingJoinRequest>;
   onOpenActiveGroup?: (activeGroupId: string) => void;
+  onSaveInterests?: (input: {
+    groupId: string;
+    interests: readonly string[];
+  }) => Promise<void> | void;
   screens?: AppScreenRegistry;
 }
 
@@ -91,6 +97,7 @@ export default function App({
   onGroupChange,
   onJoinGroup,
   onOpenActiveGroup,
+  onSaveInterests,
   screens,
 }: AppProps) {
   const [route, setRoute] = useState<RootRoute>(initialRootRoute);
@@ -100,6 +107,7 @@ export default function App({
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [activeGroupId, setActiveGroupId] = useState(initialGroupId);
   const [createdGroups, setCreatedGroups] = useState<FamilyGroup[]>([]);
+  const [interestGroup, setInterestGroup] = useState<FamilyGroup | null>(null);
   const [joinRequests, setJoinRequests] =
     useState<readonly PendingJoinRequest[]>(initialJoinRequests);
   const resolvedGroups = [
@@ -148,6 +156,11 @@ export default function App({
         // 서버가 확정한 그룹만 저장하고 오류 처리는 상위 앱 계층에 위임한다.
       });
     }
+    if (createdGroup.role === "careReceiver") {
+      setInterestGroup(createdGroup);
+      setRoute("interestSetup");
+      return;
+    }
     setRoute("appShell");
   };
 
@@ -185,6 +198,20 @@ export default function App({
     groupStore?.save(groupId).catch(() => {
       // 그룹 진입은 유지하고 영속화 오류 처리는 상위 앱 계층에 위임한다.
     });
+    if (request.role === "careReceiver") {
+      setInterestGroup({
+        id: groupId,
+        name: request.groupName,
+        role: request.role,
+      });
+      setRoute("interestSetup");
+      return;
+    }
+    setRoute("appShell");
+  };
+
+  const handleFinishInterestSetup = () => {
+    setInterestGroup(null);
     setRoute("appShell");
   };
 
@@ -246,6 +273,19 @@ export default function App({
           onJoinByCode={handleJoinGroup}
           onOpenApprovedGroup={handleOpenApprovedGroup}
           pendingRequests={joinRequests}
+        />
+      )}
+      {route === "interestSetup" && interestGroup !== null && (
+        <InterestSelectionScreen
+          onBack={handleFinishInterestSetup}
+          onComplete={handleFinishInterestSetup}
+          onSave={(interests) =>
+            onSaveInterests?.({
+              groupId: interestGroup.id,
+              interests,
+            })
+          }
+          onSkip={handleFinishInterestSetup}
         />
       )}
     </SafeAreaProvider>

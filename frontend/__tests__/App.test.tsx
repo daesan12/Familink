@@ -270,6 +270,75 @@ test("새 그룹을 만들면 입력한 그룹으로 앱 셸에 진입한다", a
   ).toBeTruthy();
 });
 
+test("피보호자로 새 그룹을 만들면 관심사 설정 후 앱 셸에 진입한다", async () => {
+  const onSaveInterests = jest.fn().mockResolvedValue(undefined);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        initialRootRoute="groupOnboarding"
+        onSaveInterests={onSaveInterests}
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: "우리 가족만의 공간을 시작해요",
+      })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹 이름" })
+      .props.onChangeText("돌봄 가족");
+    renderer!.root
+      .findByProps({ accessibilityLabel: "피보호자" })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "생성하기" })
+      .props.onPress();
+  });
+
+  expect(
+    renderer!.root.findByProps({ children: "관심사를 선택해주세요" })
+  ).toBeTruthy();
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "가족과 일상 관심사" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "관심사 저장하고 다음" })
+      .props.onPress();
+  });
+
+  expect(onSaveInterests).toHaveBeenCalledWith({
+    groupId: expect.stringMatching(/^created-group-/),
+    interests: ["가족과 일상"],
+  });
+  expect(
+    renderer!.root.findByProps({ accessibilityLabel: "관심사 저장 완료" })
+  ).toBeTruthy();
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "피드로 이동" })
+      .props.onPress();
+  });
+  expect(renderer!.root.findByProps({ children: "돌봄 가족" })).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({ accessibilityRole: "tablist" })
+  ).toBeTruthy();
+});
+
 test("초대 코드 참여 요청을 보내면 승인 대기 카드를 표시한다", async () => {
   const onJoinGroup = jest.fn().mockReturnValue({
     groupName: "가족 소모임",
@@ -470,6 +539,16 @@ test("승인된 피보호자는 지정된 역할로 그룹에 진입한다", asy
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({ accessibilityLabel: "돌봄 가족 열기" })
+      .props.onPress();
+  });
+
+  expect(
+    renderer!.root.findByProps({ children: "관심사를 선택해주세요" })
+  ).toBeTruthy();
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "관심사 설정 건너뛰기" })
       .props.onPress();
   });
 
