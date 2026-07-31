@@ -51,10 +51,12 @@ import { FeedScreen } from "./src/features/feed";
 import {
   familyGroupMembershipGateway,
   familyGroupMemberGateway,
+  familyGroupManagementGateway,
   familyGroupGateway,
   GroupInfoScreen,
   type FamilyGroupGateway,
   type GroupMemberGateway,
+  type GroupManagementGateway,
   type GroupMembershipGateway,
   type GroupJoinRequestSummary,
 } from "./src/features/group-info";
@@ -75,6 +77,7 @@ interface AppProps {
   authSession?: AuthSessionCoordinator;
   groupGateway?: FamilyGroupGateway;
   groupMemberGateway?: GroupMemberGateway;
+  groupManagementGateway?: GroupManagementGateway;
   groupMembershipGateway?: GroupMembershipGateway;
   groupStore?: CurrentGroupStore;
   groups?: readonly FamilyGroup[];
@@ -136,7 +139,10 @@ function toPendingJoinRequests(
 interface GroupInfoIntegration {
   gateway: FamilyGroupGateway;
   members: GroupMemberGateway;
+  management: GroupManagementGateway;
   membership: GroupMembershipGateway;
+  deleteGroup(groupId: string, confirmationName: string): Promise<void>;
+  leaveGroup(groupId: string): Promise<void>;
   renameGroup(groupId: string, name: string): Promise<void>;
 }
 
@@ -171,6 +177,25 @@ function ConnectedGroupInfoScreen(screenProps: AppScreenProps) {
       onUpdateMemberRole={(groupId, memberId, role) =>
         integration.members.updateMemberRole(groupId, memberId, role)
       }
+      onChangeManager={memberId =>
+        integration.management.changeManager(
+          screenProps.currentGroup.id,
+          memberId,
+        ).then(() => undefined)
+      }
+      onRemoveMember={memberId =>
+        integration.management.removeMember(
+          screenProps.currentGroup.id,
+          memberId,
+        )
+      }
+      onLeaveGroup={() => integration.leaveGroup(screenProps.currentGroup.id)}
+      onDeleteGroup={confirmationName =>
+        integration.deleteGroup(
+          screenProps.currentGroup.id,
+          confirmationName,
+        )
+      }
       onRenameGroup={(name) =>
         integration.renameGroup(screenProps.currentGroup.id, name)
       }
@@ -200,6 +225,7 @@ export default function App({
   authSession = authSessionManager,
   groupGateway = familyGroupGateway,
   groupMemberGateway = familyGroupMemberGateway,
+  groupManagementGateway = familyGroupManagementGateway,
   groupMembershipGateway = familyGroupMembershipGateway,
   groupStore = currentGroupStore,
   groups,
@@ -538,14 +564,65 @@ export default function App({
     [groupGateway]
   );
 
+  const removeGroupFromState = useCallback(
+    (groupId: string) => {
+      const remainingGroups = availableGroups.filter(
+        group => group.id !== groupId,
+      );
+      setAvailableGroups(remainingGroups);
+
+      const nextGroup = remainingGroups[0];
+      if (nextGroup === undefined) {
+        setActiveGroupId(null);
+        setRoute('signedInWelcome');
+        return;
+      }
+
+      setActiveGroupId(nextGroup.id);
+      onGroupChange?.(nextGroup.id);
+      groupStore?.save(nextGroup.id).catch(() => {
+        // API 작업은 완료됐고 최근 그룹 저장 실패는 다음 진입에서 다시 복구한다.
+      });
+      setRoute('appShell');
+    },
+    [availableGroups, groupStore, onGroupChange],
+  );
+
+  const handleLeaveGroup = useCallback(
+    async (groupId: string) => {
+      await groupManagementGateway.leaveGroup(groupId);
+      removeGroupFromState(groupId);
+    },
+    [groupManagementGateway, removeGroupFromState],
+  );
+
+  const handleDeleteGroup = useCallback(
+    async (groupId: string, confirmationName: string) => {
+      await groupManagementGateway.deleteGroup(groupId, confirmationName);
+      removeGroupFromState(groupId);
+    },
+    [groupManagementGateway, removeGroupFromState],
+  );
+
   const groupInfoIntegration = useMemo<GroupInfoIntegration>(
     () => ({
       gateway: groupGateway,
       members: groupMemberGateway,
+      management: groupManagementGateway,
       membership: groupMembershipGateway,
+      deleteGroup: handleDeleteGroup,
+      leaveGroup: handleLeaveGroup,
       renameGroup: handleRenameGroup,
     }),
-    [groupGateway, groupMemberGateway, groupMembershipGateway, handleRenameGroup]
+    [
+      groupGateway,
+      groupManagementGateway,
+      groupMemberGateway,
+      groupMembershipGateway,
+      handleDeleteGroup,
+      handleLeaveGroup,
+      handleRenameGroup,
+    ]
   );
   const resolvedScreens = screens ?? DEFAULT_SCREENS;
 

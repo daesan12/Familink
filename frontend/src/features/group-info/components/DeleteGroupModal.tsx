@@ -1,23 +1,60 @@
-import {Modal, Pressable, StyleSheet, Text} from 'react-native';
+import {useState} from 'react';
+import {ActivityIndicator, Modal, Pressable, StyleSheet, Text} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {getGroupManagementErrorMessage} from '../api/groupManagementApi';
 
 interface DeleteGroupModalProps {
   visible: boolean;
   onClose: () => void;
-  // 그룹 삭제 확정 콜백(연동·B-3 전환은 후속).
-  onDeleteGroup?: () => void;
+  // API 계약의 confirmationName으로 보낼 현재 그룹 이름.
+  confirmationName?: string;
+  // 그룹 삭제 확정 콜백. API 성공 후에만 팝업이 닫힌다.
+  onDeleteGroup?: (confirmationName: string) => unknown;
 }
 
 // H-9 그룹 삭제. 그룹정보 화면 위에 뜨는 확인 팝업.
 export function DeleteGroupModal({
   visible,
   onClose,
+  confirmationName = '',
   onDeleteGroup,
 }: DeleteGroupModalProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const handleDelete = () => {
-    onDeleteGroup?.();
-    onClose();
+    if (isSubmitting) {
+      return;
+    }
+
+    setErrorMessage(null);
+    try {
+      const result = onDeleteGroup?.(confirmationName);
+      if (result !== undefined && isPromiseLike(result)) {
+        setIsSubmitting(true);
+        result
+          .then(onClose)
+          .catch((error: unknown) => {
+            setErrorMessage(
+              getGroupManagementErrorMessage(
+                error,
+                '그룹을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+              ),
+            );
+          })
+          .finally(() => setIsSubmitting(false));
+        return;
+      }
+      onClose();
+    } catch (error) {
+      setErrorMessage(
+        getGroupManagementErrorMessage(
+          error,
+          '그룹을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        ),
+      );
+    }
   };
 
   return (
@@ -40,13 +77,23 @@ export function DeleteGroupModal({
           style={styles.card}
         >
           <Text style={styles.title}>정말 그룹을 삭제하시겠어요?</Text>
+          {errorMessage ? (
+            <Text accessibilityRole="alert" style={styles.errorText}>
+              {errorMessage}
+            </Text>
+          ) : null}
           <Pressable
             accessibilityLabel="그룹 삭제 확정"
             accessibilityRole="button"
+            disabled={isSubmitting}
             onPress={handleDelete}
             style={styles.deleteButton}
           >
-            <Text style={styles.deleteButtonText}>그룹 삭제</Text>
+            {isSubmitting ? (
+              <ActivityIndicator color={COLORS.background} />
+            ) : (
+              <Text style={styles.deleteButtonText}>그룹 삭제</Text>
+            )}
           </Pressable>
         </Pressable>
       </Pressable>
@@ -84,6 +131,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
   title: {
     color: COLORS.textStrong,
     fontSize: 18,
@@ -91,3 +144,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+function isPromiseLike(value: unknown): value is Promise<void> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof value.then === 'function'
+  );
+}
