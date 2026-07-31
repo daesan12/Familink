@@ -32,3 +32,37 @@ export interface GroupMember {
   // 최근 7일 카네이션(도장) 적립 여부. 길이는 WEEKLY_STAMP_DAYS다.
   weeklyStamps: readonly boolean[];
 }
+
+// H-3 주간 효자 랭킹의 한 줄. 필드명은 API-CARNATION-001
+// (GET /groups/{groupId}/grass) 응답의 rankings[] 항목과 맞춘다.
+// 카네이션은 보호자만 적립하므로 서버도 보호자만 내려준다.
+export interface WeeklyRankingEntry {
+  memberId: string;
+  // 표시 이름. 아바타 이니셜은 이 값에서 파생한다(avatarInitial).
+  displayName: string;
+  // 이번 주에 적립한 카네이션 수. 순위 산정 기준이다.
+  carnationCount: number;
+  // 지난주 카네이션 1위 여부. 이번 주에 왕관을 단다.
+  // 이번 주 순위와 무관하며, 지난주 공동 1위면 여러 명이 true일 수 있다.
+  previousWeekWinner: boolean;
+}
+
+// 공동 순위를 반영한 표준 경쟁 순위(1,1,3 …)를 매긴 한 줄.
+// rank는 서버가 내려주지 않고 조회 시점에 carnationCount로 계산한다(rankEntries).
+export interface RankedEntry extends WeeklyRankingEntry {
+  rank: number;
+}
+
+// API-CARNATION-001 응답 형식. 연동 시 이 묶음이 서버 응답으로 대체된다.
+export interface WeeklyRankingSnapshot {
+  // 집계 주간의 시작(월요일)·끝(일요일). KST 기준 ISO 날짜(YYYY-MM-DD).
+  weekStart: string;
+  weekEnd: string;
+  rankings: readonly WeeklyRankingEntry[];
+}
+
+// 주간 랭킹 조회의 로드 상태. 피드(useFeed)와 같은 형태를 따른다.
+export type WeeklyRankingLoadState =
+  | {status: 'loading'}
+  | {status: 'error'; message: string}
+  | {status: 'success'; snapshot: WeeklyRankingSnapshot};
