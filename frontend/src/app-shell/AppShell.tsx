@@ -24,6 +24,7 @@ interface AppShellProps {
   onCreateGroup?: () => void;
   onGroupChange?: (groupId: string) => void;
   onJoinGroup?: () => void;
+  onRequestLogout?: () => void;
   screens?: AppScreenRegistry;
 }
 
@@ -37,6 +38,7 @@ export function AppShell({
   onCreateGroup,
   onGroupChange,
   onJoinGroup,
+  onRequestLogout,
   screens = {},
 }: AppShellProps) {
   const [activeRoute, setActiveRoute] = useState(initialRoute);
@@ -102,6 +104,27 @@ export function AppShell({
     };
   }, [groupStore, initialGroupId]);
 
+  // 상위 앱이 그룹 탈퇴·삭제 후 선택한 다음 그룹을 전달하면 현재 그룹도 동기화한다.
+  useEffect(() => {
+    const currentGroupStillExists = groups.some(
+      group => group.id === currentGroupId,
+    );
+    const initialGroupStillExists = groups.some(
+      group => group.id === initialGroupId,
+    );
+
+    // The parent updates initialGroupId after the selected group is removed.
+    // Do not treat it as a controlled value during ordinary group switching.
+    if (
+      !currentGroupStillExists &&
+      initialGroupId !== undefined &&
+      initialGroupId !== currentGroupId &&
+      initialGroupStillExists
+    ) {
+      setCurrentGroupId(initialGroupId);
+    }
+  }, [currentGroupId, groups, initialGroupId]);
+
   if (isRestoringGroup) {
     return (
       <SafeAreaView style={styles.emptyContainer}>
@@ -151,6 +174,8 @@ export function AppShell({
 
   const handleGroupSelect = (groupId: string) => {
     setCurrentGroupId(groupId);
+    setOpenPostId(null);
+    setOpenPostRequestId(0);
     setIsGroupMenuOpen(false);
     onGroupChange?.(groupId);
     if (groupStore) {
@@ -186,7 +211,8 @@ export function AppShell({
       isScreenHeaderVisible &&
       resolvedRoute !== 'notifications' &&
       resolvedRoute !== 'archive' &&
-      resolvedRoute !== 'groupInfo' ? (
+      resolvedRoute !== 'groupInfo' &&
+      resolvedRoute !== 'profile' ? (
         <View style={styles.header} testID="app-shell-header">
           {resolvedRoute === 'calendar' ? (
             <CurrentGroupSwitcher
@@ -295,6 +321,7 @@ export function AppShell({
             onNotificationRead={handleNotificationRead}
             onOpenNotifications={() => setActiveRoute('notifications')}
             onOpenPost={handleOpenPost}
+            onRequestLogout={onRequestLogout}
             openPostId={openPostId}
             openPostRequestId={openPostRequestId}
             readNotificationIds={readNotificationIds}

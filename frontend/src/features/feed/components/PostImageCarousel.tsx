@@ -21,7 +21,9 @@ const NEXT_IMAGE_PEEK = 28;
 
 export interface CarouselImage {
   accessibilityLabel?: string;
+  hasPoster?: boolean;
   id: string;
+  mediaType?: 'IMAGE' | 'VIDEO';
   source: ImageSourcePropType;
 }
 
@@ -146,16 +148,18 @@ function FeedImageFrame({
     'loading',
   );
   const [retryCount, setRetryCount] = useState(0);
+  const isVideo = image.mediaType === 'VIDEO';
+  const hasPoster = !isVideo || image.hasPoster !== false;
 
   return (
     <View style={[styles.imageFrame, {height, width}]}>
-      {loadState === 'loading' ? (
+      {hasPoster && loadState === 'loading' ? (
         <View accessibilityLabel="이미지 불러오는 중" style={styles.placeholder}>
           <ActivityIndicator color={COLORS.purple} />
         </View>
       ) : null}
 
-      {loadState === 'error' ? (
+      {hasPoster && loadState === 'error' ? (
         <View accessibilityLiveRegion="polite" style={styles.errorState}>
           <Text style={styles.errorText}>이미지를 불러오지 못했어요</Text>
           <Pressable
@@ -183,21 +187,39 @@ function FeedImageFrame({
         disabled={!onPress}
         onPress={onPress}
       >
-        <Image
-          accessibilityLabel={image.accessibilityLabel}
-          accessibilityRole="image"
-          key={`${image.id}-${retryCount}`}
-          onError={() => setLoadState('error')}
-          onLoad={() => setLoadState('loaded')}
-          onLoadStart={() => setLoadState('loading')}
-          resizeMode="cover"
-          source={image.source}
-          style={[
-            styles.image,
-            loadState !== 'loaded' && styles.hiddenImage,
-            {height, width},
-          ]}
-        />
+        {hasPoster ? (
+          <Image
+            accessibilityLabel={image.accessibilityLabel}
+            accessibilityRole="image"
+            key={`${image.id}-${retryCount}`}
+            onError={() => setLoadState('error')}
+            onLoad={() => setLoadState('loaded')}
+            onLoadStart={() => setLoadState('loading')}
+            resizeMode="cover"
+            source={image.source}
+            style={[
+              styles.image,
+              loadState !== 'loaded' && styles.hiddenImage,
+              {height, width},
+            ]}
+          />
+        ) : null}
+        {isVideo ? (
+          <View
+            accessibilityLabel="동영상 미리보기"
+            pointerEvents="none"
+            style={[
+              hasPoster ? styles.videoBadge : styles.videoFallback,
+              {height, width},
+            ]}
+          >
+            <MaterialDesignIcons
+              color={COLORS.background}
+              name="play-circle-outline"
+              size={48}
+            />
+          </View>
+        ) : null}
       </Pressable>
 
       {onRemove ? (
@@ -307,5 +329,19 @@ const styles = StyleSheet.create({
   },
   separator: {
     width: IMAGE_GAP,
+  },
+  videoBadge: {
+    alignItems: 'center',
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  videoFallback: {
+    alignItems: 'center',
+    backgroundColor: COLORS.imageOverlay,
+    justifyContent: 'center',
   },
 });

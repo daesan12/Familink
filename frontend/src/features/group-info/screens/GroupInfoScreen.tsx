@@ -72,11 +72,11 @@ export interface GroupInfoScreenProps extends AppScreenProps {
   onProcessJoinRequest?: JoinRequestProcessor;
   onUpdateMemberAlias?: MemberAliasUpdater;
   onUpdateMemberRole?: MemberRoleUpdater;
-  // 그룹 관리 액션 콜백(연동·B-3 전환은 후속). 없으면 로컬 상태만 갱신한다.
-  onChangeManager?: (memberId: string) => void;
-  onRemoveMember?: (memberId: string) => void;
-  onLeaveGroup?: () => void;
-  onDeleteGroup?: () => void;
+  // 그룹 관리 액션 콜백. API 성공 후에만 로컬 상태를 갱신한다.
+  onChangeManager?: (memberId: string) => unknown;
+  onRemoveMember?: (memberId: string) => unknown;
+  onLeaveGroup?: () => unknown;
+  onDeleteGroup?: (confirmationName: string) => unknown;
   onRenameGroup?: (name: string) => Promise<void> | void;
 }
 
@@ -335,6 +335,7 @@ export function GroupInfoScreen({
     groupDetail?.isManager ?? canManageRolesFor(members, viewerMemberId);
   const waitingCount = scoped.pendingJoinCount;
   const resolvedGroupName = groupDetail?.name ?? currentGroup.name;
+  const resolvedMemberCount = groupDetail?.memberCount ?? members.length;
   const memberCounts = groupDetail
     ? `피보호자 ${groupDetail.careReceiverCount}명, 보호자 ${groupDetail.guardianCount}명`
     : formatMemberCounts(members);
@@ -427,35 +428,81 @@ export function GroupInfoScreen({
     setMembers(current => applyRoleChange(current, member.memberId, role));
   };
 
-  // 새 관리자로 위임한다. 연동 콜백을 부른 뒤 로컬 목록의 관리자 표시를 옮기고
-  // 그룹정보로 복귀한다(실제 권한 전환·재조회는 후속).
+  // 새 관리자로 위임한다. API 성공 후 로컬 목록의 관리자 표시를 옮기고 복귀한다.
   const handleChangeManager = (memberId: string) => {
-    onChangeManager?.(memberId);
-    setMembers(current =>
-      current.map(member => ({
-        ...member,
-        isManager: member.memberId === memberId,
-      })),
-    );
-    setSubScreen(null);
+    const result = onChangeManager?.(memberId);
+    const apply = () => {
+      setMembers(current =>
+        current.map(member => ({
+          ...member,
+          isManager: member.memberId === memberId,
+        })),
+      );
+      setGroupDetail(current =>
+        current === null
+          ? current
+          : {
+              ...current,
+              isManager: memberId === viewerMemberId,
+              managerMemberId: memberId,
+            },
+      );
+      setSubScreen(null);
+    };
+
+    if (isPromiseLike(result)) {
+      return result.then(apply);
+    }
+    apply();
   };
 
-  // 구성원을 내보낸다. 연동 콜백을 부른 뒤 로컬 목록에서 제거하고 복귀한다.
+  // 구성원을 내보낸다. API 성공 후 로컬 목록에서 제거하고 복귀한다.
   const handleRemoveMember = (memberId: string) => {
-    onRemoveMember?.(memberId);
-    setMembers(current =>
-      current.filter(member => member.memberId !== memberId),
-    );
-    setSubScreen(null);
+    const result = onRemoveMember?.(memberId);
+    const apply = () => {
+      const removedMember = members.find(member => member.memberId === memberId);
+      setMembers(current =>
+        current.filter(member => member.memberId !== memberId),
+      );
+      if (removedMember !== undefined) {
+        setGroupDetail(current => {
+          if (current === null) {
+            return current;
+          }
+          return {
+            ...current,
+            careReceiverCount:
+              current.careReceiverCount -
+              (removedMember.role === 'careReceiver' ? 1 : 0),
+            guardianCount:
+              current.guardianCount -
+              (removedMember.role === 'guardian' ? 1 : 0),
+            memberCount: Math.max(0, current.memberCount - 1),
+          };
+        });
+      }
+      setSubScreen(null);
+    };
+
+    if (isPromiseLike(result)) {
+      return result.then(apply);
+    }
+    apply();
   };
 
   const handleLeaveGroup = () => {
-    onLeaveGroup?.();
+    const result = onLeaveGroup?.();
+    if (isPromiseLike(result)) {
+      return result.then(() => setSubScreen(null));
+    }
     setSubScreen(null);
   };
 
-  const handleDeleteGroup = () => {
-    onDeleteGroup?.();
+  const handleDeleteGroup = (confirmationName = resolvedGroupName) => {
+    const result = onDeleteGroup?.(confirmationName);
+    if (isPromiseLike(result)) {
+      return result.then(() => setIsDeleteOpen(false));
+    }
     setIsDeleteOpen(false);
   };
 
@@ -518,7 +565,13 @@ export function GroupInfoScreen({
       description: '그룹을 떠납니다',
       key: 'leave-group',
       label: '그룹 나가기',
-      onPress: () => setSubScreen('leaveGroup'),
+      onPress: () => {
+        if (canManageRoles && resolvedMemberCount <= 1) {
+          setIsDeleteOpen(true);
+          return;
+        }
+        setSubScreen('leaveGroup');
+      },
     },
     {
       description: '전체 구성원에게 영향을 줍니다',
@@ -562,7 +615,7 @@ export function GroupInfoScreen({
         groupName={resolvedGroupName}
         isViewerManager={canManageRoles}
         managerName={resolveManagerName(members)}
-        memberCount={members.length}
+        memberCount={resolvedMemberCount}
         onBack={() => setSubScreen(null)}
         onGoToChangeManager={() => setSubScreen('changeManager')}
         onLeaveGroup={handleLeaveGroup}
@@ -698,6 +751,7 @@ export function GroupInfoScreen({
       />
 
       <DeleteGroupModal
+        confirmationName={resolvedGroupName}
         onClose={() => setIsDeleteOpen(false)}
         onDeleteGroup={handleDeleteGroup}
         visible={isDeleteOpen}
@@ -708,6 +762,15 @@ export function GroupInfoScreen({
 
 // resolveMemberDisplayName은 향후 프로필 팝업 연동에서 재사용하기 위해 함께 노출한다.
 export {resolveMemberDisplayName};
+
+function isPromiseLike(value: unknown): value is Promise<void> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof value.then === 'function'
+  );
+}
 
 const styles = StyleSheet.create({
   content: {

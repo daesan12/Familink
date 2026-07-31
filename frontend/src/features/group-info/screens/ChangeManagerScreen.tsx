@@ -1,6 +1,13 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {useState} from 'react';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {SubScreenHeader} from '../components/SubScreenHeader';
@@ -9,6 +16,7 @@ import {
   isManagerChangeSaveable,
   managerCandidates,
 } from '../groupManagementModel';
+import {getGroupManagementErrorMessage} from '../api/groupManagementApi';
 import type {GroupMember} from '../types';
 
 interface ChangeManagerScreenProps {
@@ -16,8 +24,8 @@ interface ChangeManagerScreenProps {
   // 조회자(현재 관리자) memberId. 본인 행에는 "나"를 표시한다.
   currentMemberId: string;
   onBack: () => void;
-  // 변경 확정 콜백. 새 관리자 memberId를 넘긴다(연동은 후속).
-  onChangeManager?: (memberId: string) => void;
+  // 변경 확정 콜백. API 성공 후에만 화면이 닫힌다.
+  onChangeManager?: (memberId: string) => unknown;
 }
 
 const CONFIRM_NOTES: readonly string[] = [
@@ -35,14 +43,42 @@ export function ChangeManagerScreen({
   const candidates = managerCandidates(members);
   const managerId = currentManagerId(members);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const canSubmit = isManagerChangeSaveable(members, selectedId);
 
   const handleSubmit = () => {
-    if (!selectedId || !canSubmit) {
+    if (!selectedId || !canSubmit || isSubmitting) {
       return;
     }
-    onChangeManager?.(selectedId);
-    onBack();
+
+    setErrorMessage(null);
+    try {
+      const result = onChangeManager?.(selectedId);
+      if (result !== undefined && isPromiseLike(result)) {
+        setIsSubmitting(true);
+        result
+          .then(onBack)
+          .catch((error: unknown) => {
+            setErrorMessage(
+              getGroupManagementErrorMessage(
+                error,
+                '관리자 변경에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+              ),
+            );
+          })
+          .finally(() => setIsSubmitting(false));
+        return;
+      }
+      onBack();
+    } catch (error) {
+      setErrorMessage(
+        getGroupManagementErrorMessage(
+          error,
+          '관리자 변경에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+        ),
+      );
+    }
   };
 
   return (
@@ -110,28 +146,49 @@ export function ChangeManagerScreen({
             </Text>
           ))}
         </View>
+        {errorMessage ? (
+          <Text accessibilityRole="alert" style={styles.errorText}>
+            {errorMessage}
+          </Text>
+        ) : null}
       </ScrollView>
 
       <View style={styles.footer}>
         <Pressable
           accessibilityLabel="그룹관리자 변경하기"
           accessibilityRole="button"
-          accessibilityState={{disabled: !canSubmit}}
-          disabled={!canSubmit}
+          accessibilityState={{disabled: !canSubmit || isSubmitting}}
+          disabled={!canSubmit || isSubmitting}
           onPress={handleSubmit}
-          style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+          style={[
+            styles.submitButton,
+            (!canSubmit || isSubmitting) && styles.submitButtonDisabled,
+          ]}
         >
-          <Text
-            style={[
-              styles.submitButtonText,
-              !canSubmit && styles.submitButtonTextDisabled,
-            ]}
-          >
-            그룹관리자 변경하기
-          </Text>
+          {isSubmitting ? (
+            <ActivityIndicator color={COLORS.background} />
+          ) : (
+            <Text
+              style={[
+                styles.submitButtonText,
+                !canSubmit && styles.submitButtonTextDisabled,
+              ]}
+            >
+              그룹관리자 변경하기
+            </Text>
+          )}
         </Pressable>
       </View>
     </View>
+  );
+}
+
+function isPromiseLike(value: unknown): value is Promise<void> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof value.then === 'function'
   );
 }
 
@@ -154,6 +211,11 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 20,
     paddingTop: 8,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 14,
+    lineHeight: 20,
   },
   currentTag: {
     color: COLORS.textSubtle,
