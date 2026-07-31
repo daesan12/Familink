@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Alert, StatusBar } from "react-native";
+import { useMemo, useState } from "react";
+import { Alert, Platform, StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AppShell } from "./src/app-shell";
@@ -28,6 +28,12 @@ import type {
 } from "./src/features/auth/types";
 import { AiCallScreen } from "./src/features/ai-call";
 import { ArchiveScreen } from "./src/features/archive";
+import {
+  CalendarGatewayProvider,
+  CalendarScreen,
+  createCalendarHttpGateway,
+  type CalendarGateway,
+} from "./src/features/calendar";
 import { FeedScreen } from "./src/features/feed";
 import { GroupInfoScreen } from "./src/features/group-info";
 import { NotificationsScreen } from "./src/features/notifications";
@@ -41,7 +47,9 @@ type RootRoute =
   | "appShell";
 
 interface AppProps {
+  apiBaseUrl?: string;
   authGateway?: AuthGateway;
+  calendarGateway?: CalendarGateway;
   groupStore?: CurrentGroupStore;
   groups?: readonly FamilyGroup[];
   initialGroupId?: string | null;
@@ -82,13 +90,19 @@ const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
 const DEFAULT_SCREENS: AppScreenRegistry = {
   aiCall: AiCallScreen,
   archive: ArchiveScreen,
+  calendar: CalendarScreen,
   feed: FeedScreen,
   groupInfo: GroupInfoScreen,
   notifications: NotificationsScreen,
 };
 
+const DEFAULT_API_BASE_URL =
+  Platform.OS === "android" ? "http://10.0.2.2:8080" : "http://localhost:8080";
+
 export default function App({
+  apiBaseUrl = DEFAULT_API_BASE_URL,
   authGateway = mockAuthGateway,
+  calendarGateway,
   groupStore,
   groups,
   initialGroupId,
@@ -112,6 +126,15 @@ export default function App({
   const [interestGroup, setInterestGroup] = useState<FamilyGroup | null>(null);
   const [joinRequests, setJoinRequests] =
     useState<readonly PendingJoinRequest[]>(initialJoinRequests);
+  const resolvedCalendarGateway = useMemo(
+    () =>
+      calendarGateway ??
+      createCalendarHttpGateway({
+        baseUrl: apiBaseUrl,
+        getAccessToken: () => authGateway.getAccessToken?.() ?? null,
+      }),
+    [apiBaseUrl, authGateway, calendarGateway]
+  );
   const resolvedGroups = [
     ...(groups ?? (__DEV__ ? DEVELOPMENT_GROUPS : [])),
     ...createdGroups,
@@ -226,70 +249,74 @@ export default function App({
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      {route === "welcome" && (
-        <>
-          <WelcomeScreen
-            onStartLogin={() => setLoginVisible(true)}
-            onStartSignup={() => setRoute("signup")}
+      <CalendarGatewayProvider gateway={resolvedCalendarGateway}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        {route === "welcome" && (
+          <>
+            <WelcomeScreen
+              onStartLogin={() => setLoginVisible(true)}
+              onStartSignup={() => setRoute("signup")}
+            />
+            <LoginBottomSheet
+              onDismiss={() => setLoginVisible(false)}
+              onLogin={handleLogin}
+              visible={loginVisible}
+            />
+          </>
+        )}
+        {route === "signup" && (
+          <SignupFlowScreen
+            onCancel={() => setRoute("welcome")}
+            onComplete={() => setRoute("welcome")}
           />
-          <LoginBottomSheet
-            onDismiss={() => setLoginVisible(false)}
-            onLogin={handleLogin}
-            visible={loginVisible}
+        )}
+        {route === "appShell" && (
+          <AppShell
+            groupStore={groupStore}
+            groups={resolvedGroups}
+            initialGroupId={activeGroupId}
+            initialRoute={initialShellRoute}
+            onCreateCalendarEvent={() => showDeferredFeature("일정 추가")}
+            onCreateGroup={() => openGroupOnboarding("appShell")}
+            onEditCalendarEvent={() => showDeferredFeature("일정 수정")}
+            onGroupChange={onGroupChange}
+            onJoinGroup={() => openGroupOnboarding("appShell")}
+            screens={screens ?? DEFAULT_SCREENS}
           />
-        </>
-      )}
-      {route === "signup" && (
-        <SignupFlowScreen
-          onCancel={() => setRoute("welcome")}
-          onComplete={() => setRoute("welcome")}
-        />
-      )}
-      {route === "appShell" && (
-        <AppShell
-          groupStore={groupStore}
-          groups={resolvedGroups}
-          initialGroupId={activeGroupId}
-          initialRoute={initialShellRoute}
-          onCreateGroup={() => openGroupOnboarding("appShell")}
-          onGroupChange={onGroupChange}
-          onJoinGroup={() => openGroupOnboarding("appShell")}
-          screens={screens ?? DEFAULT_SCREENS}
-        />
-      )}
-      {route === "signedInWelcome" && user !== null && (
-        <SignedInWelcomeScreen
-          onLogout={handleLogout}
-          onRequestWithdrawal={() => showDeferredFeature("회원 탈퇴")}
-          onStartGroupOnboarding={() =>
-            openGroupOnboarding("signedInWelcome")
-          }
-          userName={user.name}
-        />
-      )}
-      {route === "groupOnboarding" && (
-        <GroupOnboardingScreen
-          onBack={() => setRoute(groupOnboardingReturnRoute)}
-          onCreateGroup={handleCreateGroup}
-          onJoinByCode={handleJoinGroup}
-          onOpenApprovedGroup={handleOpenApprovedGroup}
-          pendingRequests={joinRequests}
-        />
-      )}
-      {route === "interestSetup" && interestGroup !== null && (
-        <InterestSelectionScreen
-          onBack={handleFinishInterestSetup}
-          onComplete={handleFinishInterestSetup}
-          onSave={(interests) =>
-            onSaveInterests?.({
-              groupId: interestGroup.id,
-              interests,
-            })
-          }
-          onSkip={handleFinishInterestSetup}
-        />
-      )}
+        )}
+        {route === "signedInWelcome" && user !== null && (
+          <SignedInWelcomeScreen
+            onLogout={handleLogout}
+            onRequestWithdrawal={() => showDeferredFeature("회원 탈퇴")}
+            onStartGroupOnboarding={() =>
+              openGroupOnboarding("signedInWelcome")
+            }
+            userName={user.name}
+          />
+        )}
+        {route === "groupOnboarding" && (
+          <GroupOnboardingScreen
+            onBack={() => setRoute(groupOnboardingReturnRoute)}
+            onCreateGroup={handleCreateGroup}
+            onJoinByCode={handleJoinGroup}
+            onOpenApprovedGroup={handleOpenApprovedGroup}
+            pendingRequests={joinRequests}
+          />
+        )}
+        {route === "interestSetup" && interestGroup !== null && (
+          <InterestSelectionScreen
+            onBack={handleFinishInterestSetup}
+            onComplete={handleFinishInterestSetup}
+            onSave={(interests) =>
+              onSaveInterests?.({
+                groupId: interestGroup.id,
+                interests,
+              })
+            }
+            onSkip={handleFinishInterestSetup}
+          />
+        )}
+      </CalendarGatewayProvider>
     </SafeAreaProvider>
   );
 }
