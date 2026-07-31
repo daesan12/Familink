@@ -52,9 +52,10 @@ public class PostReadController {
 		@PathVariable Long groupId,
 		@RequestParam(required = false) LocalDate date,
 		@RequestParam(required = false) String type,
+		@RequestParam(required = false) Long memberId,
 		@AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
 		return ApiResponse.success(
 			"게시글 보관함 조회 성공",
-			postReadService.getArchive(groupId, date, type, authenticatedUser.id()));
+			postReadService.getArchive(groupId, date, type, memberId, authenticatedUser.id()));
 	}
 }

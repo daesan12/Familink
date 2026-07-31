@@ -15,7 +15,9 @@ export interface ArchivePost {
   groupId: string;
   id: string;
   mediaKind: ArchiveMediaKind;
-  memberId: string;
+  // API-POSTS-003는 전체 보관함 결과에 작성자 memberId를 포함하지 않는다.
+  // 구성원 필터 조회 결과에서는 요청한 memberId를 채우고, 전체 조회는 null이다.
+  memberId: string | null;
   // 썸네일을 누르면 이동할 피드 게시글 ID.
   postId: string;
   // 이미지·비디오 게시글의 썸네일. 텍스트 게시글에는 없다.

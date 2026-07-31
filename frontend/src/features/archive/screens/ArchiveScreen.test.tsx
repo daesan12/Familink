@@ -2,6 +2,7 @@ import React from 'react';
 import {Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
+import type {ArchiveLoader, ArchiveQuery} from '../api/archiveApi';
 import type {ArchiveMember, ArchivePost} from '../types';
 import {ArchiveScreen} from './ArchiveScreen';
 
@@ -219,4 +220,288 @@ test('기본 목업은 메인 피드와 동일하게 김민수 없이 각 구성
   // 게시글이 없는 가족 구성원을 누르면 안내 문구가 뜬다.
   press(renderer!, '강다영');
   expect(hasText(renderer!, '강다영님이 작성한 게시글이 없어요')).toBe(true);
+});
+
+test('원격 보관함과 구성원 API를 사용하고 필터를 서버에 전달한다', async () => {
+  const archiveLoader = jest.fn().mockResolvedValue([
+    {
+      dateKey: '2026-08-01',
+      groupId: 'group-1',
+      id: 'group-1-11',
+      mediaKind: 'text',
+      memberId: null,
+      postId: '11',
+      text: '원격 게시글',
+    } satisfies ArchivePost,
+  ]);
+  const membersLoader = jest.fn().mockResolvedValue(MEMBERS);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <ArchiveScreen
+        {...baseProps}
+        archiveLoader={archiveLoader}
+        membersLoader={membersLoader}
+      />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(membersLoader).toHaveBeenCalledWith('group-1');
+  expect(archiveLoader).toHaveBeenCalledWith('group-1', {
+    date: null,
+    memberId: null,
+  });
+  expect(hasText(renderer!, '원격 게시글')).toBe(true);
+
+  press(renderer!, '구성원 필터: 모두');
+  press(renderer!, '나나나');
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+  });
+
+  expect(archiveLoader).toHaveBeenLastCalledWith('group-1', {
+    date: null,
+    memberId: 'm-b',
+  });
+});
+
+test('원격 보관함 오류를 안내하고 다시 시도할 수 있다', async () => {
+  const archiveLoader = jest
+    .fn()
+    .mockRejectedValueOnce(new Error('보관함 서버 오류'))
+    .mockResolvedValueOnce([]);
+  const membersLoader = jest.fn().mockResolvedValue(MEMBERS);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <ArchiveScreen
+        {...baseProps}
+        archiveLoader={archiveLoader}
+        membersLoader={membersLoader}
+      />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(hasText(renderer!, '보관함 서버 오류')).toBe(true);
+  press(renderer!, '보관함 다시 시도');
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+  });
+
+  expect(archiveLoader).toHaveBeenCalledTimes(2);
+  expect(hasText(renderer!, '아직 보관된 게시글이 없어요')).toBe(true);
+});
+
+test('날짜 결과를 다시 불러와도 달력에서 다른 날짜로 바로 이동할 수 있다', async () => {
+  const makePost = (dateKey: string, postId: string): ArchivePost => ({
+    dateKey,
+    groupId: 'group-1',
+    id: `group-1-${postId}`,
+    mediaKind: 'text',
+    memberId: null,
+    postId,
+    text: dateKey,
+  });
+  const archiveLoader: ArchiveLoader = jest.fn(
+    async (_groupId: string, query: ArchiveQuery = {}) => {
+      if (query.date === '2026-08-01') {
+        return [makePost('2026-08-01', '1')];
+      }
+      if (query.date === '2026-08-02') {
+        return [makePost('2026-08-02', '2')];
+      }
+      return [
+        makePost('2026-08-01', '1'),
+        makePost('2026-08-02', '2'),
+      ];
+    },
+  );
+  const membersLoader = jest.fn().mockResolvedValue(MEMBERS);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <ArchiveScreen
+        {...baseProps}
+        archiveLoader={archiveLoader}
+        membersLoader={membersLoader}
+      />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '날짜로 찾기');
+  press(renderer!, '8월 1일 게시글 보기');
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+  });
+  expect(archiveLoader).toHaveBeenLastCalledWith('group-1', {
+    date: '2026-08-01',
+    memberId: null,
+  });
+
+  press(renderer!, '날짜로 찾기');
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '8월 2일 게시글 보기'}),
+  ).toBeTruthy();
+  press(renderer!, '8월 2일 게시글 보기');
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+  });
+
+  expect(archiveLoader).toHaveBeenLastCalledWith('group-1', {
+    date: '2026-08-02',
+    memberId: null,
+  });
+});
+
+test('날짜 조회 실패 후 재시도해도 달력의 날짜 목록을 유지한다', async () => {
+  const makePost = (dateKey: string, postId: string): ArchivePost => ({
+    dateKey,
+    groupId: 'group-1',
+    id: `group-1-${postId}`,
+    mediaKind: 'text',
+    memberId: null,
+    postId,
+    text: dateKey,
+  });
+  let dateAttempt = 0;
+  const archiveLoader: ArchiveLoader = jest.fn(
+    async (_groupId: string, query: ArchiveQuery = {}) => {
+      if (query.date === '2026-08-01') {
+        if (dateAttempt++ === 0) {
+          throw new Error('날짜 조회 실패');
+        }
+        return [makePost('2026-08-01', '1')];
+      }
+      return [
+        makePost('2026-08-01', '1'),
+        makePost('2026-08-02', '2'),
+      ];
+    },
+  );
+  const membersLoader = jest.fn().mockResolvedValue(MEMBERS);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <ArchiveScreen
+        {...baseProps}
+        archiveLoader={archiveLoader}
+        membersLoader={membersLoader}
+      />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '날짜로 찾기');
+  press(renderer!, '8월 1일 게시글 보기');
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+  });
+  expect(hasText(renderer!, '날짜 조회 실패')).toBe(true);
+
+  press(renderer!, '보관함 다시 시도');
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+  });
+
+  press(renderer!, '날짜로 찾기');
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '8월 2일 게시글 보기'}),
+  ).toBeTruthy();
+});
+
+test('그룹을 바꾸면 이전 그룹 보관함을 새 그룹 응답 전까지 보여주지 않는다', async () => {
+  const groupOnePosts: readonly ArchivePost[] = [
+    {
+      dateKey: '2026-08-01',
+      groupId: 'group-1',
+      id: 'group-1-1',
+      mediaKind: 'text',
+      memberId: null,
+      postId: '1',
+      text: '첫 번째 그룹 게시글',
+    },
+  ];
+  const groupTwoPosts: readonly ArchivePost[] = [
+    {
+      dateKey: '2026-08-02',
+      groupId: 'group-2',
+      id: 'group-2-2',
+      mediaKind: 'text',
+      memberId: null,
+      postId: '2',
+      text: '두 번째 그룹 게시글',
+    },
+  ];
+  let resolveGroupTwoPosts!: (
+    posts: readonly ArchivePost[],
+  ) => void;
+  let resolveGroupTwoMembers!: (
+    members: readonly ArchiveMember[],
+  ) => void;
+  const archiveLoader: ArchiveLoader = jest.fn((groupId: string) => {
+    if (groupId === 'group-1') {
+      return Promise.resolve(groupOnePosts);
+    }
+    return new Promise(resolve => {
+      resolveGroupTwoPosts = resolve;
+    });
+  });
+  const membersLoader: (groupId: string) => Promise<readonly ArchiveMember[]> =
+    jest.fn((groupId: string) => {
+    if (groupId === 'group-1') {
+      return Promise.resolve(MEMBERS);
+    }
+    return new Promise<readonly ArchiveMember[]>(resolve => {
+      resolveGroupTwoMembers = resolve;
+    });
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <ArchiveScreen
+        {...baseProps}
+        archiveLoader={archiveLoader}
+        membersLoader={membersLoader}
+      />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+  expect(hasText(renderer!, '첫 번째 그룹 게시글')).toBe(true);
+
+  await TestRenderer.act(async () => {
+    renderer!.update(
+      <ArchiveScreen
+        {...baseProps}
+        currentGroup={{id: 'group-2', name: '두 번째 가족', role: 'guardian'}}
+        archiveLoader={archiveLoader}
+        membersLoader={membersLoader}
+      />,
+    );
+    await Promise.resolve();
+  });
+
+  expect(hasText(renderer!, '첫 번째 그룹 게시글')).toBe(false);
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '보관함을 불러오는 중'}),
+  ).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    resolveGroupTwoPosts(groupTwoPosts);
+    resolveGroupTwoMembers(MEMBERS);
+    await Promise.resolve();
+  });
+  expect(hasText(renderer!, '두 번째 그룹 게시글')).toBe(true);
 });
