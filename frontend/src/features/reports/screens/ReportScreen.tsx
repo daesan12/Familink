@@ -1,0 +1,607 @@
+import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
+import type { ComponentProps } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
+
+import type { AppScreenProps } from "../../../app-shell";
+import { COLORS, RADII } from "../../../design/tokens";
+import { CallReportDetailModal } from "../components/CallReportDetailModal";
+import { CallReportRow } from "../components/CallReportRow";
+import { DailyReportCard } from "../components/DailyReportCard";
+import { ReportPageIndicator } from "../components/ReportPageIndicator";
+import { DEVELOPMENT_REPORT_PAGES } from "../fixtures/reportFixtures";
+import { useCareReceiverReportTargets } from "../hooks/useCareReceiverReportTargets";
+import { useReportPages } from "../hooks/useReportPages";
+import {
+  getReportPageState,
+  sortCallsByStartedAt,
+} from "../reportPresentation";
+import type {
+  CallReportDetailState,
+  CallReportView,
+  CareReceiverReportPage,
+  CareReceiverReportTarget,
+  CareReceiverReportTargetLoader,
+  ReportGateway,
+} from "../types";
+
+const EMPTY_REPORT_PAGES: readonly CareReceiverReportPage[] = [];
+const EMPTY_REPORT_TARGETS: readonly CareReceiverReportTarget[] = [];
+
+export interface ReportScreenProps extends AppScreenProps {
+  careReceivers?: readonly CareReceiverReportPage[];
+  careReceiverTargets?: readonly CareReceiverReportTarget[];
+  careReceiverTargetsLoader?: CareReceiverReportTargetLoader;
+  reportDate?: string;
+  reportGateway?: ReportGateway;
+}
+
+export function ReportScreen({
+  careReceivers,
+  careReceiverTargets,
+  careReceiverTargetsLoader,
+  currentGroup,
+  reportDate = getKoreaReportDate(),
+  reportGateway,
+}: ReportScreenProps) {
+  const { width } = useWindowDimensions();
+  const shouldLoadTargets =
+    careReceiverTargets === undefined &&
+    careReceiverTargetsLoader !== undefined &&
+    reportGateway !== undefined;
+  const targetState = useCareReceiverReportTargets({
+    enabled: shouldLoadTargets,
+    groupId: currentGroup.id,
+    loader: careReceiverTargetsLoader,
+  });
+  const resolvedTargets =
+    careReceiverTargets ??
+    (targetState.status === "ready"
+      ? targetState.targets
+      : EMPTY_REPORT_TARGETS);
+  const hasRemoteSource =
+    reportGateway !== undefined &&
+    (careReceiverTargets !== undefined || careReceiverTargetsLoader !== undefined);
+  const remotePages = useReportPages({
+    enabled:
+      hasRemoteSource &&
+      (!shouldLoadTargets || targetState.status === "ready"),
+    groupId: currentGroup.id,
+    reportDate,
+    reportGateway,
+    targets: resolvedTargets,
+  });
+  const localPages =
+    careReceivers ??
+    (__DEV__ && currentGroup.id === "development-guardian-group"
+      ? DEVELOPMENT_REPORT_PAGES
+      : EMPTY_REPORT_PAGES);
+  const pages =
+    hasRemoteSource && remotePages.status === "ready"
+      ? remotePages.pages
+      : localPages;
+  const pageIdentity = `${currentGroup.id}:${pages
+    .map((page) => page.memberId)
+    .join(",")}`;
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedDetail, setSelectedDetail] =
+    useState<CallReportDetailState | null>(null);
+  const callRequestId = useRef(0);
+
+  useEffect(() => {
+    setCurrentIndex(0);
+    callRequestId.current += 1;
+    setSelectedDetail(null);
+  }, [pageIdentity]);
+
+  const handlePageChange = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (pages.length === 0 || width <= 0) {
+      return;
+    }
+
+    const nextIndex = Math.min(
+      pages.length - 1,
+      Math.max(0, Math.round(event.nativeEvent.contentOffset.x / width))
+    );
+    setCurrentIndex(nextIndex);
+  };
+
+  const handleOpenCall = async (call: CallReportView) => {
+    if (!reportGateway) {
+      setSelectedDetail({
+        call,
+        status: call.summary === null ? "generating" : "ready",
+      });
+      return;
+    }
+
+    const requestId = ++callRequestId.current;
+    setSelectedDetail({ call, status: "loading" });
+
+    try {
+      const report = await reportGateway.getCallReport(call.callSessionId);
+      if (requestId !== callRequestId.current) {
+        return;
+      }
+
+      if (report.status === "generating") {
+        setSelectedDetail({ call, status: "generating" });
+        return;
+      }
+
+      setSelectedDetail({
+        call: {
+          ...call,
+          guardianMessage: report.guardianMessage,
+          summary: report.summary,
+        },
+        status: "ready",
+      });
+    } catch {
+      if (requestId === callRequestId.current) {
+        setSelectedDetail({ call, status: "error" });
+      }
+    }
+  };
+
+  const handleCloseDetail = () => {
+    callRequestId.current += 1;
+    setSelectedDetail(null);
+  };
+
+  const handleRetryDetail = () => {
+    if (selectedDetail) {
+      handleOpenCall(selectedDetail.call).catch(() => {
+        // handleOpenCall이 오류 상태로 변환하므로 추가 처리가 필요하지 않다.
+      });
+    }
+  };
+
+  if (shouldLoadTargets && targetState.status === "loading") {
+    return (
+      <ReportLoadState
+        description="현재 그룹의 피보호자를 확인하고 있어요."
+        icon="account-search-outline"
+        title="피보호자 목록을 불러오고 있어요"
+      />
+    );
+  }
+
+  if (shouldLoadTargets && targetState.status === "error") {
+    return (
+      <ReportLoadState
+        actionLabel="다시 시도"
+        description={targetState.message}
+        icon="alert-circle-outline"
+        onAction={targetState.retry}
+        title="피보호자 조회에 실패했어요"
+      />
+    );
+  }
+
+  if (hasRemoteSource && remotePages.status === "loading") {
+    return (
+      <ReportLoadState
+        description="피보호자의 일간·건별 리포트를 확인하고 있어요."
+        icon="clock-outline"
+        title="리포트를 불러오고 있어요"
+      />
+    );
+  }
+
+  if (hasRemoteSource && remotePages.status === "error") {
+    return (
+      <ReportLoadState
+        actionLabel="다시 시도"
+        description={remotePages.message}
+        icon="alert-circle-outline"
+        onAction={remotePages.retry}
+        title="리포트 조회에 실패했어요"
+      />
+    );
+  }
+
+  if (pages.length === 0) {
+    return (
+      <View
+        accessibilityLabel="조회할 피보호자가 없는 리포트"
+        style={styles.noCareReceiver}
+      >
+        <Text style={styles.noCareReceiverTitle}>
+          리포트를 확인할 피보호자가 없어요
+        </Text>
+        <Text style={styles.noCareReceiverDescription}>
+          현재 그룹에 피보호자가 연결되면 통화 리포트를 확인할 수 있어요.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.screen}>
+      <ScrollView
+        accessibilityLabel="피보호자별 통화 리포트"
+        decelerationRate="fast"
+        horizontal
+        key={pageIdentity}
+        onMomentumScrollEnd={handlePageChange}
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        testID="care-receiver-report-pager"
+      >
+        {pages.map((page) => (
+          <ReportPage
+            key={page.memberId}
+            onOpenCall={handleOpenCall}
+            page={page}
+            width={width}
+          />
+        ))}
+      </ScrollView>
+
+      <ReportPageIndicator currentIndex={currentIndex} pages={pages} />
+
+      <CallReportDetailModal
+        detail={selectedDetail}
+        onClose={handleCloseDetail}
+        onRetry={handleRetryDetail}
+      />
+    </View>
+  );
+}
+
+interface ReportLoadStateProps {
+  actionLabel?: string;
+  description: string;
+  icon: ComponentProps<typeof MaterialDesignIcons>["name"];
+  onAction?: () => void;
+  title: string;
+}
+
+function ReportLoadState({
+  actionLabel,
+  description,
+  icon,
+  onAction,
+  title,
+}: ReportLoadStateProps) {
+  return (
+    <View accessibilityLabel={title} style={styles.loadState}>
+      <MaterialDesignIcons color={COLORS.purpleDeep} name={icon} size={34} />
+      <Text style={styles.loadStateTitle}>{title}</Text>
+      <Text style={styles.loadStateDescription}>{description}</Text>
+      {actionLabel && onAction ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onAction}
+          style={styles.retryButton}
+        >
+          <Text style={styles.retryButtonText}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function getKoreaReportDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+  }).formatToParts(now);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  return year && month && day
+    ? `${year}-${month}-${day}`
+    : now.toISOString().slice(0, 10);
+}
+
+interface ReportPageProps {
+  onOpenCall: (call: CallReportView) => void;
+  page: CareReceiverReportPage;
+  width: number;
+}
+
+function ReportPage({ onOpenCall, page, width }: ReportPageProps) {
+  const pageState = getReportPageState(page);
+  const sortedTodayCalls = sortCallsByStartedAt(page.todayCalls);
+
+  return (
+    <View style={[styles.page, { width }]}>
+      <View style={styles.header}>
+        <Text style={styles.title}>{page.displayName} 님의 통화 리포트</Text>
+        <Pressable
+          accessibilityHint="캘린더 화면은 후속 작업에서 제공됩니다"
+          accessibilityLabel="리포트 캘린더"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: true }}
+          disabled
+          style={styles.calendarButton}
+        >
+          <MaterialDesignIcons
+            color={COLORS.textStrong}
+            name="calendar-month-outline"
+            size={26}
+          />
+        </Pressable>
+      </View>
+
+      {pageState === "empty" ? (
+        <EmptyReportState displayName={page.displayName} />
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.pageContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {page.latestDailyReport ? (
+            <DailyReportCard report={page.latestDailyReport} />
+          ) : (
+            <DailyReportPendingCard />
+          )}
+
+          <View style={styles.callSection}>
+            <Text style={styles.callSectionTitle}>오늘의 통화</Text>
+            {sortedTodayCalls.length > 0 ? (
+              <View style={styles.callList}>
+                {sortedTodayCalls.map((call) => (
+                  <CallReportRow
+                    call={call}
+                    key={call.callSessionId}
+                    onPress={onOpenCall}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View
+                accessibilityLabel="오늘 통화 리포트 없음"
+                style={styles.emptyCalls}
+              >
+                <Text style={styles.emptyCallsText}>
+                  오늘 생성된 통화 리포트가 없어요.
+                </Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+function DailyReportPendingCard() {
+  return (
+    <View accessibilityLabel="일간 리포트 준비 중" style={styles.pendingCard}>
+      <View style={styles.pendingIcon}>
+        <MaterialDesignIcons
+          color={COLORS.purpleDeep}
+          name="clock-outline"
+          size={24}
+        />
+      </View>
+      <View style={styles.pendingCopy}>
+        <Text style={styles.pendingTitle}>
+          아직 일간 리포트가 생성되지 않았어요
+        </Text>
+        <Text style={styles.pendingDescription}>
+          오늘의 통화가 모이면 일간 리포트로 정리해드려요.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function EmptyReportState({ displayName }: { displayName: string }) {
+  return (
+    <View accessibilityLabel="통화 리포트 없음" style={styles.emptyState}>
+      <View style={styles.emptyIcon}>
+        <MaterialDesignIcons
+          color={COLORS.purpleDeep}
+          name="message-text-clock-outline"
+          size={34}
+        />
+      </View>
+      <Text style={styles.emptyTitle}>
+        {displayName} 님께서 아직{"\n"}AI 전화를 사용하시지 않으셨어요
+      </Text>
+      <Text style={styles.emptyDescription}>
+        통화를 마치면 이곳에서 내용을 확인할 수 있어요.
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  calendarButton: {
+    alignItems: "center",
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  callList: {
+    gap: 10,
+  },
+  callSection: {
+    marginTop: 24,
+  },
+  callSectionTitle: {
+    color: COLORS.textStrong,
+    fontSize: 17,
+    fontWeight: "800",
+    lineHeight: 23,
+    marginBottom: 12,
+  },
+  emptyCalls: {
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    borderCurve: "continuous",
+    borderRadius: RADII.medium,
+    justifyContent: "center",
+    minHeight: 84,
+    padding: 18,
+  },
+  emptyCallsText: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+  },
+  emptyDescription: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    lineHeight: 22,
+    marginTop: 10,
+    textAlign: "center",
+  },
+  emptyIcon: {
+    alignItems: "center",
+    backgroundColor: COLORS.lavenderSurface,
+    borderCurve: "continuous",
+    borderRadius: RADII.pill,
+    height: 68,
+    justifyContent: "center",
+    marginBottom: 20,
+    width: 68,
+  },
+  emptyState: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    paddingBottom: 56,
+    paddingHorizontal: 30,
+  },
+  emptyTitle: {
+    color: COLORS.textStrong,
+    fontSize: 19,
+    fontWeight: "800",
+    lineHeight: 29,
+    textAlign: "center",
+  },
+  header: {
+    alignItems: "center",
+    flexDirection: "row",
+    minHeight: 62,
+    paddingHorizontal: 20,
+  },
+  noCareReceiver: {
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 28,
+  },
+  noCareReceiverDescription: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    lineHeight: 22,
+    marginTop: 10,
+    textAlign: "center",
+  },
+  noCareReceiverTitle: {
+    color: COLORS.textStrong,
+    fontSize: 19,
+    fontWeight: "800",
+    lineHeight: 27,
+    textAlign: "center",
+  },
+  loadState: {
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 28,
+  },
+  loadStateDescription: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    lineHeight: 22,
+    marginTop: 8,
+    textAlign: "center",
+  },
+  loadStateTitle: {
+    color: COLORS.textStrong,
+    fontSize: 19,
+    fontWeight: "800",
+    lineHeight: 27,
+    marginTop: 16,
+    textAlign: "center",
+  },
+  page: {
+    backgroundColor: COLORS.background,
+    flex: 1,
+  },
+  pageContent: {
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+  },
+  pendingCard: {
+    alignItems: "center",
+    backgroundColor: COLORS.lavenderSurface,
+    borderCurve: "continuous",
+    borderRadius: RADII.sheet,
+    flexDirection: "row",
+    gap: 13,
+    minHeight: 106,
+    padding: 18,
+  },
+  pendingCopy: {
+    flex: 1,
+  },
+  pendingDescription: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 5,
+  },
+  pendingIcon: {
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    borderCurve: "continuous",
+    borderRadius: RADII.pill,
+    height: 48,
+    justifyContent: "center",
+    width: 48,
+  },
+  pendingTitle: {
+    color: COLORS.textStrong,
+    fontSize: 15,
+    fontWeight: "800",
+    lineHeight: 22,
+  },
+  retryButton: {
+    alignItems: "center",
+    backgroundColor: COLORS.purpleDeep,
+    borderRadius: RADII.medium,
+    justifyContent: "center",
+    marginTop: 20,
+    minHeight: 44,
+    paddingHorizontal: 22,
+  },
+  retryButtonText: {
+    color: COLORS.background,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  screen: {
+    backgroundColor: COLORS.background,
+    flex: 1,
+  },
+  title: {
+    color: COLORS.textStrong,
+    flex: 1,
+    fontSize: 20,
+    fontWeight: "800",
+    lineHeight: 28,
+  },
+});

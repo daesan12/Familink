@@ -67,7 +67,8 @@ public class ReportQueryService {
 		return new ReportCalendarResponse(
 			yearMonth.toString(),
 			dailyReportRepository.findReportDatesInRange(
-				memberId, yearMonth.atDay(1), yearMonth.atEndOfMonth()));
+				memberId, yearMonth.atDay(1), yearMonth.atEndOfMonth()),
+			dailyReportRepository.findLatestReportDate(memberId).orElse(null));
 	}
 
 	/**

@@ -4,10 +4,12 @@
   "private": true,
   "scripts": {
     "android": "react-native run-android --no-packager --active-arch-only",
+    "android:dev": "node scripts/start-android-dev.mjs",
     "check:structure": "node scripts/check-structure.mjs",
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
+    "test:android-dev": "node --test scripts/start-android-dev.test.mjs",
     "test:app-shell": "node --test src/app-shell/navigation.test.mjs",
     "typecheck": "tsc --noEmit"
   },

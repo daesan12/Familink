@@ -38,6 +38,30 @@ npm start
 npm run android
 ```
 
+앱을 한 번 설치한 뒤에는 전용 명령으로 현재 `frontend`의 Metro와 앱을 함께
+실행할 수 있습니다.
+
+```bash
+npm run android:dev
+```
+
+`android:dev`는 다음 조건을 확인합니다.
+
+- 명령이 현재 Worktree의 `frontend`에서 실행되었는지
+- Metro 기본 포트 `8081`이 비어 있는지
+- Android 기기가 한 대 연결되어 있는지
+- 대상 앱과 실행 Activity가 설치되어 있는지
+
+`8081`이 이미 사용 중이면 다른 Worktree의 번들을 잘못 불러오지 않도록 기존
+Metro를 재사용하거나 종료하지 않고 즉시 중단합니다. 기존 Metro 터미널에서
+`Ctrl+C`로 종료한 후 다시 실행합니다.
+
+기기가 여러 대라면 대상을 지정합니다.
+
+```bash
+npm run android:dev -- --device emulator-5554
+```
+
 `S15P11B104`와 실행 환경 준비 안내가 표시되면 정상입니다.
 
 `.env.development` 값을 바꾸면 Metro만 다시 시작하지 말고 Android 앱을
@@ -64,6 +88,7 @@ API 주소에는 `/api/v1` 같은 별도 기본 경로를 붙이지 않습니다
 
 ```bash
 npm run check:structure
+npm run test:android-dev
 npm run typecheck
 npm run lint
 npm test

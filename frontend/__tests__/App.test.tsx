@@ -14,7 +14,12 @@ import { SignupFlowScreen } from "../src/features/auth/screens/SignupFlowScreen"
 import { SignedInWelcomeScreen } from "../src/features/auth/screens/SignedInWelcomeScreen";
 import type { AuthGateway } from "../src/features/auth/types";
 import { ApiError } from "../src/shared/api";
-import type { FamilyGroupGateway } from "../src/features/group-info";
+import type {
+  FamilyGroupGateway,
+  GroupMemberGateway,
+} from "../src/features/group-info";
+import { ReportScreen } from "../src/features/reports";
+import type { ReportGateway } from "../src/features/reports";
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
 
@@ -110,6 +115,9 @@ function createAuthSessionCoordinator(
         }
       };
     }),
+    getAccessToken: jest.fn().mockReturnValue(null),
+    getRefreshToken: jest.fn().mockReturnValue(null),
+    refreshAccessToken: jest.fn().mockRejectedValue(new Error("no session")),
   };
   return coordinator;
 }
@@ -1520,6 +1528,168 @@ test("캘린더 헤더는 일정 추가 버튼과 그룹 전환만 표시한다"
   });
 
   expect(createCalendarEventRequestId).toBe(1);
+});
+
+test("보호자 리포트 탭에 리포트 화면을 연결한다", async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        groups={[
+          {
+            id: "guardian-group",
+            name: "우리 가족",
+            role: "guardian",
+          },
+        ]}
+        initialGroupId="guardian-group"
+        initialRootRoute="appShell"
+        initialShellRoute="report"
+        reportTargetsByGroup={{ "guardian-group": [] }}
+      />
+    );
+  });
+
+  expect(renderer!.root.findByType(ReportScreen)).toBeTruthy();
+  mountedRenderers.push(renderer!);
+});
+
+test("앱에 주입한 리포트 Gateway와 현재 그룹 피보호자를 조회한다", async () => {
+  const reportGateway: jest.Mocked<ReportGateway> = {
+    getCallReport: jest.fn(),
+    getDailyReport: jest.fn().mockResolvedValue({
+      calls: [],
+      dailyReport: {
+        emotionCategory: "JOY",
+        emotionSubcategory: "즐거움",
+        guardianMessageSummary: null,
+        id: "7",
+        summary: "가족 이야기를 나누며 즐거워하셨어요.",
+      },
+      date: "2026-07-31",
+      status: "ready",
+    }),
+    getReportDates: jest.fn().mockResolvedValue({
+      latestReportDate: "2026-07-31",
+      reportDates: ["2026-07-31"],
+      yearMonth: "2026-07",
+    }),
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <App
+        groups={[
+          {
+            id: "guardian-group",
+            name: "우리 가족",
+            role: "guardian",
+          },
+        ]}
+        initialGroupId="guardian-group"
+        initialRootRoute="appShell"
+        initialShellRoute="report"
+        reportGateway={reportGateway}
+        reportTargetsByGroup={{
+          "guardian-group": [{ displayName: "김말순", memberId: "12" }],
+        }}
+      />
+    );
+  });
+
+  expect(reportGateway.getDailyReport).toHaveBeenCalledWith(
+    "guardian-group",
+    "12",
+    expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
+  );
+  expect(JSON.stringify(renderer!.toJSON())).toContain(
+    "가족 이야기를 나누며 즐거워하셨어요."
+  );
+
+  mountedRenderers.push(renderer!);
+});
+
+test("현재 그룹 구성원 API에서 피보호자만 리포트 조회 대상으로 연결한다", async () => {
+  const groupMemberGateway: jest.Mocked<GroupMemberGateway> = {
+    loadMemberProfile: jest.fn(),
+    loadMembers: jest.fn().mockResolvedValue([
+      {
+        age: null,
+        alias: "말순 할머니",
+        avatarText: "김",
+        gender: null,
+        isManager: false,
+        memberId: "12",
+        name: "김말순",
+        role: "careReceiver",
+        userId: "112",
+      },
+      {
+        age: null,
+        alias: null,
+        avatarText: "박",
+        gender: null,
+        isManager: true,
+        memberId: "13",
+        name: "박민수",
+        role: "guardian",
+        userId: "113",
+      },
+    ]),
+    updateMemberAlias: jest.fn(),
+    updateMemberRole: jest.fn(),
+  };
+  const reportGateway: jest.Mocked<ReportGateway> = {
+    getCallReport: jest.fn(),
+    getDailyReport: jest.fn().mockResolvedValue({
+      calls: [],
+      dailyReport: null,
+      date: "2026-08-01",
+      status: "noCalls",
+    }),
+    getReportDates: jest.fn().mockResolvedValue({
+      latestReportDate: null,
+      reportDates: [],
+      yearMonth: "2026-08",
+    }),
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <App
+        groupMemberGateway={groupMemberGateway}
+        groups={[
+          {
+            id: "guardian-group",
+            name: "우리 가족",
+            role: "guardian",
+          },
+        ]}
+        initialGroupId="guardian-group"
+        initialRootRoute="appShell"
+        initialShellRoute="report"
+        reportGateway={reportGateway}
+      />
+    );
+  });
+
+  expect(groupMemberGateway.loadMembers).toHaveBeenCalledWith("guardian-group");
+  expect(reportGateway.getDailyReport).toHaveBeenCalledWith(
+    "guardian-group",
+    "12",
+    expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
+  );
+  expect(reportGateway.getDailyReport).not.toHaveBeenCalledWith(
+    "guardian-group",
+    "13",
+    expect.any(String)
+  );
+  expect(JSON.stringify(renderer!.toJSON())).toContain("말순 할머니");
+
+  mountedRenderers.push(renderer!);
 });
 
 test("그룹 선택 바텀시트에서 빈 피드 그룹으로 전환한다", async () => {

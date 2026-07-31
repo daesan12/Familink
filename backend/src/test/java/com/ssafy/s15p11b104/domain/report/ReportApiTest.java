@@ -155,7 +155,8 @@ class ReportApiTest extends IntegrationTest {
 			.andExpect(jsonPath("$.data.yearMonth").value("2026-07"))
 			.andExpect(jsonPath("$.data.reportDates.length()").value(2))
 			.andExpect(jsonPath("$.data.reportDates[0]").value("2026-07-03"))
-			.andExpect(jsonPath("$.data.reportDates[1]").value("2026-07-20"));
+			.andExpect(jsonPath("$.data.reportDates[1]").value("2026-07-20"))
+			.andExpect(jsonPath("$.data.latestReportDate").value("2026-08-01"));
 	}
 
 	@Test
@@ -166,7 +167,8 @@ class ReportApiTest extends IntegrationTest {
 				.param("month", "7")
 				.with(authenticatedAs(guardianUser.getId())))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.reportDates.length()").value(0));
+			.andExpect(jsonPath("$.data.reportDates.length()").value(0))
+			.andExpect(jsonPath("$.data.latestReportDate").value(nullValue()));
 	}
 
 	@Test
@@ -313,7 +315,8 @@ class ReportApiTest extends IntegrationTest {
 				.with(authenticatedAs(guardianUser.getId())))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.reportDates.length()").value(1))
-			.andExpect(jsonPath("$.data.reportDates[0]").value("2026-07-03"));
+			.andExpect(jsonPath("$.data.reportDates[0]").value("2026-07-03"))
+			.andExpect(jsonPath("$.data.latestReportDate").value("2026-07-03"));
 	}
 
 	@Test

@@ -34,4 +34,12 @@ public interface DailyReportRepository extends JpaRepository<DailyReport, Long> 
 		@Param("careReceiverMemberId") Long careReceiverMemberId,
 		@Param("startDate") LocalDate startDate,
 		@Param("endDate") LocalDate endDate);
+
+	@Query("""
+		select max(report.reportDate)
+		from DailyReport report
+		where report.careReceiverMember.id = :careReceiverMemberId
+		""")
+	Optional<LocalDate> findLatestReportDate(
+		@Param("careReceiverMemberId") Long careReceiverMemberId);
 }

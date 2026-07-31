@@ -281,7 +281,7 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 
 | API ID | Method · Path | 백엔드·권한 | 핵심 요청 | 성공 결과 | 명시 오류 |
 |---|---|---|---|---|---|
-| `API-REPORTS-001` | `GET /groups/{groupId}/care-receivers/{memberId}/reports/calendar` | Spring Boot · 같은 그룹 활성 보호자 | path `groupId`, `memberId`; query `year`, `month` | `200`: `yearMonth`, `reportDates[]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-REPORTS-001` | `GET /groups/{groupId}/care-receivers/{memberId}/reports/calendar` | Spring Boot · 같은 그룹 활성 보호자 | path `groupId`, `memberId`; query `year`, `month` | `200`: `yearMonth`, `reportDates[]`, `latestReportDate` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-REPORTS-002` | `GET /groups/{groupId}/members/{memberId}/reports/daily/{reportDate}` | Spring Boot · 같은 그룹 활성 보호자 | path `groupId`, `memberId`, `reportDate` | `200`: `date`, `dailyReport{id,summary,emotionCategory,emotionSubcategory,guardianMessageSummary}` 또는 `dailyReport=null`, `calls[{callSessionId,startedAt,reportAvailable}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-REPORTS-003` | `GET /call-sessions/{callSessionId}/report` | Spring Boot · 같은 그룹 활성 보호자 | path `callSessionId` | `200`: `callSessionId`, `summary`, `guardianMessage`, `createdAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `404 CALL_REPORT_NOT_READY` |
 | `API-CARNATION-001` | `GET /groups/{groupId}/grass` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 선택 query `startDate`, `endDate`(둘 다 지정하거나 둘 다 생략) | `200`: `weekStart`, `weekEnd`, `rankings[{memberId,displayName,carnationCount,previousWeekWinner}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
@@ -289,6 +289,11 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 
 - `API-REPORTS-002`의 `guardianMessageSummary`는 일일 대표 보호자 전달
   메모 단일 문자열이며 전달할 내용이 없으면 `null`이다.
+- `API-REPORTS-001`의 `reportDates[]`는 요청 월에 존재하는 일일 리포트 날짜만
+  반환한다. `latestReportDate`는 요청 월과 관계없이 해당 피보호자의 전체
+  `daily_reports.report_date` 중 최댓값이며, 일일 리포트가 한 건도 없으면
+  `null`이다. 세 날짜 필드는 모두 기존 일일 리포트와 같은 ISO-8601 날짜
+  문자열을 사용한다.
 - Spring Boot는 `daily_reports`와 `call_reports`를 직접 읽어 리포트 응답을
   구성한다.
 - Spring Scheduler는 `Asia/Seoul` 기준 매일 22시에 일일 리포트 생성을

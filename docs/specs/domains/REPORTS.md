@@ -31,12 +31,17 @@
 13. 건별 또는 일일 리포트가 새로 생성되면 해당 피보호자와 같은 그룹의
     현재 활성 보호자 전원에게 각각 `CALL_REPORT` 또는 `DAILY_REPORT`
     알림을 생성한다.
+14. 리포트 탭의 상단에는 생성이 완료된 가장 최신 일간 리포트와 해당 리포트의 날짜를 표시한다.
+15. 당일 일간 리포트가 아직 생성되지 않았거나 당일 통화가 없더라도 이전에 생성된 일간 리포트가 있으면 가장 최신 일간 리포트를 상단에 유지한다. 하단 건별 목록에는 당일 생성된 건만 시간순으로 표시한다.
+16. 건별 리포트는 있으나 생성된 일간 리포트가 아직 하나도 없으면 일간 리포트 준비 상태를 표시한다.
+17. 일간 리포트의 `guardianMessageSummary` 또는 건별 리포트의 `guardianMessage`가 `null`이면 제목·배경·여백을 포함한 전달 메시지 영역 전체를 표시하지 않는다.
+18. 리포트 달력 API는 요청 월의 `reportDates[]`와 함께 해당 피보호자의 전체 일일 리포트 중 가장 최신 `report_date`인 `latestReportDate`를 반환한다. 일일 리포트가 한 건도 없으면 `latestReportDate`는 `null`이다.
 
 건별 감정 대분류 enum은 `ANGER`, `SADNESS`, `ANXIETY`, `HURT`, `EMBARRASSMENT`, `JOY`, `NEUTRAL`이다. 한국어 표시명과 이미지 매핑은 미결정이다.
 
 ## 예외
 
-- 해당 리포트 구간에 통화가 없으면 일일 리포트를 만들지 않고 조회 화면은 빈 상태를 표시한다.
+- 해당 리포트 구간에 통화가 없으면 그 기준일의 일일 리포트를 만들지 않는다. 이전에 생성된 일일 리포트가 있으면 조회 화면 상단에 가장 최신 일일 리포트를 유지하고 당일 건별 목록만 빈 상태로 표시한다. 생성된 일일 리포트가 전혀 없을 때만 전체 리포트 빈 상태를 표시한다.
 - 건별 리포트가 아직 준비되지 않았으면 [API 계약](../contracts/API.md)의 준비 전 오류를 사용한다.
 - Gemini 호출이 실패하면 성공 리포트를 저장하지 않는다. 재시도·복구 정책은 미결정이다.
 
@@ -45,6 +50,7 @@
 - 권한: 같은 그룹의 활성 보호자만 피보호자 리포트를 조회할 수 있다.
 - API:
   - `API-REPORTS-001` `GET /groups/{groupId}/care-receivers/{memberId}/reports/calendar`
+    - `reportDates[]`는 요청한 월의 일일 리포트 날짜만 담고, `latestReportDate`는 월과 관계없이 전체 최신 일일 리포트 날짜를 담는다.
   - `API-REPORTS-002` `GET /groups/{groupId}/members/{memberId}/reports/daily/{reportDate}`
   - `API-REPORTS-003` `GET /call-sessions/{callSessionId}/report`
   - 요청·응답·명시 오류의 상세는 [API 계약](../contracts/API.md)을 따른다.
@@ -93,6 +99,24 @@
 - When: 리포트 생성 알림 이벤트를 처리한다.
 - Then: 같은 그룹의 현재 활성 보호자 전원에게 리포트 종류에 맞는 알림이
   중복 없이 생성된다.
+
+### AC-006
+
+- Given: 당일 일일 리포트가 아직 생성되지 않았거나 당일 통화가 없고 이전에 생성된 일일 리포트가 있다.
+- When: 보호자가 리포트 탭을 조회한다.
+- Then: 가장 최신 일일 리포트와 그 날짜를 상단에 표시하고 당일 건별 목록은 당일 데이터에 따라 표시한다.
+
+### AC-007
+
+- Given: 일일 리포트의 `guardianMessageSummary` 또는 건별 리포트의 `guardianMessage`가 `null`이다.
+- When: 해당 리포트를 표시한다.
+- Then: 전달 메시지 영역 전체를 표시하지 않는다.
+
+### AC-008
+
+- Given: 조회 기준일이 속한 달에는 일일 리포트가 없고 이전 달에 생성된 일일 리포트가 있다.
+- When: 보호자가 리포트 탭을 조회한다.
+- Then: `API-REPORTS-001.latestReportDate`로 전체 최신 날짜를 확인하고 해당 날짜의 일일 리포트를 상단에 표시한다.
 
 ## 미결정 사항
 

@@ -11,7 +11,10 @@ const frontendRoot = path.resolve(
 const requiredPaths = [
   "App.tsx",
   "package.json",
+  "README.md",
   "tsconfig.json",
+  "scripts/start-android-dev.mjs",
+  "scripts/start-android-dev.test.mjs",
   "src/app-shell/AppShell.tsx",
   "src/app-shell/BottomTabBar.tsx",
   "src/app-shell/CurrentGroupSwitcher.tsx",
@@ -44,6 +47,15 @@ const requiredPaths = [
   "src/shared/api/apiError.ts",
   "src/shared/api/apiTypes.ts",
   "src/shared/api/index.ts",
+  "src/features/reports/index.ts",
+  "src/features/reports/types.ts",
+  "src/features/reports/reportPresentation.ts",
+  "src/features/reports/fixtures/reportFixtures.ts",
+  "src/features/reports/screens/ReportScreen.tsx",
+  "src/features/reports/components/DailyReportCard.tsx",
+  "src/features/reports/components/CallReportRow.tsx",
+  "src/features/reports/components/CallReportDetailModal.tsx",
+  "src/features/reports/components/ReportPageIndicator.tsx",
 ];
 
 await Promise.all(
