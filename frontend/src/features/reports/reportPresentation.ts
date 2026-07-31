@@ -3,6 +3,7 @@ import type {
   CareReceiverReportPage,
   CareReceiverReportTarget,
   DailyReportResult,
+  ReportCalendar,
   ReportEmotionCategory,
   ReportPageState,
 } from "./types";
@@ -41,7 +42,8 @@ export function sortCallsByStartedAt(
 export function toCareReceiverReportPage(
   target: CareReceiverReportTarget,
   callsResult: DailyReportResult,
-  dailyResult: DailyReportResult = callsResult
+  dailyResult: DailyReportResult = callsResult,
+  reportCalendar?: ReportCalendar
 ): CareReceiverReportPage {
   return {
     displayName: target.displayName,
@@ -58,6 +60,7 @@ export function toCareReceiverReportPage(
         }
       : null,
     memberId: target.memberId,
+    reportCalendar,
     todayCalls: callsResult.calls.map((call) => ({
       callSessionId: call.callSessionId,
       guardianMessage: null,

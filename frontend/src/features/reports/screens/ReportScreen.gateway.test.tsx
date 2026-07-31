@@ -29,13 +29,16 @@ function createGateway(): jest.Mocked<ReportGateway> {
   };
 }
 
-async function renderWithGateway(gateway: ReportGateway) {
+async function renderWithGateway(
+  gateway: ReportGateway,
+  targets = [target]
+) {
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
       <ReportScreen
-        careReceiverTargets={[target]}
+        careReceiverTargets={targets}
         currentGroup={currentGroup}
         reportDate="2026-07-31"
         reportGateway={gateway}
@@ -190,4 +193,260 @@ test("당일 리포트가 없으면 이전 달을 포함한 최신 일간 리포
   expect(tree).toContain("2026년 6월 30일");
   expect(tree).toContain("차분하게 하루를 보내셨어요.");
   expect(tree).toContain("오늘 생성된 통화 리포트가 없어요.");
+});
+
+test("캘린더의 생성 날짜를 누르면 같은 화면을 해당 날짜 리포트로 갱신한다", async () => {
+  const gateway = createGateway();
+  gateway.getReportDates.mockResolvedValue({
+    latestReportDate: "2026-07-31",
+    reportDates: ["2026-07-17", "2026-07-31"],
+    yearMonth: "2026-07",
+  });
+  gateway.getDailyReport.mockImplementation(
+    async (_groupId, _memberId, date) => ({
+      calls: [],
+      dailyReport: {
+        emotionCategory: "NEUTRAL",
+        emotionSubcategory: "평온",
+        guardianMessageSummary: null,
+        id: date,
+        summary:
+          date === "2026-07-17"
+            ? "선택한 날짜의 리포트입니다."
+            : "오늘의 리포트입니다.",
+      },
+      date,
+      status: "ready",
+    })
+  );
+  const renderer = await renderWithGateway(gateway);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "리포트 캘린더" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({
+        accessibilityLabel: "2026년 7월 17일 리포트 보기",
+      })
+      .props.onPress();
+  });
+
+  expect(gateway.getDailyReport).toHaveBeenCalledWith(
+    "group-1",
+    "12",
+    "2026-07-17"
+  );
+  const tree = JSON.stringify(renderer.toJSON());
+  expect(tree).toContain("선택한 날짜의 리포트입니다.");
+  expect(tree).toContain("2026년 7월 17일");
+  expect(tree).toContain("선택한 날의 통화");
+  expect(tree).not.toContain("리포트 날짜 선택");
+});
+
+test("캘린더 방향 버튼으로 월을 이동하면 이동한 월의 생성 날짜를 조회한다", async () => {
+  const gateway = createGateway();
+  gateway.getReportDates.mockResolvedValue({
+    latestReportDate: "2026-07-31",
+    reportDates: ["2026-07-31"],
+    yearMonth: "2026-07",
+  });
+  gateway.getDailyReport.mockResolvedValue({
+    calls: [],
+    dailyReport: {
+      emotionCategory: "NEUTRAL",
+      emotionSubcategory: "평온",
+      guardianMessageSummary: null,
+      id: "daily-31",
+      summary: "오늘의 리포트입니다.",
+    },
+    date: "2026-07-31",
+    status: "ready",
+  });
+  const renderer = await renderWithGateway(gateway);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "리포트 캘린더" })
+      .props.onPress();
+  });
+
+  await TestRenderer.act(async () => {
+    renderer.root.findByProps({ accessibilityLabel: "다음 달" }).props.onPress();
+  });
+
+  expect(gateway.getReportDates).toHaveBeenCalledWith(
+    "group-1",
+    "12",
+    2026,
+    8
+  );
+  expect(JSON.stringify(renderer.toJSON())).toContain("2026년 8월");
+});
+
+test("월을 이동하면 API 응답 전에도 날짜표를 즉시 표시하고 인접 월 결과를 캐시한다", async () => {
+  const gateway = createGateway();
+  let resolveAugust:
+    | ((value: {
+        latestReportDate: string;
+        reportDates: string[];
+        yearMonth: string;
+      }) => void)
+    | undefined;
+  gateway.getDailyReport.mockResolvedValue({
+    calls: [],
+    dailyReport: {
+      emotionCategory: "NEUTRAL",
+      emotionSubcategory: "평온",
+      guardianMessageSummary: null,
+      id: "daily-31",
+      summary: "오늘의 리포트입니다.",
+    },
+    date: "2026-07-31",
+    status: "ready",
+  });
+  gateway.getReportDates.mockImplementation(
+    async (_groupId, _memberId, year, month) => {
+      if (month === 8) {
+        return new Promise((resolve) => {
+          resolveAugust = resolve;
+        });
+      }
+      return {
+        latestReportDate: "2026-07-31",
+        reportDates: month === 7 ? ["2026-07-31"] : [],
+        yearMonth: `${year}-${String(month).padStart(2, "0")}`,
+      };
+    }
+  );
+  const renderer = await renderWithGateway(gateway);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "리포트 캘린더" })
+      .props.onPress();
+  });
+  const julyRequestCountAfterOpen = gateway.getReportDates.mock.calls.filter(
+    ([, , year, month]) => year === 2026 && month === 7
+  ).length;
+
+  TestRenderer.act(() => {
+    renderer.root.findByProps({ accessibilityLabel: "다음 달" }).props.onPress();
+  });
+
+  expect(JSON.stringify(renderer.toJSON())).toContain("2026년 8월");
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "2026년 8월 1일 리포트 없음",
+    })
+  ).toBeTruthy();
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "리포트 날짜 확인 중" })
+  ).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    resolveAugust?.({
+      latestReportDate: "2026-08-17",
+      reportDates: ["2026-08-17"],
+      yearMonth: "2026-08",
+    });
+  });
+
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "2026년 8월 17일 리포트 보기",
+    })
+  ).toBeTruthy();
+
+  TestRenderer.act(() => {
+    renderer.root.findByProps({ accessibilityLabel: "이전 달" }).props.onPress();
+    renderer.root.findByProps({ accessibilityLabel: "다음 달" }).props.onPress();
+  });
+
+  const julyRequestCountAfterNavigation = gateway.getReportDates.mock.calls.filter(
+    ([, , year, month]) => year === 2026 && month === 7
+  ).length;
+  const augustRequests = gateway.getReportDates.mock.calls.filter(
+    ([, , year, month]) => year === 2026 && month === 8
+  );
+  expect(julyRequestCountAfterNavigation).toBe(julyRequestCountAfterOpen);
+  expect(augustRequests).toHaveLength(1);
+});
+
+test("어르신별 캘린더 날짜를 분리하고 화면 로딩 때 받은 현재 월을 재사용한다", async () => {
+  const gateway = createGateway();
+  const targets = [
+    { displayName: "김수호", memberId: "11" },
+    { displayName: "이말순", memberId: "12" },
+  ];
+  gateway.getDailyReport.mockImplementation(
+    async (_groupId, memberId, date) => ({
+      calls: [],
+      dailyReport: {
+        emotionCategory: "NEUTRAL",
+        emotionSubcategory: "평온",
+        guardianMessageSummary: null,
+        id: `daily-${memberId}`,
+        summary: `${memberId}번 어르신 리포트`,
+      },
+      date,
+      status: "ready",
+    })
+  );
+  gateway.getReportDates.mockImplementation(
+    async (_groupId, memberId, year, month) => ({
+      latestReportDate: memberId === "11" ? "2026-07-10" : "2026-07-20",
+      reportDates:
+        month !== 7
+          ? []
+          : memberId === "11"
+            ? ["2026-07-10"]
+            : ["2026-07-20"],
+      yearMonth: `${year}-${String(month).padStart(2, "0")}`,
+    })
+  );
+  const renderer = await renderWithGateway(gateway, targets);
+  const currentMonthRequestCount = () =>
+    gateway.getReportDates.mock.calls.filter(
+      ([, , year, month]) => year === 2026 && month === 7
+    ).length;
+
+  expect(currentMonthRequestCount()).toBe(2);
+  const calendarButtons = renderer.root
+    .findAllByProps({ accessibilityLabel: "리포트 캘린더" })
+    .filter((button) => typeof button.props.onPress === "function");
+
+  await TestRenderer.act(async () => {
+    calendarButtons[0].props.onPress();
+  });
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "2026년 7월 10일 리포트 보기",
+    })
+  ).toBeTruthy();
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "2026년 7월 20일 리포트 없음",
+    })
+  ).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "리포트 캘린더 닫기" })
+      .props.onPress();
+    calendarButtons[1].props.onPress();
+  });
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "2026년 7월 20일 리포트 보기",
+    })
+  ).toBeTruthy();
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "2026년 7월 10일 리포트 없음",
+    })
+  ).toBeTruthy();
+  expect(currentMonthRequestCount()).toBe(2);
 });

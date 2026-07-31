@@ -70,7 +70,12 @@ export function useReportPages({
           latestReportDate === reportDate ||
           callsResult.dailyReport
         ) {
-          return toCareReceiverReportPage(target, callsResult);
+          return toCareReceiverReportPage(
+            target,
+            callsResult,
+            callsResult,
+            calendar
+          );
         }
 
         const dailyResult = await reportGateway.getDailyReport(
@@ -78,7 +83,12 @@ export function useReportPages({
           target.memberId,
           latestReportDate
         );
-        return toCareReceiverReportPage(target, callsResult, dailyResult);
+        return toCareReceiverReportPage(
+          target,
+          callsResult,
+          dailyResult,
+          calendar
+        );
       })
     )
       .then((pages) => {
