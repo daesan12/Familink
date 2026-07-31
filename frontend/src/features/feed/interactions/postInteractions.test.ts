@@ -4,6 +4,7 @@ import {
   createPostInteractionsState,
   deleteComment,
   REACTION_OPTIONS,
+  replaceComments,
   updateComment,
 } from './postInteractions';
 import type {FeedPost} from '../types';
@@ -103,4 +104,35 @@ test('postId별 댓글을 작성·수정·삭제하며 다른 게시글 상태�
   expect(deleted.commentsByPostId[post.id]).toEqual([]);
   expect(deleted.commentCountByPostId[post.id]).toBe(0);
   expect(deleted.commentsByPostId['post-2']).toEqual([]);
+});
+
+test('댓글 페이지를 갱신해도 저장 중인 임시 댓글을 보존한다', () => {
+  const author = {avatarText: '다', id: 'current-user', name: '다영'};
+  const initial = createPostInteractionsState([post], {});
+  const withPendingComment = addComment(initial, {
+    author,
+    body: '저장 중 댓글',
+    commentId: 'local-comment-1',
+    createdAt: '2026-07-30T12:01:00Z',
+    postId: post.id,
+  });
+
+  const refreshed = replaceComments(withPendingComment, {
+    comments: [
+      {
+        author,
+        body: '서버 댓글',
+        createdAt: '2026-07-30T12:00:00Z',
+        id: 'comment-2',
+        postId: post.id,
+      },
+    ],
+    postId: post.id,
+    preserveCount: true,
+  });
+
+  expect(refreshed.commentsByPostId[post.id]?.map(comment => comment.id)).toEqual([
+    'comment-2',
+    'local-comment-1',
+  ]);
 });

@@ -23,12 +23,16 @@ const detailPost: FeedPost = {
 
 test('상세 API는 목록에 없는 postId도 조회한다', async () => {
   const detailLoader = jest.fn().mockResolvedValue(detailPost);
+  const commentsLoader = jest
+    .fn()
+    .mockResolvedValue({comments: [], hasNext: false});
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
       <FeedScreen
         currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+        commentsLoader={commentsLoader}
         detailLoader={detailLoader}
         loader={jest.fn().mockResolvedValue([])}
         openPostId="post-detail"
@@ -42,6 +46,7 @@ test('상세 API는 목록에 없는 postId도 조회한다', async () => {
   });
 
   expect(detailLoader).toHaveBeenCalledWith('post-detail', undefined, 'group-1');
+  expect(commentsLoader).toHaveBeenCalledWith('post-detail', 0, 20);
 
   await TestRenderer.act(() => {
     renderer!.unmount();

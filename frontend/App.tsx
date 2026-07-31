@@ -63,6 +63,13 @@ import {
   submitPost,
 } from "./src/features/feed/api/postApi";
 import {
+  createComment,
+  deleteComment,
+  loadComments,
+  updateComment,
+} from "./src/features/feed/api/commentApi";
+import { changePostReaction } from "./src/features/feed/api/reactionApi";
+import {
   familyGroupMembershipGateway,
   familyGroupMemberGateway,
   familyGroupManagementGateway,
@@ -246,13 +253,43 @@ function ConnectedFeedScreen(screenProps: AppScreenProps) {
   // UI previews. Real groups returned by the API always use the HTTP gateway.
   const usesDevelopmentFixture =
     __DEV__ && screenProps.currentGroup.id.startsWith("development-");
+  const currentUser = usesDevelopmentFixture
+    ? undefined
+    : currentMemberId && screenProps.currentUserName
+      ? {
+          avatarText:
+            [...screenProps.currentUserName].slice(0, 2).join("") || "?",
+          id: currentMemberId,
+          name: screenProps.currentUserName,
+        }
+      : null;
 
   return (
     <FeedScreen
       {...screenProps}
+      commentsLoader={usesDevelopmentFixture ? undefined : loadComments}
       currentMemberId={currentMemberId}
+      currentUser={currentUser}
       detailLoader={usesDevelopmentFixture ? undefined : loadPostDetail}
+      onChangeReaction={
+        usesDevelopmentFixture
+          ? undefined
+          : input => {
+              const reactionId =
+                input.nextReactionId ?? input.previousReactionId;
+              if (reactionId === null) {
+                return Promise.reject(
+                  new Error("보낼 반응이 선택되지 않았습니다."),
+                );
+              }
+              return changePostReaction(input.postId, reactionId);
+            }
+      }
       onConfirmDelete={usesDevelopmentFixture ? undefined : deletePost}
+      onCreateComment={usesDevelopmentFixture ? undefined : input =>
+        createComment(input.postId, input.body)}
+      onDeleteComment={usesDevelopmentFixture ? undefined : input =>
+        deleteComment(input.commentId)}
       onSubmitPost={
         usesDevelopmentFixture
           ? undefined
@@ -264,6 +301,8 @@ function ConnectedFeedScreen(screenProps: AppScreenProps) {
                 signal,
               ).then(() => undefined)
       }
+      onUpdateComment={usesDevelopmentFixture ? undefined : input =>
+        updateComment(input.commentId, input.body)}
       pageLoader={usesDevelopmentFixture ? undefined : loadFeedPage}
     />
   );

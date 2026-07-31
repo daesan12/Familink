@@ -2,13 +2,19 @@ import {useEffect, useRef, useState} from 'react';
 
 import {
   addComment,
+  appendComments,
   changeReaction,
   createPostInteractionsState,
   deleteComment,
+  replaceComment,
+  replaceComments,
+  restoreComment,
+  setReaction,
   updateComment,
 } from '../interactions/postInteractions';
 import type {
   FeedMember,
+  FeedReaction,
   FeedPost,
   PostComment,
   ReactionId,
@@ -32,16 +38,25 @@ export function usePostInteractions(
   }, [initialCommentsByPostId, posts]);
 
   return {
-    addComment: (postId: string, body: string, author: FeedMember) => {
+    addComment: (
+      postId: string,
+      body: string,
+      author: FeedMember,
+      options?: {commentId?: string; createdAt?: string},
+    ) => {
       setState(current =>
         addComment(current, {
           author,
           body,
-          commentId: `local-comment-${nextLocalCommentId.current++}`,
-          createdAt: new Date().toISOString(),
+          commentId:
+            options?.commentId ?? `local-comment-${nextLocalCommentId.current++}`,
+          createdAt: options?.createdAt ?? new Date().toISOString(),
           postId,
         }),
       );
+    },
+    appendComments: (postId: string, comments: readonly PostComment[]) => {
+      setState(current => appendComments(current, {comments, postId}));
     },
     changeReaction: (postId: string, reactionId: ReactionId) => {
       setState(current => changeReaction(current, postId, reactionId));
@@ -51,11 +66,46 @@ export function usePostInteractions(
     deleteComment: (postId: string, commentId: string) => {
       setState(current => deleteComment(current, {commentId, postId}));
     },
-    reactionsByPostId: state.reactionsByPostId,
-    selectedReactionByPostId: state.selectedReactionByPostId,
-    updateComment: (postId: string, commentId: string, body: string) => {
+    replaceComment: (
+      postId: string,
+      comment: PostComment,
+      previousCommentId?: string,
+    ) => {
       setState(current =>
-        updateComment(current, {body, commentId, postId}),
+        replaceComment(current, {comment, postId, previousCommentId}),
+      );
+    },
+    replaceComments: (
+      postId: string,
+      comments: readonly PostComment[],
+      preserveCount = true,
+    ) => {
+      setState(current =>
+        replaceComments(current, {comments, postId, preserveCount}),
+      );
+    },
+    restoreComment: (postId: string, comment: PostComment) => {
+      setState(current => restoreComment(current, {comment, postId}));
+    },
+    reactionsByPostId: state.reactionsByPostId,
+    setReaction: (
+      postId: string,
+      selectedReactionId: ReactionId | null,
+      reactions: readonly FeedReaction[],
+    ) => {
+      setState(current =>
+        setReaction(current, {postId, reactions, selectedReactionId}),
+      );
+    },
+    selectedReactionByPostId: state.selectedReactionByPostId,
+    updateComment: (
+      postId: string,
+      commentId: string,
+      body: string,
+      updatedAt?: string,
+    ) => {
+      setState(current =>
+        updateComment(current, {body, commentId, postId, updatedAt}),
       );
     },
   };

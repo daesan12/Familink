@@ -14,6 +14,8 @@ export const REACTION_OPTIONS: readonly Omit<FeedReaction, 'count'>[] = [
   {emoji: '👏', id: 'SUPPORT', label: '응원해요'},
 ];
 
+const LOCAL_COMMENT_ID_PREFIX = 'local-comment-';
+
 export interface PostInteractionsState {
   commentCountByPostId: Readonly<Record<string, number>>;
   commentsByPostId: Readonly<Record<string, readonly PostComment[]>>;
@@ -54,6 +56,7 @@ export function addComment(
     commentId: string;
     createdAt: string;
     postId: string;
+    updatedAt?: string;
   },
 ): PostInteractionsState {
   const comments = state.commentsByPostId[input.postId] ?? [];
@@ -63,6 +66,7 @@ export function addComment(
     createdAt: input.createdAt,
     id: input.commentId,
     postId: input.postId,
+    updatedAt: input.updatedAt,
   };
 
   return {
@@ -81,7 +85,12 @@ export function addComment(
 
 export function updateComment(
   state: PostInteractionsState,
-  input: {body: string; commentId: string; postId: string},
+  input: {
+    body: string;
+    commentId: string;
+    postId: string;
+    updatedAt?: string;
+  },
 ): PostInteractionsState {
   const comments = state.commentsByPostId[input.postId] ?? [];
 
@@ -91,9 +100,110 @@ export function updateComment(
       ...state.commentsByPostId,
       [input.postId]: comments.map(comment =>
         comment.id === input.commentId
-          ? {...comment, body: input.body.trim()}
+          ? {
+              ...comment,
+              body: input.body.trim(),
+              ...(input.updatedAt === undefined
+                ? {}
+                : {updatedAt: input.updatedAt}),
+            }
           : comment,
       ),
+    },
+  };
+}
+
+export function replaceComments(
+  state: PostInteractionsState,
+  input: {
+    comments: readonly PostComment[];
+    postId: string;
+    preserveCount?: boolean;
+  },
+): PostInteractionsState {
+  const current = state.commentsByPostId[input.postId] ?? [];
+  const nextIds = new Set(input.comments.map(comment => comment.id));
+  const pendingLocalComments = current.filter(
+    comment =>
+      comment.id.startsWith(LOCAL_COMMENT_ID_PREFIX) &&
+      !nextIds.has(comment.id),
+  );
+
+  return {
+    ...state,
+    commentCountByPostId: input.preserveCount
+      ? state.commentCountByPostId
+      : {
+          ...state.commentCountByPostId,
+          [input.postId]: input.comments.length,
+        },
+    commentsByPostId: {
+      ...state.commentsByPostId,
+      [input.postId]: [...input.comments, ...pendingLocalComments],
+    },
+  };
+}
+
+export function appendComments(
+  state: PostInteractionsState,
+  input: {comments: readonly PostComment[]; postId: string},
+): PostInteractionsState {
+  const current = state.commentsByPostId[input.postId] ?? [];
+  const seenIds = new Set(current.map(comment => comment.id));
+  const next = input.comments.filter(comment => {
+    if (seenIds.has(comment.id)) {
+      return false;
+    }
+    seenIds.add(comment.id);
+    return true;
+  });
+
+  return replaceComments(state, {
+    comments: [...current, ...next],
+    postId: input.postId,
+    preserveCount: true,
+  });
+}
+
+export function replaceComment(
+  state: PostInteractionsState,
+  input: {
+    comment: PostComment;
+    postId: string;
+    previousCommentId?: string;
+  },
+): PostInteractionsState {
+  const comments = state.commentsByPostId[input.postId] ?? [];
+  const previousCommentId = input.previousCommentId ?? input.comment.id;
+  return {
+    ...state,
+    commentsByPostId: {
+      ...state.commentsByPostId,
+      [input.postId]: comments.map(comment =>
+        comment.id === previousCommentId ? input.comment : comment,
+      ),
+    },
+  };
+}
+
+export function restoreComment(
+  state: PostInteractionsState,
+  input: {comment: PostComment; postId: string},
+): PostInteractionsState {
+  const comments = state.commentsByPostId[input.postId] ?? [];
+  if (comments.some(comment => comment.id === input.comment.id)) {
+    return state;
+  }
+  return {
+    ...state,
+    commentCountByPostId: {
+      ...state.commentCountByPostId,
+      [input.postId]:
+        (state.commentCountByPostId[input.postId] ?? comments.length) + 1,
+    },
+    commentsByPostId: {
+      ...state.commentsByPostId,
+      [input.postId]: [...comments, input.comment],
     },
   };
 }
@@ -169,6 +279,27 @@ export function changeReaction(
     selectedReactionByPostId: {
       ...state.selectedReactionByPostId,
       [postId]: selectedReactionId,
+    },
+  };
+}
+
+export function setReaction(
+  state: PostInteractionsState,
+  input: {
+    postId: string;
+    reactions: readonly FeedReaction[];
+    selectedReactionId: ReactionId | null;
+  },
+): PostInteractionsState {
+  return {
+    ...state,
+    reactionsByPostId: {
+      ...state.reactionsByPostId,
+      [input.postId]: input.reactions,
+    },
+    selectedReactionByPostId: {
+      ...state.selectedReactionByPostId,
+      [input.postId]: input.selectedReactionId,
     },
   };
 }
