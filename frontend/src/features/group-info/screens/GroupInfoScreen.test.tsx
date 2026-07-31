@@ -530,16 +530,101 @@ test('로더 실패 시 에러와 다시 시도를 보여주고, 재시도로 �
   ).toBe(false);
 });
 
-test('아직 연동 전인 관리 메뉴 행은 후속 작업 안내 팝업을 띄운다', () => {
-  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+test('그룹관리자 변경 메뉴를 누르면 H-6 화면으로 이동하고 뒤로 복귀한다', () => {
   const renderer = renderScreen();
 
   press(renderer, '그룹관리자 변경');
+  expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(true);
 
-  expect(alertSpy).toHaveBeenCalledWith(
-    '그룹관리자 변경',
-    '후속 작업에서 연결될 화면입니다.',
-  );
+  press(renderer, '뒤로 가기');
+  expect(hasText(renderer, '그룹 정보')).toBe(true);
+});
+
+test('구성원 내보내기 메뉴를 누르면 H-7 선택 화면으로 이동한다', () => {
+  const renderer = renderScreen();
+
+  press(renderer, '구성원 내보내기');
+  expect(hasText(renderer, '내보낼 구성원을 선택하세요')).toBe(true);
+});
+
+test('그룹 나가기 메뉴를 누르면 H-8 화면으로 이동한다', () => {
+  const renderer = renderScreen();
+
+  press(renderer, '그룹 나가기');
+  expect(hasText(renderer, '정말 그룹을 나가시겠어요?')).toBe(true);
+  // 요약 카드에 그룹명·관리자 이름이 실데이터로 노출된다(이경호가 방장).
+  expect(hasText(renderer, '우리 가족')).toBe(true);
+  expect(hasText(renderer, '그룹관리자 · 이경호')).toBe(true);
+});
+
+test('그룹 나가기 화면의 관리자 변경 링크는 H-6으로 이동한다', () => {
+  const renderer = renderScreen();
+
+  press(renderer, '그룹 나가기');
+  press(renderer, '그룹관리자 변경하기');
+  expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(true);
+});
+
+test('그룹 삭제 메뉴는 확인 팝업을 띄우고 삭제 콜백을 부른다', () => {
+  const deleted: number[] = [];
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        onDeleteGroup={() => deleted.push(1)}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '그룹 삭제');
+  expect(hasText(renderer!, '정말 그룹을 삭제하시겠어요?')).toBe(true);
+
+  press(renderer!, '그룹 삭제 확정');
+  expect(deleted).toEqual([1]);
+  // 삭제 후 팝업이 닫힌다.
+  expect(hasText(renderer!, '정말 그룹을 삭제하시겠어요?')).toBe(false);
+});
+
+test('그룹명 변경 메뉴를 누르면 H-10 화면으로 이동한다', () => {
+  const renderer = renderScreen();
+
+  press(renderer, '그룹명 변경');
+  expect(hasText(renderer, '그룹 이름을 변경하세요')).toBe(true);
+});
+
+test('그룹관리자 변경을 확정하면 콜백을 부르고 관리자 표시를 옮긴다', () => {
+  const changed: string[] = [];
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        onChangeManager={(id) => changed.push(id)}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '그룹관리자 변경');
+  // 보호자인 손수호를 새 관리자로 선택하고 확정한다.
+  press(renderer!, '손수호 선택');
+  press(renderer!, '그룹관리자 변경하기');
+
+  expect(changed).toEqual(['m-dad']);
+  // 복귀 후 다시 H-6을 열면 손수호가 현재 관리자로 표시된다.
+  press(renderer!, '그룹관리자 변경');
+  const dadRow = renderer!.root.findByProps({accessibilityLabel: '손수호 선택'});
+  expect(dadRow.props.accessibilityState.disabled).toBe(true);
 });
 
 test('그룹 코드 카드를 누르면 그룹 코드 화면으로 이동한다', async () => {

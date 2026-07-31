@@ -31,6 +31,9 @@ export interface GroupMember {
   weeklyRank: number;
   // 최근 7일 카네이션(도장) 적립 여부. 길이는 WEEKLY_STAMP_DAYS다.
   weeklyStamps: readonly boolean[];
+  // 그룹 가입일(ISO). 어떤 조회 API도 내려주지 않아(계약 밖) H-7 구성원 내보내기에서만
+  // 목업으로 표시한다. DB group_members.joined_at에는 존재하며, 연동 시 서버 값으로 대체한다.
+  joinedAt?: string;
 }
 
 // H-3 주간 효자 랭킹의 한 줄. 필드명은 API-CARNATION-001
