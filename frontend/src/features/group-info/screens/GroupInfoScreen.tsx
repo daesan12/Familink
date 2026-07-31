@@ -2,6 +2,7 @@ import MaterialDesignIcons from '@react-native-vector-icons/material-design-icon
 import {useEffect, useRef, useState} from 'react';
 import {
   Alert,
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -37,6 +38,13 @@ import type {
   JoinRequestProcessor,
   JoinRequestsLoader,
 } from '../api/groupMembershipApi';
+import type {
+  GroupMembersLoader,
+  MemberAliasUpdater,
+  MemberProfile,
+  MemberProfileLoader,
+  MemberRoleUpdater,
+} from '../api/groupMemberApi';
 import {useWeeklyRanking} from '../hooks/useWeeklyRanking';
 import type {GroupMember} from '../types';
 import {ChangeManagerScreen} from './ChangeManagerScreen';
@@ -57,9 +65,13 @@ export interface GroupInfoScreenProps extends AppScreenProps {
   rankingLoader?: WeeklyRankingLoader;
   // 그룹 코드·가입 요청 로더 주입(테스트·연동용). 없으면 기본 로더로 조회한다.
   groupDetailLoader?: (groupId: string) => Promise<FamilyGroupDetail>;
+  membersLoader?: GroupMembersLoader;
+  memberProfileLoader?: MemberProfileLoader;
   inviteCodeLoader?: GroupInviteCodeLoader;
   joinRequestsLoader?: JoinRequestsLoader;
   onProcessJoinRequest?: JoinRequestProcessor;
+  onUpdateMemberAlias?: MemberAliasUpdater;
+  onUpdateMemberRole?: MemberRoleUpdater;
   // 그룹 관리 액션 콜백(연동·B-3 전환은 후속). 없으면 로컬 상태만 갱신한다.
   onChangeManager?: (memberId: string) => void;
   onRemoveMember?: (memberId: string) => void;
@@ -87,9 +99,13 @@ export function GroupInfoScreen({
   recordCount,
   rankingLoader,
   groupDetailLoader,
+  membersLoader,
+  memberProfileLoader,
   inviteCodeLoader,
   joinRequestsLoader,
   onProcessJoinRequest,
+  onUpdateMemberAlias,
+  onUpdateMemberRole,
   onChangeManager,
   onRemoveMember,
   onLeaveGroup,
@@ -107,6 +123,13 @@ export function GroupInfoScreen({
           pendingJoinCount: pendingJoinCount ?? 0,
           recordCount: recordCount ?? 0,
         }
+      : membersLoader !== undefined
+        ? {
+            members: EMPTY_MEMBERS,
+            currentMemberId: currentMemberId ?? '',
+            pendingJoinCount: pendingJoinCount ?? 0,
+            recordCount: recordCount ?? 0,
+          }
       : __DEV__
         ? getDevelopmentGroupInfo(currentGroup.id)
         : {
@@ -130,11 +153,36 @@ export function GroupInfoScreen({
   const [subScreen, setSubScreen] = useState<SubScreen | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [scopedGroupId, setScopedGroupId] = useState(currentGroup.id);
+  const [membersLoadState, setMembersLoadState] = useState<
+    'idle' | 'loading' | 'error'
+  >(membersLoader === undefined ? 'idle' : 'loading');
+  const [membersLoadError, setMembersLoadError] = useState<string | null>(
+    null,
+  );
+  const [membersReloadCount, setMembersReloadCount] = useState(0);
+  const [profileDetails, setProfileDetails] = useState<
+    Readonly<Record<string, MemberProfile>>
+  >({});
+  const [profileLoadState, setProfileLoadState] = useState<
+    'idle' | 'loading' | 'error'
+  >('idle');
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(
+    null,
+  );
+  const [profileReloadCount, setProfileReloadCount] = useState(0);
+  const [updatingAliasMemberId, setUpdatingAliasMemberId] = useState<
+    string | null
+  >(null);
+  const [updatingRoleMemberId, setUpdatingRoleMemberId] = useState<
+    string | null
+  >(null);
   const [groupDetail, setGroupDetail] = useState<FamilyGroupDetail | null>(
     null,
   );
   const [detailReloadCount, setDetailReloadCount] = useState(0);
   const detailRequestVersion = useRef(0);
+  const membersRequestVersion = useRef(0);
+  const profileRequestVersion = useRef(0);
 
   // 하위 전체화면에 들어가면 하단 탭을 숨긴다(피드 상세·컴포저와 같은 방식).
   useEffect(() => {
@@ -142,6 +190,90 @@ export function GroupInfoScreen({
 
     return () => onFullscreenChange?.(false);
   }, [subScreen, onFullscreenChange]);
+
+  useEffect(() => {
+    if (membersLoader === undefined || initialMembers !== undefined) {
+      setMembersLoadState('idle');
+      setMembersLoadError(null);
+      return;
+    }
+
+    let isActive = true;
+    const requestVersion = membersRequestVersion.current + 1;
+    membersRequestVersion.current = requestVersion;
+    setMembers(EMPTY_MEMBERS);
+    setMembersLoadState('loading');
+    setMembersLoadError(null);
+
+    membersLoader(currentGroup.id)
+      .then(nextMembers => {
+        if (isActive && membersRequestVersion.current === requestVersion) {
+          setMembers(nextMembers);
+          setMembersLoadState('idle');
+        }
+      })
+      .catch(() => {
+        if (!isActive || membersRequestVersion.current !== requestVersion) {
+          return;
+        }
+        setMembersLoadState('error');
+        setMembersLoadError(
+          '구성원 정보를 불러오지 못했습니다. 네트워크와 그룹 권한을 확인해 주세요.',
+        );
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentGroup.id, initialMembers, membersLoader, membersReloadCount]);
+
+  useEffect(() => {
+    if (
+      profileMemberId === null ||
+      memberProfileLoader === undefined ||
+      initialMembers !== undefined
+    ) {
+      setProfileLoadState('idle');
+      setProfileLoadError(null);
+      return;
+    }
+
+    let isActive = true;
+    const requestVersion = profileRequestVersion.current + 1;
+    profileRequestVersion.current = requestVersion;
+    setProfileLoadState('loading');
+    setProfileLoadError(null);
+
+    memberProfileLoader(currentGroup.id, profileMemberId)
+      .then(profile => {
+        if (isActive && profileRequestVersion.current === requestVersion) {
+          setProfileDetails(current => ({
+            ...current,
+            [profile.memberId]: profile,
+          }));
+          setProfileLoadState('idle');
+        }
+      })
+      .catch(() => {
+        if (!isActive || profileRequestVersion.current !== requestVersion) {
+          return;
+        }
+        setProfileLoadState('error');
+        setProfileLoadError(
+          '프로필을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        );
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    currentGroup.id,
+    initialMembers,
+    memberProfileLoader,
+    profileMemberId,
+    profileReloadCount,
+  ]);
 
   useEffect(() => {
     if (groupDetailLoader === undefined) {
@@ -189,6 +321,9 @@ export function GroupInfoScreen({
     setEditingMemberId(null);
     setAliasDraft('');
     setProfileMemberId(null);
+    setProfileDetails({});
+    setProfileLoadState('idle');
+    setProfileLoadError(null);
     setIsRankingOpen(false);
     setSubScreen(null);
     setIsDeleteOpen(false);
@@ -206,7 +341,9 @@ export function GroupInfoScreen({
 
   const handleStartEditAlias = (member: GroupMember) => {
     setEditingMemberId(member.memberId);
-    setAliasDraft(member.alias ?? '');
+    setAliasDraft(
+      member.alias ?? (onUpdateMemberAlias === undefined ? '' : member.name),
+    );
   };
 
   const handleChangeAliasDraft = (value: string) => {
@@ -214,9 +351,39 @@ export function GroupInfoScreen({
   };
 
   const handleSaveAlias = (memberId: string) => {
-    if (!isAliasSaveable(aliasDraft)) {
+    if (
+      !isAliasSaveable(aliasDraft) ||
+      updatingAliasMemberId !== null ||
+      membersLoadState === 'loading'
+    ) {
       return;
     }
+
+    if (onUpdateMemberAlias !== undefined) {
+      const draft = aliasDraft.trim();
+      setUpdatingAliasMemberId(memberId);
+      onUpdateMemberAlias(currentGroup.id, memberId, draft)
+        .then(result => {
+          setMembers(current =>
+            current.map(member =>
+              member.memberId === result.targetMemberId
+                ? {...member, alias: null, name: result.alias}
+                : member,
+            ),
+          );
+          setEditingMemberId(null);
+          setAliasDraft('');
+        })
+        .catch(() => {
+          Alert.alert(
+            '호칭을 저장하지 못했습니다',
+            '네트워크와 그룹 권한을 확인한 뒤 다시 시도해 주세요.',
+          );
+        })
+        .finally(() => setUpdatingAliasMemberId(null));
+      return;
+    }
+
     setMembers(current => applyAliasChange(current, memberId, aliasDraft));
     setEditingMemberId(null);
     setAliasDraft('');
@@ -234,6 +401,29 @@ export function GroupInfoScreen({
       );
       return;
     }
+
+    if (updatingRoleMemberId !== null) {
+      return;
+    }
+
+    if (onUpdateMemberRole !== undefined) {
+      setUpdatingRoleMemberId(member.memberId);
+      onUpdateMemberRole(currentGroup.id, member.memberId, role)
+        .then(result => {
+          setMembers(current =>
+            applyRoleChange(current, result.memberId, result.role),
+          );
+        })
+        .catch(() => {
+          Alert.alert(
+            '역할을 변경하지 못했습니다',
+            '관리자 권한과 구성원 상태를 확인한 뒤 다시 시도해 주세요.',
+          );
+        })
+        .finally(() => setUpdatingRoleMemberId(null));
+      return;
+    }
+
     setMembers(current => applyRoleChange(current, member.memberId, role));
   };
 
@@ -278,8 +468,23 @@ export function GroupInfoScreen({
     setDetailReloadCount(count => count + 1);
   };
 
-  const profileMember =
+  const profileMemberBase =
     members.find(member => member.memberId === profileMemberId) ?? null;
+  const profileMember =
+    profileMemberBase === null
+      ? null
+      : (() => {
+          const profile = profileDetails[profileMemberBase.memberId];
+          return profile === undefined
+            ? profileMemberBase
+            : {
+                ...profileMemberBase,
+                age: profile.age,
+                gender: profile.gender,
+                name: profile.displayName,
+                ...(memberProfileLoader !== undefined ? {alias: null} : {}),
+              };
+        })();
 
   const inviteItems: readonly GroupMenuItem[] = [
     {
@@ -430,24 +635,47 @@ export function GroupInfoScreen({
             <Text style={styles.memberCounts}>{memberCounts}</Text>
           </View>
 
-          {members.map((member, index) => (
-            <View
-              key={member.memberId}
-              style={[styles.memberRow, index > 0 && styles.memberRowDivider]}>
-              <GroupMemberRow
-                aliasDraft={
-                  editingMemberId === member.memberId ? aliasDraft : ''
-                }
-                isEditing={editingMemberId === member.memberId}
-                member={member}
-                onChangeAliasDraft={handleChangeAliasDraft}
-                onOpenProfile={() => setProfileMemberId(member.memberId)}
-                onSaveAlias={() => handleSaveAlias(member.memberId)}
-                onSelectRole={role => handleSelectRole(member, role)}
-                onStartEditAlias={() => handleStartEditAlias(member)}
-              />
+          {membersLoadState === 'loading' ? (
+            <View accessibilityLabel="구성원 정보를 불러오는 중" style={styles.statusBlock}>
+              <ActivityIndicator color={COLORS.purple} />
             </View>
-          ))}
+          ) : membersLoadState === 'error' ? (
+            <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
+              <Text style={styles.errorText}>{membersLoadError}</Text>
+              <Pressable
+                accessibilityLabel="구성원 정보 다시 시도"
+                accessibilityRole="button"
+                onPress={() => setMembersReloadCount(count => count + 1)}
+                style={styles.retryButton}
+              >
+                <Text style={styles.retryText}>다시 시도</Text>
+              </Pressable>
+            </View>
+          ) : members.length === 0 ? (
+            <Text style={styles.emptyMembersText}>현재 구성원이 없습니다.</Text>
+          ) : (
+            members.map((member, index) => (
+              <View
+                key={member.memberId}
+                style={[styles.memberRow, index > 0 && styles.memberRowDivider]}>
+                <GroupMemberRow
+                  aliasDraft={
+                    editingMemberId === member.memberId ? aliasDraft : ''
+                  }
+                  isEditing={editingMemberId === member.memberId}
+                  member={member}
+                  onChangeAliasDraft={handleChangeAliasDraft}
+                  onOpenProfile={() => {
+                    setProfileMemberId(member.memberId);
+                    setProfileReloadCount(count => count + 1);
+                  }}
+                  onSaveAlias={() => handleSaveAlias(member.memberId)}
+                  onSelectRole={role => handleSelectRole(member, role)}
+                  onStartEditAlias={() => handleStartEditAlias(member)}
+                />
+              </View>
+            ))
+          )}
         </View>
 
         <GroupMenuSection items={inviteItems} title="구성원 초대" />
@@ -455,8 +683,11 @@ export function GroupInfoScreen({
       </ScrollView>
 
       <MemberProfileModal
+        errorMessage={profileLoadError}
+        isLoading={profileLoadState === 'loading'}
         member={profileMember}
         onClose={() => setProfileMemberId(null)}
+        onRetry={() => setProfileReloadCount(count => count + 1)}
       />
 
       <WeeklyRankingModal
@@ -484,6 +715,18 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     paddingHorizontal: 20,
     paddingTop: 8,
+  },
+  emptyMembersText: {
+    color: COLORS.textSubtle,
+    fontSize: 14,
+    paddingVertical: 20,
+    textAlign: 'center',
+  },
+  errorText: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
   },
   header: {
     borderBottomColor: COLORS.divider,
@@ -551,6 +794,25 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: COLORS.background,
     flex: 1,
+  },
+  retryButton: {
+    alignItems: 'center',
+    borderColor: COLORS.divider,
+    borderRadius: RADII.pill,
+    borderWidth: 1,
+    minHeight: 40,
+    paddingHorizontal: 16,
+  },
+  retryText: {
+    color: COLORS.textStrong,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  statusBlock: {
+    alignItems: 'center',
+    gap: 10,
+    justifyContent: 'center',
+    paddingVertical: 20,
   },
   title: {
     color: COLORS.textStrong,

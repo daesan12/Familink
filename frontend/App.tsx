@@ -50,9 +50,11 @@ import {
 import { FeedScreen } from "./src/features/feed";
 import {
   familyGroupMembershipGateway,
+  familyGroupMemberGateway,
   familyGroupGateway,
   GroupInfoScreen,
   type FamilyGroupGateway,
+  type GroupMemberGateway,
   type GroupMembershipGateway,
   type GroupJoinRequestSummary,
 } from "./src/features/group-info";
@@ -72,6 +74,7 @@ interface AppProps {
   calendarGateway?: CalendarGateway;
   authSession?: AuthSessionCoordinator;
   groupGateway?: FamilyGroupGateway;
+  groupMemberGateway?: GroupMemberGateway;
   groupMembershipGateway?: GroupMembershipGateway;
   groupStore?: CurrentGroupStore;
   groups?: readonly FamilyGroup[];
@@ -132,6 +135,7 @@ function toPendingJoinRequests(
 
 interface GroupInfoIntegration {
   gateway: FamilyGroupGateway;
+  members: GroupMemberGateway;
   membership: GroupMembershipGateway;
   renameGroup(groupId: string, name: string): Promise<void>;
 }
@@ -149,9 +153,24 @@ function ConnectedGroupInfoScreen(screenProps: AppScreenProps) {
   return (
     <GroupInfoScreen
       {...screenProps}
+      currentMemberId={
+        (
+          screenProps.currentGroup as typeof screenProps.currentGroup & {
+            myMemberId?: string;
+          }
+        ).myMemberId
+      }
       groupDetailLoader={integration.gateway.getGroupDetail}
       inviteCodeLoader={integration.gateway.getInviteCode}
       joinRequestsLoader={integration.membership.loadJoinRequests}
+      membersLoader={integration.members.loadMembers}
+      memberProfileLoader={integration.members.loadMemberProfile}
+      onUpdateMemberAlias={(groupId, memberId, alias) =>
+        integration.members.updateMemberAlias(groupId, memberId, alias)
+      }
+      onUpdateMemberRole={(groupId, memberId, role) =>
+        integration.members.updateMemberRole(groupId, memberId, role)
+      }
       onRenameGroup={(name) =>
         integration.renameGroup(screenProps.currentGroup.id, name)
       }
@@ -180,6 +199,7 @@ export default function App({
   calendarGateway,
   authSession = authSessionManager,
   groupGateway = familyGroupGateway,
+  groupMemberGateway = familyGroupMemberGateway,
   groupMembershipGateway = familyGroupMembershipGateway,
   groupStore = currentGroupStore,
   groups,
@@ -519,8 +539,13 @@ export default function App({
   );
 
   const groupInfoIntegration = useMemo<GroupInfoIntegration>(
-    () => ({ gateway: groupGateway, membership: groupMembershipGateway, renameGroup: handleRenameGroup }),
-    [groupGateway, groupMembershipGateway, handleRenameGroup]
+    () => ({
+      gateway: groupGateway,
+      members: groupMemberGateway,
+      membership: groupMembershipGateway,
+      renameGroup: handleRenameGroup,
+    }),
+    [groupGateway, groupMemberGateway, groupMembershipGateway, handleRenameGroup]
   );
   const resolvedScreens = screens ?? DEFAULT_SCREENS;
 

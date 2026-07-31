@@ -34,6 +34,23 @@ export type {
   JoinRequestsLoader,
 } from './api/groupMembershipApi';
 export {
+  familyGroupMemberGateway,
+  loadMemberProfile,
+  loadMembers,
+  updateMemberAlias,
+  updateMemberRole,
+} from './api/groupMemberApi';
+export type {
+  GroupMemberGateway,
+  GroupMembersLoader,
+  MemberAliasUpdate,
+  MemberAliasUpdater,
+  MemberProfile,
+  MemberProfileLoader,
+  MemberRoleUpdate,
+  MemberRoleUpdater,
+} from './api/groupMemberApi';
+export {
   DEVELOPMENT_CURRENT_MEMBER_ID,
   DEVELOPMENT_GROUP_MEMBERS,
   DEVELOPMENT_PENDING_JOIN_COUNT,

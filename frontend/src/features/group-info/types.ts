@@ -12,6 +12,7 @@ export const WEEKLY_STAMP_DAYS = 7;
 export interface GroupMember {
   // 그룹 멤버십 식별자.
   memberId: string;
+  userId?: string;
   // 대상자의 실제 이름. 호칭 미설정 시 이 이름을 표시한다.
   name: string;
   // 조회자가 설정한 개인화 호칭. 없으면 null이며 실제 이름을 표시한다.
@@ -24,13 +25,13 @@ export interface GroupMember {
   // 아바타 이미지 연동 전 자리표시자 텍스트.
   avatarText: string;
   // 만 나이. 축소 프로필 팝업에 "만 N세"로 표시한다.
-  age: number;
+  age: number | null;
   // 성별.
-  gender: MemberGender;
+  gender: MemberGender | null;
   // 이번 주 카네이션 랭킹 순위. 1위는 왕관을 함께 표시한다.
-  weeklyRank: number;
+  weeklyRank?: number;
   // 최근 7일 카네이션(도장) 적립 여부. 길이는 WEEKLY_STAMP_DAYS다.
-  weeklyStamps: readonly boolean[];
+  weeklyStamps?: readonly boolean[];
   // 그룹 가입일(ISO). 어떤 조회 API도 내려주지 않아(계약 밖) H-7 구성원 내보내기에서만
   // 목업으로 표시한다. DB group_members.joined_at에는 존재하며, 연동 시 서버 값으로 대체한다.
   joinedAt?: string;

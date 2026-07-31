@@ -824,3 +824,122 @@ test('가입 승인 대기 카드를 누르면 승인 화면으로 이동한다'
   expect(hasText(renderer!, '승인 요청 1건')).toBe(true);
   expect(hasText(renderer!, '손수호')).toBe(true);
 });
+test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공 후 상태를 갱신한다', async () => {
+  const membersLoader = jest.fn().mockResolvedValue([
+    {
+      age: null,
+      alias: null,
+      avatarText: '아',
+      gender: null,
+      isManager: true,
+      memberId: 'm-manager',
+      name: '아빠',
+      role: 'guardian' as const,
+      userId: 'u-manager',
+    },
+    {
+      age: null,
+      alias: null,
+      avatarText: '엄',
+      gender: null,
+      isManager: false,
+      memberId: 'm-member',
+      name: '엄마',
+      role: 'guardian' as const,
+      userId: 'u-member',
+    },
+  ]);
+  const updateMemberRole = jest.fn().mockResolvedValue({
+    groupId: 'group-1',
+    memberId: 'm-member',
+    role: 'careReceiver' as const,
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        membersLoader={membersLoader}
+        onUpdateMemberRole={updateMemberRole}
+        pendingJoinCount={0}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+    await Promise.resolve();
+  });
+
+  mountedRenderers.push(renderer!);
+  expect(membersLoader).toHaveBeenCalledWith('group-1');
+  expect(hasText(renderer!, '엄마')).toBe(true);
+
+  press(renderer!, '엄마 피보호자');
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+  });
+
+  expect(updateMemberRole).toHaveBeenCalledWith(
+    'group-1',
+    'm-member',
+    'careReceiver',
+  );
+  expect(hasText(renderer!, '피보호자 1명, 보호자 1명')).toBe(true);
+});
+
+test('프로필 API의 nullable 개인정보를 팝업에 반영하고 실패 시 재시도 버튼을 표시한다', async () => {
+  const membersLoader = jest.fn().mockResolvedValue([
+    {
+      age: null,
+      alias: null,
+      avatarText: '아',
+      gender: null,
+      isManager: false,
+      memberId: 'm-member',
+      name: '아빠',
+      role: 'guardian' as const,
+      userId: 'u-member',
+    },
+  ]);
+  const memberProfileLoader = jest
+    .fn()
+    .mockResolvedValueOnce({
+      age: null,
+      displayName: '아빠',
+      gender: null,
+      memberId: 'm-member',
+    })
+    .mockRejectedValueOnce(new Error('network'));
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-member"
+        memberProfileLoader={memberProfileLoader}
+        membersLoader={membersLoader}
+        pendingJoinCount={0}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '아빠 프로필 보기');
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+  });
+  expect(memberProfileLoader).toHaveBeenCalledWith('group-1', 'm-member');
+  expect(hasText(renderer!, '미입력')).toBe(true);
+
+  press(renderer!, '프로필 닫기');
+  press(renderer!, '아빠 프로필 보기');
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+  });
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '프로필 정보 다시 시도'}),
+  ).toBeTruthy();
+});
