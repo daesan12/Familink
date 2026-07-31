@@ -1,5 +1,5 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {Alert, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 
 import type {AppScreenProps, GroupRole} from '../../../app-shell';
@@ -22,8 +22,14 @@ import {
 } from '../groupInfoModel';
 import {getDevelopmentGroupInfo} from '../fixtures/groupInfoFixtures';
 import type {WeeklyRankingLoader} from '../api/rankingApi';
+import type {
+  GroupInviteCodeLoader,
+  JoinRequestsLoader,
+} from '../api/groupMembershipApi';
 import {useWeeklyRanking} from '../hooks/useWeeklyRanking';
 import type {GroupMember} from '../types';
+import {GroupCodeScreen} from './GroupCodeScreen';
+import {JoinApprovalScreen} from './JoinApprovalScreen';
 
 export interface GroupInfoScreenProps extends AppScreenProps {
   // 조회자로 간주할 구성원. 방장 여부로 역할 토글 권한을 판단한다.
@@ -32,7 +38,13 @@ export interface GroupInfoScreenProps extends AppScreenProps {
   pendingJoinCount?: number;
   // 주간 효자 랭킹 로더 주입(테스트·연동용). 없으면 기본 로더로 조회한다.
   rankingLoader?: WeeklyRankingLoader;
+  // 그룹 코드·가입 요청 로더 주입(테스트·연동용). 없으면 기본 로더로 조회한다.
+  inviteCodeLoader?: GroupInviteCodeLoader;
+  joinRequestsLoader?: JoinRequestsLoader;
 }
+
+// 그룹정보에서 전체화면으로 여는 하위 화면.
+type SubScreen = 'groupCode' | 'joinApproval';
 
 const EMPTY_MEMBERS: readonly GroupMember[] = [];
 
@@ -47,6 +59,9 @@ export function GroupInfoScreen({
   initialMembers,
   pendingJoinCount,
   rankingLoader,
+  inviteCodeLoader,
+  joinRequestsLoader,
+  onFullscreenChange,
 }: GroupInfoScreenProps) {
   // 현재 그룹 기준 데이터. props 오버라이드(테스트)가 없으면 그룹 ID로 목업을 조회한다.
   // API 연동 시 이 조회만 서버 응답으로 바꾸면 전환 로직은 그대로 재사용된다.
@@ -74,7 +89,15 @@ export function GroupInfoScreen({
   const [aliasDraft, setAliasDraft] = useState('');
   const [profileMemberId, setProfileMemberId] = useState<string | null>(null);
   const [isRankingOpen, setIsRankingOpen] = useState(false);
+  const [subScreen, setSubScreen] = useState<SubScreen | null>(null);
   const [scopedGroupId, setScopedGroupId] = useState(currentGroup.id);
+
+  // 하위 전체화면에 들어가면 하단 탭을 숨긴다(피드 상세·컴포저와 같은 방식).
+  useEffect(() => {
+    onFullscreenChange?.(subScreen !== null);
+
+    return () => onFullscreenChange?.(false);
+  }, [subScreen, onFullscreenChange]);
 
   // 그룹을 전환하면 목록과 편집 중 상태(호칭 편집·임시 입력·열린 프로필)를
   // 새 그룹 기준으로 초기화해 이전 그룹의 상태가 새 그룹에 남지 않게 한다.
@@ -85,6 +108,7 @@ export function GroupInfoScreen({
     setAliasDraft('');
     setProfileMemberId(null);
     setIsRankingOpen(false);
+    setSubScreen(null);
   }
 
   const viewerMemberId = scoped.currentMemberId;
@@ -132,13 +156,13 @@ export function GroupInfoScreen({
       description: '그룹 코드로 초대',
       key: 'invite-code',
       label: '그룹 코드',
-      onPress: () => notifyDeferred('그룹 코드'),
+      onPress: () => setSubScreen('groupCode'),
     },
     {
       description: `승인 요청 ${waitingCount}건`,
       key: 'join-requests',
       label: '가입 승인 대기',
-      onPress: () => notifyDeferred('가입 승인 대기'),
+      onPress: () => setSubScreen('joinApproval'),
     },
   ];
 
@@ -174,6 +198,26 @@ export function GroupInfoScreen({
       onPress: () => notifyDeferred('그룹명 변경'),
     },
   ];
+
+  if (subScreen === 'groupCode') {
+    return (
+      <GroupCodeScreen
+        groupId={currentGroup.id}
+        loader={inviteCodeLoader}
+        onBack={() => setSubScreen(null)}
+      />
+    );
+  }
+
+  if (subScreen === 'joinApproval') {
+    return (
+      <JoinApprovalScreen
+        groupId={currentGroup.id}
+        loader={joinRequestsLoader}
+        onBack={() => setSubScreen(null)}
+      />
+    );
+  }
 
   return (
     <View style={styles.screen}>
