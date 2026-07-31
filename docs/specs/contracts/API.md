@@ -1,7 +1,7 @@
 # API 계약
 
 > 상태: 일부 확정
-> 기준: 2026-07-31, Notion 활성 API 명세 59건과 승인된 모바일 인증 세션 계약
+> 기준: 2026-07-31, Notion 활성 API 명세 59건과 승인된 모바일 인증 세션·알림 API 응답 계약
 
 이 문서는 제품 구현에서 사용하는 유일한 로컬 API 계약이다. 아래 목록에는
 Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 요청,
@@ -23,7 +23,13 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 - 확인된 성공 문구는 `API-AUTH-001`의 `로그인 아이디 중복 확인 성공`,
   `API-AUTH-002`의 `회원가입 성공`, `API-AUTH-003`의 `로그인 성공`,
   `API-AUTH-004`의 `토큰 재발급 성공`, `API-NOTIFICATIONS-001`의
-  `기기 토큰 등록 성공`, `API-CALLS-001`의 `AI 통화 세션 생성 성공`,
+  `기기 토큰 등록 성공`, `API-NOTIFICATIONS-002`의
+  `읽지 않은 알림 개수 조회 성공`, `API-NOTIFICATIONS-003`의
+  `알림 목록 조회 성공`, `API-NOTIFICATIONS-004`의
+  `알림 읽음 처리 성공`, `API-NOTIFICATIONS-005`의
+  `전체 알림 읽음 처리 성공`, `API-NOTIFICATIONS-006`의
+  `푸시 알림 설정 조회 성공`, `API-NOTIFICATIONS-007`의
+  `푸시 알림 설정 저장 성공`, `API-CALLS-001`의 `AI 통화 세션 생성 성공`,
   `API-CALLS-002`의 `AI 통화 연결 결과 처리 성공`, `API-CALLS-003`의
   `AI 통화 종료 요청 접수 성공`이다. 다른 API의 성공 문구는 각 API의
   확정 원본이나 별도 결정을 따른다.
@@ -304,13 +310,18 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 |---|---|---|---|---|---|
 | `API-NOTIFICATIONS-001` | `POST /device-tokens` | Spring Boot · 본인 | `token`, `deviceType` | 신규 `201`, 재등록·재활성화·소유권 이전 `200`: `id`, `deviceType`, `active=true` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED` |
 | `API-NOTIFICATIONS-002` | `GET /notifications/unread-count` | Spring Boot · 본인 | 없음 | `200`: `unreadCount` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
-| `API-NOTIFICATIONS-003` | `GET /notifications` | Spring Boot · 본인 | 선택 query `page`, `size` | `200`: `content[{id,type,title,body,groupId,actor,relatedJoinRequestId,relatedPostId,relatedEventId,relatedCallReportId,relatedDailyReportId,readAt,createdAt}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-NOTIFICATIONS-003` | `GET /notifications` | Spring Boot · 본인 | 선택 query `page`, `size` | `200`: `content[{id,type,title,body,groupId,actor:{userId,name,profileImageUrl}\|null,relatedJoinRequestId,relatedPostId,relatedEventId,relatedCallReportId,relatedDailyReportId,readAt,createdAt}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-004` | `PATCH /notifications/{notificationId}/read` | Spring Boot · 본인 | path `notificationId` | `200`: `id`, `readAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-005` | `PATCH /notifications/read-all` | Spring Boot · 본인 | 없음 | `200`: `updatedCount`, `readAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-006` | `GET /notification-settings` | Spring Boot · 본인 | 없음 | `200`: 알림 유형 7종의 `settings[{notificationType,enabled}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-007` | `PUT /notification-settings` | Spring Boot · 본인 | 알림 유형 7종의 `settings[{notificationType,enabled}]` | `200`: `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-008` | `DELETE /device-tokens` | Spring Boot · 본인 | `token` | `204 No Content` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 
+- `API-NOTIFICATIONS-003.actor`는 행위자 참조가 없거나 삭제됐다면 `null`이다.
+  actor가 있으면 `userId`는 필수이고, 회원 탈퇴 후 익명화될 수 있는
+  `name`과 `profileImageUrl`은 nullable이다. `memberId`, `role`,
+  `displayName`, `loginId`, 생년월일, 성별은 포함하지 않는다. 수신자별
+  호칭을 적용한 과거 문구는 `title`·`body` 스냅샷을 사용한다.
 - `enabled=false`는 해당 유형의 푸시만 차단한다. 앱 내부 알림 레코드는
   계속 생성한다.
 - 푸시는 해당 유형이 활성이고 수신자에게 활성 기기 토큰이 있을 때만

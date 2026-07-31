@@ -35,8 +35,13 @@ public class NotificationSetting extends UpdatedAtEntity {
 	}
 
 	public NotificationSetting(User user, NotificationType notificationType) {
+		this(user, notificationType, true);
+	}
+
+	public NotificationSetting(User user, NotificationType notificationType, boolean enabled) {
 		this.user = user;
 		this.notificationType = notificationType;
+		this.enabled = enabled;
 	}
 
 	public User getUser() {
@@ -49,5 +54,10 @@ public class NotificationSetting extends UpdatedAtEntity {
 
 	public boolean isEnabled() {
 		return enabled;
+	}
+
+	public void updateEnabled(boolean enabled) {
+		this.enabled = enabled;
+		touch();
 	}
 }

@@ -214,12 +214,12 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-INTERESTS-001 관심사 조회 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | 피보호자 본인·같은 그룹 보호자 |
 | 활성 API | API-INTERESTS-002 관심사 일괄 수정 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | 0~10개·피보호자 본인 |
 | 활성 API | API-NOTIFICATIONS-001 기기 토큰 등록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md), [데이터](./contracts/DATA_MODEL.md) | 반영·확정 | 원자적 재등록·재활성화·소유권 이전 |
-| 활성 API | API-NOTIFICATIONS-002 미읽음 수 조회 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
-| 활성 API | API-NOTIFICATIONS-003 앱 내부 알림 목록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | `page`·`size`, 최신순 고정 |
-| 활성 API | API-NOTIFICATIONS-004 단일 알림 읽음 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
-| 활성 API | API-NOTIFICATIONS-005 전체 알림 읽음 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
-| 활성 API | API-NOTIFICATIONS-006 푸시 설정 조회 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 7개 유형 |
-| 활성 API | API-NOTIFICATIONS-007 푸시 설정 저장 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 7개 유형 |
+| 활성 API | API-NOTIFICATIONS-002 미읽음 수 조회 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 성공 문구 `읽지 않은 알림 개수 조회 성공` |
+| 활성 API | API-NOTIFICATIONS-003 앱 내부 알림 목록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | `page`·`size`, 최신순 고정; `actor={userId,name,profileImageUrl}\|null` |
+| 활성 API | API-NOTIFICATIONS-004 단일 알림 읽음 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 성공 문구 `알림 읽음 처리 성공` |
+| 활성 API | API-NOTIFICATIONS-005 전체 알림 읽음 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 성공 문구 `전체 알림 읽음 처리 성공` |
+| 활성 API | API-NOTIFICATIONS-006 푸시 설정 조회 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 7개 유형; 성공 문구 `푸시 알림 설정 조회 성공` |
+| 활성 API | API-NOTIFICATIONS-007 푸시 설정 저장 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 7개 유형; 성공 문구 `푸시 알림 설정 저장 성공` |
 | 활성 API | API-NOTIFICATIONS-008 기기 토큰 비활성화 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md), [데이터](./contracts/DATA_MODEL.md) | 반영·확정 | 소프트 비활성화·본인 멱등·타인 403 |
 | 활성 API | API-POSTS-001 그룹 피드 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | `page`·`size`, 최신순 고정 |
 | 활성 API | API-POSTS-002 게시글 상세 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
@@ -293,7 +293,8 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
   스토리지 메타데이터 재검증 정책
 - 프로필 수정의 이미지 외 필드 `null`·빈 요청 처리와 변경 전 로그인 ID
   재사용 정책
-- 아직 별도 결정되지 않은 API별 성공 `message` 문구
+- `API-NOTIFICATIONS-002~007`을 제외한 아직 별도 결정되지 않은 API별
+  성공 `message` 문구
 - 통화 고유 오류 코드의 정확한 `message` 문구
 - FCM token 해제 실패 시 `API-AUTH-005` 호출 지속 여부·재시도와 비인증
   상태의 OS 알림 권한 철회 처리

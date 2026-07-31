@@ -51,4 +51,11 @@ public class DeviceToken extends BaseEntity {
 	public boolean isActive() {
 		return active;
 	}
+
+	public void deactivate() {
+		if (active) {
+			active = false;
+			touch();
+		}
+	}
 }

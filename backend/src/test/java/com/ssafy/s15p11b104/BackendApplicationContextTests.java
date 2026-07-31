@@ -33,6 +33,10 @@ import com.ssafy.s15p11b104.domain.group.repository.GroupJoinRequestRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberInterestRepository;
+import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRegistrationStore;
+import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRepository;
+import com.ssafy.s15p11b104.domain.notification.repository.NotificationRepository;
+import com.ssafy.s15p11b104.domain.notification.repository.NotificationSettingRepository;
 import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationService;
 
 import jakarta.persistence.EntityManager;
@@ -117,6 +121,18 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private EventParticipantRepository eventParticipantRepository;
+
+	@MockitoBean
+	private DeviceTokenRepository deviceTokenRepository;
+
+	@MockitoBean
+	private DeviceTokenRegistrationStore deviceTokenRegistrationStore;
+
+	@MockitoBean
+	private NotificationRepository notificationRepository;
+
+	@MockitoBean
+	private NotificationSettingRepository notificationSettingRepository;
 
 	@Test
 	void healthEndpointIsPublic() throws Exception {
