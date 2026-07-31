@@ -10,6 +10,8 @@ export const SIGNUP_LIMITS = {
 } as const;
 
 const ALPHANUMERIC_PATTERN = /^[A-Za-z0-9]+$/;
+const LETTER_PATTERN = /[A-Za-z]/;
+const DIGIT_PATTERN = /[0-9]/;
 
 export function isValidName(name: string): boolean {
   const length = Array.from(name.trim()).length;
@@ -28,7 +30,9 @@ export function isValidPassword(password: string): boolean {
   return (
     password.length >= SIGNUP_LIMITS.passwordMin &&
     password.length <= SIGNUP_LIMITS.passwordMax &&
-    ALPHANUMERIC_PATTERN.test(password)
+    ALPHANUMERIC_PATTERN.test(password) &&
+    LETTER_PATTERN.test(password) &&
+    DIGIT_PATTERN.test(password)
   );
 }
 
@@ -80,7 +84,7 @@ export function canSubmitSignup(draft: SignupDraft): boolean {
 
 export function canSubmitLogin(credentials: LoginCredentials): boolean {
   return (
-    isValidLoginId(credentials.loginId) &&
-    isValidPassword(credentials.password)
+    credentials.loginId.trim().length > 0 &&
+    credentials.password.trim().length > 0
   );
 }

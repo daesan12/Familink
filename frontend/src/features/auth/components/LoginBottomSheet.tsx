@@ -14,12 +14,7 @@ import {
 } from 'react-native';
 
 import type {LoginCredentials} from '../types';
-import {
-  canSubmitLogin,
-  isValidLoginId,
-  isValidPassword,
-  SIGNUP_LIMITS,
-} from '../validation';
+import {canSubmitLogin} from '../validation';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 import {AnimatedPressable} from './AnimatedPressable';
 import {FormField} from './FormField';
@@ -99,9 +94,9 @@ export function LoginBottomSheet({
   ]);
 
   const loginIdInvalid =
-    loginIdTouched && !isValidLoginId(credentials.loginId);
+    loginIdTouched && credentials.loginId.trim().length === 0;
   const passwordInvalid =
-    passwordTouched && !isValidPassword(credentials.password);
+    passwordTouched && credentials.password.trim().length === 0;
   const canLogin = canSubmitLogin(credentials);
 
   const handleSubmit = async () => {
@@ -181,12 +176,11 @@ export function LoginBottomSheet({
                   autoCorrect={false}
                   autoFocus
                   invalid={loginIdInvalid}
-                  maxLength={SIGNUP_LIMITS.loginIdMax}
                   onBlur={() => setLoginIdTouched(true)}
                   onChangeText={value => {
                     setCredentials(current => ({
                       ...current,
-                      loginId: value.replace(/[^A-Za-z0-9]/g, ''),
+                      loginId: value,
                     }));
                     setLoginError(null);
                   }}
@@ -196,7 +190,7 @@ export function LoginBottomSheet({
                 />
                 {loginIdInvalid && (
                   <ValidationMessage
-                    message="아이디는 영문·숫자 5~15자로 입력해주세요."
+                    message="아이디를 입력해주세요."
                     variant="error"
                   />
                 )}
@@ -206,12 +200,11 @@ export function LoginBottomSheet({
                   autoComplete="current-password"
                   autoCorrect={false}
                   invalid={passwordInvalid}
-                  maxLength={SIGNUP_LIMITS.passwordMax}
                   onBlur={() => setPasswordTouched(true)}
                   onChangeText={value => {
                     setCredentials(current => ({
                       ...current,
-                      password: value.replace(/[^A-Za-z0-9]/g, ''),
+                      password: value,
                     }));
                     setLoginError(null);
                   }}
@@ -243,7 +236,7 @@ export function LoginBottomSheet({
                 />
                 {passwordInvalid && (
                   <ValidationMessage
-                    message="비밀번호는 영문·숫자 8~16자로 입력해주세요."
+                    message="비밀번호를 입력해주세요."
                     variant="error"
                   />
                 )}

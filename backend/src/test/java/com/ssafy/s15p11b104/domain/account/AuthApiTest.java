@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.s15p11b104.domain.account.entity.User;
+import com.ssafy.s15p11b104.domain.account.entity.UserGender;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
@@ -105,6 +108,15 @@ class AuthApiTest extends IntegrationTest {
 		mockMvc.perform(get("/auth/login-id/check").param("loginId", " testuser"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
+	void loginIdCheckRejectsNonAlphanumericLoginIds() throws Exception {
+		for (String loginId : List.of("test!", "가나다라마")) {
+			mockMvc.perform(get("/auth/login-id/check").param("loginId", loginId))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+		}
 	}
 
 	@Test
@@ -216,6 +228,32 @@ class AuthApiTest extends IntegrationTest {
 	}
 
 	@Test
+	void signupRejectsNonAlphanumericLoginIds() throws Exception {
+		for (String loginId : List.of("test!", "가나다라마")) {
+			String body = SIGNUP_BODY.replace("\"testuser\"", "\"" + loginId + "\"");
+
+			mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+		}
+
+		assertThat(userRepository.count()).isZero();
+	}
+
+	@Test
+	void signupRequiresAtLeastOneLetterAndOneDigitInPassword() throws Exception {
+		for (String password : List.of("password", "12345678", "abcd123!")) {
+			String body = SIGNUP_BODY.replace("\"password123\"", "\"" + password + "\"");
+
+			mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+		}
+
+		assertThat(userRepository.count()).isZero();
+	}
+
+	@Test
 	void signupRejectsLoginIdLongerThanFifteenCharacters() throws Exception {
 		String body = SIGNUP_BODY.replace("\"testuser\"", "\"sixteencharacter\"");
 
@@ -300,6 +338,25 @@ class AuthApiTest extends IntegrationTest {
 			.andExpect(jsonPath("$.data.refreshToken").isString())
 			.andExpect(jsonPath("$.data.user.id").isNumber())
 			.andExpect(jsonPath("$.data.user.name").value("이경호"));
+	}
+
+	@Test
+	void loginAcceptsExistingCredentialsWithoutApplyingSignupFormatRules() throws Exception {
+		String loginId = "legacy!";
+		String password = "old-password!";
+		userRepository.saveAndFlush(new User(
+			loginId,
+			passwordEncoder.encode(password),
+			"기존회원",
+			LocalDate.of(1990, 1, 1),
+			UserGender.FEMALE
+		));
+
+		mockMvc.perform(post("/auth/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(loginBody(loginId, password)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.user.name").value("기존회원"));
 	}
 
 	@Test

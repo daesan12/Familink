@@ -24,7 +24,7 @@ public class ProfileUpdateRequest {
 
 	@JsonProperty
 	@Size(min = 5, max = 15)
-	@Pattern(regexp = "\\S+")
+	@Pattern(regexp = "[A-Za-z0-9]+")
 	private String loginId;
 
 	/** 공백만으로 이루어진 이름을 거부한다. 회원가입의 {@code @NotBlank}와 같은 조건이다. */

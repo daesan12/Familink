@@ -260,6 +260,8 @@ class UserApiTest extends IntegrationTest {
 			"{\"loginId\": \"abcd\"}",
 			"{\"loginId\": \"sixteencharacter\"}",
 			"{\"loginId\": \" testuser\"}",
+			"{\"loginId\": \"test!\"}",
+			"{\"loginId\": \"가나다라마\"}",
 			"{\"name\": \"김\"}",
 			"{\"name\": \"   \"}",
 			"{\"name\": \"가나다라마바사아자차카\"}",
