@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,7 @@ import com.ssafy.s15p11b104.domain.group.entity.JoinRequestStatus;
 import com.ssafy.s15p11b104.domain.group.repository.FamilyGroupRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupJoinRequestRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.notification.event.DomainNotificationEvent;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
 import com.ssafy.s15p11b104.global.exception.ErrorCode;
 
@@ -36,16 +38,19 @@ public class JoinRequestService {
 	private final GroupMemberRepository groupMemberRepository;
 	private final GroupJoinRequestRepository groupJoinRequestRepository;
 	private final UserRepository userRepository;
+	private final ApplicationEventPublisher eventPublisher;
 
 	public JoinRequestService(
 		FamilyGroupRepository familyGroupRepository,
 		GroupMemberRepository groupMemberRepository,
 		GroupJoinRequestRepository groupJoinRequestRepository,
-		UserRepository userRepository) {
+		UserRepository userRepository,
+		ApplicationEventPublisher eventPublisher) {
 		this.familyGroupRepository = familyGroupRepository;
 		this.groupMemberRepository = groupMemberRepository;
 		this.groupJoinRequestRepository = groupJoinRequestRepository;
 		this.userRepository = userRepository;
+		this.eventPublisher = eventPublisher;
 	}
 
 	@Transactional
@@ -67,6 +72,7 @@ public class JoinRequestService {
 			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 		GroupJoinRequest joinRequest = groupJoinRequestRepository.save(
 			new GroupJoinRequest(group, applicant, JoinRequestStatus.PENDING_ADMIN));
+		eventPublisher.publishEvent(new DomainNotificationEvent.JoinRequestCreated(joinRequest.getId()));
 
 		return new JoinRequestCreateResponse(
 			joinRequest.getId(), group.getId(), group.getName(), joinRequest.getStatus());
@@ -99,7 +105,7 @@ public class JoinRequestService {
 		Long joinRequestId,
 		Long authenticatedUserId,
 		JoinRequestDecisionRequest request) {
-		requireActiveManager(groupId, authenticatedUserId);
+		GroupMember manager = requireActiveManager(groupId, authenticatedUserId);
 
 		String decision = normalizeDecision(request.decision());
 		GroupJoinRequest joinRequest = groupJoinRequestRepository
@@ -112,6 +118,10 @@ public class JoinRequestService {
 
 		if (DECISION_REJECT.equals(decision)) {
 			joinRequest.reject(Instant.now());
+			eventPublisher.publishEvent(new DomainNotificationEvent.JoinRequestDecided(
+				joinRequest.getId(),
+				manager.getUser().getId(),
+				DomainNotificationEvent.Decision.REJECTED));
 			return new JoinRequestDecisionResponse(joinRequest.getId(), joinRequest.getStatus(), null, null);
 		}
 
@@ -122,6 +132,10 @@ public class JoinRequestService {
 
 		GroupMember member = approveMembership(joinRequest, assignedRole);
 		joinRequest.approve(assignedRole, Instant.now());
+		eventPublisher.publishEvent(new DomainNotificationEvent.JoinRequestDecided(
+			joinRequest.getId(),
+			manager.getUser().getId(),
+			DomainNotificationEvent.Decision.APPROVED));
 
 		return new JoinRequestDecisionResponse(
 			joinRequest.getId(), joinRequest.getStatus(), member.getId(), assignedRole);
@@ -157,13 +171,14 @@ public class JoinRequestService {
 			.anyMatch(membership -> membership.getRole() == GroupRole.CARE_RECEIVER);
 	}
 
-	private void requireActiveManager(Long groupId, Long authenticatedUserId) {
+	private GroupMember requireActiveManager(Long groupId, Long authenticatedUserId) {
 		GroupMember requester = groupMemberRepository
 			.findActiveByGroupIdAndUserId(groupId, authenticatedUserId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.NOT_GROUP_MANAGER));
 		if (!requester.isManager()) {
 			throw new BusinessException(ErrorCode.NOT_GROUP_MANAGER);
 		}
+		return requester;
 	}
 
 	private String normalizeInviteCode(String inviteCode) {

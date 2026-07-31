@@ -23,7 +23,7 @@ class EventReminderSchedulerTest {
 
 		scheduler.schedule();
 
-		verify(service).remind(now);
+		verify(service).createDueReminders(now);
 	}
 
 	@Test

@@ -33,7 +33,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-002 아이디·비밀번호 회원가입 및 로그인 | [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 | Keystore 보호 세션 저장·앱 시작 복원·확정 무효화 시 기존 비로그인 진입 |
 | 요구사항 | REQ-003 프로필 및 개인정보 설정 | [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 | 그룹 구성원 프로필은 `memberId`, `displayName`, `age`, `gender`만 제공 |
 | 요구사항 | REQ-004 가족 그룹 생성 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영·확정 |  |
-| 요구사항 | REQ-005 가족 초대·참가 요청·관리자 승인 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 |  |
+| 요구사항 | REQ-005 가족 초대·참가 요청·관리자 승인 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 가입 요청 생성은 활성 관리자, 승인·거절 결과는 신청자에게 알림 |
 | 요구사항 | REQ-006 역할 및 그룹 데이터 접근 제어 | [공통](./COMMON.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영·확정 |  |
 | 요구사항 | REQ-007 사용자별 그룹 소속 범위 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영·확정 | 보호자는 여러 그룹, 피보호자는 활성 한 그룹 |
 | 요구사항 | REQ-008 역할 구성과 그룹 지속 이용 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영·확정 | 역할 부족에 따른 유예·비활성화 없음 |
@@ -51,10 +51,10 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-020 통화 녹음 원본 미저장 및 전체 전문 미제공 | [공통](./COMMON.md), [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영·확정 |  |
 | 요구사항 | REQ-021 가족 피드 게시글 관리 | [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 |  |
 | 요구사항 | REQ-022 게시글 미디어 구성 제한 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
-| 요구사항 | REQ-023 게시글 반응·댓글·게시 알림 | [피드](./domains/FEED_AND_MEDIA.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 대댓글·댓글 반응 없음 |
+| 요구사항 | REQ-023 게시글 반응·댓글·게시 알림 | [피드](./domains/FEED_AND_MEDIA.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 새 게시글은 작성자를 제외한 그룹 활성 구성원, 댓글·반응은 본인 행동을 제외한 게시글 작성자에게 알림; 대댓글·댓글 반응 없음 |
 | 요구사항 | REQ-024 게시글 보관함 및 필터 | [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | 서버의 활성 구성원 `memberId`·날짜·유형 AND 필터 |
 | 요구사항 | REQ-025 공유 일정 등록·조회·수정·삭제 | [일정](./domains/CALENDAR.md) | 반영·확정 |  |
-| 요구사항 | REQ-026 공유 일정 알림 | [일정](./domains/CALENDAR.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 |  |
+| 요구사항 | REQ-026 공유 일정 알림 | [일정](./domains/CALENDAR.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 일정 변경은 변경자를 제외한 기존·변경 후 참여자, 시작 알림은 1분 주기와 최근 1시간 복구 범위 적용 |
 | 요구사항 | REQ-027 공유 캘린더 범위 분리 | [일정](./domains/CALENDAR.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 기기 캘린더 연동 없음 |
 | 요구사항 | REQ-028 보호자 활동 잔디 및 연속 기록 | [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영·미결정 유지 | 과거 주 UI 등 미결정 |
 | 요구사항 | REQ-029 그룹별 주간 효자랭킹 및 왕관 | [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영·미결정 유지 | 표시 세부 미결정 |
@@ -257,7 +257,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | ERD | `call_reports` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring Boot 쓰기 |
 | ERD | `daily_reports` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring Boot 쓰기 |
 | ERD | `carnations` | [데이터](./contracts/DATA_MODEL.md), [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영 |  |
-| ERD | `notifications` | [데이터](./contracts/DATA_MODEL.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 앱 내부 알림 |
+| ERD | `notifications` | [데이터](./contracts/DATA_MODEL.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 앱 내부 알림; 일정 시작 Unique와 비일정 사건용 `source_event_key` 부분 Unique 적용 |
 | ERD | `notification_settings` | [데이터](./contracts/DATA_MODEL.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 푸시 허용 설정 |
 | ERD | `device_tokens` | [데이터](./contracts/DATA_MODEL.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 전역 Unique·단일 활성 소유권·원자적 이전·소프트 비활성화 |
 

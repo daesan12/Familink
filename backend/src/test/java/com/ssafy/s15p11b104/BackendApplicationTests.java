@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -85,6 +86,42 @@ class BackendApplicationTests extends IntegrationTest {
 			.contains("(receiver_user_id, related_event_id, type, reminder_slot)")
 			.contains("NULLS NOT DISTINCT")
 			.contains("EVENT_REMINDER");
+	}
+
+	@Test
+	void notificationSourceEventSchemaMatchesContract() {
+		String dataType = jdbcTemplate.queryForObject(
+			"SELECT data_type FROM information_schema.columns "
+				+ "WHERE table_schema = 'public' AND table_name = 'notifications' "
+				+ "AND column_name = 'source_event_key'",
+			String.class);
+		Integer length = jdbcTemplate.queryForObject(
+			"SELECT character_maximum_length FROM information_schema.columns "
+				+ "WHERE table_schema = 'public' AND table_name = 'notifications' "
+				+ "AND column_name = 'source_event_key'",
+			Integer.class);
+		String indexDefinition = jdbcTemplate.queryForObject(
+			"SELECT indexdef FROM pg_indexes "
+				+ "WHERE schemaname = 'public' AND indexname = 'uq_notifications_receiver_source_event'",
+			String.class);
+
+		assertThat(dataType).isEqualTo("character varying");
+		assertThat(length).isEqualTo(160);
+		assertThat(indexDefinition)
+			.contains("(receiver_user_id, source_event_key)")
+			.contains("source_event_key IS NOT NULL");
+	}
+
+	@Test
+	void calendarReminderScheduleTimestampMatchesContract() {
+		Map<String, Object> column = jdbcTemplate.queryForMap(
+			"SELECT data_type, is_nullable FROM information_schema.columns "
+				+ "WHERE table_schema = 'public' AND table_name = 'calendar_events' "
+				+ "AND column_name = 'reminder_schedule_updated_at'");
+
+		assertThat(column)
+			.containsEntry("data_type", "timestamp with time zone")
+			.containsEntry("is_nullable", "NO");
 	}
 
 	@Test

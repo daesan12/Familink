@@ -39,6 +39,8 @@ management:
 app:
   auth:
     secret: ${JWT_SECRET}
+  push:
+    enabled: ${PUSH_ENABLED:true}
   storage:
     s3:
       bucket: ${S3_BUCKET}

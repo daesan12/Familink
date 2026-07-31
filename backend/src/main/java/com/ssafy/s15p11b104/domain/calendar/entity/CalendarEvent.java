@@ -2,6 +2,7 @@ package com.ssafy.s15p11b104.domain.calendar.entity;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Objects;
 
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
@@ -54,7 +55,36 @@ public class CalendarEvent extends BaseEntity {
 	@Column(name = "end_at")
 	private Instant endAt;
 
+	@Column(name = "reminder_schedule_updated_at", nullable = false)
+	private Instant reminderScheduleUpdatedAt;
+
 	protected CalendarEvent() {
+	}
+
+	/**
+	 * 기존 일정 알림 픽스처와의 호환 생성자다. 새 코드에서는 일정 시점 변경을 정확히 기록하기
+	 * 위해 {@link #CalendarEvent(FamilyGroup, GroupMember, String, String, LocalDate, LocalDate,
+	 * Instant, Instant, Instant)}를 사용한다.
+	 */
+	public CalendarEvent(
+		FamilyGroup group,
+		GroupMember creatorMember,
+		String title,
+		String description,
+		LocalDate eventDate,
+		LocalDate endDate,
+		Instant startAt,
+		Instant endAt) {
+		this(
+			group,
+			creatorMember,
+			title,
+			description,
+			eventDate,
+			endDate,
+			startAt,
+			endAt,
+			Instant.now());
 	}
 
 	/**
@@ -71,7 +101,8 @@ public class CalendarEvent extends BaseEntity {
 		LocalDate eventDate,
 		LocalDate endDate,
 		Instant startAt,
-		Instant endAt) {
+		Instant endAt,
+		Instant reminderScheduleUpdatedAt) {
 		this.group = group;
 		this.creatorMember = creatorMember;
 		this.lastEditorMember = creatorMember;
@@ -81,6 +112,7 @@ public class CalendarEvent extends BaseEntity {
 		this.endDate = endDate;
 		this.startAt = startAt;
 		this.endAt = endAt;
+		this.reminderScheduleUpdatedAt = Objects.requireNonNull(reminderScheduleUpdatedAt);
 	}
 
 	/**
@@ -98,7 +130,12 @@ public class CalendarEvent extends BaseEntity {
 		LocalDate eventDate,
 		LocalDate endDate,
 		Instant startAt,
-		Instant endAt) {
+		Instant endAt,
+		Instant scheduleUpdatedAt) {
+		boolean scheduleChanged = !Objects.equals(this.eventDate, eventDate)
+			|| !Objects.equals(this.endDate, endDate)
+			|| !Objects.equals(this.startAt, startAt)
+			|| !Objects.equals(this.endAt, endAt);
 		this.lastEditorMember = editorMember;
 		this.title = title;
 		this.description = description;
@@ -106,6 +143,9 @@ public class CalendarEvent extends BaseEntity {
 		this.endDate = endDate;
 		this.startAt = startAt;
 		this.endAt = endAt;
+		if (scheduleChanged) {
+			this.reminderScheduleUpdatedAt = Objects.requireNonNull(scheduleUpdatedAt);
+		}
 		touch();
 	}
 
@@ -143,5 +183,9 @@ public class CalendarEvent extends BaseEntity {
 
 	public Instant getEndAt() {
 		return endAt;
+	}
+
+	public Instant getReminderScheduleUpdatedAt() {
+		return reminderScheduleUpdatedAt;
 	}
 }

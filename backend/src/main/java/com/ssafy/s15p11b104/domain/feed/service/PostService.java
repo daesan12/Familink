@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,7 @@ import com.ssafy.s15p11b104.domain.file.config.S3Properties;
 import com.ssafy.s15p11b104.domain.file.service.S3MediaValidator;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.notification.event.DomainNotificationEvent;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
 import com.ssafy.s15p11b104.global.exception.ErrorCode;
 
@@ -38,6 +40,7 @@ public class PostService {
 	private final S3Properties s3Properties;
 	private final S3MediaValidator s3MediaValidator;
 	private final CarnationService carnationService;
+	private final ApplicationEventPublisher eventPublisher;
 
 	public PostService(
 		GroupMemberRepository groupMemberRepository,
@@ -46,7 +49,8 @@ public class PostService {
 		PostAnalysisRepository postAnalysisRepository,
 		S3Properties s3Properties,
 		S3MediaValidator s3MediaValidator,
-		CarnationService carnationService) {
+		CarnationService carnationService,
+		ApplicationEventPublisher eventPublisher) {
 		this.groupMemberRepository = groupMemberRepository;
 		this.postRepository = postRepository;
 		this.postMediaRepository = postMediaRepository;
@@ -54,6 +58,7 @@ public class PostService {
 		this.s3Properties = s3Properties;
 		this.s3MediaValidator = s3MediaValidator;
 		this.carnationService = carnationService;
+		this.eventPublisher = eventPublisher;
 	}
 
 	@Transactional
@@ -99,6 +104,7 @@ public class PostService {
 		Post post = postRepository.save(new Post(author.getGroup(), author, request.content()));
 		replaceMedia(post, request.mediaType(), request.media());
 		carnationService.earnForPost(author);
+		eventPublisher.publishEvent(new DomainNotificationEvent.PostCreated(post.getId()));
 		return new PostCreatedItem(post.getId(), groupId);
 	}
 

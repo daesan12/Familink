@@ -1,7 +1,5 @@
-import {
-  getDevelopmentInviteCode,
-  getDevelopmentJoinRequests,
-} from '../fixtures/groupMembershipFixtures';
+import {getDevelopmentJoinRequests} from '../fixtures/groupMembershipFixtures';
+import {getInviteCode} from './groupApi';
 import type {
   GroupInviteCode,
   JoinRequest,
@@ -25,12 +23,10 @@ export type JoinRequestProcessor = (
   input: JoinRequestDecisionInput,
 ) => Promise<void>;
 
-// 개발 목업 로더. API 연동 시 이 함수만 API-GROUPS-007 호출로 교체한다.
 export async function loadGroupInviteCode(
   groupId: string,
 ): Promise<GroupInviteCode> {
-  await Promise.resolve();
-  return {inviteCode: getDevelopmentInviteCode(groupId)};
+  return getInviteCode(groupId);
 }
 
 // 개발 목업 로더. API 연동 시 이 함수만 API-GROUPS-008 호출로 교체한다.
