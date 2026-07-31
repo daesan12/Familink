@@ -1,22 +1,40 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {formatAge, formatGender} from '../groupInfoModel';
 import {WEEKLY_STAMP_DAYS, type GroupMember} from '../types';
 
 interface MemberProfileModalProps {
+  errorMessage?: string | null;
+  isLoading?: boolean;
   member: GroupMember | null;
   onClose: () => void;
+  onRetry?: () => void;
 }
 
 // H-1p 축소 프로필 팝업. 구성원 아바타를 누르면 열리며
 // 이름·순위·나이·성별과 일주일 도장 현황을 보여준다.
-export function MemberProfileModal({member, onClose}: MemberProfileModalProps) {
+export function MemberProfileModal({
+  errorMessage,
+  isLoading = false,
+  member,
+  onClose,
+  onRetry,
+}: MemberProfileModalProps) {
   const isWeeklyWinner = member?.weeklyRank === 1;
   // 도장·순위·왕관은 효자 랭킹 요소라 보호자에게만 보여준다.
   // 피보호자는 이름·나이·성별만 표시한다.
-  const showRanking = member?.role === 'guardian';
+  const showRanking =
+    member?.role === 'guardian' &&
+    (member.weeklyRank !== undefined || member.weeklyStamps !== undefined);
   // 계약이 7이 아닌 길이를 주더라도 항상 7칸으로 고정한다.
   const stamps = Array.from(
     {length: WEEKLY_STAMP_DAYS},
@@ -46,6 +64,25 @@ export function MemberProfileModal({member, onClose}: MemberProfileModalProps) {
             onPress={() => {}}
             style={styles.card}
           >
+            {isLoading ? (
+              <View accessibilityLabel="프로필 정보를 불러오는 중" style={styles.statusBlock}>
+                <ActivityIndicator color={COLORS.purple} />
+              </View>
+            ) : errorMessage ? (
+              <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+                {onRetry ? (
+                  <Pressable
+                    accessibilityLabel="프로필 정보 다시 시도"
+                    accessibilityRole="button"
+                    onPress={onRetry}
+                    style={styles.retryButton}
+                  >
+                    <Text style={styles.retryText}>다시 시도</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
             <View style={styles.headerRow}>
               <View style={styles.avatarWrap}>
                 <View style={styles.avatar} />
@@ -66,7 +103,7 @@ export function MemberProfileModal({member, onClose}: MemberProfileModalProps) {
 
               <View style={styles.info}>
                 <View style={styles.nameRow}>
-                  {showRanking ? (
+                  {showRanking && member.weeklyRank !== undefined ? (
                     <View
                       accessibilityLabel={`순위 ${member.weeklyRank}위`}
                       accessible
@@ -217,5 +254,30 @@ const styles = StyleSheet.create({
   stampRow: {
     flexDirection: 'row',
     gap: 6,
+  },
+  errorText: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+  retryButton: {
+    alignItems: 'center',
+    borderColor: COLORS.divider,
+    borderRadius: RADII.pill,
+    borderWidth: 1,
+    minHeight: 36,
+    paddingHorizontal: 16,
+  },
+  retryText: {
+    color: COLORS.textStrong,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  statusBlock: {
+    alignItems: 'center',
+    gap: 8,
+    justifyContent: 'center',
+    paddingVertical: 4,
   },
 });

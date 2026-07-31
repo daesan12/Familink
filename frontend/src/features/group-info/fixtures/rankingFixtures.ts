@@ -33,7 +33,7 @@ export function getDevelopmentWeeklyRanking(
     .map((member) => ({
       memberId: member.memberId,
       displayName: member.name,
-      carnationCount: member.weeklyStamps.filter(Boolean).length,
+      carnationCount: (member.weeklyStamps ?? []).filter(Boolean).length,
       previousWeekWinner: lastWeekWinners.has(member.memberId),
     }));
 
