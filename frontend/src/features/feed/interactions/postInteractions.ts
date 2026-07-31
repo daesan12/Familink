@@ -52,6 +52,7 @@ export function addComment(
     author: FeedMember;
     body: string;
     commentId: string;
+    createdAt: string;
     postId: string;
   },
 ): PostInteractionsState {
@@ -59,7 +60,7 @@ export function addComment(
   const comment: PostComment = {
     author: input.author,
     body: input.body.trim(),
-    createdAtLabel: '방금 전',
+    createdAt: input.createdAt,
     id: input.commentId,
     postId: input.postId,
   };
