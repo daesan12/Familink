@@ -24,10 +24,10 @@ describe('signup validation', () => {
     expect(isValidLoginId('가나다라마')).toBe(false);
   });
 
-  it('accepts alphanumeric passwords between 8 and 16 characters', () => {
-    expect(isValidPassword('abcdefgh')).toBe(true);
+  it('accepts 8 to 16 character alphanumeric passwords with letters and digits', () => {
+    expect(isValidPassword('abcdefgh')).toBe(false);
     expect(isValidPassword('abcd1234')).toBe(true);
-    expect(isValidPassword('12345678')).toBe(true);
+    expect(isValidPassword('12345678')).toBe(false);
     expect(isValidPassword('abcdefg')).toBe(false);
     expect(isValidPassword('abcd123!')).toBe(false);
   });
@@ -37,7 +37,7 @@ describe('signup validation', () => {
     expect(doPasswordsMatch('abcdefgh', 'abcdefgi')).toBe(false);
   });
 
-  it('enables login only when both credentials are valid', () => {
+  it('enables login for nonblank credentials without applying signup rules', () => {
     expect(
       canSubmitLogin({
         loginId: 'hello1',
@@ -46,8 +46,14 @@ describe('signup validation', () => {
     ).toBe(true);
     expect(
       canSubmitLogin({
-        loginId: 'short',
-        password: 'invalid!',
+        loginId: 'legacy!',
+        password: 'old-password!',
+      }),
+    ).toBe(true);
+    expect(
+      canSubmitLogin({
+        loginId: '   ',
+        password: 'old-password!',
       }),
     ).toBe(false);
   });
@@ -65,8 +71,8 @@ describe('signup validation', () => {
         profileImageUri: null,
         name: '홍유라',
         loginId: 'hongyura',
-        password: 'password',
-        passwordConfirmation: 'password',
+        password: 'password1',
+        passwordConfirmation: 'password1',
         birthDate: '2000-01-01',
         gender: 'FEMALE',
       }),

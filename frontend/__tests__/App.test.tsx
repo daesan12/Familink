@@ -125,7 +125,7 @@ test("회원가입 시작 화면을 표시하고 기존 회원가입으로 이�
   ).toBeTruthy();
 });
 
-test("로그인 입력 검증과 비밀번호 표시 전환을 제공한다", async () => {
+test("로그인 입력을 보존하고 비밀번호 표시 전환을 제공한다", async () => {
   const { renderer } = await renderApp();
   await openLogin(renderer);
 
@@ -143,13 +143,32 @@ test("로그인 입력 검증과 비밀번호 표시 전환을 제공한다", as
   });
   expect(
     renderer.root.findByProps({
-      children: "아이디는 영문·숫자 5~15자로 입력해주세요.",
+      accessibilityLabel: "로그인 아이디",
+    }).props.value
+  ).toBe("abc!");
+  expect(
+    renderer.root.findAllByProps({
+      children: "아이디를 입력해주세요.",
     })
-  ).toBeTruthy();
+  ).toHaveLength(0);
 
   const passwordInput = renderer.root.findByProps({
     accessibilityLabel: "로그인 비밀번호",
   });
+  await TestRenderer.act(() => {
+    passwordInput.props.onChangeText("old-password!");
+  });
+
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "로그인 비밀번호",
+    }).props.value
+  ).toBe("old-password!");
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "로그인",
+    }).props.accessibilityState.disabled
+  ).toBe(false);
   expect(passwordInput.props.secureTextEntry).toBe(true);
 
   await TestRenderer.act(() => {

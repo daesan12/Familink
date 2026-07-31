@@ -8,7 +8,7 @@ public record AiCallPromptContext(
 	CareReceiverContext careReceiver,
 	List<FamilyMemberContext> familyMembers,
 	List<TodayPostContext> todayPosts,
-	RecentCallContext recentCall
+	List<RecentCallContext> recentCalls
 ) {
 
 	public record CareReceiverContext(

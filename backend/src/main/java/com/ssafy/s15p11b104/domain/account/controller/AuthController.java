@@ -55,7 +55,12 @@ public class AuthController {
 	 */
 	@GetMapping("/login-id/check")
 	public ApiResponse<LoginIdAvailabilityResponse> checkLoginId(
-		@RequestParam @NotBlank @Size(min = 5, max = 15) @Pattern(regexp = "\\S+") String loginId) {
+		@RequestParam
+		@NotBlank
+		@Size(min = 5, max = 15)
+		@Pattern(regexp = "[A-Za-z0-9]+")
+		String loginId
+	) {
 		return ApiResponse.success(LOGIN_ID_CHECK_MESSAGE, authService.checkLoginIdAvailability(loginId));
 	}
 
