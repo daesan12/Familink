@@ -98,4 +98,4 @@ Notion에도 정의되지 않아 이번 구현에서 판단한 사항은 다음 
 - 결정일: 2026-07-31
 - 반영 문서: `docs/specs/contracts/API.md`,
   `docs/specs/domains/ACCOUNT_AND_PROFILE.md`, `docs/specs/COVERAGE.md`
-- 반영 커밋:
+- 반영 커밋: `121cf0c2120d4e2514afc3a0566eae95efd7afc7`

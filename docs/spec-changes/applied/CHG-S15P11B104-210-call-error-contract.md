@@ -83,4 +83,4 @@
 - 결정일: 2026-07-31
 - 반영 문서: `docs/specs/contracts/API.md`,
   `docs/specs/domains/AI_CALL.md`, `docs/specs/COVERAGE.md`
-- 반영 커밋:
+- 반영 커밋: `121cf0c2120d4e2514afc3a0566eae95efd7afc7`

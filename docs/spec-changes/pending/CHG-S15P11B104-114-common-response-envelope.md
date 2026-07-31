@@ -94,4 +94,4 @@
 - 결정일: 2026-07-29, 2026-07-31
 - 승인 근거: 사용자가 각 날짜에 명시된 범위만 승인했다.
 - 반영 문서: `docs/specs/contracts/API.md`, `docs/specs/COVERAGE.md`
-- 반영 커밋:
+- 반영 커밋: `121cf0c2120d4e2514afc3a0566eae95efd7afc7`

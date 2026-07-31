@@ -70,4 +70,4 @@ FFprobe 운영 규칙까지 승인한 것으로 확대하지 않는다.
 - 반영 문서: `docs/specs/contracts/API.md`,
   `docs/specs/domains/FEED_AND_MEDIA.md`,
   `docs/specs/domains/ACCOUNT_AND_PROFILE.md`, `docs/specs/COVERAGE.md`
-- 반영 커밋:
+- 반영 커밋: `121cf0c2120d4e2514afc3a0566eae95efd7afc7`
