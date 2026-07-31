@@ -2,6 +2,10 @@ export { AppShell } from './AppShell';
 export { BottomTabBar } from './BottomTabBar';
 export { CurrentGroupSwitcher } from './CurrentGroupSwitcher';
 export {
+  createCurrentGroupStore,
+  currentGroupStore,
+} from './currentGroupStore';
+export {
   getTabsForRole,
   isRouteAllowed,
   resolveAllowedRoute,

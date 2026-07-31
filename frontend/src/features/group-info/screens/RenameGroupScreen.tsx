@@ -1,5 +1,6 @@
-import {useState} from 'react';
+import {useRef, useState} from 'react';
 import {
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -18,8 +19,8 @@ import {
 interface RenameGroupScreenProps {
   currentName: string;
   onBack: () => void;
-  // 그룹명 변경 확정 콜백. 다듬은 새 이름을 넘긴다(연동은 후속).
-  onRenameGroup?: (name: string) => void;
+  // 그룹명 변경 확정 콜백. API 성공 후에만 화면을 닫는다.
+  onRenameGroup?: (name: string) => Promise<void> | void;
 }
 
 // H-10 그룹명 변경. 1~10자이며 기존과 다른 이름으로 바꿀 때만 변경할 수 있다.
@@ -29,14 +30,29 @@ export function RenameGroupScreen({
   onRenameGroup,
 }: RenameGroupScreenProps) {
   const [draft, setDraft] = useState(currentName);
-  const canSubmit = isGroupNameSaveable(draft, currentName);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const canSubmit = !submitting && isGroupNameSaveable(draft, currentName);
 
-  const handleSubmit = () => {
-    if (!canSubmit) {
+  const handleSubmit = async () => {
+    if (!canSubmit || submittingRef.current) {
       return;
     }
-    onRenameGroup?.(draft.trim());
-    onBack();
+
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      await onRenameGroup?.(draft.trim());
+      onBack();
+    } catch {
+      Alert.alert(
+        '그룹 이름을 바꾸지 못했어요',
+        '네트워크 연결과 그룹 관리 권한을 확인해 주세요.',
+      );
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -50,7 +66,7 @@ export function RenameGroupScreen({
         <TextInput
           accessibilityLabel="그룹 이름 입력"
           maxLength={GROUP_NAME_MAX_LENGTH}
-          onChangeText={(value) => setDraft(clampGroupNameInput(value))}
+          onChangeText={value => setDraft(clampGroupNameInput(value))}
           placeholder="그룹 이름"
           placeholderTextColor={COLORS.textSubtle}
           style={styles.input}
@@ -62,11 +78,13 @@ export function RenameGroupScreen({
         <Pressable
           accessibilityLabel="변경하기"
           accessibilityRole="button"
-          accessibilityState={{disabled: !canSubmit}}
+          accessibilityState={{busy: submitting, disabled: !canSubmit}}
           disabled={!canSubmit}
           onPress={handleSubmit}
-          style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
-        >
+          style={[
+            styles.submitButton,
+            !canSubmit && styles.submitButtonDisabled,
+          ]}>
           <Text style={styles.submitButtonText}>변경하기</Text>
         </Pressable>
       </View>

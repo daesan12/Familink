@@ -1,5 +1,5 @@
-import {useEffect, useState} from 'react';
-import {StyleSheet, Text, TextInput, View} from 'react-native';
+import {useEffect, useRef, useState} from 'react';
+import {Alert, StyleSheet, Text, TextInput, View} from 'react-native';
 
 import {AUTH_COLORS} from '../theme';
 import {AnimatedPressable} from './AnimatedPressable';
@@ -15,7 +15,7 @@ export interface CreateGroupInput {
 
 interface CreateGroupSheetProps {
   onDismiss: () => void;
-  onSubmit: (input: CreateGroupInput) => void;
+  onSubmit: (input: CreateGroupInput) => Promise<void> | void;
   visible: boolean;
 }
 
@@ -28,6 +28,8 @@ export function CreateGroupSheet({
 }: CreateGroupSheetProps) {
   const [name, setName] = useState('');
   const [role, setRole] = useState<GroupRole>('guardian');
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const normalizedName = name.trim();
 
   useEffect(() => {
@@ -37,15 +39,26 @@ export function CreateGroupSheet({
 
     setName('');
     setRole('guardian');
+    setSubmitting(false);
+    submittingRef.current = false;
   }, [visible]);
 
-  const handleSubmit = () => {
-    if (normalizedName.length === 0) {
+  const handleSubmit = async () => {
+    if (normalizedName.length === 0 || submittingRef.current) {
       return;
     }
 
-    onSubmit({name: normalizedName, role});
-    onDismiss();
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      await onSubmit({name: normalizedName, role});
+      onDismiss();
+    } catch {
+      Alert.alert('그룹을 만들지 못했어요', '잠시 후 다시 시도해 주세요.');
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -94,8 +107,9 @@ export function CreateGroupSheet({
 
       <View style={styles.submit}>
         <PrimaryButton
-          disabled={normalizedName.length === 0}
+          disabled={normalizedName.length === 0 || submitting}
           label="생성하기"
+          loading={submitting}
           onPress={handleSubmit}
           tone="lavender"
         />
@@ -118,16 +132,9 @@ function RoleOption({label, onPress, selected}: RoleOptionProps) {
       accessibilityState={{checked: selected}}
       containerStyle={styles.roleOptionContainer}
       onPress={onPress}
-      style={[
-        styles.roleOptionPressable,
-        selected && styles.selectedRole,
-      ]}>
+      style={[styles.roleOptionPressable, selected && styles.selectedRole]}>
       <View style={styles.roleOption}>
-        <Text
-          style={[
-            styles.roleLabel,
-            selected && styles.selectedRoleLabel,
-          ]}>
+        <Text style={[styles.roleLabel, selected && styles.selectedRoleLabel]}>
           {label}
         </Text>
       </View>

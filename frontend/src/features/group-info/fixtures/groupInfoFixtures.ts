@@ -162,6 +162,13 @@ const FAMILY_GROUP_INFO: GroupInfoSnapshot = {
   recordCount: 128,
 };
 
+const EMPTY_GROUP_INFO: GroupInfoSnapshot = {
+  members: [],
+  currentMemberId: '',
+  pendingJoinCount: 0,
+  recordCount: 0,
+};
+
 // App.tsx의 DEVELOPMENT_GROUPS 그룹 ID와 맞춘다.
 const DEVELOPMENT_GROUP_INFO: Record<string, GroupInfoSnapshot> = {
   'development-guardian-group': FAMILY_GROUP_INFO,
@@ -179,12 +186,13 @@ const DEVELOPMENT_GROUP_INFO: Record<string, GroupInfoSnapshot> = {
   },
 };
 
-// 그룹 ID에 해당하는 목업을 돌려준다. 알 수 없는 그룹은 가족 그룹으로 대체한다.
+// 등록된 개발 그룹만 목업을 돌려준다. 실제 서버 그룹 ID에는 가짜 가족 데이터를 붙이지 않는다.
 export function getDevelopmentGroupInfo(groupId: string): GroupInfoSnapshot {
-  return DEVELOPMENT_GROUP_INFO[groupId] ?? FAMILY_GROUP_INFO;
+  return DEVELOPMENT_GROUP_INFO[groupId] ?? EMPTY_GROUP_INFO;
 }
 
 // 기존 참조 호환용(우리 가족 그룹 기준).
 export const DEVELOPMENT_GROUP_MEMBERS = FAMILY_MEMBERS;
 export const DEVELOPMENT_CURRENT_MEMBER_ID = FAMILY_GROUP_INFO.currentMemberId;
-export const DEVELOPMENT_PENDING_JOIN_COUNT = FAMILY_GROUP_INFO.pendingJoinCount;
+export const DEVELOPMENT_PENDING_JOIN_COUNT =
+  FAMILY_GROUP_INFO.pendingJoinCount;
