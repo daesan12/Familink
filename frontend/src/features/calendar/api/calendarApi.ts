@@ -1,3 +1,13 @@
+import type {AxiosInstance, AxiosRequestConfig} from "axios";
+
+import {
+  ApiError,
+  apiClient,
+  createApiClient,
+  type ApiAuthSession,
+  type ApiSuccess,
+} from "../../../shared/api";
+import {parseApiEnvelope} from "../../group-info/api/groupApi";
 import type {
   CalendarEventDetail,
   CalendarEventSummary,
@@ -7,134 +17,99 @@ import type {
   CalendarQuery,
 } from "../types";
 
-type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+export type CalendarHttpClient = Pick<
+  AxiosInstance,
+  "delete" | "get" | "patch" | "post"
+>;
 
 interface CalendarHttpGatewayOptions {
-  baseUrl: string;
-  fetchImpl?: FetchLike;
-  getAccessToken: () => Promise<string | null> | string | null;
+  authSession?: ApiAuthSession;
+  baseUrl?: string;
+  client?: CalendarHttpClient;
 }
 
-interface ApiEnvelope {
-  data: unknown;
-  message: string;
-  success: boolean;
-}
-
-export class CalendarApiError extends Error {
-  readonly status: number | null;
-
-  constructor(message: string, status: number | null = null) {
-    super(message);
-    this.name = "CalendarApiError";
-    this.status = status;
+/** 일정 도메인의 입력 검증 오류를 화면에서 구분할 수 있도록 유지하는 호환 오류다. */
+export class CalendarApiError extends ApiError {
+  constructor(message: string, status?: number) {
+    super({
+      code: "INVALID_API_RESPONSE",
+      kind: "invalidResponse",
+      message,
+      status,
+    });
   }
 }
 
 export function createCalendarHttpGateway({
+  authSession,
   baseUrl,
-  fetchImpl = fetch,
-  getAccessToken,
+  client,
 }: CalendarHttpGatewayOptions): CalendarGateway {
-  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
-
-  const request = async (
-    path: string,
-    signal?: AbortSignal,
-    method = "GET",
-    body?: unknown
-  ): Promise<unknown> => {
-    const accessToken = await getAccessToken();
-    if (!accessToken) {
-      throw new CalendarApiError(
-        "로그인 연결이 필요해 일정을 불러오지 못했어요.",
-        401
-      );
-    }
-    if (!normalizedBaseUrl) {
-      throw new CalendarApiError("일정 API 주소가 설정되지 않았어요.");
-    }
-
-    const response = await fetchImpl(`${normalizedBaseUrl}${path}`, {
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`,
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      method,
-      signal,
-    });
-
-    if (!response.ok) {
-      throw new CalendarApiError(
-        await readErrorMessage(response),
-        response.status
-      );
-    }
-
-    if (response.status === 204) {
-      return null;
-    }
-
-    const envelope = readEnvelope(await response.json());
-    if (!envelope.success) {
-      throw new CalendarApiError(envelope.message, response.status);
-    }
-    return envelope.data;
-  };
+  const httpClient =
+    client ?? (baseUrl ? createApiClient(baseUrl, authSession) : apiClient);
 
   return {
     async createEvent(groupId, input, signal) {
-      const data = readObject(
-        await request(
-          `/groups/${encodeURIComponent(groupId)}/events`,
-          signal,
-          "POST",
-          toWriteBody(input)
-        ),
-        "일정 생성 응답"
+      const response = await httpClient.post<ApiSuccess<unknown>>(
+        `/groups/${encodeURIComponent(groupId)}/events`,
+        toWriteBody(input),
+        requestConfig(signal)
       );
-      return readId(data.eventId, "일정 ID");
+      assertStatus(response.status, 201);
+      return parseApiEnvelope(response.data, response.status, value =>
+        readId(readObject(value, "일정 생성 응답").eventId, "일정 ID")
+      );
     },
     async deleteEvent(eventId, signal) {
-      await request(`/events/${encodeURIComponent(eventId)}`, signal, "DELETE");
+      const response = await httpClient.delete(
+        `/events/${encodeURIComponent(eventId)}`,
+        requestConfig(signal)
+      );
+      assertStatus(response.status, 204);
     },
     async getEvent(eventId, signal) {
-      const data = readObject(
-        await request(`/events/${encodeURIComponent(eventId)}`, signal),
-        "일정 상세 응답"
+      const response = await httpClient.get<ApiSuccess<unknown>>(
+        `/events/${encodeURIComponent(eventId)}`,
+        requestConfig(signal)
       );
-      return readEventDetail(data);
+      assertStatus(response.status, 200);
+      return parseApiEnvelope(response.data, response.status, value =>
+        readEventDetail(value)
+      );
     },
     async listEvents(query: CalendarQuery) {
       const searchParams = [
         `startDate=${encodeURIComponent(query.startDate)}`,
         `endDate=${encodeURIComponent(query.endDate)}`,
       ].join("&");
-      const data = readObject(
-        await request(
-          `/groups/${encodeURIComponent(query.groupId)}/events?${searchParams}`,
-          query.signal
-        ),
-        "일정 목록 응답"
+      const response = await httpClient.get<ApiSuccess<unknown>>(
+        `/groups/${encodeURIComponent(query.groupId)}/events?${searchParams}`,
+        requestConfig(query.signal)
       );
-      return readArray(data.events, "일정 목록").map(readEventSummary);
+      assertStatus(response.status, 200);
+      return parseApiEnvelope(response.data, response.status, value => {
+        const data = readObject(value, "일정 목록 응답");
+        return readArray(data.events, "일정 목록").map(readEventSummary);
+      });
     },
     async listMembers(groupId, signal) {
-      const data = readObject(
-        await request(`/groups/${encodeURIComponent(groupId)}/members`, signal),
-        "구성원 목록 응답"
+      const response = await httpClient.get<ApiSuccess<unknown>>(
+        `/groups/${encodeURIComponent(groupId)}/members`,
+        requestConfig(signal)
       );
-      return readArray(data.members, "구성원 목록").map(readMember);
+      assertStatus(response.status, 200);
+      return parseApiEnvelope(response.data, response.status, value => {
+        const data = readObject(value, "구성원 목록 응답");
+        return readArray(data.members, "구성원 목록").map(readMember);
+      });
     },
     async updateEvent(eventId, input, signal) {
-      await request(
+      const response = await httpClient.patch<ApiSuccess<unknown>>(
         `/events/${encodeURIComponent(eventId)}`,
-        signal,
-        "PATCH",
-        toWriteBody(input)
+        toWriteBody(input),
+        requestConfig(signal)
       );
+      assertStatus(response.status, 200);
     },
   };
 }
@@ -157,33 +132,6 @@ function readMemberIdForWrite(value: string): number {
     throw new CalendarApiError("참여자 구성원 ID 형식이 올바르지 않아요.");
   }
   return memberId;
-}
-
-async function readErrorMessage(response: Response): Promise<string> {
-  try {
-    const body = readObject(await response.json(), "오류 응답");
-    return typeof body.message === "string"
-      ? body.message
-      : "일정을 불러오지 못했어요.";
-  } catch {
-    return "일정을 불러오지 못했어요.";
-  }
-}
-
-function readEnvelope(value: unknown): ApiEnvelope {
-  const envelope = readObject(value, "API 응답");
-  if (
-    typeof envelope.success !== "boolean" ||
-    typeof envelope.message !== "string" ||
-    !("data" in envelope)
-  ) {
-    throw new CalendarApiError("일정 API 응답 형식이 올바르지 않아요.");
-  }
-  return {
-    data: envelope.data,
-    message: envelope.message,
-    success: envelope.success,
-  };
 }
 
 function readEventSummary(value: unknown): CalendarEventSummary {
@@ -260,10 +208,20 @@ function readOptionalNullableString(
 }
 
 function readId(value: unknown, label: string): string {
-  if (typeof value === "number" && Number.isSafeInteger(value)) {
+  if (
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value > 0
+  ) {
     return String(value);
   }
-  return readString(value, label);
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed) && parsed > 0) {
+      return value;
+    }
+  }
+  throw new CalendarApiError(`${label} 형식이 올바르지 않아요.`);
 }
 
 function readBoolean(value: unknown, label: string): boolean {
@@ -281,4 +239,14 @@ function readRole(value: unknown): CalendarMember["role"] {
     return "careReceiver";
   }
   throw new CalendarApiError("구성원 역할 형식이 올바르지 않아요.");
+}
+
+function requestConfig(signal?: AbortSignal): AxiosRequestConfig | undefined {
+  return signal === undefined ? undefined : {signal};
+}
+
+function assertStatus(status: number, expectedStatus: number): void {
+  if (status !== expectedStatus) {
+    throw new CalendarApiError("일정 API 응답 상태가 올바르지 않아요.", status);
+  }
 }
