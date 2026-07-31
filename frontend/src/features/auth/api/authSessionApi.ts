@@ -32,7 +32,7 @@ export async function reissueAuthTokenPair(
   return payload;
 }
 
-function isAuthTokenPairResponse(
+export function isAuthTokenPairResponse(
   value: unknown,
 ): value is AuthTokenPairResponse {
   if (typeof value !== 'object' || value === null) {

@@ -1,15 +1,24 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Alert, Platform, StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { AppShell } from "./src/app-shell";
+import { AppShell, currentGroupStore } from "./src/app-shell";
 import type {
   AppRoute,
+  AppScreenProps,
   AppScreenRegistry,
   CurrentGroupStore,
   FamilyGroup,
 } from "./src/app-shell";
-import { mockAuthGateway } from "./src/features/auth/api/mockAuthGateway";
+import { apiAuthGateway } from "./src/features/auth/api/authGateway";
 import { LoginBottomSheet } from "./src/features/auth/components/LoginBottomSheet";
 import type { CreateGroupInput } from "./src/features/auth/components/CreateGroupSheet";
 import {
@@ -39,7 +48,16 @@ import {
   type CalendarGateway,
 } from "./src/features/calendar";
 import { FeedScreen } from "./src/features/feed";
-import { GroupInfoScreen } from "./src/features/group-info";
+import {
+  familyGroupMembershipGateway,
+  familyGroupMemberGateway,
+  familyGroupGateway,
+  GroupInfoScreen,
+  type FamilyGroupGateway,
+  type GroupMemberGateway,
+  type GroupMembershipGateway,
+  type GroupJoinRequestSummary,
+} from "./src/features/group-info";
 import { NotificationsScreen } from "./src/features/notifications";
 
 type RootRoute =
@@ -55,13 +73,18 @@ interface AppProps {
   authGateway?: AuthGateway;
   calendarGateway?: CalendarGateway;
   authSession?: AuthSessionCoordinator;
+  groupGateway?: FamilyGroupGateway;
+  groupMemberGateway?: GroupMemberGateway;
+  groupMembershipGateway?: GroupMembershipGateway;
   groupStore?: CurrentGroupStore;
   groups?: readonly FamilyGroup[];
   initialGroupId?: string | null;
   initialJoinRequests?: readonly PendingJoinRequest[];
   initialRootRoute?: RootRoute;
   initialShellRoute?: AppRoute;
-  onCreateGroup?: (input: CreateGroupInput) => FamilyGroup | void;
+  onCreateGroup?: (
+    input: CreateGroupInput
+  ) => FamilyGroup | Promise<FamilyGroup>;
   onGroupChange?: (groupId: string) => void;
   onJoinGroup?: (
     inviteCode: string
@@ -92,12 +115,78 @@ const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
   },
 ];
 
+function toPendingJoinRequests(
+  requests: readonly GroupJoinRequestSummary[]
+): readonly PendingJoinRequest[] {
+  const pendingRequests: PendingJoinRequest[] = [];
+  requests.forEach((request) => {
+    if (request.status === "APPROVED") {
+      return;
+    }
+    pendingRequests.push({
+      groupId: request.groupId,
+      groupName: request.groupName,
+      id: request.joinRequestId,
+      status: request.status,
+    });
+  });
+  return pendingRequests;
+}
+
+interface GroupInfoIntegration {
+  gateway: FamilyGroupGateway;
+  members: GroupMemberGateway;
+  membership: GroupMembershipGateway;
+  renameGroup(groupId: string, name: string): Promise<void>;
+}
+
+const GroupInfoIntegrationContext = createContext<GroupInfoIntegration | null>(
+  null
+);
+
+function ConnectedGroupInfoScreen(screenProps: AppScreenProps) {
+  const integration = useContext(GroupInfoIntegrationContext);
+  if (integration === null) {
+    return <GroupInfoScreen {...screenProps} />;
+  }
+
+  return (
+    <GroupInfoScreen
+      {...screenProps}
+      currentMemberId={
+        (
+          screenProps.currentGroup as typeof screenProps.currentGroup & {
+            myMemberId?: string;
+          }
+        ).myMemberId
+      }
+      groupDetailLoader={integration.gateway.getGroupDetail}
+      inviteCodeLoader={integration.gateway.getInviteCode}
+      joinRequestsLoader={integration.membership.loadJoinRequests}
+      membersLoader={integration.members.loadMembers}
+      memberProfileLoader={integration.members.loadMemberProfile}
+      onUpdateMemberAlias={(groupId, memberId, alias) =>
+        integration.members.updateMemberAlias(groupId, memberId, alias)
+      }
+      onUpdateMemberRole={(groupId, memberId, role) =>
+        integration.members.updateMemberRole(groupId, memberId, role)
+      }
+      onRenameGroup={(name) =>
+        integration.renameGroup(screenProps.currentGroup.id, name)
+      }
+      onProcessJoinRequest={(groupId, input) =>
+        integration.membership.processJoinRequest(groupId, input)
+      }
+    />
+  );
+}
+
 const DEFAULT_SCREENS: AppScreenRegistry = {
   aiCall: AiCallScreen,
   archive: ArchiveScreen,
   calendar: CalendarScreen,
   feed: FeedScreen,
-  groupInfo: GroupInfoScreen,
+  groupInfo: ConnectedGroupInfoScreen,
   notifications: NotificationsScreen,
 };
 
@@ -106,10 +195,13 @@ const DEFAULT_API_BASE_URL =
 
 export default function App({
   apiBaseUrl = DEFAULT_API_BASE_URL,
-  authGateway = mockAuthGateway,
+  authGateway = apiAuthGateway,
   calendarGateway,
   authSession = authSessionManager,
-  groupStore,
+  groupGateway = familyGroupGateway,
+  groupMemberGateway = familyGroupMemberGateway,
+  groupMembershipGateway = familyGroupMembershipGateway,
+  groupStore = currentGroupStore,
   groups,
   initialGroupId,
   initialJoinRequests = [],
@@ -129,7 +221,10 @@ export default function App({
   const [loginVisible, setLoginVisible] = useState(false);
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [activeGroupId, setActiveGroupId] = useState(initialGroupId);
-  const [createdGroups, setCreatedGroups] = useState<FamilyGroup[]>([]);
+  const [availableGroups, setAvailableGroups] = useState<FamilyGroup[]>(() => [
+    ...(groups ??
+      (initialRootRoute === "appShell" && __DEV__ ? DEVELOPMENT_GROUPS : [])),
+  ]);
   const [interestGroup, setInterestGroup] = useState<FamilyGroup | null>(null);
   const [joinRequests, setJoinRequests] =
     useState<readonly PendingJoinRequest[]>(initialJoinRequests);
@@ -145,15 +240,13 @@ export default function App({
   const [authenticationResolved, setAuthenticationResolved] = useState(
     !shouldRestoreSession
   );
-  const resolvedGroups = [
-    ...(groups ?? (__DEV__ ? DEVELOPMENT_GROUPS : [])),
-    ...createdGroups,
-  ];
+  const authInvalidationVersionRef = useRef(0);
+  const resolvedGroups = availableGroups;
 
   const clearAuthenticationState = useCallback(() => {
     setUser(null);
     setActiveGroupId(null);
-    setCreatedGroups([]);
+    setAvailableGroups([]);
     setInterestGroup(null);
     setJoinRequests([]);
     setGroupOnboardingReturnRoute("welcome");
@@ -162,19 +255,70 @@ export default function App({
   }, []);
 
   const enterAuthenticatedState = useCallback(
-    (authenticatedUser: AuthenticatedUser) => {
-      setUser(authenticatedUser);
+    async (
+      authenticatedUser: AuthenticatedUser,
+      shouldApply: () => boolean = () => true
+    ) => {
+      if (!shouldApply()) {
+        return;
+      }
 
-      if (authenticatedUser.activeGroupId !== null) {
-        setActiveGroupId(authenticatedUser.activeGroupId);
-        onOpenActiveGroup?.(authenticatedUser.activeGroupId);
+      let loadedGroups: readonly FamilyGroup[];
+      let loadedJoinRequests: readonly PendingJoinRequest[] | undefined;
+
+      if (groups !== undefined) {
+        loadedGroups = groups;
+      } else {
+        try {
+          const snapshot = await groupGateway.loadGroups();
+          loadedGroups = snapshot.groups;
+          loadedJoinRequests = toPendingJoinRequests(snapshot.joinRequests);
+        } catch {
+          if (!shouldApply()) {
+            return;
+          }
+          setUser(authenticatedUser);
+          setAvailableGroups([]);
+          setJoinRequests([]);
+          setActiveGroupId(null);
+          Alert.alert(
+            "그룹 정보를 불러오지 못했어요",
+            "네트워크 연결을 확인한 뒤 다시 로그인해 주세요."
+          );
+          setRoute("signedInWelcome");
+          return;
+        }
+      }
+
+      if (!shouldApply()) {
+        return;
+      }
+
+      setUser(authenticatedUser);
+      setAvailableGroups([...loadedGroups]);
+      if (loadedJoinRequests !== undefined) {
+        setJoinRequests(loadedJoinRequests);
+      }
+
+      if (loadedGroups.length > 0) {
+        const requestedGroupId = authenticatedUser.activeGroupId;
+        const restorableGroupId = loadedGroups.some(
+          (group) => group.id === requestedGroupId
+        )
+          ? requestedGroupId
+          : null;
+        setActiveGroupId(restorableGroupId);
+        if (restorableGroupId !== null) {
+          onOpenActiveGroup?.(restorableGroupId);
+        }
         setRoute("appShell");
         return;
       }
 
+      setActiveGroupId(null);
       setRoute("signedInWelcome");
     },
-    [onOpenActiveGroup]
+    [groupGateway, groups, onOpenActiveGroup]
   );
 
   useEffect(() => {
@@ -182,6 +326,7 @@ export default function App({
     let invalidated = false;
     const unsubscribe = authSession.subscribeAuthInvalidated(() => {
       invalidated = true;
+      authInvalidationVersionRef.current += 1;
       if (!disposed) {
         clearAuthenticationState();
         setAuthenticationResolved(true);
@@ -195,7 +340,7 @@ export default function App({
     setAuthenticationResolved(false);
     authSession
       .restore()
-      .then((result) => {
+      .then(async (result) => {
         if (disposed || invalidated) {
           return;
         }
@@ -205,7 +350,13 @@ export default function App({
             id: result.user.id,
             name: result.user.name,
           };
-          enterAuthenticatedState(restoredUser);
+          await enterAuthenticatedState(
+            restoredUser,
+            () => !disposed && !invalidated
+          );
+          if (disposed || invalidated) {
+            return;
+          }
           setAuthenticationResolved(true);
           return;
         }
@@ -231,9 +382,13 @@ export default function App({
   ]);
 
   const handleLogin = async (credentials: LoginCredentials) => {
+    const invalidationVersion = authInvalidationVersionRef.current;
     const authenticatedUser = await authGateway.login(credentials);
     setLoginVisible(false);
-    enterAuthenticatedState(authenticatedUser);
+    await enterAuthenticatedState(
+      authenticatedUser,
+      () => authInvalidationVersionRef.current === invalidationVersion
+    );
   };
 
   const handleLogout = async () => {
@@ -262,22 +417,19 @@ export default function App({
     Alert.alert(title, "후속 작업에서 연결될 화면입니다.");
   };
 
-  const handleCreateGroup = (input: CreateGroupInput) => {
-    const providedGroup = onCreateGroup?.(input);
-
-    const createdGroup: FamilyGroup = providedGroup ?? {
-      id: `created-group-${Date.now()}`,
-      name: input.name,
-      role: input.role,
-    };
-    setCreatedGroups((current) => [...current, createdGroup]);
+  const handleCreateGroup = async (input: CreateGroupInput) => {
+    const createdGroup = onCreateGroup
+      ? await onCreateGroup(input)
+      : (await groupGateway.createGroup(input)).group;
+    setAvailableGroups((current) => [
+      ...current.filter((group) => group.id !== createdGroup.id),
+      createdGroup,
+    ]);
     setActiveGroupId(createdGroup.id);
     onGroupChange?.(createdGroup.id);
-    if (providedGroup !== undefined) {
-      groupStore?.save(createdGroup.id).catch(() => {
-        // 서버가 확정한 그룹만 저장하고 오류 처리는 상위 앱 계층에 위임한다.
-      });
-    }
+    groupStore?.save(createdGroup.id).catch(() => {
+      // 서버가 확정한 그룹만 저장하고 오류 처리는 상위 앱 계층에 위임한다.
+    });
     if (createdGroup.role === "careReceiver") {
       setInterestGroup(createdGroup);
       setRoute("interestSetup");
@@ -287,12 +439,40 @@ export default function App({
   };
 
   const handleJoinGroup = async (inviteCode: string) => {
-    if (onJoinGroup === undefined) {
+    if (onJoinGroup !== undefined) {
+      const request = await onJoinGroup(inviteCode);
+      setJoinRequests((current) => {
+        const withoutDuplicate = current.filter((item) => item.id !== request.id);
+        return [...withoutDuplicate, request];
+      });
+      return;
+    }
+
+    if (groupGateway.requestJoinByCode === undefined) {
       showDeferredFeature("코드로 참여");
       return;
     }
 
-    const request = await onJoinGroup(inviteCode);
+    const submitted = await groupGateway.requestJoinByCode(inviteCode);
+    const request: PendingJoinRequest = {
+      groupId: submitted.groupId,
+      groupName: submitted.groupName,
+      id: submitted.joinRequestId,
+      status: submitted.status,
+    };
+
+    try {
+      const snapshot = await groupGateway.loadGroups();
+      const refreshedRequests = [...toPendingJoinRequests(snapshot.joinRequests)];
+      if (!refreshedRequests.some((item) => item.id === request.id)) {
+        refreshedRequests.push(request);
+      }
+      setJoinRequests(refreshedRequests);
+      return;
+    } catch {
+      // 가입 요청은 이미 생성됐으므로 목록 재조회 실패 시 제출 결과를 유지한다.
+    }
+
     setJoinRequests((current) => {
       const withoutDuplicate = current.filter((item) => item.id !== request.id);
       return [...withoutDuplicate, request];
@@ -301,7 +481,7 @@ export default function App({
 
   const handleOpenApprovedGroup = (request: ApprovedJoinRequest) => {
     const groupId = request.groupId;
-    setCreatedGroups((current) => {
+    setAvailableGroups((current) => {
       if (current.some((group) => group.id === groupId)) {
         return current;
       }
@@ -344,13 +524,39 @@ export default function App({
     setRoute("groupOnboarding");
   };
 
+  const handleRenameGroup = useCallback(
+    async (groupId: string, name: string) => {
+      const updated = await groupGateway.renameGroup(groupId, name);
+      setAvailableGroups((current) =>
+        current.map((group) =>
+          group.id === updated.id
+            ? { ...group, name: updated.name }
+            : group
+        )
+      );
+    },
+    [groupGateway]
+  );
+
+  const groupInfoIntegration = useMemo<GroupInfoIntegration>(
+    () => ({
+      gateway: groupGateway,
+      members: groupMemberGateway,
+      membership: groupMembershipGateway,
+      renameGroup: handleRenameGroup,
+    }),
+    [groupGateway, groupMemberGateway, groupMembershipGateway, handleRenameGroup]
+  );
+  const resolvedScreens = screens ?? DEFAULT_SCREENS;
+
   if (!authenticationResolved) {
     return null;
   }
 
   return (
-    <SafeAreaProvider>
-      <CalendarGatewayProvider gateway={resolvedCalendarGateway}>
+    <GroupInfoIntegrationContext.Provider value={groupInfoIntegration}>
+      <SafeAreaProvider>
+        <CalendarGatewayProvider gateway={resolvedCalendarGateway}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
         {route === "welcome" && (
           <>
@@ -382,7 +588,7 @@ export default function App({
             onCreateGroup={() => openGroupOnboarding("appShell")}
             onGroupChange={onGroupChange}
             onJoinGroup={() => openGroupOnboarding("appShell")}
-            screens={screens ?? DEFAULT_SCREENS}
+            screens={resolvedScreens}
           />
         )}
         {route === "signedInWelcome" && user !== null && (
@@ -417,7 +623,8 @@ export default function App({
             onSkip={handleFinishInterestSetup}
           />
         )}
-      </CalendarGatewayProvider>
-    </SafeAreaProvider>
+        </CalendarGatewayProvider>
+      </SafeAreaProvider>
+    </GroupInfoIntegrationContext.Provider>
   );
 }

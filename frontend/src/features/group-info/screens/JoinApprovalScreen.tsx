@@ -42,27 +42,49 @@ export function JoinApprovalScreen({
   const joinRequests = useJoinRequests(groupId, loader);
   // H-5p 역할 선택 모달 대상. null이면 닫힘.
   const [approving, setApproving] = useState<JoinRequest | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [processError, setProcessError] = useState<string | null>(null);
 
-  const applyDecision = (request: JoinRequest, role?: GroupRole) => {
-    onProcess?.(groupId, {
-      joinRequestId: request.joinRequestId,
-      decision: role ? 'APPROVE' : 'REJECT',
-      assignedRole: role,
-    });
-    // 연동 전 단계라 로컬 목록에서 즉시 제거해 처리 결과를 반영한다.
-    joinRequests.remove(request.joinRequestId);
+  const applyDecision = async (
+    request: JoinRequest,
+    role?: GroupRole,
+  ): Promise<boolean> => {
+    if (processingId !== null) {
+      return false;
+    }
+
+    setProcessError(null);
+    setProcessingId(request.joinRequestId);
+    try {
+      await onProcess?.(groupId, {
+        joinRequestId: request.joinRequestId,
+        decision: role ? 'APPROVE' : 'REJECT',
+        assignedRole: role,
+      });
+      // 연동 전 단계라 로컬 목록에서 즉시 제거해 처리 결과를 반영한다.
+      joinRequests.remove(request.joinRequestId);
+      return true;
+    } catch {
+      setProcessError(
+        '가입 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+      return false;
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   const handleReject = (request: JoinRequest) => {
-    applyDecision(request);
+    return applyDecision(request);
   };
 
-  const handleSelectRole = (role: GroupRole) => {
+  const handleSelectRole = async (role: GroupRole) => {
     if (!approving) {
       return;
     }
-    applyDecision(approving, role);
-    setApproving(null);
+    if (await applyDecision(approving, role)) {
+      setApproving(null);
+    }
   };
 
   return (
@@ -91,6 +113,11 @@ export function JoinApprovalScreen({
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
+          {processError ? (
+            <Text accessibilityLiveRegion="polite" style={styles.errorText}>
+              {processError}
+            </Text>
+          ) : null}
           <Text style={styles.heading}>
             승인 요청 {joinRequests.requests.length}건
           </Text>
@@ -120,6 +147,7 @@ export function JoinApprovalScreen({
                   <Pressable
                     accessibilityLabel={`${request.applicantName} 거절`}
                     accessibilityRole="button"
+                    disabled={processingId !== null}
                     onPress={() => handleReject(request)}
                     style={[styles.actionButton, styles.rejectButton]}
                   >
@@ -128,6 +156,7 @@ export function JoinApprovalScreen({
                   <Pressable
                     accessibilityLabel={`${request.applicantName} 승인`}
                     accessibilityRole="button"
+                    disabled={processingId !== null}
                     onPress={() => setApproving(request)}
                     style={[styles.actionButton, styles.approveButton]}
                   >
