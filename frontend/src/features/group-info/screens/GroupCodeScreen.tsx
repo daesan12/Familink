@@ -1,7 +1,8 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
+import Clipboard from '@react-native-clipboard/clipboard';
+import {useState} from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -37,14 +38,16 @@ export function GroupCodeScreen({
   onCopyCode,
 }: GroupCodeScreenProps) {
   const invite = useGroupInviteCode(groupId, loader);
+  const [copied, setCopied] = useState(false);
 
   const handleCopy = (code: string) => {
+    // onCopyCode 주입 시 그 구현을 쓰고(테스트·커스텀), 없으면 기기 클립보드에 복사한다.
     if (onCopyCode) {
       onCopyCode(code);
-      return;
+    } else {
+      Clipboard.setString(code);
     }
-    // 네이티브 클립보드 연동 전 단계라 코드만 안내한다.
-    Alert.alert('복사 연동 전 단계예요', `그룹 코드 ${code}를 가족에게 공유해 주세요.`);
+    setCopied(true);
   };
 
   return (
@@ -93,7 +96,9 @@ export function GroupCodeScreen({
               onPress={() => handleCopy(invite.inviteCode)}
               style={styles.copyButton}
             >
-              <Text style={styles.copyButtonText}>코드 복사</Text>
+              <Text style={styles.copyButtonText}>
+                {copied ? '복사했어요' : '코드 복사'}
+              </Text>
             </Pressable>
           </View>
 

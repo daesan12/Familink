@@ -6,6 +6,7 @@ import type {GroupMember, WeeklyRankingSnapshot} from '../types';
 import {GroupInfoScreen} from './GroupInfoScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
+jest.mock('@react-native-clipboard/clipboard', () => ({setString: jest.fn()}));
 
 const baseProps = {
   currentGroup: {id: 'group-1', name: '우리 가족', role: 'guardian'} as const,

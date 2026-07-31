@@ -2,10 +2,16 @@ import React from 'react';
 import {Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
+import Clipboard from '@react-native-clipboard/clipboard';
 import type {GroupInviteCode} from '../types';
 import {GroupCodeScreen} from './GroupCodeScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
+jest.mock('@react-native-clipboard/clipboard', () => ({setString: jest.fn()}));
+
+afterEach(() => {
+  (Clipboard.setString as jest.Mock).mockClear();
+});
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
 
@@ -60,7 +66,25 @@ test('그룹 코드와 초대 안내를 보여주고, 복사를 위임한다', a
   TestRenderer.act(() => {
     copyButton.props.onPress();
   });
+  // 주입한 onCopyCode로 위임하고, 버튼은 복사 피드백으로 바뀐다.
   expect(copied).toEqual(['176203']);
+  expect(hasText(renderer, '복사했어요')).toBe(true);
+});
+
+test('onCopyCode가 없으면 기기 클립보드에 복사한다', async () => {
+  const renderer = await renderScreen(() =>
+    Promise.resolve({inviteCode: '176203'}),
+  );
+
+  const copyButton = renderer.root.findByProps({
+    accessibilityLabel: '그룹 코드 복사',
+  });
+  TestRenderer.act(() => {
+    copyButton.props.onPress();
+  });
+
+  expect(Clipboard.setString).toHaveBeenCalledWith('176203');
+  expect(hasText(renderer, '복사했어요')).toBe(true);
 });
 
 test('로딩 중에는 코드 대신 로딩 표시를 보여준다', () => {
