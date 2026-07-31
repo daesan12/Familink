@@ -51,6 +51,22 @@ export type {
   MemberRoleUpdater,
 } from './api/groupMemberApi';
 export {
+  changeManager,
+  deleteGroup,
+  familyGroupManagementGateway,
+  getGroupManagementErrorMessage,
+  leaveGroup,
+  removeMember,
+} from './api/groupManagementApi';
+export type {
+  GroupDeleter,
+  GroupLeaver,
+  GroupManagementGateway,
+  ManagerUpdate,
+  ManagerUpdater,
+  MemberRemover,
+} from './api/groupManagementApi';
+export {
   DEVELOPMENT_CURRENT_MEMBER_ID,
   DEVELOPMENT_GROUP_MEMBERS,
   DEVELOPMENT_PENDING_JOIN_COUNT,

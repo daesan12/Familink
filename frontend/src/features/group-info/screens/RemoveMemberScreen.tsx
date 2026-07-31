@@ -1,9 +1,17 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {useState} from 'react';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {SubScreenHeader} from '../components/SubScreenHeader';
+import {getGroupManagementErrorMessage} from '../api/groupManagementApi';
 import {formatJoinedDate, removableMembers} from '../groupManagementModel';
 import type {GroupMember} from '../types';
 
@@ -12,8 +20,8 @@ interface RemoveMemberScreenProps {
   // 조회자(본인). 본인은 내보낼 수 없어 선택 목록에서 제외한다.
   currentMemberId: string;
   onBack: () => void;
-  // 내보내기 확정 콜백. 대상 memberId를 넘긴다(연동은 후속).
-  onRemoveMember?: (memberId: string) => void;
+  // 내보내기 확정 콜백. API 성공 후에만 그룹정보로 돌아간다.
+  onRemoveMember?: (memberId: string) => unknown;
 }
 
 const REMOVE_NOTES: readonly string[] = [
@@ -33,6 +41,8 @@ export function RemoveMemberScreen({
   // 선택한 구성원. null이면 1단계(선택), 있으면 2단계(확인).
   const [selected, setSelected] = useState<GroupMember | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // 2단계에서 뒤로가면 1단계로, 1단계에서 뒤로가면 그룹정보로 돌아간다.
   const handleBack = () => {
@@ -45,11 +55,37 @@ export function RemoveMemberScreen({
   };
 
   const handleRemove = () => {
-    if (!selected || !confirmed) {
+    if (!selected || !confirmed || isSubmitting) {
       return;
     }
-    onRemoveMember?.(selected.memberId);
-    onBack();
+
+    setErrorMessage(null);
+    try {
+      const result = onRemoveMember?.(selected.memberId);
+      if (result !== undefined && isPromiseLike(result)) {
+        setIsSubmitting(true);
+        result
+          .then(onBack)
+          .catch((error: unknown) => {
+            setErrorMessage(
+              getGroupManagementErrorMessage(
+                error,
+                '구성원을 내보내지 못했습니다. 잠시 후 다시 시도해 주세요.',
+              ),
+            );
+          })
+          .finally(() => setIsSubmitting(false));
+        return;
+      }
+      onBack();
+    } catch (error) {
+      setErrorMessage(
+        getGroupManagementErrorMessage(
+          error,
+          '구성원을 내보내지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        ),
+      );
+    }
   };
 
   return (
@@ -60,6 +96,8 @@ export function RemoveMemberScreen({
         <ConfirmStep
           confirmed={confirmed}
           member={selected}
+          errorMessage={errorMessage}
+          isSubmitting={isSubmitting}
           onRemove={handleRemove}
           onToggleConfirm={() => setConfirmed((value) => !value)}
         />
@@ -67,6 +105,15 @@ export function RemoveMemberScreen({
         <SelectStep candidates={candidates} onSelect={setSelected} />
       )}
     </View>
+  );
+}
+
+function isPromiseLike(value: unknown): value is Promise<void> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof value.then === 'function'
   );
 }
 
@@ -123,11 +170,15 @@ function SelectStep({
 function ConfirmStep({
   member,
   confirmed,
+  errorMessage,
+  isSubmitting,
   onToggleConfirm,
   onRemove,
 }: {
   member: GroupMember;
   confirmed: boolean;
+  errorMessage: string | null;
+  isSubmitting: boolean;
   onToggleConfirm: () => void;
   onRemove: () => void;
 }) {
@@ -179,18 +230,30 @@ function ConfirmStep({
             위 내용을 확인했으며 구성원을 내보냅니다.
           </Text>
         </Pressable>
+        {errorMessage ? (
+          <Text accessibilityRole="alert" style={styles.errorText}>
+            {errorMessage}
+          </Text>
+        ) : null}
       </ScrollView>
 
       <View style={styles.footer}>
         <Pressable
           accessibilityLabel="구성원 내보내기"
           accessibilityRole="button"
-          accessibilityState={{disabled: !confirmed}}
-          disabled={!confirmed}
+          accessibilityState={{disabled: !confirmed || isSubmitting}}
+          disabled={!confirmed || isSubmitting}
           onPress={onRemove}
-          style={[styles.submitButton, !confirmed && styles.submitButtonDisabled]}
+          style={[
+            styles.submitButton,
+            (!confirmed || isSubmitting) && styles.submitButtonDisabled,
+          ]}
         >
-          <Text style={styles.submitButtonText}>구성원 내보내기</Text>
+          {isSubmitting ? (
+            <ActivityIndicator color={COLORS.background} />
+          ) : (
+            <Text style={styles.submitButtonText}>구성원 내보내기</Text>
+          )}
         </Pressable>
       </View>
     </>
@@ -235,6 +298,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingVertical: 24,
     textAlign: 'center',
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 14,
+    lineHeight: 20,
   },
   footer: {
     borderTopColor: COLORS.divider,
