@@ -529,14 +529,80 @@ test('로더 실패 시 에러와 다시 시도를 보여주고, 재시도로 �
   ).toBe(false);
 });
 
-test('초대·관리 메뉴 행은 후속 작업 안내 팝업을 띄운다', () => {
+test('아직 연동 전인 관리 메뉴 행은 후속 작업 안내 팝업을 띄운다', () => {
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const renderer = renderScreen();
 
-  press(renderer, '그룹 코드');
+  press(renderer, '그룹관리자 변경');
 
   expect(alertSpy).toHaveBeenCalledWith(
-    '그룹 코드',
+    '그룹관리자 변경',
     '후속 작업에서 연결될 화면입니다.',
   );
+});
+
+test('그룹 코드 카드를 누르면 그룹 코드 화면으로 이동한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        inviteCodeLoader={() => Promise.resolve({inviteCode: '176203'})}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '그룹 코드');
+  // 하위 화면 로더가 해소되도록 flush한다.
+  await TestRenderer.act(async () => {});
+
+  expect(hasText(renderer!, '가족을 초대해 보세요')).toBe(true);
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '그룹 코드 176203'}),
+  ).toBeTruthy();
+
+  // 뒤로 가면 그룹정보로 돌아온다.
+  press(renderer!, '뒤로 가기');
+  expect(hasText(renderer!, '그룹 정보')).toBe(true);
+});
+
+test('가입 승인 대기 카드를 누르면 승인 화면으로 이동한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        joinRequestsLoader={() =>
+          Promise.resolve([
+            {
+              joinRequestId: 'jr-1',
+              applicantUserId: 'u-1',
+              applicantName: '손수호',
+              profileImageUrl: null,
+              status: 'PENDING_ADMIN' as const,
+              assignedRole: null,
+              processedAt: null,
+              createdAt: '2026-07-30T09:12:00Z',
+            },
+          ])
+        }
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '가입 승인 대기');
+  await TestRenderer.act(async () => {});
+
+  expect(hasText(renderer!, '승인 요청 1건')).toBe(true);
+  expect(hasText(renderer!, '손수호')).toBe(true);
 });

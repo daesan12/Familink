@@ -66,3 +66,51 @@ export type WeeklyRankingLoadState =
   | {status: 'loading'}
   | {status: 'error'; message: string}
   | {status: 'success'; snapshot: WeeklyRankingSnapshot};
+
+// API-GROUPS-007 GET /groups/{groupId}/invite-code 응답.
+// 유효 기간 필드는 없어 화면의 "제한 없음"은 정적 표기다.
+export interface GroupInviteCode {
+  inviteCode: string;
+}
+
+// H-4 그룹 코드 조회 로드 상태.
+export type GroupInviteCodeLoadState =
+  | {status: 'loading'}
+  | {status: 'error'; message: string}
+  | {status: 'success'; inviteCode: string};
+
+// API-GROUPS-008/009의 가입 요청 상태.
+export type JoinRequestStatus = 'PENDING_ADMIN' | 'APPROVED' | 'REJECTED';
+
+// API-GROUPS-008 GET /groups/{groupId}/join-requests 응답의 joinRequests[] 항목.
+export interface JoinRequest {
+  joinRequestId: string;
+  applicantUserId: string;
+  // 신청자 표시 이름. 아바타 이니셜은 이 값에서 파생한다.
+  applicantName: string;
+  // 신청자 프로필 이미지 URL. 없으면 이니셜 아바타로 대체한다.
+  profileImageUrl: string | null;
+  status: JoinRequestStatus;
+  // 승인 시 지정된 역할. 대기 중이면 null이다.
+  assignedRole: GroupRole | null;
+  // 처리 시각(ISO). 대기 중이면 null이다.
+  processedAt: string | null;
+  // 신청 시각(ISO).
+  createdAt: string;
+}
+
+// H-5 가입 승인 대기 목록 로드 상태.
+export type JoinRequestsLoadState =
+  | {status: 'loading'}
+  | {status: 'error'; message: string}
+  | {status: 'success'; requests: readonly JoinRequest[]};
+
+// API-GROUPS-009 PATCH .../join-requests/{joinRequestId} 요청 결정.
+export type JoinRequestDecision = 'APPROVE' | 'REJECT';
+
+// 가입 요청 처리 입력. 승인이면 역할을 함께 전달한다.
+export interface JoinRequestDecisionInput {
+  joinRequestId: string;
+  decision: JoinRequestDecision;
+  assignedRole?: GroupRole;
+}
