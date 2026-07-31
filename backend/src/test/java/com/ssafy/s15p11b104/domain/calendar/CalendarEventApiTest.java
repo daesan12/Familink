@@ -765,7 +765,7 @@ class CalendarEventApiTest extends IntegrationTest {
 		entityManager.flush();
 		entityManager.clear();
 		Object[] remaining = (Object[]) entityManager.createNativeQuery(
-				"SELECT related_event_id, title, body FROM notifications")
+				"SELECT related_event_id, title, body FROM notifications WHERE type = 'EVENT_REMINDER'")
 			.getSingleResult();
 		assertThat(remaining[0]).isNull();
 		assertThat(remaining[1]).isEqualTo("내일 일정 알림");
