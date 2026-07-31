@@ -6,6 +6,7 @@ export type {
   CreateCommentInput,
   DeleteCommentInput,
   FeedImage,
+  FeedMediaType,
   FeedMember,
   FeedPost,
   FeedReaction,

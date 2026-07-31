@@ -18,9 +18,13 @@ export interface FeedMember {
   name: string;
 }
 
+export type FeedMediaType = 'IMAGE' | 'VIDEO';
+
 export interface FeedImage {
   accessibilityLabel: string;
   id: string;
+  hasPoster?: boolean;
+  mediaType?: FeedMediaType;
   source: ImageSourcePropType;
 }
 
@@ -76,7 +80,12 @@ export interface FeedPost {
 
 export type FeedLoadState =
   | {status: 'loading'}
-  | {status: 'success'; posts: readonly FeedPost[]}
+  | {
+      hasNext: boolean;
+      isLoadingMore: boolean;
+      posts: readonly FeedPost[];
+      status: 'success';
+    }
   | {message: string; status: 'error'};
 
 export function limitPostImages(
