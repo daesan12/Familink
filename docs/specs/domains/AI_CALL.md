@@ -59,7 +59,10 @@
     주입하며, 모델이 이 값을 사용자 입력으로 받아 신뢰하지 않는다.
 13. 연결 결과는 `CONNECTED` 또는 `FAILED`로 처리한다. 세션 상태는 `CONNECTING`, `IN_PROGRESS`, `COMPLETED`, `INCOMPLETE`, `CANCELLED`, `FAILED`를 사용한다. 종료 원인 `termination_type`은 `USER_REQUESTED` 또는 `CONNECTION_LOST`를 사용하며, 요청 body나 값이 없으면 `USER_REQUESTED`로 처리한다. `CONNECTING` 중 연결 성공은 `IN_PROGRESS`, `USER_REQUESTED`는 `CANCELLED`, 연결 오류 또는 `CONNECTION_LOST`는 `FAILED`가 된다. `IN_PROGRESS` 중 `USER_REQUESTED`는 `COMPLETED`, `CONNECTION_LOST`는 `INCOMPLETE`가 된다.
 14. `COMPLETED` 통화는 건별 리포트를 생성한다. `INCOMPLETE`는 충분한 transcript가 있을 때만 생성하며, `CANCELLED`·`FAILED`는 리포트를 생성하지 않는다.
-15. 통화 종료 요청은 비동기로 접수한다. 클라이언트와 Sideband의 종료 처리가 겹치면 먼저 확정된 종결 상태를 보존하고, 중복 종료로 세션·리포트를 중복 생성하지 않는다.
+15. 통화 종료 요청은 비동기로 접수한다. 클라이언트와 Sideband의 종료 처리가
+    겹치면 먼저 확정된 종결 상태와 최초 `endedAt`을 보존하고, 이후 요청에도
+    같은 `202` 성공을 반환한다. 마지막 전사 정리와 리포트 생성은 한 번만
+    접수하며 중복 종료로 세션·리포트를 중복 생성하지 않는다.
 16. 녹음 원본은 저장하지 않는다. 보호자에게 전체 통화 전문·원본 음성을 노출하지 않고 건별 요약과 보호자 전달 메시지만 제공한다.
 17. Spring Boot는 Sideband의 발화 완료 이벤트를 기준으로 사용자와 AI
     전사를 `call_transcripts`에 순서대로 저장하고, 통화 종료 상태에 따라
@@ -113,6 +116,16 @@
   - 처리 주체: Spring Boot 단일 백엔드
   - Method와 Path: `API-CALLS-001`~`API-CALLS-003`의 Method·Path·요청·결과는 [`../contracts/API.md`](../contracts/API.md)를 참조한다. 확인된 세션 생성 경로는 `POST /call-sessions`다.
   - 핵심 입력·결과: `persona_id`, `sdp_offer`, 연결 결과, 종료 원인 `termination_type`과 종료 상태를 계약에 맞게 교환한다.
+  - 요청 JSON은 `snake_case`를 사용한다. 클라이언트는 현재 그룹이나
+    서버가 관리하는 현재 세션 `status`, 내부 사용자·멤버십 ID를 보내지
+    않는다. 계약 입력인 연결 결과 `result`와 종료 원인
+    `termination_type`은 전달한다.
+  - 잘못된 JSON·필수 필드·enum·SDP는 `400`, 인증 실패는 `401`, 역할·
+    당사자 권한 실패는 `403`이다. 존재하지 않는 세션은 연결 결과·종료에서
+    `404`, 활성 통화 중 생성은 `409 ACTIVE_CALL_EXISTS`, 허용하지 않는
+    연결 결과 상태는 `409 INVALID_CALL_STATUS`, Realtime 연결·SDP 교환
+    실패는 생성에서 `502 AI_CONNECTION_FAILED`를 사용한다.
+  - 중복 종료는 오류나 `409`가 아니며 같은 `202` 성공을 반환한다.
 - 데이터:
   - 관련 엔티티: `call_sessions`, `call_transcripts`, `call_reports`
   - 읽기·쓰기 소유자: Spring Boot가 세션·transcript·AI 결과를 직접
@@ -153,6 +166,14 @@
 - Then: 가족 구성원의 `personKey`·실제 이름·별칭과 현재 피보호자의 최신
   통화 요약 최대 5건이 권한 범위 안에서 주입되고, 감정 분류와 보호자
   전달 메시지는 포함되지 않는다.
+
+### AC-005
+
+- Given: 통화 생성·연결 결과·종료 요청이 실패하거나 종료 요청이 중복된다.
+- When: Spring Boot가 요청 형식·인증·권한·세션·상태·AI 연결 결과를
+  판정한다.
+- Then: API 계약의 기존 오류 코드로 응답하고, 중복 종료는 최초 상태와
+  시각을 보존한 같은 `202` 성공으로 처리한다.
 
 ## 미결정 사항
 

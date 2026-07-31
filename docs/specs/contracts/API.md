@@ -22,8 +22,11 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 - `204 No Content` 성공 응답은 공통 응답 봉투를 포함하지 않는다.
 - 확인된 성공 문구는 `API-AUTH-001`의 `로그인 아이디 중복 확인 성공`,
   `API-AUTH-002`의 `회원가입 성공`, `API-AUTH-003`의 `로그인 성공`,
-  `API-AUTH-004`의 `토큰 재발급 성공`이다. 다른 API의 성공 문구는 각
-  API의 확정 원본이나 별도 결정을 따른다.
+  `API-AUTH-004`의 `토큰 재발급 성공`, `API-NOTIFICATIONS-001`의
+  `기기 토큰 등록 성공`, `API-CALLS-001`의 `AI 통화 세션 생성 성공`,
+  `API-CALLS-002`의 `AI 통화 연결 결과 처리 성공`, `API-CALLS-003`의
+  `AI 통화 종료 요청 접수 성공`이다. 다른 API의 성공 문구는 각 API의
+  확정 원본이나 별도 결정을 따른다.
 - 확인된 오류 문구는 `INVALID_REQUEST`의 `요청 형식 또는 검증 실패`,
   `LOGIN_ID_DUPLICATED`의 `이미 사용 중인 로그인 아이디`,
   `INVALID_CREDENTIALS`의 `아이디 또는 비밀번호가 일치하지 않습니다.`다.
@@ -83,6 +86,26 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 - `API-AUTH-005`는 인증에 사용한 Access Token을 남은 만료 시간 동안
   블랙리스트에 등록하고, 요청 Refresh Token이 현재 저장값일 때 사용자별
   Refresh Token 키를 삭제한다.
+- 일반 로그아웃은 인증이 유효한 동안 현재 기기의 FCM token으로
+  `API-NOTIFICATIONS-008`을 먼저 호출한 뒤 `API-AUTH-005`를 호출한다.
+  인증이 유효한 상태에서 OS 알림 권한을 철회할 때도 현재 또는 직전에
+  발급받아 보관 중인 token으로 `API-NOTIFICATIONS-008`을 호출한다.
+  `API-AUTH-005` 요청에 기기 token을 추가하지 않으며 서버가
+  Access/Refresh Token만으로 기기를 추측하지 않는다.
+- 프로필 이미지는 `API-FILES-001`에 `purpose=profile-image`와 이미지
+  1개를 보내 받은 URL에 응답 `headers`를 그대로 사용해 PUT한 뒤, 반환된
+  `fileUrl`을 `API-USERS-002.profileImageUrl`로 전달한다.
+- `API-USERS-002.profileImageUrl`은 요청에서 생략하면 기존 값을 유지하고,
+  명시적 `null`이면 삭제하며, 문자열이면 새 이미지로 교체한다. 문자열은
+  설정된 S3 또는 허용 CDN 호스트이며 object key가 `profile-image/` 아래인
+  URL만 허용한다. Spring Boot는 저장 전 스토리지 메타데이터의 이미지
+  MIME과 10 MiB 제한을 다시 검증한다.
+- DB에는 만료되지 않는 안정적인 `fileUrl`을 저장한다. `API-USERS-001`은
+  접근 가능한 CDN URL 또는 다운로드용 서명 URL을 `profileImageUrl`로
+  반환한다. 교체·삭제된 과거 객체와 고아 객체의 정리는 별도 수명주기
+  작업이며, 그 정리 실패로 프로필 수정 성공을 막지 않는다.
+- `API-USERS-003`은 회원 탈퇴 트랜잭션에서 해당 사용자의 모든
+  `device_tokens`를 비활성화한다.
 
 ## 그룹·구성원·관심사
 
@@ -126,7 +149,7 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 
 | API ID | Method · Path | 백엔드·권한 | 핵심 요청 | 성공 결과 | 명시 오류 |
 |---|---|---|---|---|---|
-| `API-FILES-001` | `POST /files/presigned-urls` | Spring Boot · Access Token 로그인 사용자 | `purpose`, `files[{fileName,contentType,sizeBytes}]` | `201`: `uploads[{uploadUrl,fileUrl,headers,expiresAt}]` | 명시 없음 |
+| `API-FILES-001` | `POST /files/presigned-urls` | Spring Boot · Access Token 로그인 사용자 | `purpose`, `files[{fileName,contentType,sizeBytes}]` | `201`: `uploads[{uploadUrl,fileUrl,headers,expiresAt}]` | `400 INVALID_REQUEST` |
 | `API-POSTS-001` | `GET /groups/{groupId}/posts` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 선택 query `page`, `size` | `200`: `content[{id,author,content,media,reactionCounts,myReaction,commentCount,createdAt}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-POSTS-002` | `GET /posts/{postId}` | Spring Boot · 해당 그룹 활성 구성원 | path `postId` | `200`: `id`, `groupId`, `author`, `content`, `media`, `reactions`, `commentCount`, `createdAt`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-POSTS-003` | `GET /groups/{groupId}/archive` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 선택 query `date`, `type`, `memberId`(`group_members.id`) | `200`: `dates[{date,items[{postId,type,thumbnailUrl,contentPreview}]}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
@@ -153,8 +176,28 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
   `null`로 저장한다.
 - 보호자의 게시글 작성에 따른 카네이션은 KST 날짜·그룹 기준 하루 최대
   한 번 적립한다.
-- `API-FILES-001`의 `purpose`별 MIME 허용 목록과 최대 크기는 미결정이다.
-  서버가 UUID 기반 object key를 만들며 제품 DB에는 최적화본 URL만 저장한다.
+- `API-FILES-001.purpose`는 정확히 `post-media`, `profile-image`만
+  허용한다. 서버는 UUID 기반 object key를 각각 `post-media/`,
+  `profile-image/` 아래에 만든다.
+- `post-media`는 이미지 1~4개 또는 영상 정확히 1개만 허용하고 둘을 섞지
+  않는다. 이미지는 파일당 최대 10 MiB(10,485,760 bytes)이며
+  `image/jpeg`, `image/png`, `image/webp`만 허용한다. 영상은 파일당 최대
+  100 MiB(104,857,600 bytes)이며 `video/mp4`만 허용한다.
+  `profile-image`는 위 이미지 MIME과 10 MiB 제한을 적용한 이미지 정확히
+  1개만 허용한다.
+- 각 `fileName`은 공백이 아닌 1~255자이며 경로 구분자와 제어 문자를
+  허용하지 않는다. `sizeBytes`는 0보다 크고 해당 목적·MIME의 최대 크기
+  이하여야 한다. 빈 `files`, 개수 초과, 미디어 혼합, 알 수 없는
+  `purpose`, 허용하지 않는 MIME과 잘못된 필드는 `400 INVALID_REQUEST`다.
+  필드 단위 원인이 있으면 공통 실패 봉투의 `errors[{field,message}]`에
+  기록한다.
+- Spring Boot는 `contentType`의 공백·대소문자·선택 매개변수를 정규화해
+  표준 MIME으로 검증하고, 같은 값을 PUT 서명과 응답의
+  `headers.Content-Type`에 사용한다. PUT의 `Content-Type`은 필수이며
+  클라이언트는 반환된 모든 헤더 이름과 값을 그대로 사용한다.
+  `expiresAt`은 발급 시각 10분 뒤의 ISO-8601 UTC 절대 시각이다. 반환
+  헤더가 빠졌거나 값이 다른 업로드는 성공으로 간주하지 않는다.
+- 게시글에는 최적화본 URL만 저장한다.
 - Spring Scheduler가 마지막 `updated_at` 이후 10분간 변경이 없는 게시글을
   찾고 Spring 내부 `PostAnalysisService`를 호출한다.
 
@@ -193,6 +236,29 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 | `API-CALLS-002` | `POST /call-sessions/{callSessionId}/connection-result` | Spring Boot · 통화 당사자 본인 | `result=CONNECTED\|FAILED`; `FAILED`일 때 `error_code` | `200`: `call_session_id`; `CONNECTING`에서 `IN_PROGRESS` 또는 `FAILED`로 전이 | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `404 CALL_SESSION_NOT_FOUND`; `409 INVALID_CALL_STATUS` |
 | `API-CALLS-003` | `POST /call-sessions/{callSessionId}/end` | Spring Boot · 통화 당사자 본인 | 선택 `termination_type=USER_REQUESTED\|CONNECTION_LOST`; body 또는 값이 없으면 `USER_REQUESTED` | `202`: `call_session_id`; `USER_REQUESTED`는 `CONNECTING -> CANCELLED`, `IN_PROGRESS -> COMPLETED`; `CONNECTION_LOST`는 `CONNECTING -> FAILED`, `IN_PROGRESS -> INCOMPLETE`; 먼저 확정된 종결 상태를 보존하고 중복 요청도 동일 성공 응답; 마지막 전사·리포트는 접수 후 처리 | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `404 CALL_SESSION_NOT_FOUND` |
 
+- 통화 API의 JSON 필드는 `snake_case`를 사용하고 Path는 위 표의
+  `{callSessionId}` 형태를 유지한다. 클라이언트는 `groupId`, 서버가
+  관리하는 현재 세션 `status`, 내부 사용자·멤버십 ID를 추가로 보내지
+  않는다. 계약에 정의된 연결 결과 `result`와 종료 원인
+  `termination_type`은 그대로 전달한다.
+- 잘못된 JSON, 필수 필드 누락, enum 값 오류, SDP 또는 필드 검증 실패는
+  `400 INVALID_REQUEST`다. Access Token 누락·만료·서명 실패는
+  `401 UNAUTHORIZED`, 유효한 사용자지만 피보호자 역할 또는 해당 통화
+  당사자 권한이 없으면 `403 FORBIDDEN`이다.
+- 존재하지 않는 세션은 `API-CALLS-002`·`003`에서
+  `404 CALL_SESSION_NOT_FOUND`다. 활성 통화 중 새 세션 생성은
+  `API-CALLS-001`에서 `409 ACTIVE_CALL_EXISTS`, 연결 결과를 받을 수 없는
+  세션 상태는 `API-CALLS-002`에서 `409 INVALID_CALL_STATUS`다. OpenAI
+  Realtime 연결 생성 또는 SDP 교환 실패는 `API-CALLS-001`에서
+  `502 AI_CONNECTION_FAILED`다.
+- `API-CALLS-003`의 중복 종료는 오류가 아니다. 최초 종결 상태와
+  `endedAt`을 보존하고 후속 요청에도 같은 `202` 성공을 반환하며, 마지막
+  전사 정리와 리포트 생성은 한 번만 접수한다. 중복 종료에는 `409`를
+  사용하지 않는다.
+- 위 결정은 HTTP 상태와 오류 `code` 매핑을 고정한다. 별도로 문구가 확정되지
+  않은 통화 오류의 `message`는 클라이언트 분기 기준으로 사용하지 않으며,
+  정확한 문구는 미결정이다.
+
 ## 리포트·카네이션
 
 | API ID | Method · Path | 백엔드·권한 | 핵심 요청 | 성공 결과 | 명시 오류 |
@@ -224,7 +290,7 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 
 | API ID | Method · Path | 백엔드·권한 | 핵심 요청 | 성공 결과 | 명시 오류 |
 |---|---|---|---|---|---|
-| `API-NOTIFICATIONS-001` | `POST /device-tokens` | Spring Boot · 본인 | `token`, `deviceType` | `201`: `id`, `deviceType`, `active` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-NOTIFICATIONS-001` | `POST /device-tokens` | Spring Boot · 본인 | `token`, `deviceType` | 신규 `201`, 재등록·재활성화·소유권 이전 `200`: `id`, `deviceType`, `active=true` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED` |
 | `API-NOTIFICATIONS-002` | `GET /notifications/unread-count` | Spring Boot · 본인 | 없음 | `200`: `unreadCount` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-003` | `GET /notifications` | Spring Boot · 본인 | 선택 query `page`, `size` | `200`: `content[{id,type,title,body,groupId,actor,relatedJoinRequestId,relatedPostId,relatedEventId,relatedCallReportId,relatedDailyReportId,readAt,createdAt}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-004` | `PATCH /notifications/{notificationId}/read` | Spring Boot · 본인 | path `notificationId` | `200`: `id`, `readAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
@@ -237,9 +303,23 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
   계속 생성한다.
 - 푸시는 해당 유형이 활성이고 수신자에게 활성 기기 토큰이 있을 때만
   시도한다.
-- 토큰은 전역 Unique다. 동일 토큰 재등록 시 갱신 정책은 미결정이다.
-
-## 계약상 미결정
-
-- `API-FILES-001`의 `purpose` 값, MIME 허용 목록과 파일별 최대 크기
-- 동일 기기 토큰을 다시 등록할 때 기존 행을 갱신하는 세부 정책
+- `API-NOTIFICATIONS-001.token`은 공백이 아닌 최대 500자의 opaque
+  문자열이다. 서버는 정규식, 대소문자 변경 또는 형식 변환을 적용하지
+  않는다. MVP의 `deviceType` 허용값은 정확히 `ANDROID` 하나다.
+- 토큰 문자열은 시스템 전체에서 한 행만 가지며 활성 토큰은 동시에 한
+  사용자만 소유한다. Spring Boot는 Unique 제약과 행 잠금 또는 동등한
+  원자적 upsert로 등록한다.
+- 같은 사용자가 다시 등록하면 기존 `id`를 유지하면서 `active=true`로
+  복구하고 `deviceType`, `updatedAt`을 갱신한다. 다른 사용자가 같은 토큰을
+  등록하면 같은 행의 소유자를 새 인증 사용자에게 이전하고 동일하게
+  갱신한다. 두 경우 모두 `200`이며 이전 사용자에게 해당 토큰으로 푸시를
+  보내지 않는다.
+- 소유권 이전에서는 인증 사용자가 정확한 opaque token을 제출한 사실을
+  현재 기기의 token 보유 증명으로 본다. 이전 사용자의 추가 확인은 요구하지
+  않는다.
+- 처음 생성한 토큰은 `201`, 재등록·재활성화·소유권 이전은 `200`을
+  반환한다. 모두 `기기 토큰 등록 성공` 문구와
+  `data={id,deviceType,active=true}`를 사용한다.
+- `API-NOTIFICATIONS-008`은 행을 삭제하지 않고 `active=false`로 바꾼다.
+  본인 소유 토큰이 없거나 이미 비활성이면 `204 No Content`, 다른 사용자가
+  소유한 토큰이면 `403 FORBIDDEN`이다.
