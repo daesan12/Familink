@@ -47,7 +47,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-016 장기 개인화 대화 기억 | [AI 통화](./domains/AI_CALL.md) | 반영·미결정 유지 | MVP 제외, 확장 정책 미결정 |
 | 요구사항 | REQ-017 통화 건별 요약 리포트 | [리포트](./domains/REPORTS.md) | 반영·확정 |  |
 | 요구사항 | REQ-018 22시 일일 리포트 생성 | [리포트](./domains/REPORTS.md) | 반영·확정 | Spring Scheduler `Asia/Seoul` 22시, UTC 저장; `report_date=D`는 `[D-1 22:00, D 22:00)` 구간 |
-| 요구사항 | REQ-019 피보호자별 리포트 조회 | [리포트](./domains/REPORTS.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 | 좌측 넘김, 구성원 필터 없음 |
+| 요구사항 | REQ-019 피보호자별 리포트 조회 | [리포트](./domains/REPORTS.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 | 전체 최신 `latestReportDate`, 좌우 넘김, 피보호자 수만큼 위치 표시 전용 인디케이터, 구성원 필터 없음 |
 | 요구사항 | REQ-020 통화 녹음 원본 미저장 및 전체 전문 미제공 | [공통](./COMMON.md), [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영·확정 |  |
 | 요구사항 | REQ-021 가족 피드 게시글 관리 | [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 |  |
 | 요구사항 | REQ-022 게시글 미디어 구성 제한 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
@@ -228,7 +228,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-POSTS-005 게시글 수정 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | `thumbnailUrl` 선택, `media` 전체 교체 |
 | 활성 API | API-POSTS-007 게시글 삭제 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
 | 활성 API | API-REACTIONS-001 게시글 반응 변경 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| 활성 API | API-REPORTS-001 리포트 날짜 조회 | [API](./contracts/API.md), [리포트](./domains/REPORTS.md) | 반영 | 보호자 |
+| 활성 API | API-REPORTS-001 리포트 날짜 조회 | [API](./contracts/API.md), [리포트](./domains/REPORTS.md) | 반영 | 보호자; 요청 월 `reportDates[]`와 전체 최신 `latestReportDate` |
 | 활성 API | API-REPORTS-002 일일·건별 리포트 조회 | [API](./contracts/API.md), [리포트](./domains/REPORTS.md) | 반영 | 단일 `guardianMessageSummary` |
 | 활성 API | API-REPORTS-003 통화 건별 리포트 조회 | [API](./contracts/API.md), [리포트](./domains/REPORTS.md) | 반영 | 보호자 |
 | 활성 API | API-USERS-001 내 프로필 조회 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |

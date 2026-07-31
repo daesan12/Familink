@@ -7,13 +7,14 @@ import {
   useRef,
   useState,
 } from "react";
-import { Alert, Platform, StatusBar } from "react-native";
+import { Alert, StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AppShell, currentGroupStore } from "./src/app-shell";
 import type {
   AppRoute,
   AppScreenProps,
+  AppScreenRenderer,
   AppScreenRegistry,
   CurrentGroupStore,
   FamilyGroup,
@@ -59,6 +60,12 @@ import {
   type GroupJoinRequestSummary,
 } from "./src/features/group-info";
 import { NotificationsScreen } from "./src/features/notifications";
+import { createReportGateway, ReportScreen } from "./src/features/reports";
+import type {
+  CareReceiverReportTarget,
+  ReportGateway,
+} from "./src/features/reports";
+import { API_BASE_URL } from "./src/shared/api";
 
 type RootRoute =
   | "welcome"
@@ -94,6 +101,10 @@ interface AppProps {
     groupId: string;
     interests: readonly string[];
   }) => Promise<void> | void;
+  reportGateway?: ReportGateway;
+  reportTargetsByGroup?: Readonly<
+    Record<string, readonly CareReceiverReportTarget[]>
+  >;
   screens?: AppScreenRegistry;
 }
 
@@ -188,10 +199,46 @@ const DEFAULT_SCREENS: AppScreenRegistry = {
   feed: FeedScreen,
   groupInfo: ConnectedGroupInfoScreen,
   notifications: NotificationsScreen,
+  report: ReportScreen,
 };
 
-const DEFAULT_API_BASE_URL =
-  Platform.OS === "android" ? "http://10.0.2.2:8080" : "http://localhost:8080";
+const DEFAULT_API_BASE_URL = API_BASE_URL;
+
+function createReportScreenRenderer(
+  reportGateway: ReportGateway,
+  groupMemberGateway: GroupMemberGateway,
+  reportTargetsByGroup?: Readonly<
+    Record<string, readonly CareReceiverReportTarget[]>
+  >
+): AppScreenRenderer {
+  const loadCareReceiverTargets = async (
+    groupId: string
+  ): Promise<readonly CareReceiverReportTarget[]> => {
+    const members = await groupMemberGateway.loadMembers(groupId);
+    return members
+      .filter((member) => member.role === "careReceiver")
+      .map((member) => ({
+        displayName: member.alias ?? member.name,
+        memberId: member.memberId,
+      }));
+  };
+
+  return function ConfiguredReportScreen(screenProps) {
+    const configuredTargets =
+      reportTargetsByGroup?.[screenProps.currentGroup.id];
+
+    return (
+      <ReportScreen
+        {...screenProps}
+        careReceiverTargets={configuredTargets}
+        careReceiverTargetsLoader={
+          configuredTargets === undefined ? loadCareReceiverTargets : undefined
+        }
+        reportGateway={reportGateway}
+      />
+    );
+  };
+}
 
 export default function App({
   apiBaseUrl = DEFAULT_API_BASE_URL,
@@ -212,6 +259,8 @@ export default function App({
   onJoinGroup,
   onOpenActiveGroup,
   onSaveInterests,
+  reportGateway,
+  reportTargetsByGroup,
   screens,
 }: AppProps) {
   const shouldRestoreSession = initialRootRoute === "welcome";
@@ -236,6 +285,12 @@ export default function App({
         getAccessToken: () => authGateway.getAccessToken?.() ?? null,
       }),
     [apiBaseUrl, authGateway, calendarGateway]
+  );
+  const resolvedReportGateway = useMemo(
+    () =>
+      reportGateway ??
+      createReportGateway({ authSession, baseUrl: apiBaseUrl }),
+    [apiBaseUrl, authSession, reportGateway]
   );
   const [authenticationResolved, setAuthenticationResolved] = useState(
     !shouldRestoreSession
@@ -547,7 +602,23 @@ export default function App({
     }),
     [groupGateway, groupMemberGateway, groupMembershipGateway, handleRenameGroup]
   );
-  const resolvedScreens = screens ?? DEFAULT_SCREENS;
+  const resolvedScreens = useMemo<AppScreenRegistry>(
+    () =>
+      screens ?? {
+        ...DEFAULT_SCREENS,
+        report: createReportScreenRenderer(
+          resolvedReportGateway,
+          groupMemberGateway,
+          reportTargetsByGroup
+        ),
+      },
+    [
+      groupMemberGateway,
+      reportTargetsByGroup,
+      resolvedReportGateway,
+      screens,
+    ]
+  );
 
   if (!authenticationResolved) {
     return null;

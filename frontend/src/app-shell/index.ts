@@ -14,6 +14,7 @@ export {
 export type {
   AppRoute,
   AppScreenProps,
+  AppScreenRenderer,
   AppScreenRegistry,
   CurrentGroupStore,
   FamilyGroup,

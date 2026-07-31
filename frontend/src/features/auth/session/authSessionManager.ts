@@ -17,7 +17,7 @@ export interface LoginSessionInput extends AuthTokenPairResponse {
   user: AuthSessionUser;
 }
 
-export interface AuthSessionCoordinator {
+export interface AuthSessionCoordinator extends ApiAuthSession {
   clearLocalSession(): Promise<void>;
   restore(): Promise<AuthRestoreResult>;
   subscribeAuthInvalidated(listener: AuthInvalidatedListener): () => void;
