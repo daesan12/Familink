@@ -877,7 +877,8 @@ class CalendarEventApiTest extends IntegrationTest {
 	private Long persistAllDayEventIn(
 		FamilyGroup targetGroup, GroupMember creator, String title, LocalDate eventDate, LocalDate endDate) {
 		CalendarEvent event = calendarEventRepository.save(
-			new CalendarEvent(targetGroup, creator, title, null, eventDate, endDate, null, null));
+			new CalendarEvent(
+				targetGroup, creator, title, null, eventDate, endDate, null, null, Instant.now()));
 		entityManager.flush();
 		entityManager.clear();
 		return event.getId();
@@ -892,7 +893,8 @@ class CalendarEventApiTest extends IntegrationTest {
 			LocalDate.ofInstant(startAt, BUSINESS_ZONE),
 			LocalDate.ofInstant(endAt, BUSINESS_ZONE),
 			startAt,
-			endAt));
+			endAt,
+			Instant.now()));
 		entityManager.flush();
 		entityManager.clear();
 	}

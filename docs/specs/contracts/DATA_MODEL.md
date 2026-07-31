@@ -164,8 +164,12 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   `creator_member_id -> group_members.id`,
   `last_editor_member_id -> group_members.id`
 - 컬럼: `title VARCHAR(20)`, `event_date DATE`, `end_date DATE`, `created_at`,
-  `updated_at` NOT NULL; `description VARCHAR(50) NULL`,
+  `updated_at`, `reminder_schedule_updated_at TIMESTAMPTZ` NOT NULL;
+  `description VARCHAR(50) NULL`,
   `start_at TIMESTAMPTZ NULL`, `end_at TIMESTAMPTZ NULL`
+- `reminder_schedule_updated_at`은 일정 등록 시각 또는 날짜·시각 쌍을 마지막으로
+  바꾼 시각이다. 제목·설명·참여자만 바꿀 때는 갱신하지 않으며, 이미 지난
+  일정 시작 알림을 즉시 보내지 않을 때 사용한다.
 - 날짜 쌍: `event_date`는 시작 날짜, `end_date`는 종료 날짜이며 날짜 일정과
   시간 일정 모두 항상 채운다. 하루짜리 일정은 두 값이 같다. 특정 날짜와
   겹치는 일정은 `event_date <= :date AND end_date >= :date`로 조회한다.

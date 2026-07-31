@@ -27,6 +27,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'com.google.genai:google-genai:1.61.0'
+	implementation('com.google.firebase:firebase-admin:9.10.0') {
+		exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-xml'
+	}
 	implementation 'org.flywaydb:flyway-core'
 	implementation 'org.flywaydb:flyway-database-postgresql'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17'

@@ -201,6 +201,7 @@ class JoinRequestDecisionConcurrencyTest extends IntegrationTest {
 	private void clearOwnData() {
 		transactionTemplate.executeWithoutResult(status -> {
 			entityManager.createNativeQuery("SET LOCAL lock_timeout = '5s'").executeUpdate();
+			deleteByOwnGroup("DELETE FROM notifications");
 			deleteByOwnGroup("DELETE FROM group_join_requests");
 			deleteByOwnGroup("DELETE FROM group_members");
 			entityManager.createNativeQuery("DELETE FROM family_groups WHERE invite_code = :inviteCode")

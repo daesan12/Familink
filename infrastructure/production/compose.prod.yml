@@ -17,6 +17,8 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      PUSH_ENABLED: ${PUSH_ENABLED:-true}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-service-account.json
       S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
       AWS_REGION: ${AWS_REGION:-ap-northeast-2}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
@@ -45,6 +47,8 @@ services:
       DB_POOL_MIN_IDLE: ${DB_POOL_MIN_IDLE:-2}
       DB_POOL_CONNECTION_TIMEOUT_MS: ${DB_POOL_CONNECTION_TIMEOUT_MS:-30000}
       JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms512m -Xmx1280m -XX:MaxMetaspaceSize=256m -XX:+UseG1GC}
+    volumes:
+      - ${FIREBASE_CREDENTIALS_FILE:-/dev/null}:/run/secrets/firebase-service-account.json:ro
     expose:
       - "8080"
     mem_limit: 2g

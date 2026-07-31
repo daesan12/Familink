@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -19,6 +20,7 @@ import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.notification.event.DomainNotificationEvent;
 import com.ssafy.s15p11b104.domain.report.entity.DailyReport;
 import com.ssafy.s15p11b104.domain.report.repository.DailyReportRepository;
 
@@ -33,6 +35,7 @@ public class DailyReportGenerationService {
 	private final GroupMemberRepository groupMemberRepository;
 	private final DailyReportAnalyzer analyzer;
 	private final TransactionTemplate transactionTemplate;
+	private final ApplicationEventPublisher eventPublisher;
 
 	public DailyReportGenerationService(
 		CallReportCallRepository callReportRepository,
@@ -40,7 +43,8 @@ public class DailyReportGenerationService {
 		DailyReportRepository dailyReportRepository,
 		GroupMemberRepository groupMemberRepository,
 		DailyReportAnalyzer analyzer,
-		TransactionTemplate transactionTemplate
+		TransactionTemplate transactionTemplate,
+		ApplicationEventPublisher eventPublisher
 	) {
 		this.callReportRepository = callReportRepository;
 		this.callSessionRepository = callSessionRepository;
@@ -48,6 +52,7 @@ public class DailyReportGenerationService {
 		this.groupMemberRepository = groupMemberRepository;
 		this.analyzer = analyzer;
 		this.transactionTemplate = transactionTemplate;
+		this.eventPublisher = eventPublisher;
 	}
 
 	public void generate(LocalDate reportDate) {
@@ -114,15 +119,16 @@ public class DailyReportGenerationService {
 				return;
 			}
 
-			dailyReportRepository.save(new DailyReport(
+			DailyReport report = new DailyReport(
 				careReceiverMember.getGroup(),
 				careReceiverMember,
 				reportDate,
 				analysis.summary(),
 				analysis.emotionCategory(),
 				analysis.emotionSubcategory(),
-				analysis.guardianMessage()
-			));
+				analysis.guardianMessage());
+			dailyReportRepository.save(report);
+			eventPublisher.publishEvent(new DomainNotificationEvent.DailyReportCreated(report.getId()));
 		});
 	}
 }

@@ -3,6 +3,7 @@ package com.ssafy.s15p11b104.domain.call.report;
 import java.time.Clock;
 import java.util.List;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
@@ -14,6 +15,7 @@ import com.ssafy.s15p11b104.domain.call.report.CallReportInput.TranscriptLine;
 import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallTranscriptRepository;
+import com.ssafy.s15p11b104.domain.notification.event.DomainNotificationEvent;
 import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationDispatcher;
 import com.ssafy.s15p11b104.domain.report.service.DailyReportWindow;
 
@@ -27,6 +29,7 @@ public class CallReportGenerationService {
 	private final DailyReportGenerationDispatcher dailyReportGenerationDispatcher;
 	private final Clock applicationClock;
 	private final TransactionTemplate transactionTemplate;
+	private final ApplicationEventPublisher eventPublisher;
 
 	public CallReportGenerationService(
 		CallSessionRepository callSessionRepository,
@@ -35,7 +38,8 @@ public class CallReportGenerationService {
 		CallReportAnalyzer analyzer,
 		DailyReportGenerationDispatcher dailyReportGenerationDispatcher,
 		Clock applicationClock,
-		TransactionTemplate transactionTemplate
+		TransactionTemplate transactionTemplate,
+		ApplicationEventPublisher eventPublisher
 	) {
 		this.callSessionRepository = callSessionRepository;
 		this.callTranscriptRepository = callTranscriptRepository;
@@ -44,6 +48,7 @@ public class CallReportGenerationService {
 		this.dailyReportGenerationDispatcher = dailyReportGenerationDispatcher;
 		this.applicationClock = applicationClock;
 		this.transactionTemplate = transactionTemplate;
+		this.eventPublisher = eventPublisher;
 	}
 
 	public void generate(Long callSessionId) {
@@ -94,13 +99,14 @@ public class CallReportGenerationService {
 			|| callReportRepository.existsByCallSessionId(callSessionId)) {
 			return null;
 		}
-		callReportRepository.save(new CallReport(
+		CallReport report = new CallReport(
 			session,
 			analysis.summary(),
 			analysis.emotionCategory(),
 			analysis.emotionSubcategory(),
-			analysis.guardianMessage()
-		));
+			analysis.guardianMessage());
+		callReportRepository.save(report);
+		eventPublisher.publishEvent(new DomainNotificationEvent.CallReportCreated(report.getId()));
 		return session;
 	}
 

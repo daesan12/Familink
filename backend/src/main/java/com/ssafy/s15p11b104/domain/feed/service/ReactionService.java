@@ -3,6 +3,7 @@ package com.ssafy.s15p11b104.domain.feed.service;
 import java.util.EnumMap;
 import java.util.Map;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,7 @@ import com.ssafy.s15p11b104.domain.feed.repository.PostReactionRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.notification.event.DomainNotificationEvent;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
 import com.ssafy.s15p11b104.global.exception.ErrorCode;
 
@@ -24,14 +26,17 @@ public class ReactionService {
 	private final PostRepository postRepository;
 	private final PostReactionRepository postReactionRepository;
 	private final GroupMemberRepository groupMemberRepository;
+	private final ApplicationEventPublisher eventPublisher;
 
 	public ReactionService(
 		PostRepository postRepository,
 		PostReactionRepository postReactionRepository,
-		GroupMemberRepository groupMemberRepository) {
+		GroupMemberRepository groupMemberRepository,
+		ApplicationEventPublisher eventPublisher) {
 		this.postRepository = postRepository;
 		this.postReactionRepository = postReactionRepository;
 		this.groupMemberRepository = groupMemberRepository;
+		this.eventPublisher = eventPublisher;
 	}
 
 	@Transactional
@@ -48,7 +53,8 @@ public class ReactionService {
 		ReactionType selectedType = request.reactionType();
 		ReactionType responseType;
 		if (reaction == null) {
-			postReactionRepository.save(new PostReaction(post, member, selectedType));
+			reaction = postReactionRepository.save(new PostReaction(post, member, selectedType));
+			eventPublisher.publishEvent(new DomainNotificationEvent.ReactionCreated(reaction.getId()));
 			responseType = selectedType;
 		} else if (reaction.getReactionType() == selectedType) {
 			postReactionRepository.delete(reaction);
