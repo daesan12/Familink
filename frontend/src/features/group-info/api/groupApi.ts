@@ -79,7 +79,7 @@ export interface FamilyGroupGateway {
 
 export async function loadGroups(): Promise<FamilyGroupListSnapshot> {
   const response = await apiClient.get<ApiSuccess<unknown>>('/groups');
-  return parseEnvelope(response.data, response.status, parseGroupListSnapshot);
+  return parseApiEnvelope(response.data, response.status, parseGroupListSnapshot);
 }
 
 export async function createGroup(
@@ -89,7 +89,7 @@ export async function createGroup(
     myRole: toServerGroupRole(input.role),
     name: input.name,
   });
-  const result = parseEnvelope(
+  const result = parseApiEnvelope(
     response.data,
     response.status,
     parseCreatedGroupResponse,
@@ -112,7 +112,7 @@ export async function getGroupDetail(
   const response = await apiClient.get<ApiSuccess<unknown>>(
     `/groups/${encodeURIComponent(groupId)}`,
   );
-  return parseEnvelope(response.data, response.status, parseGroupDetail);
+  return parseApiEnvelope(response.data, response.status, parseGroupDetail);
 }
 
 export async function renameGroup(
@@ -123,14 +123,14 @@ export async function renameGroup(
     `/groups/${encodeURIComponent(groupId)}`,
     {name},
   );
-  return parseEnvelope(response.data, response.status, parseUpdatedGroup);
+  return parseApiEnvelope(response.data, response.status, parseUpdatedGroup);
 }
 
 export async function getInviteCode(groupId: string): Promise<GroupInviteCode> {
   const response = await apiClient.get<ApiSuccess<unknown>>(
     `/groups/${encodeURIComponent(groupId)}/invite-code`,
   );
-  return parseEnvelope(response.data, response.status, parseInviteCode);
+  return parseApiEnvelope(response.data, response.status, parseInviteCode);
 }
 
 export async function requestJoinByCode(
@@ -140,7 +140,7 @@ export async function requestJoinByCode(
     '/join-requests/by-code',
     {inviteCode},
   );
-  return parseEnvelope(
+  return parseApiEnvelope(
     response.data,
     response.status,
     parseGroupJoinRequestResult,
@@ -163,7 +163,7 @@ interface CreatedGroupResponse {
   managerMemberId: string;
 }
 
-function parseEnvelope<T>(
+export function parseApiEnvelope<T>(
   envelope: unknown,
   status: number,
   parseData: (value: unknown) => T | null,
