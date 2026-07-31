@@ -9,6 +9,9 @@ interface LeaveGroupScreenProps {
   // 가족 기록 개수. 계약 밖 목업값이다(H-8 요약 카드).
   recordCount: number;
   managerName: string;
+  // 조회자가 그룹관리자이면 먼저 위임해야 나갈 수 있어 나가기 버튼을 비활성화한다
+  // (spec 규칙 10: 관리자는 다른 구성원이 있는 그룹에서 나가려면 먼저 위임한다).
+  isViewerManager: boolean;
   onBack: () => void;
   // 그룹 나가기 확정 콜백(연동·B-3 전환은 후속).
   onLeaveGroup?: () => void;
@@ -22,10 +25,19 @@ export function LeaveGroupScreen({
   memberCount,
   recordCount,
   managerName,
+  isViewerManager,
   onBack,
   onLeaveGroup,
   onGoToChangeManager,
 }: LeaveGroupScreenProps) {
+  // 관리자는 먼저 위임해야 나갈 수 있어 나가기를 막는다(버튼 disabled와 이중 방어).
+  const handleLeave = () => {
+    if (isViewerManager) {
+      return;
+    }
+    onLeaveGroup?.();
+  };
+
   return (
     <View style={styles.screen}>
       <SubScreenHeader onBack={onBack} title="그룹 나가기" />
@@ -68,8 +80,13 @@ export function LeaveGroupScreen({
         <Pressable
           accessibilityLabel="그룹 나가기"
           accessibilityRole="button"
-          onPress={onLeaveGroup}
-          style={styles.submitButton}
+          accessibilityState={{disabled: isViewerManager}}
+          disabled={isViewerManager}
+          onPress={handleLeave}
+          style={[
+            styles.submitButton,
+            isViewerManager && styles.submitButtonDisabled,
+          ]}
         >
           <Text style={styles.submitButtonText}>그룹 나가기</Text>
         </Pressable>
@@ -139,6 +156,9 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
     justifyContent: 'center',
     minHeight: 56,
+  },
+  submitButtonDisabled: {
+    backgroundColor: COLORS.inactive,
   },
   submitButtonText: {
     color: COLORS.background,

@@ -17,12 +17,14 @@ afterEach(() => {
 function render(overrides: {
   onLeaveGroup?: () => void;
   onGoToChangeManager?: () => void;
+  isViewerManager?: boolean;
 }) {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
       <LeaveGroupScreen
         groupName="우리 가족"
+        isViewerManager={overrides.isViewerManager ?? false}
         managerName="이경호"
         memberCount={4}
         onBack={() => {}}
@@ -34,6 +36,11 @@ function render(overrides: {
   });
   mounted.push(renderer!);
   return renderer!;
+}
+
+function leaveDisabled(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findByProps({accessibilityLabel: '그룹 나가기'}).props
+    .accessibilityState.disabled;
 }
 
 function hasText(renderer: TestRenderer.ReactTestRenderer, value: string) {
@@ -70,10 +77,27 @@ test('관리자 변경 링크는 H-6 이동 콜백을 부른다', () => {
   expect(navigated).toEqual([1]);
 });
 
-test('그룹 나가기 버튼은 항상 활성이며 콜백을 부른다', () => {
+test('조회자가 관리자가 아니면 나가기 버튼이 활성이며 콜백을 부른다', () => {
   const left: number[] = [];
-  const renderer = render({onLeaveGroup: () => left.push(1)});
+  const renderer = render({
+    isViewerManager: false,
+    onLeaveGroup: () => left.push(1),
+  });
 
+  expect(leaveDisabled(renderer)).toBe(false);
   press(renderer, '그룹 나가기');
   expect(left).toEqual([1]);
+});
+
+test('조회자가 관리자이면 나가기 버튼이 비활성이라 콜백을 부르지 않는다', () => {
+  const left: number[] = [];
+  const renderer = render({
+    isViewerManager: true,
+    onLeaveGroup: () => left.push(1),
+  });
+
+  // 먼저 다른 구성원에게 위임해야 나갈 수 있어 버튼이 비활성이다.
+  expect(leaveDisabled(renderer)).toBe(true);
+  press(renderer, '그룹 나가기');
+  expect(left).toEqual([]);
 });

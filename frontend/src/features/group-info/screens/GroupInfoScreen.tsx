@@ -287,6 +287,7 @@ export function GroupInfoScreen({
     return (
       <LeaveGroupScreen
         groupName={currentGroup.name}
+        isViewerManager={canManageRoles}
         managerName={resolveManagerName(members)}
         memberCount={members.length}
         onBack={() => setSubScreen(null)}
