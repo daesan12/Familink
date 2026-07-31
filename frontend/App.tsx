@@ -61,6 +61,7 @@ import {
   type GroupJoinRequestSummary,
 } from "./src/features/group-info";
 import { NotificationsScreen } from "./src/features/notifications";
+import { ProfileTabScreen } from "./src/features/profile";
 
 type RootRoute =
   | "welcome"
@@ -213,6 +214,7 @@ const DEFAULT_SCREENS: AppScreenRegistry = {
   feed: FeedScreen,
   groupInfo: ConnectedGroupInfoScreen,
   notifications: NotificationsScreen,
+  profile: ProfileTabScreen,
 };
 
 const DEFAULT_API_BASE_URL =
@@ -665,6 +667,7 @@ export default function App({
             onCreateGroup={() => openGroupOnboarding("appShell")}
             onGroupChange={onGroupChange}
             onJoinGroup={() => openGroupOnboarding("appShell")}
+            onRequestLogout={handleLogout}
             screens={resolvedScreens}
           />
         )}
