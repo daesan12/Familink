@@ -1,7 +1,7 @@
 package com.ssafy.s15p11b104.domain.calendar.repository;
 
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -31,13 +31,23 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
 		@Param("startDate") LocalDate startDate,
 		@Param("endDate") LocalDate endDate);
 
+	@Query("""
+		select event
+		from CalendarEvent event
+		where (event.startAt is not null and event.startAt between :timedStartAt and :timedEndAt)
+			or event.eventDate between :firstEventDate and :lastEventDate
+		order by event.id
+		""")
+	List<CalendarEvent> findReminderCandidates(
+		@Param("timedStartAt") Instant timedStartAt,
+		@Param("timedEndAt") Instant timedEndAt,
+		@Param("firstEventDate") LocalDate firstEventDate,
+		@Param("lastEventDate") LocalDate lastEventDate);
+
 	/**
 	 * 전날 09:00 알림을 보낼 일정을 모든 그룹에서 찾는다.
 	 *
-	 * <p>{@code dueAt}보다 늦게 등록하거나 수정한 일정은 알림 시점이 이미 지난 뒤에 지금의 모습이
-	 * 되었으므로 제외한다. 그 판정에 {@code updatedAt}만 쓸 수 있는 것은 일정을 만들 때
-	 * {@code createdAt}과 {@code updatedAt}이 같고 수정할 때마다 {@code updatedAt}이 오르기
-	 * 때문이다.
+	 * <p>레거시 직접 저장 경로와 일정 알림 회귀 테스트가 사용하는 정밀 후보 조회다.
 	 */
 	@Query("""
 		select event
@@ -52,9 +62,6 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
 
 	/**
 	 * 지정한 구간 안에 시작하는 시간 일정을 모든 그룹에서 찾는다.
-	 *
-	 * <p>시작 1시간 전 알림 후보를 좁히는 용도다. 시작 시각이 없는 날짜 일정은 조건에서 자연히
-	 * 빠진다.
 	 */
 	@Query("""
 		select event

@@ -75,6 +75,9 @@ public class Notification extends CreatedAtEntity {
 	@Column(nullable = false, columnDefinition = "TEXT")
 	private String body;
 
+	@Column(name = "source_event_key", length = 160)
+	private String sourceEventKey;
+
 	@Column(name = "read_at")
 	private Instant readAt;
 
@@ -191,6 +194,10 @@ public class Notification extends CreatedAtEntity {
 
 	public String getBody() {
 		return body;
+	}
+
+	public String getSourceEventKey() {
+		return sourceEventKey;
 	}
 
 	public Instant getReadAt() {

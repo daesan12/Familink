@@ -317,7 +317,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 			managerUser.getId());
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
 
-		assertThat(notificationRepository.findAll()).isEmpty();
+		assertThat(eventReminders()).isEmpty();
 
 		Instant justAfterMovedDueAt = movedDate.minusDays(1)
 			.atTime(9, 0, 30)
@@ -325,7 +325,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 			.toInstant();
 		eventReminderService.remind(justAfterMovedDueAt);
 
-		assertThat(receiverIdsOf(notificationRepository.findAll()))
+		assertThat(receiverIdsOf(eventReminders()))
 			.containsExactlyInAnyOrder(managerUser.getId(), memberUser.getId());
 	}
 
@@ -348,7 +348,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 				"병원 방문", null, null, null, movedStartAt, movedStartAt.plusSeconds(3600), null),
 			managerUser.getId());
 
-		assertThat(receiverIdsOf(notificationRepository.findAll()))
+		assertThat(receiverIdsOf(eventReminders()))
 			.containsExactlyInAnyOrder(managerUser.getId(), memberUser.getId());
 	}
 
@@ -356,6 +356,12 @@ class EventReminderIntegrationTest extends IntegrationTest {
 
 	private boolean isDayBefore(Notification reminder) {
 		return reminder.getReminderSlot() == ReminderSlot.DAY_BEFORE;
+	}
+
+	private List<Notification> eventReminders() {
+		return notificationRepository.findAll().stream()
+			.filter(notification -> notification.getType() == NotificationType.EVENT_REMINDER)
+			.toList();
 	}
 
 	private List<Long> receiverIdsOf(List<Notification> reminders) {

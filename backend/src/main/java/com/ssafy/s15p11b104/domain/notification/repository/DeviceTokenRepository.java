@@ -1,6 +1,7 @@
 package com.ssafy.s15p11b104.domain.notification.repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,6 +21,8 @@ public interface DeviceTokenRepository extends JpaRepository<DeviceToken, Long> 
 	Optional<DeviceToken> findByTokenForUpdate(@Param("token") String token);
 
 	Optional<DeviceToken> findByToken(String token);
+
+	List<DeviceToken> findAllByUser_IdAndActiveTrue(Long userId);
 
 	@Modifying
 	@Query(
