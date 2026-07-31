@@ -8,6 +8,9 @@ const SELECTION_BACKGROUND = '#FFFFFF';
 const CALL_BACKGROUND = '#32313D';
 
 export function AiCallScreen({
+  accessToken,
+  currentGroup,
+  onCallResult,
   onFullscreenChange,
   onHeaderVisibilityChange,
 }: AppScreenProps) {
@@ -27,6 +30,16 @@ export function AiCallScreen({
     onFullscreenChange?.(fullscreen);
   };
 
+  const handleCallResult = (status: string) => {
+    if (
+      status === 'COMPLETED' ||
+      status === 'CANCELLED' ||
+      status === 'FAILED'
+    ) {
+      onCallResult?.(status);
+    }
+  };
+
   return (
     <View style={styles.root}>
       <StatusBar
@@ -36,6 +49,9 @@ export function AiCallScreen({
         barStyle={isFullscreen ? 'light-content' : 'dark-content'}
       />
       <AiCallView
+        accessToken={accessToken ?? null}
+        groupId={currentGroup.id}
+        onCallResult={event => handleCallResult(event.nativeEvent.status)}
         onFullscreenChange={event =>
           handleFullscreenChange(event.nativeEvent.isFullscreen)
         }

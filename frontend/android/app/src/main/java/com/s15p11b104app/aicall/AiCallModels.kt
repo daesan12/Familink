@@ -12,6 +12,17 @@ internal enum class AiCallPhase {
   Failed,
 }
 
+internal data class AiCallBridgeContext(
+    val accessToken: String?,
+    val groupId: String?,
+)
+
+internal enum class AiCallResult(val wireValue: String) {
+  Completed("COMPLETED"),
+  Cancelled("CANCELLED"),
+  Failed("FAILED"),
+}
+
 internal data class AiPersona(
     val id: Long,
     val displayName: String,

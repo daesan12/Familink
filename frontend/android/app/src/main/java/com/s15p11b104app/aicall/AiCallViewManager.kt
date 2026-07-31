@@ -21,10 +21,20 @@ internal class AiCallViewManager :
 
   override fun createViewInstance(context: ThemedReactContext): AiCallView = AiCallView(context)
 
+  override fun setAccessToken(view: AiCallView, value: String?) {
+    view.setAccessToken(value)
+  }
+
+  override fun setGroupId(view: AiCallView, value: String?) {
+    view.setGroupId(value)
+  }
+
   override fun getExportedCustomDirectEventTypeConstants(): Map<String, Any> =
       mapOf(
           AiCallFullscreenChangeEvent.EVENT_NAME to
-              mapOf("registrationName" to "onFullscreenChange")
+              mapOf("registrationName" to "onFullscreenChange"),
+          AiCallResultEvent.EVENT_NAME to
+              mapOf("registrationName" to "onCallResult")
       )
 
   companion object {

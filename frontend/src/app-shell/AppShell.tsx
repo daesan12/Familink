@@ -15,6 +15,7 @@ import type {
 } from './types';
 
 interface AppShellProps {
+  accessToken?: string | null;
   currentUserId?: number;
   currentUserName?: string;
   groupStore?: CurrentGroupStore;
@@ -24,11 +25,13 @@ interface AppShellProps {
   onCreateGroup?: () => void;
   onGroupChange?: (groupId: string) => void;
   onJoinGroup?: () => void;
+  onCallResult?: (status: 'COMPLETED' | 'CANCELLED' | 'FAILED') => void;
   onRequestLogout?: () => void;
   screens?: AppScreenRegistry;
 }
 
 export function AppShell({
+  accessToken,
   currentUserId,
   currentUserName,
   groupStore,
@@ -38,6 +41,7 @@ export function AppShell({
   onCreateGroup,
   onGroupChange,
   onJoinGroup,
+  onCallResult,
   onRequestLogout,
   screens = {},
 }: AppShellProps) {
@@ -309,6 +313,7 @@ export function AppShell({
       <View style={styles.content}>
         {Screen ? (
           <Screen
+            accessToken={accessToken}
             createCalendarEventRequestId={createCalendarEventRequestId}
             createPostRequestId={createPostRequestId}
             currentGroup={currentGroup}
@@ -316,6 +321,7 @@ export function AppShell({
             currentUserName={currentUserName}
             onCloseArchive={() => setActiveRoute('feed')}
             onCloseNotifications={() => setActiveRoute('feed')}
+            onCallResult={onCallResult}
             onFullscreenChange={setIsScreenFullscreen}
             onHeaderVisibilityChange={setIsScreenHeaderVisible}
             onNotificationRead={handleNotificationRead}

@@ -72,7 +72,11 @@ private val liveCaptions =
     )
 
 @Composable
-internal fun AiCallRoute(onFullscreenChange: (Boolean) -> Unit) {
+internal fun AiCallRoute(
+    bridgeContext: AiCallBridgeContext,
+    onCallResult: (String) -> Unit,
+    onFullscreenChange: (Boolean) -> Unit,
+) {
   var phase by rememberSaveable { mutableStateOf(AiCallPhase.Selecting) }
   var selectedPersonaId by rememberSaveable { mutableStateOf<Long?>(null) }
   var durationSeconds by rememberSaveable { mutableIntStateOf(0) }
@@ -120,12 +124,19 @@ internal fun AiCallRoute(onFullscreenChange: (Boolean) -> Unit) {
   }
 
   val finishCall = {
-    phase =
+    val result =
         if (phase == AiCallPhase.Connecting) {
+          AiCallResult.Cancelled
+        } else {
+          AiCallResult.Completed
+        }
+    phase =
+        if (result == AiCallResult.Cancelled) {
           AiCallPhase.Cancelled
         } else {
           AiCallPhase.Completed
         }
+    onCallResult(result.wireValue)
   }
 
   BackHandler(enabled = phase != AiCallPhase.Selecting) {
@@ -162,6 +173,7 @@ internal fun AiCallRoute(onFullscreenChange: (Boolean) -> Unit) {
           durationSeconds = 0
           captionIndex = 0
           phase = AiCallPhase.Failed
+          onCallResult(AiCallResult.Failed.wireValue)
         }
       },
       onToggleMute = { isMuted = !isMuted },
