@@ -5,14 +5,63 @@ import {MAX_POST_IMAGES, type FeedPost} from '../types';
 export const MAX_POST_BODY_LENGTH = 140;
 export {MAX_POST_IMAGES} from '../types';
 
-// TODO(S15P11B104-177): 서버 정책이 확정되면 길이와 용량 제한을 추가한다.
+// 제한값은 백엔드 환경변수와 동일하게 유지한다. 공식 스펙 반영은 pending 제안 승인 후 진행한다.
 export const MEDIA_LIMITS = {
-  maxVideoDurationSeconds: null,
-  maxVideoSizeBytes: null,
+  maxImageSizeBytes: 10 * 1024 * 1024,
+  maxVideoDurationSeconds: 60,
+  maxVideoSizeBytes: 100 * 1024 * 1024,
+  allowedImageTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  allowedVideoTypes: ['video/mp4'],
 } as const;
 
-export interface LocalMedia {
+export type PickedMediaValidationError = 'duration' | 'size' | 'type';
+
+export interface PickedMediaMetadata {
+  contentType?: string;
   durationSeconds?: number;
+  fileSizeBytes?: number;
+}
+
+export function validatePickedMedia(
+  kind: LocalMedia['kind'],
+  metadata: PickedMediaMetadata,
+): PickedMediaValidationError | null {
+  const contentType = metadata.contentType?.split(';', 1)[0].toLowerCase();
+  const allowedTypes: readonly string[] =
+    kind === 'image'
+      ? MEDIA_LIMITS.allowedImageTypes
+      : MEDIA_LIMITS.allowedVideoTypes;
+
+  if (contentType && !allowedTypes.includes(contentType)) {
+    return 'type';
+  }
+
+  const maxSizeBytes =
+    kind === 'image'
+      ? MEDIA_LIMITS.maxImageSizeBytes
+      : MEDIA_LIMITS.maxVideoSizeBytes;
+  if (
+    metadata.fileSizeBytes !== undefined &&
+    metadata.fileSizeBytes > maxSizeBytes
+  ) {
+    return 'size';
+  }
+
+  if (
+    kind === 'video' &&
+    metadata.durationSeconds !== undefined &&
+    metadata.durationSeconds > MEDIA_LIMITS.maxVideoDurationSeconds
+  ) {
+    return 'duration';
+  }
+
+  return null;
+}
+
+export interface LocalMedia {
+  contentType?: string;
+  durationSeconds?: number;
+  fileSizeBytes?: number;
   fileName?: string;
   id: string;
   kind: 'image' | 'video';

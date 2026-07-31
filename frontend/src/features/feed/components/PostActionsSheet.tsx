@@ -15,6 +15,9 @@ import {
 import {COLORS, RADII} from '../../../design/tokens';
 
 interface PostActionsSheetProps {
+  deleteLabel?: string;
+  dismissLabel?: string;
+  editLabel?: string;
   isOpen: boolean;
   onClose: () => void;
   onDelete: () => void;
@@ -22,6 +25,9 @@ interface PostActionsSheetProps {
 }
 
 export function PostActionsSheet({
+  deleteLabel = '삭제하기',
+  dismissLabel = '게시글 메뉴 닫기',
+  editLabel = '수정하기',
   isOpen,
   onClose,
   onDelete,
@@ -117,7 +123,7 @@ export function PostActionsSheet({
           style={[styles.dim, {opacity: backdropOpacity}]}
         />
         <Pressable
-          accessibilityLabel="게시글 메뉴 닫기"
+          accessibilityLabel={dismissLabel}
           accessibilityRole="button"
           onPress={onClose}
           style={styles.dismissArea}
@@ -129,14 +135,14 @@ export function PostActionsSheet({
           <View accessibilityElementsHidden style={styles.handle} />
           <SheetAction
             icon="pencil-outline"
-            label="수정하기"
+            label={editLabel}
             onPress={onEdit}
           />
           <View style={styles.divider} />
           <SheetAction
             danger
             icon="trash-can-outline"
-            label="삭제하기"
+            label={deleteLabel}
             onPress={onDelete}
           />
         </Animated.View>

@@ -54,8 +54,12 @@
   발화 완료 전사와 통화 상태를 처리한다.
 - Spring Boot는 마지막 수정 후 10분이 지난 게시글을 직접 조회해 Gemini로
   분석하고 `post_analyses`에 저장한다.
+- 게시글 분석의 Gemini 호출은 SSAFY GMS 프록시를 사용한다.
+  `GMS_API_KEY`는 프록시 인증 키로 서버에서만 보관하며
+  `x-goog-api-key` 헤더로 전달한다.
 - Spring Boot는 통화 세션·전사·건별 리포트·일일 리포트를 생성·갱신하고,
-  게시글 분석과 리포트 생성 시 Gemini를 직접 호출한다.
+  게시글 분석과 리포트 생성 시 별도 백엔드를 두지 않고 각 도메인의
+  Gemini Gateway를 호출한다.
 - PostgreSQL이 공용 데이터 저장소다. 상세 테이블·관계·쓰기 소유권은 [`contracts/DATA_MODEL.md`](./contracts/DATA_MODEL.md)를 기준으로 한다.
 
 ## 시간과 날짜
@@ -65,7 +69,10 @@
   `Asia/Seoul` 기준 현재 시각과 사용자 시간대를 적용해 단일 날짜로
   해석한다. 날짜가 모호하거나 해석되지 않으면 임의 조회하지 않는다.
 - 일일 리포트는 Spring Scheduler가 `Asia/Seoul` 기준 매일 22시에
-  생성한다. 22시 이후 종료 통화를 어느 날짜에 포함할지는 미결정이다.
+  생성한다. `report_date=D`의 집계 구간은 `[D-1 22:00, D 22:00)`이며
+  시작 시각은 포함하고 종료 시각은 제외한다. 정확히 `D 22:00:00`에
+  종료된 통화는 `D+1` 리포트에 포함한다. 종료 시각 조건은 UTC
+  `Instant`로 변환해 조회한다.
 - DB 저장·서버 로그·API timestamp는 UTC로 관리하고 PostgreSQL 시각
   컬럼은 `TIMESTAMPTZ`를 사용한다. 사용자 화면에서는 서비스 시간대로
   변환해 표시한다.

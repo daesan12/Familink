@@ -3,6 +3,7 @@ package com.ssafy.s15p11b104.domain.call.service;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,6 +17,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionCallback;
@@ -26,6 +28,8 @@ import com.ssafy.s15p11b104.domain.account.entity.UserGender;
 import com.ssafy.s15p11b104.domain.call.dto.CreateCallSessionRequest;
 import com.ssafy.s15p11b104.domain.call.dto.CallTerminationType;
 import com.ssafy.s15p11b104.domain.call.entity.CallSession;
+import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
+import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationDispatcher;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.call.repository.GroupMemberCallRepository;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
@@ -64,6 +68,9 @@ class CallSessionServiceTest {
 	private SidebandSessionManager sidebandSessionManager;
 
 	@Mock
+	private CallReportGenerationDispatcher callReportGenerationDispatcher;
+
+	@Mock
 	private TransactionTemplate transactionTemplate;
 
 	@Mock
@@ -91,6 +98,7 @@ class CallSessionServiceTest {
 			promptComposer,
 			realtimeGateway,
 			sidebandSessionManager,
+			callReportGenerationDispatcher,
 			transactionTemplate
 		);
 		when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
@@ -146,28 +154,45 @@ class CallSessionServiceTest {
 	@Test
 	void endsCallByUserRequest() {
 		stubOwnedSession();
+		when(callSession.getStatus()).thenReturn(CallStatus.IN_PROGRESS, CallStatus.COMPLETED);
 
 		callSessionService.end(CALL_SESSION_ID, CallTerminationType.USER_REQUESTED);
 
 		verify(callSession).endByUser(any(Instant.class));
 		verify(callSession, never()).markUnexpectedDisconnect(any(Instant.class));
-		verify(realtimeGateway).hangUp(OPEN_AI_CALL_ID);
+		InOrder closeOrder = inOrder(sidebandSessionManager, realtimeGateway, callReportGenerationDispatcher);
+		closeOrder.verify(sidebandSessionManager).prepareClose(CALL_SESSION_ID);
+		closeOrder.verify(realtimeGateway).hangUp(OPEN_AI_CALL_ID);
+		closeOrder.verify(sidebandSessionManager).finishClose(CALL_SESSION_ID);
+		closeOrder.verify(callReportGenerationDispatcher).dispatch(CALL_SESSION_ID);
 	}
 
 	@Test
 	void marksConnectionLostAsUnexpectedDisconnect() {
 		stubOwnedSession();
+		when(callSession.getStatus()).thenReturn(CallStatus.IN_PROGRESS, CallStatus.INCOMPLETE);
 
 		callSessionService.end(CALL_SESSION_ID, CallTerminationType.CONNECTION_LOST);
 
 		verify(callSession).markUnexpectedDisconnect(any(Instant.class));
 		verify(callSession, never()).endByUser(any(Instant.class));
 		verify(realtimeGateway).hangUp(OPEN_AI_CALL_ID);
+		verify(callReportGenerationDispatcher, never()).dispatch(any());
+	}
+
+	@Test
+	void doesNotDispatchReportForDuplicateCompletedEnd() {
+		stubOwnedSession();
+		when(callSession.getStatus()).thenReturn(CallStatus.COMPLETED, CallStatus.COMPLETED);
+
+		callSessionService.end(CALL_SESSION_ID, CallTerminationType.USER_REQUESTED);
+
+		verify(callReportGenerationDispatcher, never()).dispatch(any());
 	}
 
 	private void stubOwnedSession() {
 		when(callSessionRepository.findForUpdate(CALL_SESSION_ID, CARE_RECEIVER_MEMBER_ID))
 			.thenReturn(Optional.of(callSession));
-		when(sidebandSessionManager.close(CALL_SESSION_ID)).thenReturn(OPEN_AI_CALL_ID);
+		when(sidebandSessionManager.prepareClose(CALL_SESSION_ID)).thenReturn(OPEN_AI_CALL_ID);
 	}
 }

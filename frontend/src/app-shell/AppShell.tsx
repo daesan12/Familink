@@ -49,6 +49,11 @@ export function AppShell({
   const [createPostRequestId, setCreatePostRequestId] = useState(0);
   const [isScreenFullscreen, setIsScreenFullscreen] = useState(false);
   const [isScreenHeaderVisible, setIsScreenHeaderVisible] = useState(true);
+  const [openPostId, setOpenPostId] = useState<string | null>(null);
+  const [openPostRequestId, setOpenPostRequestId] = useState(0);
+  const [readNotificationIds, setReadNotificationIds] = useState<
+    readonly string[]
+  >([]);
   const [isRestoringGroup, setIsRestoringGroup] = useState(
     Boolean(groupStore && !initialGroupId),
   );
@@ -157,14 +162,41 @@ export function AppShell({
     }
   };
 
+  const handleNotificationRead = (notificationId: string) => {
+    setReadNotificationIds(current =>
+      current.includes(notificationId)
+        ? current
+        : [...current, notificationId],
+    );
+  };
+
+  const handleOpenPost = (postId: string, groupId?: string) => {
+    if (
+      groupId &&
+      groupId !== currentGroup.id &&
+      groups.some(group => group.id === groupId)
+    ) {
+      handleGroupSelect(groupId);
+    }
+    setOpenPostId(postId);
+    setOpenPostRequestId(requestId => requestId + 1);
+    setIsScreenHeaderVisible(true);
+    setActiveRoute('feed');
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      {!isScreenFullscreen && isScreenHeaderVisible ? <View style={styles.header}>
+      {!isScreenFullscreen &&
+      isScreenHeaderVisible &&
+      resolvedRoute !== 'notifications' &&
+      resolvedRoute !== 'archive' &&
+      resolvedRoute !== 'groupInfo' ? <View style={styles.header}>
         {resolvedRoute === 'feed' ? (
           <View style={styles.headerActions}>
             <Pressable
               accessibilityLabel="게시글 보관함"
               accessibilityRole="button"
+              onPress={() => setActiveRoute('archive')}
               style={styles.headerIconButton}
             >
               <MaterialDesignIcons
@@ -203,6 +235,7 @@ export function AppShell({
           <Pressable
             accessibilityLabel="알림"
             accessibilityRole="button"
+            onPress={() => setActiveRoute('notifications')}
             style={styles.headerSide}
           >
             <MaterialDesignIcons
@@ -221,8 +254,16 @@ export function AppShell({
           <Screen
             createPostRequestId={createPostRequestId}
             currentGroup={currentGroup}
+            onCloseArchive={() => setActiveRoute('feed')}
+            onCloseNotifications={() => setActiveRoute('feed')}
             onFullscreenChange={setIsScreenFullscreen}
             onHeaderVisibilityChange={setIsScreenHeaderVisible}
+            onNotificationRead={handleNotificationRead}
+            onOpenNotifications={() => setActiveRoute('notifications')}
+            onOpenPost={handleOpenPost}
+            openPostId={openPostId}
+            openPostRequestId={openPostRequestId}
+            readNotificationIds={readNotificationIds}
             role={currentGroup.role}
           />
         ) : (
@@ -239,9 +280,10 @@ export function AppShell({
 
       {!isScreenFullscreen ? (
         <BottomTabBar
-          activeRoute={resolvedRoute}
+          activeRoute={resolvedRoute === 'archive' ? 'feed' : resolvedRoute}
           onSelect={route => {
             setIsScreenHeaderVisible(true);
+            setOpenPostId(null);
             setActiveRoute(route);
           }}
           role={currentGroup.role}
@@ -259,6 +301,8 @@ function getPlaceholderTitle(route: AppRoute): string {
     groupInfo: '그룹정보',
     profile: '프로필',
     report: '리포트',
+    notifications: '알림',
+    archive: '보관함',
   };
 
   return titles[route];

@@ -40,12 +40,18 @@ public class CallReport extends CreatedAtEntity {
 	protected CallReport() {
 	}
 
-	public CallReport(CallSession callSession, String summary, EmotionCategory emotionCategory,
-		String emotionSubcategory) {
+	public CallReport(
+		CallSession callSession,
+		String summary,
+		EmotionCategory emotionCategory,
+		String emotionSubcategory,
+		String guardianMessage
+	) {
 		this.callSession = callSession;
 		this.summary = summary;
 		this.emotionCategory = emotionCategory;
 		this.emotionSubcategory = emotionSubcategory;
+		this.guardianMessage = guardianMessage;
 	}
 
 	public CallSession getCallSession() {

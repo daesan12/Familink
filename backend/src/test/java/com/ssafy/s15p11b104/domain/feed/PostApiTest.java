@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -39,6 +40,7 @@ import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.file.service.S3MediaValidator;
 import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
@@ -72,12 +74,17 @@ class PostApiTest extends IntegrationTest {
 	@Autowired
 	private PostAnalysisRepository postAnalysisRepository;
 
+	@MockBean
+	private S3MediaValidator s3MediaValidator;
+
 	private FamilyGroup group;
 	private GroupMember authorMember;
 	private GroupMember otherMember;
 
 	@BeforeEach
 	void setUp() {
+		org.mockito.Mockito.doNothing().when(s3MediaValidator)
+			.validate(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString());
 		postAnalysisRepository.deleteAll();
 		postMediaRepository.deleteAll();
 		postRepository.deleteAll();

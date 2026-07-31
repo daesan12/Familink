@@ -82,6 +82,32 @@ public class GroupMember extends BaseEntity {
 		this.manager = false;
 	}
 
+	/**
+	 * 활성 구성원의 그룹 역할을 바꾼다.
+	 *
+	 * <p>{@code role}과 {@code is_manager}는 독립된 축이므로 관리자 여부는 함께 바뀌지 않는다.
+	 * {@code CARE_RECEIVER}로 바꿀 때 한 사용자가 활성 피보호자로 여러 그룹에 속하지 않는지는
+	 * 호출 전에 확인한다.
+	 *
+	 * @param role 새 역할
+	 */
+	public void changeRole(GroupRole role) {
+		this.role = role;
+	}
+
+	/**
+	 * 관리자 여부를 설정한다.
+	 *
+	 * <p>{@code uq_group_active_manager}는 그룹마다 활성 관리자를 한 명으로 제한한다. 위임할
+	 * 때는 기존 관리자를 먼저 해제하고 flush한 뒤 새 관리자를 지정해야 한다. 한 트랜잭션에서
+	 * 두 변경을 함께 두면 flush 순서에 따라 관리자가 일시적으로 두 명이 되어 인덱스를 위반한다.
+	 *
+	 * @param manager 관리자로 지정하면 {@code true}
+	 */
+	public void assignManager(boolean manager) {
+		this.manager = manager;
+	}
+
 	public boolean isActive() {
 		return leftAt == null;
 	}

@@ -11,7 +11,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.ssafy.s15p11b104.domain.call.service.CallApiException;
 
-@RestControllerAdvice(assignableTypes = CallSessionController.class)
+@RestControllerAdvice(assignableTypes = {
+	CallSessionController.class,
+	AiCallDevReportController.class
+})
 public class CallApiExceptionHandler {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(CallApiExceptionHandler.class);

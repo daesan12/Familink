@@ -112,6 +112,7 @@ class S3MediaMimeTypeProviderTest {
 			REGION,
 			endpoint,
 			Duration.ofMinutes(10),
+			Duration.ofMinutes(30),
 			allowedHosts);
 		return new S3MediaMimeTypeProvider(s3Client, properties);
 	}

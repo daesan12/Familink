@@ -170,10 +170,16 @@ public class GroupService {
 	 * <p>행을 삭제하지 않고 {@code left_at}만 기록해 과거 연결 데이터를 보존한다. 관리자는
 	 * 관리자 없는 그룹이 생기지 않도록 이 API로 탈퇴할 수 없다. 다른 구성원이 있으면 먼저
 	 * 위임하고, 혼자 남은 관리자는 탈퇴 대신 그룹 삭제 절차를 사용한다.
+	 *
+	 * <p>자기 멤버십 행을 잠그고 읽어 관리자 여부를 판정한다. 잠그지 않으면 관리자 위임이
+	 * 이 사용자를 관리자로 승격시키는 트랜잭션과 겹칠 때 두 변경이 서로를 덮어써, 승격된
+	 * 관리자가 이미 떠난 상태로 남고 활성 관리자가 없는 그룹이 만들어진다.
 	 */
 	@Transactional
 	public void leave(Long groupId, Long authenticatedUserId) {
-		GroupMember membership = getActiveMember(groupId, authenticatedUserId);
+		GroupMember membership = groupMemberRepository
+			.findActiveForUpdateByGroupIdAndUserId(groupId, authenticatedUserId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
 		if (membership.isManager()) {
 			throw new BusinessException(ErrorCode.MANAGER_TRANSFER_REQUIRED);
 		}

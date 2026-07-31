@@ -58,7 +58,7 @@ cd C:\Users\SSAFY\S15P11B104\backend
 Copy-Item .env.example .env
 ```
 
-`backend/.env`의 `OPENAI_API_KEY`에 실제 키를 입력한다.
+`backend/.env`의 `OPENAI_API_KEY`와 `GMS_API_KEY`에 실제 키를 입력한다.
 
 ```dotenv
 POSTGRES_DB=s15p11b104
@@ -73,12 +73,16 @@ OPENAI_API_KEY=실제_API_키
 OPENAI_REALTIME_MODEL=gpt-realtime-2
 OPENAI_REALTIME_TRANSCRIPTION_MODEL=gpt-transcribe
 OPENAI_REALTIME_TRANSCRIPTION_LANGUAGE=ko
+
+GMS_API_KEY=실제_GMS_키
+GMS_API_BASE_URL=https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com
+GEMINI_CALL_REPORT_MODEL=gemini-3.5-flash
 ```
 
 주의 사항:
 
 - API 키를 Web UI, JavaScript, Git 커밋에 입력하지 않는다.
-- API 키는 Backend만 읽고 OpenAI 요청에 사용한다.
+- API 키는 Backend만 읽고 OpenAI·GMS 요청에 사용한다.
 - `.env`가 Git에서 제외되는지 다음 명령으로 확인할 수 있다.
 
 ```powershell
@@ -195,6 +199,26 @@ http://localhost:8080/ai-call/
 7. 마이크 끄기·켜기와 스피커 끄기·켜기를 확인한다.
 8. 종료 버튼을 누르고 통화 시간이 표시되는지 확인한다.
 9. DB의 최신 `call_sessions.status`가 `COMPLETED`인지 확인한다.
+10. `call_transcripts`에 사용자와 AI의 완료 발화가 순서대로 저장됐는지 확인한다.
+11. 비동기 처리를 잠시 기다린 뒤 같은 세션의 `call_reports`가 한 건 생성됐는지 확인한다.
+
+최신 정상 통화의 전사와 건별 리포트는 다음 쿼리로 확인할 수 있다.
+
+```sql
+select transcript.sequence, transcript.speaker, transcript.content
+from call_transcripts transcript
+where transcript.call_session_id = (
+	select id from call_sessions order by id desc limit 1
+)
+order by transcript.sequence;
+
+select report.summary, report.emotion_category, report.emotion_subcategory,
+	report.guardian_message
+from call_reports report
+where report.call_session_id = (
+	select id from call_sessions order by id desc limit 1
+);
+```
 
 각 페르소나별로 한 번씩 반복한다.
 
@@ -231,10 +255,9 @@ Realtime 이벤트 수신
 - 정상 연결 후 사용자 종료는 `COMPLETED`가 된다.
 - 비정상 Sideband 종료는 연결 상태에 따라 `FAILED` 또는 `INCOMPLETE`가 된다.
 - 종료 후 마이크 트랙, WebRTC 연결과 Sideband 연결이 정리된다.
+- 완료된 사용자·AI 발화는 `call_transcripts`에 대화 순서대로 저장된다.
+- 정상 종료된 통화는 저장된 전사로 최대 100자의 건별 리포트를 비동기로 생성한다.
 - 브라우저나 응답에 OpenAI API 키가 노출되지 않는다.
-
-1단계에서는 사용자·AI 전사를 `call_transcripts`에 저장하지 않는다. 화면에는
-AI 자막만 표시한다.
 
 ## 9. 종료
 

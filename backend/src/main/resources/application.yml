@@ -37,6 +37,10 @@ gemini:
     base-url: ${GMS_API_BASE_URL:https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com}
     text-model: ${GEMINI_TEXT_MODEL:gemini-2.5-flash-lite}
     multimodal-model: ${GEMINI_MULTIMODAL_MODEL:gemini-3.5-flash}
+  call-report:
+    model: ${GEMINI_CALL_REPORT_MODEL:gemini-3.5-flash}
+  daily-report:
+    model: ${GEMINI_DAILY_REPORT_MODEL:gemini-3.5-flash}
 
 app:
   auth:
@@ -46,3 +50,10 @@ app:
     enabled: true
     fixed-delay-ms: 60000
     initial-delay-ms: 60000
+  media:
+    image-max-size-bytes: ${MEDIA_IMAGE_MAX_SIZE_BYTES:10485760}
+    video-max-size-bytes: ${MEDIA_VIDEO_MAX_SIZE_BYTES:104857600}
+    video-max-duration-seconds: ${MEDIA_VIDEO_MAX_DURATION_SECONDS:60}
+    allowed-image-types: ${MEDIA_ALLOWED_IMAGE_TYPES:image/jpeg,image/png,image/webp}
+    allowed-video-types: ${MEDIA_ALLOWED_VIDEO_TYPES:video/mp4}
+    ffprobe-path: ${FFPROBE_PATH:ffprobe}

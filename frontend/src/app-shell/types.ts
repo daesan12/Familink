@@ -8,7 +8,9 @@ export type AppRoute =
   | 'report'
   | 'aiCall'
   | 'groupInfo'
-  | 'profile';
+  | 'profile'
+  | 'notifications'
+  | 'archive';
 
 export interface FamilyGroup {
   id: string;
@@ -19,8 +21,16 @@ export interface FamilyGroup {
 export interface AppScreenProps {
   createPostRequestId?: number;
   currentGroup: FamilyGroup;
+  onCloseArchive?: () => void;
+  onCloseNotifications?: () => void;
   onFullscreenChange?: (isFullscreen: boolean) => void;
   onHeaderVisibilityChange?: (isVisible: boolean) => void;
+  onNotificationRead?: (notificationId: string) => void;
+  onOpenNotifications?: () => void;
+  onOpenPost?: (postId: string, groupId?: string) => void;
+  openPostId?: string | null;
+  openPostRequestId?: number;
+  readNotificationIds?: readonly string[];
   role: GroupRole;
 }
 
