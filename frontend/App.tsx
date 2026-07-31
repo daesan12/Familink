@@ -25,6 +25,7 @@ import type {
   AuthGateway,
   LoginCredentials,
 } from "./src/features/auth/types";
+import { AiCallScreen } from "./src/features/ai-call";
 import { FeedScreen } from "./src/features/feed";
 
 type RootRoute =
@@ -70,6 +71,7 @@ const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
 ];
 
 const DEFAULT_SCREENS: AppScreenRegistry = {
+  aiCall: AiCallScreen,
   feed: FeedScreen,
 };
 
