@@ -441,10 +441,10 @@ export default function App({
     () =>
       calendarGateway ??
       createCalendarHttpGateway({
+        authSession,
         baseUrl: apiBaseUrl,
-        getAccessToken: () => authGateway.getAccessToken?.() ?? null,
       }),
-    [apiBaseUrl, authGateway, calendarGateway]
+    [apiBaseUrl, authSession, calendarGateway]
   );
   const resolvedReportGateway = useMemo(
     () =>
