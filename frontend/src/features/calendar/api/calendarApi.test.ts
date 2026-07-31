@@ -120,6 +120,54 @@ test("상세와 구성원 API 응답을 화면 모델로 변환한다", async ()
   ]);
 });
 
+test("종일 일정의 시작·종료 시각 필드 생략을 null로 변환한다", async () => {
+  const allDaySummary = {
+    endDate: "2026-08-02",
+    eventDate: "2026-07-31",
+    id: 12,
+    title: "여름 휴가",
+  };
+  const fetchImpl = jest
+    .fn()
+    .mockResolvedValueOnce(
+      jsonResponse({
+        data: { events: [allDaySummary] },
+        message: "일정 목록 조회 성공",
+        success: true,
+      })
+    )
+    .mockResolvedValueOnce(
+      jsonResponse({
+        data: {
+          ...allDaySummary,
+          creatorMemberId: 7,
+          groupId: 3,
+          participantMemberIds: [],
+        },
+        message: "일정 상세 조회 성공",
+        success: true,
+      })
+    );
+  const gateway = createCalendarHttpGateway({
+    baseUrl: "https://api.example.com",
+    fetchImpl,
+    getAccessToken: () => "token",
+  });
+
+  await expect(
+    gateway.listEvents({
+      endDate: "2026-08-08",
+      groupId: "3",
+      startDate: "2026-06-28",
+    })
+  ).resolves.toEqual([
+    expect.objectContaining({ endAt: null, id: "12", startAt: null }),
+  ]);
+  await expect(gateway.getEvent("12")).resolves.toEqual(
+    expect.objectContaining({ endAt: null, id: "12", startAt: null })
+  );
+});
+
 test("일정 삭제 API를 호출하고 204 응답을 성공으로 처리한다", async () => {
   const fetchImpl = jest.fn(async () => jsonResponse(null, 204));
   const gateway = createCalendarHttpGateway({

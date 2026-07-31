@@ -145,11 +145,11 @@ function readEnvelope(value: unknown): ApiEnvelope {
 function readEventSummary(value: unknown): CalendarEventSummary {
   const item = readObject(value, "일정");
   return {
-    endAt: readNullableString(item.endAt, "일정 종료 시각"),
+    endAt: readOptionalNullableString(item.endAt, "일정 종료 시각"),
     endDate: readString(item.endDate, "일정 종료 날짜"),
     eventDate: readString(item.eventDate, "일정 시작 날짜"),
     id: readId(item.id, "일정 ID"),
-    startAt: readNullableString(item.startAt, "일정 시작 시각"),
+    startAt: readOptionalNullableString(item.startAt, "일정 시작 시각"),
     title: readString(item.title, "일정 제목"),
   };
 }
@@ -203,13 +203,6 @@ function readString(value: unknown, label: string): string {
     throw new CalendarApiError(`${label} 형식이 올바르지 않아요.`);
   }
   return value;
-}
-
-function readNullableString(value: unknown, label: string): string | null {
-  if (value === null) {
-    return null;
-  }
-  return readString(value, label);
 }
 
 function readOptionalNullableString(
