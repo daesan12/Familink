@@ -26,6 +26,7 @@ import type {
   AuthGateway,
   LoginCredentials,
 } from "./src/features/auth/types";
+import { AiCallScreen } from "./src/features/ai-call";
 import { ArchiveScreen } from "./src/features/archive";
 import { FeedScreen } from "./src/features/feed";
 import { GroupInfoScreen } from "./src/features/group-info";
@@ -79,6 +80,7 @@ const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
 ];
 
 const DEFAULT_SCREENS: AppScreenRegistry = {
+  aiCall: AiCallScreen,
   archive: ArchiveScreen,
   feed: FeedScreen,
   groupInfo: GroupInfoScreen,

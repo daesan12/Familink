@@ -42,5 +42,13 @@
   },
   "engines": {
     "node": ">=22.11.0"
+  },
+  "codegenConfig": {
+    "name": "AiCallSpec",
+    "type": "components",
+    "jsSrcsDir": "src/features/ai-call/native",
+    "android": {
+      "javaPackageName": "com.s15p11b104app.aicall"
+    }
   }
 }
