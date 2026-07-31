@@ -5,6 +5,7 @@ import type {AppScreenProps} from '../../../app-shell';
 import {COLORS} from '../../../design/tokens';
 import {InterestSelectionScreen} from '../../auth';
 import {NotificationSettingsScreen} from '../../notifications';
+import type {ProfileGateway} from '../api/profileApi';
 import {MyPageFooter} from '../components/MyPageFooter';
 import {MyPageProfileCard} from '../components/MyPageProfileCard';
 import {
@@ -12,6 +13,7 @@ import {
   type MyPageMenuItem,
 } from '../components/MyPageSettingsSection';
 import {CARE_RECEIVER_PROFILE} from '../fixtures/profileFixtures';
+import {mergeUserProfile, toApiProfileUpdate} from '../profileModel';
 import type {CareReceiverProfile} from '../types';
 import {ProfileEditScreen} from './ProfileEditScreen';
 import {ProfileGuideScreen} from './ProfileGuideScreen';
@@ -19,6 +21,8 @@ import {ProfileGuideScreen} from './ProfileGuideScreen';
 export interface CareReceiverMyPageScreenProps extends AppScreenProps {
   // 초기 프로필 주입(테스트·연동용). 없으면 mock 프로필을 사용한다.
   initialProfile?: CareReceiverProfile;
+  onRequestWithdrawal?: () => Promise<void> | void;
+  profileGateway?: ProfileGateway;
 }
 
 // 하위 전체화면. 진입 시 하단 탭을 숨긴다.
@@ -29,6 +33,8 @@ export function CareReceiverMyPageScreen({
   initialProfile,
   onFullscreenChange,
   onRequestLogout,
+  onRequestWithdrawal,
+  profileGateway,
 }: CareReceiverMyPageScreenProps) {
   const [profile, setProfile] = useState(
     initialProfile ?? CARE_RECEIVER_PROFILE,
@@ -42,6 +48,49 @@ export function CareReceiverMyPageScreen({
     return () => onFullscreenChange?.(false);
   }, [subScreen, onFullscreenChange]);
 
+  useEffect(() => {
+    if (profileGateway === undefined) {
+      return;
+    }
+
+    let disposed = false;
+    profileGateway
+      .loadCurrentProfile()
+      .then(remote => {
+        if (!disposed) {
+          setProfile(current => mergeUserProfile(current, remote));
+        }
+      })
+      .catch(() => {
+        if (!disposed) {
+          Alert.alert(
+            '?꾨줈???뺣낫瑜?遺덈윭?ㅼ? 紐삵뻽?듬땲??',
+            '?ㅽ듃?뚰겕 ?곌껐???뺤씤?????ㅼ떆 ?쒕룄??二쇱꽭??',
+          );
+        }
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [profileGateway]);
+
+  const handleProfileSave = (nextProfile: CareReceiverProfile) => {
+    setProfile(nextProfile);
+    if (profileGateway === undefined) {
+      return;
+    }
+
+    profileGateway
+      .updateCurrentProfile(toApiProfileUpdate(nextProfile))
+      .catch(() => {
+        Alert.alert(
+          '?꾨줈???섏젙???ㅽ뙣?덉뒿?덈떎.',
+          '?낅젰 媛믪쓣 ?뺤씤??二쇱꽭??吏?뺤쓣 ?쒕룄??二쇱꽭??',
+        );
+      });
+  };
+
   const handleLogout = () => {
     if (onRequestLogout) {
       onRequestLogout();
@@ -54,7 +103,8 @@ export function CareReceiverMyPageScreen({
     return (
       <ProfileEditScreen
         onBack={() => setSubScreen(null)}
-        onSave={setProfile}
+        onSave={handleProfileSave}
+        onWithdraw={onRequestWithdrawal}
         profile={profile}
       />
     );
@@ -68,9 +118,7 @@ export function CareReceiverMyPageScreen({
         initialInterests={profile.interests}
         onBack={() => setSubScreen(null)}
         onComplete={() => setSubScreen(null)}
-        onSave={interests =>
-          setProfile(current => ({...current, interests}))
-        }
+        onSave={interests => setProfile(current => ({...current, interests}))}
         onSkip={() => setSubScreen(null)}
         savedContent={{
           buttonLabel: '확인',
@@ -117,6 +165,7 @@ export function CareReceiverMyPageScreen({
           age={profile.age}
           gender={profile.gender}
           name={profile.name}
+          profileImageUrl={profile.profileImageUrl}
           onEdit={() => setSubScreen('edit')}
         />
 

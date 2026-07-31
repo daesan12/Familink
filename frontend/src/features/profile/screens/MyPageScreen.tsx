@@ -1,6 +1,13 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {useEffect, useState} from 'react';
-import {Alert, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
@@ -20,7 +27,12 @@ import {
   MONTHLY_STAMP_MONTH,
   MONTHLY_STAMP_YEAR,
 } from '../fixtures/profileFixtures';
-import {parseDisplayDate} from '../profileModel';
+import {
+  mergeUserProfile,
+  parseDisplayDate,
+  toApiProfileUpdate,
+} from '../profileModel';
+import type {ProfileGateway} from '../api/profileApi';
 import type {GuardianProfile} from '../types';
 import {ProfileEditScreen} from './ProfileEditScreen';
 import {ProfileGuideScreen} from './ProfileGuideScreen';
@@ -28,19 +40,31 @@ import {ProfileGuideScreen} from './ProfileGuideScreen';
 export interface MyPageScreenProps extends AppScreenProps {
   // 초기 프로필 주입(테스트·연동용). 없으면 mock 프로필을 사용한다.
   initialProfile?: GuardianProfile;
+  onRequestWithdrawal?: () => Promise<void> | void;
+  profileGateway?: ProfileGateway;
 }
 
 // 하위 전체화면. 진입 시 하단 탭을 숨긴다.
 type SubScreen = 'edit' | 'guide' | 'notificationSettings' | null;
 
 // 주간 도장(월~일) 렌더 key. 배열 index 대신 안정적인 요일 식별자를 쓴다.
-const WEEK_DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+const WEEK_DAY_KEYS = [
+  'mon',
+  'tue',
+  'wed',
+  'thu',
+  'fri',
+  'sat',
+  'sun',
+] as const;
 
 // I-1 마이페이지(보호자). 프로필·효자 도장·설정 메뉴를 담고 하위 화면으로 이동한다.
 export function MyPageScreen({
   initialProfile,
   onFullscreenChange,
   onRequestLogout,
+  onRequestWithdrawal,
+  profileGateway,
 }: MyPageScreenProps) {
   const [profile, setProfile] = useState(initialProfile ?? GUARDIAN_PROFILE);
   const [subScreen, setSubScreen] = useState<SubScreen>(null);
@@ -59,6 +83,49 @@ export function MyPageScreen({
     return () => onFullscreenChange?.(false);
   }, [subScreen, onFullscreenChange]);
 
+  useEffect(() => {
+    if (profileGateway === undefined) {
+      return;
+    }
+
+    let disposed = false;
+    profileGateway
+      .loadCurrentProfile()
+      .then(remote => {
+        if (!disposed) {
+          setProfile(current => mergeUserProfile(current, remote));
+        }
+      })
+      .catch(() => {
+        if (!disposed) {
+          Alert.alert(
+            '?꾨줈???뺣낫瑜?遺덈윭?ㅼ? 紐삵뻽?듬땲??',
+            '?ㅽ듃?뚰겕 ?곌껐???뺤씤?????ㅼ떆 ?쒕룄??二쇱꽭??',
+          );
+        }
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [profileGateway]);
+
+  const handleProfileSave = (nextProfile: GuardianProfile) => {
+    setProfile(nextProfile);
+    if (profileGateway === undefined) {
+      return;
+    }
+
+    profileGateway
+      .updateCurrentProfile(toApiProfileUpdate(nextProfile))
+      .catch(() => {
+        Alert.alert(
+          '?꾨줈???섏젙???ㅽ뙣?덉뒿?덈떎.',
+          '?낅젰 媛믪쓣 ?뺤씤??二쇱꽭??吏?뺤쓣 ?쒕룄??二쇱꽭??',
+        );
+      });
+  };
+
   const handleLogout = () => {
     if (onRequestLogout) {
       onRequestLogout();
@@ -71,7 +138,8 @@ export function MyPageScreen({
     return (
       <ProfileEditScreen
         onBack={() => setSubScreen(null)}
-        onSave={setProfile}
+        onSave={handleProfileSave}
+        onWithdraw={onRequestWithdrawal}
         profile={profile}
       />
     );
@@ -109,13 +177,16 @@ export function MyPageScreen({
           gender={profile.gender}
           hasCrown={profile.hasCrown}
           name={profile.name}
+          profileImageUrl={profile.profileImageUrl}
           onEdit={() => setSubScreen('edit')}
           rank={profile.weeklyRank}
         />
 
         <View style={styles.stampCard}>
           <View style={styles.stampHeader}>
-            <Text style={styles.stampTitle}>{GUARDIAN_WEEKLY_STAMPS.title}</Text>
+            <Text style={styles.stampTitle}>
+              {GUARDIAN_WEEKLY_STAMPS.title}
+            </Text>
             <Pressable
               accessibilityLabel="월간 효자 도장 보기"
               accessibilityRole="button"

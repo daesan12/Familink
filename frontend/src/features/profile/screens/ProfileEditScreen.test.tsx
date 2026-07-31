@@ -1,7 +1,8 @@
 import React from 'react';
-import {Text} from 'react-native';
+import {Alert, Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
+import {ApiError} from '../../../shared/api';
 import {GUARDIAN_PROFILE} from '../fixtures/profileFixtures';
 import type {GuardianProfile} from '../types';
 import {ProfileEditScreen} from './ProfileEditScreen';
@@ -36,13 +37,18 @@ afterEach(() => {
   });
 });
 
-function render(onSave: (profile: GuardianProfile) => void, onBack = jest.fn()) {
+function render(
+  onSave: (profile: GuardianProfile) => void,
+  onBack = jest.fn(),
+  onWithdraw?: () => Promise<void> | void,
+) {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
       <ProfileEditScreen
         onBack={onBack}
         onSave={onSave}
+        onWithdraw={onWithdraw}
         profile={GUARDIAN_PROFILE}
       />,
     );
@@ -50,6 +56,47 @@ function render(onSave: (profile: GuardianProfile) => void, onBack = jest.fn()) 
   mountedRenderers.push(renderer!);
   return renderer!;
 }
+
+test('shows the manager transfer guidance when withdrawal is rejected', async () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const error = new ApiError({
+    code: 'MANAGER_TRANSFER_REQUIRED',
+    kind: 'server',
+    message: 'manager transfer required',
+    status: 409,
+  });
+  const renderer = render(jest.fn(), jest.fn(), () => Promise.reject(error));
+
+  try {
+    const withdrawButton = renderer.root
+      .findAll(
+        node =>
+          typeof node.props?.onPress === 'function' &&
+          String(node.props?.accessibilityLabel).includes('탈퇴'),
+      )
+      .pop();
+    expect(withdrawButton).toBeDefined();
+    TestRenderer.act(() => {
+      withdrawButton?.props.onPress();
+    });
+    const buttons = alertSpy.mock.calls[0]?.[2] as
+      | readonly {style?: string; onPress?: () => void}[]
+      | undefined;
+    const confirmButton = buttons?.find(button => button.style === 'destructive');
+    await TestRenderer.act(async () => {
+      confirmButton?.onPress?.();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(alertSpy).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.stringContaining('그룹 관리자'),
+    );
+  } finally {
+    alertSpy.mockRestore();
+  }
+});
 
 test('성별 드롭다운에서 여자를 선택하면 반영된다', () => {
   const onSave = jest.fn();

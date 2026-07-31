@@ -3,6 +3,7 @@ import {Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import {MyPageScreen} from './MyPageScreen';
+import type {ProfileGateway} from '../api/profileApi';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
 // 알림 공개 진입점을 통해 NotificationsScreen이 함께 로드되므로 lucide 아이콘을 mock 처리한다.
@@ -89,4 +90,37 @@ test('로그아웃을 누르면 onRequestLogout을 호출한다', () => {
     renderer.root.findByProps({accessibilityLabel: '로그아웃'}).props.onPress();
   });
   expect(onRequestLogout).toHaveBeenCalledTimes(1);
+});
+
+test('renders the profile returned by the API gateway', async () => {
+  const profileGateway: ProfileGateway = {
+    loadCurrentProfile: jest.fn().mockResolvedValue({
+      birthDate: '1995-03-17',
+      gender: 'male',
+      loginId: 'api-user',
+      name: 'API User',
+      profileImageUrl: null,
+    }),
+    updateCurrentProfile: jest.fn(),
+    withdrawCurrentUser: jest.fn(),
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <MyPageScreen {...baseProps} profileGateway={profileGateway} />,
+    );
+  });
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(profileGateway.loadCurrentProfile).toHaveBeenCalledTimes(1);
+  expect(
+    renderer!.root
+      .findAllByType(Text)
+      .some(node => String(node.props.children).includes('API User')),
+  ).toBe(true);
 });

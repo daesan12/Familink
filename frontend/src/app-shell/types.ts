@@ -22,6 +22,7 @@ export interface FamilyGroup {
 
 export interface AppAuthSession {
   getAccessToken(): string | null;
+  getRefreshToken(): string | null;
   refreshAccessToken(): Promise<string>;
 }
 
