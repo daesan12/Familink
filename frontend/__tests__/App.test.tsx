@@ -913,6 +913,57 @@ test("앱 셸을 명시하면 개발 그룹과 하단 탭을 표시한다", asyn
   mountedRenderers.push(renderer!);
 });
 
+test("캘린더 헤더는 일정 추가 버튼과 그룹 전환만 표시한다", async () => {
+  const alertSpy = jest.spyOn(Alert, "alert");
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        initialRootRoute="appShell"
+        initialShellRoute="calendar"
+        screens={{ calendar: () => null }}
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  const addButton = renderer!.root.findByProps({
+    accessibilityLabel: "일정 추가",
+  });
+  expect(
+    renderer!.root.findByProps({
+      accessibilityHint: "다른 가족 그룹으로 전환합니다",
+    })
+  ).toBeTruthy();
+  const header = renderer!.root.findByProps({ testID: "app-shell-header" });
+  const headerActionOrder = header
+    .findAll(
+      (node) =>
+        node.props.accessibilityLabel === "일정 추가" ||
+        node.props.accessibilityHint === "다른 가족 그룹으로 전환합니다"
+    )
+    .map((node) =>
+      node.props.accessibilityHint === "다른 가족 그룹으로 전환합니다"
+        ? "group"
+        : "add"
+    );
+  expect([...new Set(headerActionOrder)]).toEqual(["group", "add"]);
+  expect(
+    renderer!.root.findAllByProps({ accessibilityLabel: "오늘 일정 보기" })
+  ).toHaveLength(0);
+
+  await TestRenderer.act(() => {
+    addButton.props.onPress();
+  });
+
+  expect(alertSpy).toHaveBeenCalledWith(
+    "일정 추가",
+    "후속 작업에서 연결될 화면입니다."
+  );
+  alertSpy.mockRestore();
+});
+
 test("그룹 선택 바텀시트에서 빈 피드 그룹으로 전환한다", async () => {
   jest.useFakeTimers();
   let renderer: TestRenderer.ReactTestRenderer;
