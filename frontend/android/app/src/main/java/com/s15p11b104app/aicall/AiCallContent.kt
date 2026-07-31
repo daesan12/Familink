@@ -1,7 +1,11 @@
 package com.s15p11b104app.aicall
 
+import android.Manifest
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,8 +39,12 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -61,18 +69,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
-
-private val liveCaptions =
-    listOf(
-        "안녕하세요, 어르신. 오늘은 어떤 하루를 보내셨어요?",
-        "천천히 말씀해 주세요. 제가 곁에서 듣고 있어요.",
-        "그랬군요. 그 이야기 조금 더 들려주실래요?",
-    )
 
 @Composable
 internal fun AiCallRoute(
+    apiBaseUrl: String?,
     bridgeContext: AiCallBridgeContext,
     onCallResult: (String) -> Unit,
     onFullscreenChange: (Boolean) -> Unit,
@@ -82,19 +88,61 @@ internal fun AiCallRoute(
   var durationSeconds by rememberSaveable { mutableIntStateOf(0) }
   var isMuted by rememberSaveable { mutableStateOf(false) }
   var isSpeakerOn by rememberSaveable { mutableStateOf(true) }
-  var captionIndex by rememberSaveable { mutableIntStateOf(0) }
+  var captionDraft by rememberSaveable { mutableStateOf("") }
+  var currentCaption by rememberSaveable { mutableStateOf<String?>(null) }
+  var captionHistory by remember { mutableStateOf(emptyList<String>()) }
+  var pendingPersonaId by rememberSaveable { mutableStateOf<Long?>(null) }
+  var permissionResult by remember { mutableStateOf<Boolean?>(null) }
+  var connectionLostSignal by remember { mutableIntStateOf(0) }
+  var isEnding by rememberSaveable { mutableStateOf(false) }
+  var callJob by remember { mutableStateOf<Job?>(null) }
+
+  val coroutineScope = rememberCoroutineScope()
+  val context = LocalContext.current
+  val sessionClient = remember(apiBaseUrl) { apiBaseUrl?.let(::HttpAiCallSessionClient) }
+  val callRuntime =
+      remember(sessionClient) {
+        sessionClient?.let { client ->
+          AiCallRuntime(
+              context = context,
+              sessionClient = client,
+              onCaptionUpdate = { update ->
+                if (update.completed) {
+                  val completedCaption =
+                      (update.text.ifBlank { captionDraft }).trim()
+                  if (completedCaption.isNotBlank()) {
+                    captionHistory = (captionHistory + completedCaption).takeLast(3)
+                    currentCaption = completedCaption
+                  }
+                  captionDraft = ""
+                } else {
+                  captionDraft += update.text
+                  currentCaption = captionDraft
+                }
+              },
+              onConnectionLost = { connectionLostSignal += 1 },
+          )
+       }
+      }
+
+  val latestAccessToken = rememberUpdatedState(bridgeContext.accessToken)
+  val latestCallJob = rememberUpdatedState(callJob)
+  DisposableEffect(callRuntime) {
+    onDispose {
+      latestCallJob.value?.cancel()
+      callRuntime?.dispose(latestAccessToken.value)
+    }
+  }
+
+  val permissionLauncher =
+      rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        permissionResult = granted
+      }
 
   val selectedPersona = aiPersonas.firstOrNull { it.id == selectedPersonaId }
 
   LaunchedEffect(phase) {
     onFullscreenChange(phase != AiCallPhase.Selecting)
-  }
-
-  LaunchedEffect(phase) {
-    if (phase == AiCallPhase.Connecting) {
-      delay(1_500)
-      phase = AiCallPhase.InProgress
-    }
   }
 
   LaunchedEffect(phase) {
@@ -106,37 +154,119 @@ internal fun AiCallRoute(
     }
   }
 
-  LaunchedEffect(phase) {
-    if (phase == AiCallPhase.InProgress) {
-      while (isActive) {
-        delay(4_200)
-        captionIndex = (captionIndex + 1) % liveCaptions.size
-      }
+  LaunchedEffect(connectionLostSignal, phase) {
+    if (connectionLostSignal == 0 || phase != AiCallPhase.InProgress || isEnding) {
+      return@LaunchedEffect
+    }
+    isEnding = true
+    phase = AiCallPhase.Failed
+    runCatching {
+      callRuntime?.end(
+          accessToken = bridgeContext.accessToken,
+          terminationType = AiCallTerminationType.ConnectionLost,
+      )
+    }
+    onCallResult(AiCallResult.Failed.wireValue)
+    isEnding = false
+  }
+
+  val startCallWithPermission = { personaId: Long ->
+    val runtime = callRuntime
+    if (runtime == null) {
+      phase = AiCallPhase.Failed
+      onCallResult(AiCallResult.Failed.wireValue)
+    } else {
+      callJob?.cancel()
+      isEnding = false
+      durationSeconds = 0
+      captionDraft = ""
+      currentCaption = null
+      captionHistory = emptyList()
+      phase = AiCallPhase.Connecting
+      callJob =
+          coroutineScope.launch {
+            try {
+              runtime.start(bridgeContext = bridgeContext, personaId = personaId)
+              phase = AiCallPhase.InProgress
+            } catch (exception: CancellationException) {
+              throw exception
+            } catch (exception: Throwable) {
+              phase = AiCallPhase.Failed
+              onCallResult(AiCallResult.Failed.wireValue)
+            }
+          }
+    }
+  }
+
+  LaunchedEffect(permissionResult, pendingPersonaId) {
+    val requestedPersonaId = pendingPersonaId ?: return@LaunchedEffect
+    val granted = permissionResult ?: return@LaunchedEffect
+    pendingPersonaId = null
+    permissionResult = null
+    if (granted) {
+      startCallWithPermission(requestedPersonaId)
+    } else {
+      phase = AiCallPhase.Failed
+      onCallResult(AiCallResult.Failed.wireValue)
+    }
+  }
+
+  val startCall = { personaId: Long ->
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+        PackageManager.PERMISSION_GRANTED) {
+      startCallWithPermission(personaId)
+    } else {
+      pendingPersonaId = personaId
+      permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
   }
 
   val returnToSelection = {
+    callJob?.cancel()
+    callRuntime?.close()
+    isEnding = false
     phase = AiCallPhase.Selecting
     durationSeconds = 0
-    captionIndex = 0
+    captionDraft = ""
+    currentCaption = null
+    captionHistory = emptyList()
     isMuted = false
     isSpeakerOn = true
   }
 
   val finishCall = {
-    val result =
-        if (phase == AiCallPhase.Connecting) {
-          AiCallResult.Cancelled
-        } else {
-          AiCallResult.Completed
+    if (!isEnding && (phase == AiCallPhase.Connecting || phase == AiCallPhase.InProgress)) {
+      isEnding = true
+      if (phase == AiCallPhase.Connecting) {
+        callJob?.cancel()
+      }
+      val result =
+          if (phase == AiCallPhase.Connecting) {
+            AiCallResult.Cancelled
+          } else {
+            AiCallResult.Completed
+          }
+      phase =
+          if (result == AiCallResult.Cancelled) {
+            AiCallPhase.Cancelled
+          } else {
+            AiCallPhase.Completed
+          }
+      coroutineScope.launch {
+        try {
+          callRuntime?.end(
+              accessToken = bridgeContext.accessToken,
+              terminationType = AiCallTerminationType.UserRequested,
+          )
+          onCallResult(result.wireValue)
+        } catch (exception: Throwable) {
+          phase = AiCallPhase.Failed
+          onCallResult(AiCallResult.Failed.wireValue)
+        } finally {
+          isEnding = false
         }
-    phase =
-        if (result == AiCallResult.Cancelled) {
-          AiCallPhase.Cancelled
-        } else {
-          AiCallPhase.Completed
-        }
-    onCallResult(result.wireValue)
+      }
+    }
   }
 
   BackHandler(enabled = phase != AiCallPhase.Selecting) {
@@ -157,33 +287,35 @@ internal fun AiCallRoute(
               durationSeconds = durationSeconds,
               isMuted = isMuted,
               isSpeakerOn = isSpeakerOn,
-              captionIndex = captionIndex,
+              currentCaption = currentCaption,
+              captionHistory = captionHistory,
           ),
       selectedPersonaId = selectedPersonaId,
       onPersonaSelected = { selectedPersonaId = it },
       onStartCall = {
         if (selectedPersona != null) {
-          durationSeconds = 0
-          captionIndex = 0
-          phase = AiCallPhase.Connecting
+          startCall(selectedPersona.id)
         }
       },
       onPreviewFailure = {
         if (selectedPersona != null) {
           durationSeconds = 0
-          captionIndex = 0
           phase = AiCallPhase.Failed
           onCallResult(AiCallResult.Failed.wireValue)
         }
       },
-      onToggleMute = { isMuted = !isMuted },
-      onToggleSpeaker = { isSpeakerOn = !isSpeakerOn },
+      onToggleMute = {
+        isMuted = !isMuted
+        callRuntime?.setMicrophoneEnabled(!isMuted)
+      },
+      onToggleSpeaker = {
+        isSpeakerOn = !isSpeakerOn
+        callRuntime?.setSpeakerEnabled(isSpeakerOn)
+      },
       onEndCall = finishCall,
       onConfirm = returnToSelection,
       onRetry = {
-        durationSeconds = 0
-        captionIndex = 0
-        phase = AiCallPhase.Connecting
+        selectedPersona?.let { startCall(it.id) }
       },
   )
 }
@@ -485,13 +617,8 @@ private fun ActiveCallScreen(
 ) {
   val persona = state.persona ?: return
   val isConnecting = state.phase == AiCallPhase.Connecting
-  val currentCaption = liveCaptions[state.captionIndex % liveCaptions.size]
-  val previousCaption =
-      if (state.captionIndex == 0) {
-        null
-      } else {
-        liveCaptions[(state.captionIndex - 1 + liveCaptions.size) % liveCaptions.size]
-      }
+  val currentCaption = state.currentCaption ?: "자막을 기다리는 중입니다."
+  val previousCaption = state.captionHistory.dropLast(1).lastOrNull()
 
   Column(
       modifier =

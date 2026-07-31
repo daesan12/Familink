@@ -48,7 +48,7 @@ describe('AiCallScreen', () => {
       });
     });
     expect(onCallResult).toHaveBeenCalledWith('COMPLETED');
-    expect(onFullscreenChange).toHaveBeenLastCalledWith(true);
+    expect(onFullscreenChange).toHaveBeenLastCalledWith(false);
 
     act(() => {
       renderer!.unmount();

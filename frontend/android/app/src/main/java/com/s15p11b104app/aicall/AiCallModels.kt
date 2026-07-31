@@ -83,7 +83,8 @@ internal data class AiCallUiState(
     val durationSeconds: Int = 0,
     val isMuted: Boolean = false,
     val isSpeakerOn: Boolean = true,
-    val captionIndex: Int = 0,
+    val currentCaption: String? = null,
+    val captionHistory: List<String> = emptyList(),
 )
 
 internal fun formatCallDuration(durationSeconds: Int): String {

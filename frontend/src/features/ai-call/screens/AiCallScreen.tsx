@@ -8,6 +8,8 @@ const SELECTION_BACKGROUND = '#FFFFFF';
 const CALL_BACKGROUND = '#32313D';
 
 export function AiCallScreen({
+  apiBaseUrl,
+  authSession,
   accessToken,
   currentGroup,
   onCallResult,
@@ -15,6 +17,50 @@ export function AiCallScreen({
   onHeaderVisibilityChange,
 }: AppScreenProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [resolvedAccessToken, setResolvedAccessToken] = useState(
+    () =>
+      authSession === undefined
+        ? accessToken ?? null
+        : authSession.getAccessToken(),
+  );
+
+  useEffect(() => {
+    let active = true;
+    const syncAccessToken = () => {
+      const latest =
+        authSession === undefined
+          ? accessToken ?? null
+          : authSession.getAccessToken();
+      setResolvedAccessToken(previous =>
+        previous === latest ? previous : latest,
+      );
+    };
+
+    syncAccessToken();
+    if (authSession !== undefined) {
+      void authSession
+        .refreshAccessToken()
+        .then(latest => {
+          if (active) {
+            setResolvedAccessToken(latest);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            syncAccessToken();
+          }
+        });
+    }
+    const refreshTimer =
+      authSession === undefined ? undefined : setInterval(syncAccessToken, 1000);
+
+    return () => {
+      active = false;
+      if (refreshTimer !== undefined) {
+        clearInterval(refreshTimer);
+      }
+    };
+  }, [accessToken, authSession]);
 
   useEffect(() => {
     onHeaderVisibilityChange?.(false);
@@ -36,6 +82,7 @@ export function AiCallScreen({
       status === 'CANCELLED' ||
       status === 'FAILED'
     ) {
+      handleFullscreenChange(false);
       onCallResult?.(status);
     }
   };
@@ -49,7 +96,8 @@ export function AiCallScreen({
         barStyle={isFullscreen ? 'light-content' : 'dark-content'}
       />
       <AiCallView
-        accessToken={accessToken ?? null}
+        apiBaseUrl={apiBaseUrl ?? null}
+        accessToken={resolvedAccessToken}
         groupId={currentGroup.id}
         onCallResult={event => handleCallResult(event.nativeEvent.status)}
         onFullscreenChange={event =>
