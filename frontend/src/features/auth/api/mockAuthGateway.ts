@@ -13,7 +13,7 @@ export const MOCK_LOGIN_CREDENTIALS: LoginCredentials = {
 
 const MOCK_USER: AuthenticatedUser = {
   activeGroupId: null,
-  id: 'mock-user-1',
+  id: 1,
   name: '이종철',
 };
 

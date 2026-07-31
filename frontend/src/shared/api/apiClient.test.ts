@@ -5,9 +5,17 @@ jest.mock('react-native-config', () => ({
   },
 }));
 
-import type {AxiosAdapter, AxiosResponse} from 'axios';
+import type {
+  AxiosAdapter,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from 'axios';
 
-import {API_TIMEOUT_MS, createApiClient} from './apiClient';
+import {
+  API_TIMEOUT_MS,
+  createApiClient,
+  type ApiAuthSession,
+} from './apiClient';
 import {ApiError} from './apiError';
 
 function createAdapter(
@@ -95,3 +103,190 @@ test('네트워크 실패를 공통 오류로 변환한다', async () => {
     kind: 'network',
   });
 });
+
+test('보호 요청에만 현재 Access Token을 첨부한다', async () => {
+  const authSession: ApiAuthSession = {
+    getAccessToken: jest.fn().mockReturnValue('access-token'),
+    refreshAccessToken: jest.fn(),
+  };
+  const client = createApiClient('https://api.example.com', authSession);
+  const authorizationHeaders: unknown[] = [];
+  const adapter: AxiosAdapter = async config => {
+    authorizationHeaders.push(config.headers.get('Authorization'));
+    return {
+      config,
+      data: {data: {}, message: '성공', success: true},
+      headers: {},
+      status: 200,
+      statusText: 'OK',
+    };
+  };
+
+  await client.get('/notifications', {adapter});
+  await client.post('/auth/logout', {}, {adapter});
+  await client.post('/auth/login', {}, {adapter});
+  await client.post('/auth/reissue', {}, {adapter});
+
+  expect(authorizationHeaders).toEqual([
+    'Bearer access-token',
+    'Bearer access-token',
+    undefined,
+    undefined,
+  ]);
+});
+
+test('보호 API의 401만 재발급 후 새 토큰으로 한 번 재시도한다', async () => {
+  const authSession: ApiAuthSession = {
+    getAccessToken: jest.fn().mockReturnValue('old-access'),
+    refreshAccessToken: jest.fn().mockResolvedValue('new-access'),
+  };
+  const client = createApiClient('https://api.example.com', authSession);
+  const seenHeaders: unknown[] = [];
+  const adapter: AxiosAdapter = async config => {
+    const authorization = config.headers.get('Authorization');
+    seenHeaders.push(authorization);
+    if (authorization !== 'Bearer new-access') {
+      throwApiFailure(config, 401, 'UNAUTHORIZED');
+    }
+    return {
+      config,
+      data: {data: {ok: true}, message: '성공', success: true},
+      headers: {},
+      status: 200,
+      statusText: 'OK',
+    };
+  };
+
+  await expect(client.get('/notifications', {adapter})).resolves.toMatchObject({
+    status: 200,
+  });
+
+  expect(authSession.refreshAccessToken).toHaveBeenCalledTimes(1);
+  expect(seenHeaders).toEqual([
+    'Bearer old-access',
+    'Bearer new-access',
+  ]);
+});
+
+test('403과 공개 인증 API의 401에는 재발급하지 않는다', async () => {
+  const authSession: ApiAuthSession = {
+    getAccessToken: jest.fn().mockReturnValue('access-token'),
+    refreshAccessToken: jest.fn(),
+  };
+  const client = createApiClient('https://api.example.com', authSession);
+  const forbidden: AxiosAdapter = async config => {
+    throwApiFailure(config, 403, 'FORBIDDEN');
+  };
+  const invalidCredentials: AxiosAdapter = async config => {
+    throwApiFailure(config, 401, 'INVALID_CREDENTIALS');
+  };
+
+  await expect(
+    client.get('/notifications', {adapter: forbidden}),
+  ).rejects.toMatchObject({code: 'FORBIDDEN', status: 403});
+  await expect(
+    client.post('/auth/login', {}, {adapter: invalidCredentials}),
+  ).rejects.toMatchObject({code: 'INVALID_CREDENTIALS', status: 401});
+  expect(authSession.refreshAccessToken).not.toHaveBeenCalled();
+});
+
+test('재시도 요청의 두 번째 401은 다시 재발급하지 않는다', async () => {
+  const authSession: ApiAuthSession = {
+    getAccessToken: jest.fn().mockReturnValue('old-access'),
+    refreshAccessToken: jest.fn().mockResolvedValue('new-access'),
+  };
+  const client = createApiClient('https://api.example.com', authSession);
+  let requestCount = 0;
+  const adapter: AxiosAdapter = async config => {
+    requestCount += 1;
+    throwApiFailure(config, 401, 'UNAUTHORIZED');
+  };
+
+  await expect(
+    client.get('/notifications', {adapter}),
+  ).rejects.toMatchObject({code: 'UNAUTHORIZED', status: 401});
+
+  expect(requestCount).toBe(2);
+  expect(authSession.refreshAccessToken).toHaveBeenCalledTimes(1);
+});
+
+test('늦게 도착한 동시 401은 이미 갱신된 토큰으로 재시도한다', async () => {
+  let accessToken = 'old-access';
+  let resolveSecondRequest!: () => void;
+  let resolveRefresh!: () => void;
+  const secondRequestStarted = new Promise<void>(resolve => {
+    resolveSecondRequest = resolve;
+  });
+  const refreshFinished = new Promise<void>(resolve => {
+    resolveRefresh = resolve;
+  });
+  const authSession: ApiAuthSession = {
+    getAccessToken: jest.fn(() => accessToken),
+    refreshAccessToken: jest.fn(async () => {
+      accessToken = 'new-access';
+      resolveRefresh();
+      return accessToken;
+    }),
+  };
+  const client = createApiClient('https://api.example.com', authSession);
+  const seenHeaders: unknown[] = [];
+  const adapter: AxiosAdapter = async config => {
+    const authorization = config.headers.get('Authorization');
+    seenHeaders.push(authorization);
+    if (authorization === 'Bearer new-access') {
+      return {
+        config,
+        data: {data: {ok: true}, message: '성공', success: true},
+        headers: {},
+        status: 200,
+        statusText: 'OK',
+      };
+    }
+
+    if (config.url === '/notifications/first') {
+      await secondRequestStarted;
+    } else {
+      resolveSecondRequest();
+      await refreshFinished;
+    }
+    throwApiFailure(config, 401, 'UNAUTHORIZED');
+  };
+
+  await expect(
+    Promise.all([
+      client.get('/notifications/first', {adapter}),
+      client.get('/notifications/second', {adapter}),
+    ]),
+  ).resolves.toHaveLength(2);
+
+  expect(authSession.refreshAccessToken).toHaveBeenCalledTimes(1);
+  expect(seenHeaders).toEqual([
+    'Bearer old-access',
+    'Bearer old-access',
+    'Bearer new-access',
+    'Bearer new-access',
+  ]);
+});
+
+function throwApiFailure(
+  config: InternalAxiosRequestConfig,
+  status: number,
+  code: string,
+): never {
+  throw {
+    config,
+    isAxiosError: true,
+    response: {
+      config,
+      data: {
+        code,
+        errors: [],
+        message: code,
+        success: false,
+      },
+      headers: {},
+      status,
+      statusText: 'Error',
+    },
+  };
+}

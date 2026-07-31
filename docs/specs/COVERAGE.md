@@ -30,7 +30,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 원본 종류 | ID·이름 | 반영 문서 | 상태 | 비고 |
 |---|---|---|---|---|
 | 요구사항 | REQ-001 Android 모바일 앱 지원 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영·미결정 유지 | Android 전용은 확정, 최소 버전·시험 기기는 미결정 |
-| 요구사항 | REQ-002 아이디·비밀번호 회원가입 및 로그인 | [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 |  |
+| 요구사항 | REQ-002 아이디·비밀번호 회원가입 및 로그인 | [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 | Keystore 보호 세션 저장·앱 시작 복원·확정 무효화 시 기존 비로그인 진입 |
 | 요구사항 | REQ-003 프로필 및 개인정보 설정 | [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 | 그룹 구성원 프로필은 `memberId`, `displayName`, `age`, `gender`만 제공 |
 | 요구사항 | REQ-004 가족 그룹 생성 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영·확정 |  |
 | 요구사항 | REQ-005 가족 초대·참가 요청·관리자 승인 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 |  |
@@ -157,7 +157,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | IA | B-3 피보호자&보호자 / 그룹 선택 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 무그룹 선택·승인 대기 통합 |
 | IA | D-0 피보호자&보호자 / 피드 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 빈 피드 |
 | IA | B-1 피보호자&보호자 / 그룹 선택 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 대체 | B-3 통합 화면으로 대체 |
-| IA | A-1 피보호자&보호자 / 메인 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 비로그인 진입 |
+| IA | A-1 피보호자&보호자 / 메인 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 비로그인 진입; 확정 인증 무효화 시 기존 상태 재사용 |
 | IA | A-5 피보호자&보호자 / 회원가입 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 성별 |
 | IA | B-2p 피보호자&보호자 / 그룹 참가 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 초대 코드 요청 |
 | IA | A-3 피보호자&보호자 / 회원가입 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 가입 입력 |
@@ -178,9 +178,9 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-ALIASES-001 그룹원 호칭 설정 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
 | 활성 API | API-AUTH-001 로그인 ID 중복 확인 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
 | 활성 API | API-AUTH-002 회원가입 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
-| 활성 API | API-AUTH-003 로그인 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
-| 활성 API | API-AUTH-004 토큰 재발급 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
-| 활성 API | API-AUTH-005 로그아웃 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md), [알림](./domains/NOTIFICATIONS.md) | 반영·일부 확정 | 현재 기기 token 해제 후 인증 로그아웃 |
+| 활성 API | API-AUTH-003 로그인 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 | Keystore 보호 버전 세션 레코드 저장·Access Token 만료 시각 계산 |
+| 활성 API | API-AUTH-004 토큰 재발급 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 | 앱 복원 1회 재발급·보호 API `401` single-flight·원 요청 1회 재시도·확정/일시 실패 분리 |
+| 활성 API | API-AUTH-005 로그아웃 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md), [알림](./domains/NOTIFICATIONS.md) | 반영·일부 확정 | 현재 기기 token 해제 후 인증 로그아웃; 서버 결과와 무관하게 로컬 세션 삭제 |
 | 활성 API | API-CALENDAR-001 그룹 일정 목록 조회 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
 | 활성 API | API-CALENDAR-002 일정 상세 조회 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
 | 활성 API | API-CALENDAR-003 일정 등록 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
@@ -295,6 +295,6 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
   재사용 정책
 - 아직 별도 결정되지 않은 API별 성공 `message` 문구
 - 통화 고유 오류 코드의 정확한 `message` 문구
-- token 해제 실패 중 로그아웃 지속·재시도와 비인증 상태의 OS 알림 권한
-  철회 처리
+- FCM token 해제 실패 시 `API-AUTH-005` 호출 지속 여부·재시도와 비인증
+  상태의 OS 알림 권한 철회 처리
 - 통화 전사 보존 기간과 개인정보·AI 통화 동의의 문구·재동의 정책

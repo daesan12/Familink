@@ -5,7 +5,9 @@ export {
 export {
   API_TIMEOUT_MS,
   apiClient,
+  configureApiAuthSession,
   createApiClient,
+  type ApiAuthSession,
 } from './apiClient';
 export {
   ApiError,

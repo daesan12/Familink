@@ -20,7 +20,7 @@ describe('mockAuthGateway', () => {
 
     await expect(login).resolves.toEqual({
       activeGroupId: null,
-      id: 'mock-user-1',
+      id: 1,
       name: '이종철',
     });
   });
