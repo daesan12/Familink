@@ -1,4 +1,8 @@
-import type {AppNotification, NotificationSetting} from '../types';
+import type {
+  AppNotification,
+  NotificationSetting,
+  NotificationSettingGroup,
+} from '../types';
 
 export const DEVELOPMENT_NOTIFICATIONS: readonly AppNotification[] = [
   {
@@ -37,12 +41,46 @@ export const DEVELOPMENT_NOTIFICATIONS: readonly AppNotification[] = [
 
 export const EMPTY_NOTIFICATIONS: readonly AppNotification[] = [];
 
+// 스펙(NOTIFICATIONS): 7개 항목, 최초 기본값은 모두 true.
 export const DEFAULT_NOTIFICATION_SETTINGS: readonly NotificationSetting[] = [
-  {enabled: true, label: '새 게시글', type: 'NEW_POST'},
-  {enabled: true, label: '게시글 반응', type: 'POST_ACTIVITY'},
-  {enabled: true, label: '일정 변경', type: 'EVENT_CHANGED'},
-  {enabled: true, label: '일정 시작', type: 'EVENT_REMINDER'},
-  {enabled: true, label: '건별 리포트', type: 'CALL_REPORT'},
+  {
+    description: '가족의 새 게시글 알림',
+    enabled: true,
+    label: '새 게시글',
+    type: 'NEW_POST',
+  },
+  {
+    description: '댓글, 좋아요',
+    enabled: true,
+    label: '내 게시글 반응',
+    type: 'POST_ACTIVITY',
+  },
+  {
+    description: '일정 등록, 수정, 삭제',
+    enabled: true,
+    label: '일정 변경 알림',
+    type: 'EVENT_CHANGED',
+  },
+  {
+    description: '등록된 일정 시간이 되었을 때',
+    enabled: true,
+    label: '일정 시작 알림',
+    type: 'EVENT_REMINDER',
+  },
+  {enabled: true, label: '건당 리포트', type: 'CALL_REPORT'},
   {enabled: true, label: '일일 리포트', type: 'DAILY_REPORT'},
-  {enabled: true, label: '그룹 요청', type: 'GROUP_JOIN_REQUEST'},
+  {
+    description: '초대 요청, 가입 요청',
+    enabled: true,
+    label: '그룹 요청 알림',
+    type: 'GROUP_JOIN_REQUEST',
+  },
+];
+
+// I-6 알림 설정 화면의 섹션 구성. 가족 피드·캘린더·리포트·가족 그룹 순으로 묶는다.
+export const NOTIFICATION_SETTING_GROUPS: readonly NotificationSettingGroup[] = [
+  {title: '가족 피드', types: ['NEW_POST', 'POST_ACTIVITY']},
+  {title: '캘린더', types: ['EVENT_CHANGED', 'EVENT_REMINDER']},
+  {title: '리포트', types: ['CALL_REPORT', 'DAILY_REPORT']},
+  {title: '가족 그룹', types: ['GROUP_JOIN_REQUEST']},
 ];

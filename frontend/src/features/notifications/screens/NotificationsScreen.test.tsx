@@ -1,9 +1,8 @@
 import React from 'react';
-import {Switch, Text} from 'react-native';
+import {Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import {
-  DEFAULT_NOTIFICATION_SETTINGS,
   DEVELOPMENT_NOTIFICATIONS,
   EMPTY_NOTIFICATIONS,
 } from '../fixtures/notificationFixtures';
@@ -12,7 +11,6 @@ import {NotificationsScreen} from './NotificationsScreen';
 jest.mock('lucide-react-native/icons/bell-off', () => 'BellOff');
 jest.mock('lucide-react-native/icons/check', () => 'Check');
 jest.mock('lucide-react-native/icons/chevron-left', () => 'ChevronLeft');
-jest.mock('lucide-react-native/icons/settings', () => 'Settings');
 jest.mock('lucide-react-native/icons/x', () => 'X');
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
@@ -163,53 +161,6 @@ test('그룹 요청 승인과 거부 팝업을 표시한다', async () => {
       accessibilityLabel: '수호님의 그룹 승인 요청, 방금',
     }),
   ).toHaveLength(0);
-});
-
-test('7개 푸시 설정과 권한 및 토큰 상태를 표시하고 토글한다', async () => {
-  let renderer: TestRenderer.ReactTestRenderer;
-
-  await TestRenderer.act(() => {
-    renderer = TestRenderer.create(
-      <NotificationsScreen
-        {...baseProps}
-        initialNotifications={EMPTY_NOTIFICATIONS}
-        initialPermissionStatus="denied"
-        initialTokenStatus="inactive"
-        initialView="settings"
-      />,
-    );
-  });
-  mountedRenderers.push(renderer!);
-
-  expect(renderer!.root.findAllByType(Switch)).toHaveLength(7);
-  expect(
-    renderer!.root.findByProps({
-      accessibilityLabel: '새 게시글 푸시 알림',
-    }).props.value,
-  ).toBe(true);
-
-  await TestRenderer.act(() => {
-    renderer!.root.findByProps({
-      accessibilityLabel: '새 게시글 푸시 알림',
-    }).props.onValueChange();
-  });
-
-  expect(
-    renderer!.root.findByProps({
-      accessibilityLabel: '새 게시글 푸시 알림',
-    }).props.value,
-  ).toBe(false);
-  expect(DEFAULT_NOTIFICATION_SETTINGS).toHaveLength(7);
-  expect(
-    renderer!.root
-      .findAllByType(Text)
-      .some(node => node.props.children === '거부됨'),
-  ).toBe(true);
-  expect(
-    renderer!.root
-      .findAllByType(Text)
-      .some(node => node.props.children === '비활성'),
-  ).toBe(true);
 });
 
 test('fixture가 비어 있으면 빈 알림 상태를 표시한다', async () => {
