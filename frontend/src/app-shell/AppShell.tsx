@@ -9,12 +9,15 @@ import { CurrentGroupSwitcher } from './CurrentGroupSwitcher';
 import { resolveAllowedRoute, resolveCurrentGroup } from './navigation';
 import type {
   AppRoute,
+  AppAuthSession,
   AppScreenRegistry,
   CurrentGroupStore,
   FamilyGroup,
 } from './types';
 
 interface AppShellProps {
+  apiBaseUrl?: string;
+  authSession?: AppAuthSession;
   accessToken?: string | null;
   currentUserId?: number;
   currentUserName?: string;
@@ -31,6 +34,8 @@ interface AppShellProps {
 }
 
 export function AppShell({
+  apiBaseUrl,
+  authSession,
   accessToken,
   currentUserId,
   currentUserName,
@@ -313,6 +318,8 @@ export function AppShell({
       <View style={styles.content}>
         {Screen ? (
           <Screen
+            apiBaseUrl={apiBaseUrl}
+            authSession={authSession}
             accessToken={accessToken}
             createCalendarEventRequestId={createCalendarEventRequestId}
             createPostRequestId={createPostRequestId}

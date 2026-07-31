@@ -138,6 +138,7 @@ class AiCallContentTest {
     composeRule.setContent {
       AiCallTheme {
         AiCallRoute(
+            apiBaseUrl = null,
             bridgeContext = AiCallBridgeContext("test-access-token", "group-1"),
             onCallResult = {},
             onFullscreenChange = {},

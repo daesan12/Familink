@@ -13,6 +13,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppShell, currentGroupStore } from "./src/app-shell";
 import type {
   AppRoute,
+  AiCallResultStatus,
   AppScreenProps,
   AppScreenRenderer,
   AppScreenRegistry,
@@ -126,6 +127,7 @@ interface AppProps {
   onJoinGroup?: (
     inviteCode: string
   ) => PendingJoinRequest | Promise<PendingJoinRequest>;
+  onCallResult?: (status: AiCallResultStatus) => void;
   onOpenActiveGroup?: (activeGroupId: string) => void;
   onSaveInterests?: (input: {
     groupId: string;
@@ -412,6 +414,7 @@ export default function App({
   onCreateGroup,
   onGroupChange,
   onJoinGroup,
+  onCallResult,
   onOpenActiveGroup,
   onSaveInterests,
   reportGateway,
@@ -1030,6 +1033,8 @@ export default function App({
         )}
         {route === "appShell" && (
           <AppShell
+            apiBaseUrl={apiBaseUrl}
+            authSession={authSession}
             accessToken={authSession.getAccessToken()}
             currentUserId={user?.id}
             currentUserName={user?.name}
@@ -1040,6 +1045,7 @@ export default function App({
             onCreateGroup={() => openGroupOnboarding("appShell")}
             onGroupChange={onGroupChange}
             onJoinGroup={() => openGroupOnboarding("appShell")}
+            onCallResult={onCallResult}
             onRequestLogout={handleLogout}
             screens={resolvedScreens}
           />

@@ -20,7 +20,14 @@ export interface FamilyGroup {
   role: GroupRole;
 }
 
+export interface AppAuthSession {
+  getAccessToken(): string | null;
+  refreshAccessToken(): Promise<string>;
+}
+
 export interface AppScreenProps {
+  apiBaseUrl?: string;
+  authSession?: AppAuthSession;
   accessToken?: string | null;
   onCallResult?: (status: AiCallResultStatus) => void;
   createCalendarEventRequestId?: number;

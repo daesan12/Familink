@@ -21,6 +21,10 @@ internal class AiCallViewManager :
 
   override fun createViewInstance(context: ThemedReactContext): AiCallView = AiCallView(context)
 
+  override fun setApiBaseUrl(view: AiCallView, value: String?) {
+    view.setApiBaseUrl(value)
+  }
+
   override fun setAccessToken(view: AiCallView, value: String?) {
     view.setAccessToken(value)
   }

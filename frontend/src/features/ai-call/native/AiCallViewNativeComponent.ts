@@ -14,6 +14,7 @@ export type AiCallResultEvent = Readonly<{
 }>;
 
 export interface NativeProps extends ViewProps {
+  apiBaseUrl?: string | null;
   accessToken?: string | null;
   groupId?: string | null;
   onCallResult?:

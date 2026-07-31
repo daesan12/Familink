@@ -14,6 +14,7 @@ internal class AiCallView(
 ) : FrameLayout(reactContext) {
 
   private var accessToken by mutableStateOf<String?>(null)
+  private var apiBaseUrl by mutableStateOf<String?>(null)
   private var groupId by mutableStateOf<String?>(null)
 
   init {
@@ -30,6 +31,7 @@ internal class AiCallView(
           setContent {
             AiCallTheme {
               AiCallRoute(
+                  apiBaseUrl = apiBaseUrl,
                   bridgeContext = AiCallBridgeContext(accessToken, groupId),
                   onCallResult = ::emitCallResult,
                   onFullscreenChange = ::emitFullscreenChange,
@@ -46,6 +48,10 @@ internal class AiCallView(
 
   internal fun setAccessToken(value: String?) {
     accessToken = value
+  }
+
+  internal fun setApiBaseUrl(value: String?) {
+    apiBaseUrl = value
   }
 
   internal fun setGroupId(value: String?) {

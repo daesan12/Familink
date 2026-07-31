@@ -13,6 +13,7 @@ export {
 } from './navigation';
 export type {
   AppRoute,
+  AppAuthSession,
   AiCallResultStatus,
   AppScreenProps,
   AppScreenRenderer,
