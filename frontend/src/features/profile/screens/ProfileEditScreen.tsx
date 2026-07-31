@@ -13,6 +13,7 @@ import {
 
 import {DatePickerSheet} from '../../auth';
 import {COLORS, RADII} from '../../../design/tokens';
+import {getProfileWithdrawErrorMessage} from '../api/profileApi';
 import {
   formatDisplayDate,
   formatGenderLabel,
@@ -28,6 +29,7 @@ interface ProfileEditScreenProps<T extends BaseProfile> {
   profile: T;
   onBack: () => void;
   onSave: (profile: T) => void;
+  onWithdraw?: () => Promise<void> | void;
 }
 
 // 'YYYY.MM.DD' 표시 문자열을 DatePickerSheet가 쓰는 'YYYY-MM-DD'로 바꾼다.
@@ -43,6 +45,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
   profile,
   onBack,
   onSave,
+  onWithdraw,
 }: ProfileEditScreenProps<T>) {
   const [name, setName] = useState(profile.name);
   const [gender, setGender] = useState<Gender>(profile.gender);
@@ -119,13 +122,20 @@ export function ProfileEditScreen<T extends BaseProfile>({
           accessibilityLabel="프로필 이미지 변경"
           accessibilityRole="button"
           onPress={() =>
-            Alert.alert('프로필 이미지 변경', '후속 작업에서 연결될 기능입니다.')
+            Alert.alert(
+              '프로필 이미지 변경',
+              '후속 작업에서 연결될 기능입니다.',
+            )
           }
           style={styles.avatarWrap}
         >
           <Image
             accessibilityIgnoresInvertColors
-            source={PROFILE_PLACEHOLDER}
+            source={
+              profile.profileImageUrl
+                ? {uri: profile.profileImageUrl}
+                : PROFILE_PLACEHOLDER
+            }
             style={styles.avatar}
           />
         </Pressable>
@@ -194,7 +204,8 @@ export function ProfileEditScreen<T extends BaseProfile>({
                     }}
                     style={[
                       styles.dropdownRow,
-                      index < GENDER_OPTIONS.length - 1 && styles.dropdownDivider,
+                      index < GENDER_OPTIONS.length - 1 &&
+                        styles.dropdownDivider,
                       isSelected && styles.dropdownRowSelected,
                     ]}
                   >
@@ -225,9 +236,31 @@ export function ProfileEditScreen<T extends BaseProfile>({
           accessibilityLabel="회원 탈퇴"
           accessibilityRole="button"
           hitSlop={8}
-          onPress={() =>
-            Alert.alert('회원 탈퇴', '후속 작업에서 연결될 기능입니다.')
-          }
+          onPress={() => {
+            if (onWithdraw === undefined) {
+              Alert.alert('회원 탈퇴', '후속 작업에서 연결될 기능입니다.');
+              return;
+            }
+            Alert.alert(
+              '회원 탈퇴',
+              '탈퇴 후 개인정보가 익명화되며 계정을 복구할 수 없습니다.',
+              [
+                {text: '취소', style: 'cancel'},
+                {
+                  text: '탈퇴',
+                  style: 'destructive',
+                  onPress: () => {
+                    Promise.resolve(onWithdraw()).catch(error => {
+                      Alert.alert(
+                        '탈퇴에 실패했습니다.',
+                        getProfileWithdrawErrorMessage(error),
+                      );
+                    });
+                  },
+                },
+              ],
+            );
+          }}
           style={styles.withdrawButton}
         >
           <Text style={styles.withdrawText}>회원 탈퇴</Text>

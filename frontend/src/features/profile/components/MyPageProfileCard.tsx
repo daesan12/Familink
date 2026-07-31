@@ -11,6 +11,7 @@ interface MyPageProfileCardProps {
   name: string;
   age: number;
   gender: Gender;
+  profileImageUrl?: string | null;
   onEdit: () => void;
   // 보호자만 사용하는 주간 랭킹 배지와 지난주 1위 왕관. 피보호자는 넘기지 않는다.
   rank?: number;
@@ -22,6 +23,7 @@ export function MyPageProfileCard({
   name,
   age,
   gender,
+  profileImageUrl,
   onEdit,
   rank,
   hasCrown = false,
@@ -54,7 +56,9 @@ export function MyPageProfileCard({
         ) : null}
         <Image
           accessibilityIgnoresInvertColors
-          source={PROFILE_PLACEHOLDER}
+          source={
+            profileImageUrl ? {uri: profileImageUrl} : PROFILE_PLACEHOLDER
+          }
           style={styles.avatar}
         />
       </View>

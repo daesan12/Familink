@@ -1,8 +1,89 @@
+import type {UserProfile} from './api/profileApi';
 import type {Gender} from './types';
 
 // 성별 코드값을 화면 표시 문구로 바꾼다.
 export function formatGenderLabel(gender: Gender): string {
   return gender === 'male' ? '남자' : '여자';
+}
+
+export function mergeUserProfile<T extends {age: number; birthDate: string}>(
+  current: T,
+  remote: UserProfile,
+  now = new Date(),
+): T & UserProfile {
+  return {
+    ...current,
+    age: calculateAge(remote.birthDate, now),
+    birthDate: formatIsoDate(remote.birthDate),
+    gender: remote.gender,
+    loginId: remote.loginId,
+    name: remote.name,
+    profileImageUrl: remote.profileImageUrl,
+  } as T & UserProfile;
+}
+
+export function calculateAge(birthDate: string, now = new Date()): number {
+  const parsed = parseIsoDate(birthDate);
+  if (parsed === null) {
+    return 0;
+  }
+
+  // Profile age follows the product's Asia/Seoul business-date rule. Seoul
+  // has a fixed UTC+09:00 offset, so shifting the instant keeps this helper
+  // deterministic without relying on the device's local timezone.
+  const seoulNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  let age = seoulNow.getUTCFullYear() - parsed.year;
+  const birthdayPassed =
+    seoulNow.getUTCMonth() + 1 > parsed.month ||
+    (seoulNow.getUTCMonth() + 1 === parsed.month &&
+      seoulNow.getUTCDate() >= parsed.day);
+  if (!birthdayPassed) {
+    age -= 1;
+  }
+  return Math.max(0, age);
+}
+
+export function formatIsoDate(value: string): string {
+  const parsed = parseIsoDate(value);
+  return parsed === null
+    ? value
+    : formatDisplayDate(parsed.year, parsed.month, parsed.day);
+}
+
+export function toApiProfileUpdate(profile: {
+  birthDate: string;
+  gender: Gender;
+  name: string;
+  profileImageUrl?: string | null;
+}): {
+  birthDate?: string;
+  gender: 'FEMALE' | 'MALE';
+  name: string;
+  profileImageUrl?: string | null;
+} {
+  const parsedBirthDate = parseDisplayDate(profile.birthDate);
+  const input: {
+    birthDate?: string;
+    gender: 'FEMALE' | 'MALE';
+    name: string;
+    profileImageUrl?: string | null;
+  } = {
+    ...(parsedBirthDate
+      ? {
+          birthDate: toIsoDate(
+            parsedBirthDate.year,
+            parsedBirthDate.month,
+            parsedBirthDate.day,
+          ),
+        }
+      : {}),
+    gender: profile.gender === 'male' ? 'MALE' : 'FEMALE',
+    name: profile.name,
+  };
+  if (profile.profileImageUrl !== undefined) {
+    input.profileImageUrl = profile.profileImageUrl;
+  }
+  return input;
 }
 
 export const GENDER_OPTIONS: readonly {label: string; value: Gender}[] = [
@@ -70,7 +151,12 @@ export function buildMonthGrid(
   let nextDay = 1;
   while (cells.length % 7 !== 0) {
     const iso = toIsoDate(next.year, next.month, nextDay);
-    cells.push({day: nextDay, filled: postDates.has(iso), inMonth: false, iso});
+    cells.push({
+      day: nextDay,
+      filled: postDates.has(iso),
+      inMonth: false,
+      iso,
+    });
     nextDay += 1;
   }
 
@@ -112,6 +198,26 @@ export function shiftMonth(
 }
 
 // 'YYYY.MM.DD' 표시 문자열을 연·월·일로 분해한다. 형식이 어긋나면 null.
+function parseIsoDate(
+  value: string,
+): {year: number; month: number; day: number} | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(`${value}T00:00:00Z`);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== value
+  ) {
+    return null;
+  }
+  return {year, month, day};
+}
+
 export function parseDisplayDate(
   value: string,
 ): {year: number; month: number; day: number} | null {

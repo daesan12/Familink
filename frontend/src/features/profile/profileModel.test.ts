@@ -1,5 +1,6 @@
 import {
   buildMonthGrid,
+  calculateAge,
   chunkIntoWeeks,
   formatDisplayDate,
   formatGenderLabel,
@@ -9,6 +10,13 @@ import {
   shiftMonth,
   toIsoDate,
 } from './profileModel';
+
+test('calculates profile age using the Asia/Seoul business date', () => {
+  const birthDate = '2000-07-31';
+
+  expect(calculateAge(birthDate, new Date('2026-07-30T14:59:59Z'))).toBe(25);
+  expect(calculateAge(birthDate, new Date('2026-07-31T00:00:00Z'))).toBe(26);
+});
 
 test('성별 코드값을 표시 문구로 바꾼다', () => {
   expect(formatGenderLabel('male')).toBe('남자');

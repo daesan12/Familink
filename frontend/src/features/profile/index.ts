@@ -1,4 +1,14 @@
 export {ProfileTabScreen} from './screens/ProfileTabScreen';
+export {
+  createProfileGateway,
+  profileGateway,
+  type ProfileGateway,
+  type ProfileGatewayOptions,
+  type ProfileHttpClient,
+  type ProfileUpdateInput,
+  type ProfileUpdateResult,
+  type UserProfile,
+} from './api/profileApi';
 export {MyPageScreen} from './screens/MyPageScreen';
 export type {MyPageScreenProps} from './screens/MyPageScreen';
 export {CareReceiverMyPageScreen} from './screens/CareReceiverMyPageScreen';

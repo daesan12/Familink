@@ -8,6 +8,7 @@ export interface BaseProfile {
   gender: Gender;
   loginId: string;
   name: string;
+  profileImageUrl?: string | null;
 }
 
 // 보호자 마이페이지(I-1). 효자 도장·주간 랭킹·왕관을 함께 다룬다.
