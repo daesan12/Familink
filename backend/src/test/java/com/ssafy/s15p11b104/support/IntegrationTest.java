@@ -19,6 +19,12 @@ import org.testcontainers.utility.DockerImageName;
  *
  * <p>Docker가 없는 환경에서 그대로 실패하지 않도록 컨테이너 시작은 실행 조건 검사가 끝난 뒤에
  * 호출되는 {@link DynamicPropertySource} 안에서 수행한다. 이미 실행 중이면 시작 요청은 무시된다.
+ *
+ * <p>전체 테스트를 한 번에 실행하면 서로 다른 설정의 Spring 테스트 컨텍스트가 여러 개 캐시되고
+ * 각 컨텍스트가 자신의 커넥션 풀을 유지한다. PostgreSQL 기본 상한인 100개로는 이 합계를 감당하지
+ * 못해 통합 테스트가 {@code too many clients already}로 실패하므로 상한을 올린다. 풀 크기를 줄이는
+ * 대신 상한을 올리는 이유는 여러 스레드가 동시에 커넥션을 점유하는 동시성 테스트의 전제를
+ * 유지하기 위해서다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -27,8 +33,11 @@ public abstract class IntegrationTest {
 
 	private static final String TEST_REDIS_PASSWORD = "test_redis_password";
 
+	private static final String POSTGRES_MAX_CONNECTIONS = "300";
+
 	private static final PostgreSQLContainer<?> POSTGRES =
-		new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"));
+		new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))
+			.withCommand("postgres", "-c", "max_connections=" + POSTGRES_MAX_CONNECTIONS);
 
 	private static final GenericContainer<?> REDIS =
 		new GenericContainer<>(DockerImageName.parse("redis:7.4-alpine"))
