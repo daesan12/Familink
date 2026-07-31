@@ -1,35 +1,34 @@
 import type {RankedEntry, WeeklyRankingEntry} from './types';
 
 // ISO 날짜(YYYY-MM-DD)로 포맷한다. 한 자리 월·일은 0을 붙인다.
-function pad(value: number): string {
-  return value < 10 ? `0${value}` : `${value}`;
-}
-
-function toIsoDate(date: Date): string {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-// 주어진 날짜가 속한 주의 범위를 월요일~일요일로 구한다(스펙: 주 경계는 월요일).
-// 앱은 KST에서 동작한다고 보고 로컬 날짜 기준으로 계산한다. API 연동 시에는
-// 서버가 집계 주간의 weekStart·weekEnd를 내려주므로 이 계산은 그 값으로 대체된다.
+// 주어진 시각을 KST 날짜로 변환한 뒤 그 주의 월요일~일요일을 구한다.
+// 카네이션 API-002의 구성원별 날짜 조회 범위는 이 값을 사용한다.
 export function getCurrentWeekRange(today: Date): {
   weekStart: string;
   weekEnd: string;
 } {
   // getDay: 0=일 ~ 6=토. 월요일까지 되돌릴 일수(월=0, …, 일=6)를 구한다.
-  const offsetToMonday = (today.getDay() + 6) % 7;
-  const monday = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate() - offsetToMonday,
-  );
+  const koreaDate = new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+  }).formatToParts(today);
+  const year = Number(koreaDate.find(part => part.type === 'year')?.value);
+  const month = Number(koreaDate.find(part => part.type === 'month')?.value);
+  const day = Number(koreaDate.find(part => part.type === 'day')?.value);
+  const koreaToday = new Date(Date.UTC(year, month - 1, day));
+  const offsetToMonday = (koreaToday.getUTCDay() + 6) % 7;
+  const monday = new Date(koreaToday);
+  monday.setUTCDate(monday.getUTCDate() - offsetToMonday);
   // Date 생성자는 일수 오버플로를 월·연 경계로 자동 보정한다.
-  const sunday = new Date(
-    monday.getFullYear(),
-    monday.getMonth(),
-    monday.getDate() + 6,
-  );
-  return {weekStart: toIsoDate(monday), weekEnd: toIsoDate(sunday)};
+  const sunday = new Date(monday);
+  sunday.setUTCDate(sunday.getUTCDate() + 6);
+  return {weekStart: toIsoDateUtc(monday), weekEnd: toIsoDateUtc(sunday)};
+}
+
+function toIsoDateUtc(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }
 
 // 카네이션 수 내림차순으로 표준 경쟁 순위를 매긴다.
