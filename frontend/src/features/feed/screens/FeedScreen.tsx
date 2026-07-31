@@ -14,7 +14,11 @@ import {
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
-import type {FeedLoader} from '../api/feedApi';
+import type {
+  FeedLoader,
+  FeedPageLoader,
+  PostDetailLoader,
+} from '../api/feedApi';
 import {FeedItem} from '../components/FeedItem';
 import {PostActionsSheet} from '../components/PostActionsSheet';
 import {
@@ -51,10 +55,13 @@ const EMPTY_POSTS: readonly FeedPost[] = [];
 
 export interface FeedScreenProps extends AppScreenProps {
   currentUser?: FeedMember | null;
+  currentMemberId?: string;
   initialCommentsByPostId?: Readonly<
     Record<string, readonly PostComment[]>
   >;
   loader?: FeedLoader;
+  pageLoader?: FeedPageLoader;
+  detailLoader?: PostDetailLoader;
   onChangeReaction?: (input: ChangeReactionInput) => void;
   onConfirmDelete?: (postId: string) => Promise<void> | void;
   onCreateComment?: (input: CreateCommentInput) => void;
@@ -76,7 +83,9 @@ interface OpenReactionPicker {
 export function FeedScreen({
   createPostRequestId = 0,
   currentGroup,
+  currentMemberId,
   currentUser,
+  detailLoader,
   initialCommentsByPostId,
   loader,
   onChangeReaction,
@@ -90,9 +99,17 @@ export function FeedScreen({
   onUpdateComment,
   openPostId,
   openPostRequestId = 0,
+  pageLoader,
 }: FeedScreenProps) {
-  const feed = useFeed(currentGroup.id, loader);
+  const feed = useFeed(
+    currentGroup.id,
+    loader,
+    pageLoader,
+    currentMemberId,
+  );
   const posts = feed.status === 'success' ? feed.posts : EMPTY_POSTS;
+  const feedPostsRef = useRef(posts);
+  feedPostsRef.current = posts;
   const resolvedCurrentUser =
     currentUser === undefined
       ? __DEV__
@@ -111,15 +128,30 @@ export function FeedScreen({
     resolvedInitialComments,
   );
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [detailPost, setDetailPost] = useState<FeedPost | null>(null);
   const [menuPostId, setMenuPostId] = useState<string | null>(null);
   const [composer, setComposer] = useState<ComposerState | null>(null);
   const [openReactionPicker, setOpenReactionPicker] =
     useState<OpenReactionPicker | null>(null);
   const lastCreateRequestId = useRef(createPostRequestId);
   const lastOpenPostRequestId = useRef(0);
+  const detailRequestId = useRef(0);
+  const previousGroupId = useRef(currentGroup.id);
   const isDeleteConfirmationOpen = useRef(false);
   const isDeleteSubmitting = useRef(false);
   const feedScrollOffset = useRef(0);
+
+  useEffect(() => {
+    if (previousGroupId.current === currentGroup.id) {
+      return;
+    }
+    previousGroupId.current = currentGroup.id;
+    detailRequestId.current += 1;
+    setSelectedPostId(null);
+    setDetailPost(null);
+    setMenuPostId(null);
+    setOpenReactionPicker(null);
+  }, [currentGroup.id]);
 
   useEffect(() => {
     if (
@@ -143,6 +175,57 @@ export function FeedScreen({
       setOpenReactionPicker(null);
     }
   }, [openPostId, openPostRequestId]);
+
+  useEffect(() => {
+    if (selectedPostId === null) {
+      detailRequestId.current += 1;
+      setDetailPost(null);
+      return;
+    }
+
+    const fallbackPost = feedPostsRef.current.find(
+      post => post.id === selectedPostId,
+    ) ?? null;
+    setDetailPost(fallbackPost);
+
+    if (detailLoader === undefined) {
+      return;
+    }
+
+    const requestId = detailRequestId.current + 1;
+    detailRequestId.current = requestId;
+    let isActive = true;
+
+    detailLoader(selectedPostId, currentMemberId, currentGroup.id)
+      .then(post => {
+        if (post.groupId !== currentGroup.id) {
+          throw new Error('The post belongs to a different group.');
+        }
+        if (isActive && detailRequestId.current === requestId) {
+          setDetailPost(post);
+        }
+      })
+      .catch(() => {
+        if (
+          isActive &&
+          detailRequestId.current === requestId &&
+          fallbackPost === null
+        ) {
+          setDetailPost(null);
+          setSelectedPostId(null);
+        }
+        if (isActive && detailRequestId.current === requestId) {
+          Alert.alert(
+            '게시글 상세를 불러오지 못했어요',
+            '잠시 후 다시 시도해 주세요.',
+          );
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentGroup.id, currentMemberId, detailLoader, selectedPostId]);
 
   useEffect(() => {
     onFullscreenChange?.(Boolean(composer));
@@ -250,7 +333,9 @@ export function FeedScreen({
   }
 
   const selectedPost =
-    feed.posts.find(post => post.id === selectedPostId) ?? null;
+    detailPost?.id === selectedPostId
+      ? detailPost
+      : feed.posts.find(post => post.id === selectedPostId) ?? null;
   const menuPost = feed.posts.find(post => post.id === menuPostId) ?? null;
 
   const handleEdit = () => {
@@ -424,6 +509,13 @@ export function FeedScreen({
         data={feed.posts}
         keyExtractor={post => post.id}
         ListEmptyComponent={<EmptyFeedState />}
+        ListFooterComponent={
+          feed.isLoadingMore ? (
+            <ActivityIndicator color={COLORS.purple} style={styles.listFooter} />
+          ) : null
+        }
+        onEndReached={feed.loadMore}
+        onEndReachedThreshold={0.5}
         onScroll={handleFeedScroll}
         onScrollBeginDrag={closeReactionPicker}
         renderItem={({item}) => {
@@ -531,6 +623,9 @@ const styles = StyleSheet.create({
   listContent: {
     backgroundColor: COLORS.background,
     flexGrow: 1,
+  },
+  listFooter: {
+    paddingVertical: 16,
   },
   retryButton: {
     alignItems: 'center',

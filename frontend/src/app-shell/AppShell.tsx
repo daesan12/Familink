@@ -174,6 +174,8 @@ export function AppShell({
 
   const handleGroupSelect = (groupId: string) => {
     setCurrentGroupId(groupId);
+    setOpenPostId(null);
+    setOpenPostRequestId(0);
     setIsGroupMenuOpen(false);
     onGroupChange?.(groupId);
     if (groupStore) {

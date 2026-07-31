@@ -54,6 +54,10 @@ import {
 } from "./src/features/calendar";
 import { FeedScreen } from "./src/features/feed";
 import {
+  loadFeedPage,
+  loadPostDetail,
+} from "./src/features/feed/api/feedApi";
+import {
   familyGroupMembershipGateway,
   familyGroupMemberGateway,
   familyGroupManagementGateway,
@@ -76,6 +80,10 @@ type RootRoute =
   | "groupOnboarding"
   | "interestSetup"
   | "appShell";
+
+type FamilyGroupWithMemberId = FamilyGroup & {
+  myMemberId?: string;
+};
 
 interface AppProps {
   apiBaseUrl?: string;
@@ -214,11 +222,32 @@ function ConnectedGroupInfoScreen(screenProps: AppScreenProps) {
   );
 }
 
+function ConnectedFeedScreen(screenProps: AppScreenProps) {
+  const currentMemberId = (
+    screenProps.currentGroup as typeof screenProps.currentGroup & {
+      myMemberId?: string;
+    }
+  ).myMemberId;
+  // Keep the explicitly bundled development groups usable in Jest and local
+  // UI previews. Real groups returned by the API always use the HTTP gateway.
+  const usesDevelopmentFixture =
+    __DEV__ && screenProps.currentGroup.id.startsWith("development-");
+
+  return (
+    <FeedScreen
+      {...screenProps}
+      currentMemberId={currentMemberId}
+      detailLoader={usesDevelopmentFixture ? undefined : loadPostDetail}
+      pageLoader={usesDevelopmentFixture ? undefined : loadFeedPage}
+    />
+  );
+}
+
 const DEFAULT_SCREENS: AppScreenRegistry = {
   aiCall: AiCallScreen,
   archive: ArchiveScreen,
   calendar: CalendarScreen,
-  feed: FeedScreen,
+  feed: ConnectedFeedScreen,
   groupInfo: ConnectedGroupInfoScreen,
   notifications: NotificationsScreen,
   profile: ProfileTabScreen,
@@ -507,6 +536,14 @@ export default function App({
           return;
         }
 
+        if (memberId !== null) {
+          setAvailableGroups(current =>
+            current.map(item =>
+              item.id === group.id ? {...item, myMemberId: memberId} : item,
+            ),
+          );
+        }
+
         if (
           onSaveInterests === undefined &&
           loadExistingInterests &&
@@ -566,17 +603,21 @@ export default function App({
       createdGroup = created.group;
       createdMemberId = created.managerMemberId;
     }
+    const groupForState: FamilyGroupWithMemberId =
+      createdMemberId === null
+        ? createdGroup
+        : {...createdGroup, myMemberId: createdMemberId};
     setAvailableGroups((current) => [
-      ...current.filter((group) => group.id !== createdGroup.id),
-      createdGroup,
+      ...current.filter((group) => group.id !== groupForState.id),
+      groupForState,
     ]);
-    setActiveGroupId(createdGroup.id);
-    onGroupChange?.(createdGroup.id);
-    groupStore?.save(createdGroup.id).catch(() => {
+    setActiveGroupId(groupForState.id);
+    onGroupChange?.(groupForState.id);
+    groupStore?.save(groupForState.id).catch(() => {
       // 서버가 확정한 그룹만 저장하고 오류 처리는 상위 앱 계층에 위임한다.
     });
-    if (createdGroup.role === "careReceiver") {
-      await openInterestSetup(createdGroup, createdMemberId, false);
+    if (groupForState.role === "careReceiver") {
+      await openInterestSetup(groupForState, createdMemberId, false);
       return;
     }
     setRoute("appShell");
@@ -625,34 +666,45 @@ export default function App({
 
   const handleOpenApprovedGroup = async (request: ApprovedJoinRequest) => {
     const groupId = request.groupId;
-    setAvailableGroups((current) => {
-      if (current.some((group) => group.id === groupId)) {
-        return current;
+    const groupForState: FamilyGroupWithMemberId = {
+      id: groupId,
+      name: request.groupName,
+      role: request.role,
+    };
+    setAvailableGroups(current => {
+      const existingGroup = current.find(group => group.id === groupId) as
+        | FamilyGroupWithMemberId
+        | undefined;
+      if (existingGroup === undefined) {
+        return [...current, groupForState];
       }
-
-      return [
-        ...current,
-        {
-          id: groupId,
-          name: request.groupName,
-          role: request.role,
-        },
-      ];
+      return current.map(group =>
+        group.id === groupId ? {...existingGroup, ...groupForState} : group,
+      );
     });
     setActiveGroupId(groupId);
     onGroupChange?.(groupId);
     groupStore?.save(groupId).catch(() => {
-      // 그룹 진입은 유지하고 영속화 오류 처리는 상위 앱 계층에 위임한다.
+      // 그룹 진입 상태는 유지하고 영속화 오류 처리는 상위 계층에 위임한다.
     });
     if (request.role === "careReceiver") {
-      await openInterestSetup({
-        id: groupId,
-        name: request.groupName,
-        role: request.role,
-      });
+      await openInterestSetup(groupForState, groupForState.myMemberId);
       return;
     }
     setRoute("appShell");
+    try {
+      const snapshot = await groupGateway.loadGroups();
+      const loadedGroup = snapshot.groups.find(group => group.id === groupId);
+      if (loadedGroup !== undefined) {
+        setAvailableGroups(current =>
+          current.map(group =>
+            group.id === groupId ? {...group, ...loadedGroup} : group,
+          ),
+        );
+      }
+    } catch {
+      // 그룹 진입은 계속 허용하고, 다음 그룹 목록 갱신에서 memberId를 보완한다.
+    }
   };
 
   const handleFinishInterestSetup = () => {
