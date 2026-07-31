@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 
+import {ApiError} from '../../../shared/api';
 import type {LoginCredentials} from '../types';
 import {canSubmitLogin} from '../validation';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
@@ -111,8 +112,12 @@ export function LoginBottomSheet({
     setLoginError(null);
     try {
       await onLogin(credentials);
-    } catch {
-      setLoginError('아이디 또는 비밀번호가 일치하지 않습니다.');
+    } catch (error) {
+      setLoginError(
+        error instanceof ApiError
+          ? error.message
+          : '로그인에 실패했습니다. 잠시 후 다시 시도해주세요.',
+      );
     } finally {
       setSubmitting(false);
     }

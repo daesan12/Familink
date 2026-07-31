@@ -19,6 +19,7 @@ const ACCESS_TOKEN_FREE_PATHS = new Set([
 
 export interface ApiAuthSession {
   getAccessToken(): string | null;
+  getRefreshToken(): string | null;
   refreshAccessToken(): Promise<string>;
 }
 
@@ -119,6 +120,7 @@ export function createApiClient(
           currentAccessToken !== failedAccessToken
             ? currentAccessToken
             : await session.refreshAccessToken();
+        updateAuthRetryBody(config, session);
         config.headers = AxiosHeaders.from(config.headers);
         config.headers.set('Authorization', `Bearer ${accessToken}`);
         return client.request(config);
@@ -134,16 +136,42 @@ export function createApiClient(
 export const apiClient = createApiClient();
 
 function isAccessTokenFree(config: InternalAxiosRequestConfig): boolean {
+  const path = resolveRequestPath(config);
+  return path !== null && ACCESS_TOKEN_FREE_PATHS.has(path);
+}
+
+function updateAuthRetryBody(
+  config: AuthRequestConfig,
+  session: ApiAuthSession,
+): void {
+  if (resolveRequestPath(config) !== '/auth/logout') {
+    return;
+  }
+
+  const refreshToken = session.getRefreshToken();
+  if (refreshToken === null) {
+    throw new ApiError({
+      code: 'AUTH_SESSION_UNAVAILABLE',
+      kind: 'invalidResponse',
+      message: '로그아웃에 필요한 인증 정보가 없습니다.',
+    });
+  }
+
+  config.data = {refreshToken};
+}
+
+function resolveRequestPath(
+  config: InternalAxiosRequestConfig,
+): string | null {
   const url = config.url;
   if (url === undefined) {
-    return false;
+    return null;
   }
 
   try {
-    const path = new URL(url, config.baseURL ?? API_BASE_URL).pathname;
-    return ACCESS_TOKEN_FREE_PATHS.has(path);
+    return new URL(url, config.baseURL ?? API_BASE_URL).pathname;
   } catch {
-    return ACCESS_TOKEN_FREE_PATHS.has(url.split('?')[0]);
+    return url.split('?')[0] ?? null;
   }
 }
 

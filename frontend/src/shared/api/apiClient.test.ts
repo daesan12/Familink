@@ -107,6 +107,7 @@ test('네트워크 실패를 공통 오류로 변환한다', async () => {
 test('보호 요청에만 현재 Access Token을 첨부한다', async () => {
   const authSession: ApiAuthSession = {
     getAccessToken: jest.fn().mockReturnValue('access-token'),
+    getRefreshToken: jest.fn().mockReturnValue('refresh-token'),
     refreshAccessToken: jest.fn(),
   };
   const client = createApiClient('https://api.example.com', authSession);
@@ -138,6 +139,7 @@ test('보호 요청에만 현재 Access Token을 첨부한다', async () => {
 test('보호 API의 401만 재발급 후 새 토큰으로 한 번 재시도한다', async () => {
   const authSession: ApiAuthSession = {
     getAccessToken: jest.fn().mockReturnValue('old-access'),
+    getRefreshToken: jest.fn().mockReturnValue('refresh-token'),
     refreshAccessToken: jest.fn().mockResolvedValue('new-access'),
   };
   const client = createApiClient('https://api.example.com', authSession);
@@ -168,9 +170,73 @@ test('보호 API의 401만 재발급 후 새 토큰으로 한 번 재시도한�
   ]);
 });
 
+test('로그아웃 재시도는 재발급으로 회전된 Refresh Token을 사용한다', async () => {
+  let accessToken = 'old-access';
+  let refreshToken = 'old-refresh';
+  const authSession: ApiAuthSession = {
+    getAccessToken: jest.fn(() => accessToken),
+    getRefreshToken: jest.fn(() => refreshToken),
+    refreshAccessToken: jest.fn(async () => {
+      accessToken = 'new-access';
+      refreshToken = 'new-refresh';
+      return accessToken;
+    }),
+  };
+  const client = createApiClient('https://api.example.com', authSession);
+  const seenRequests: Array<{
+    authorization: unknown;
+    refreshToken: unknown;
+  }> = [];
+  const adapter: AxiosAdapter = async config => {
+    const data: unknown =
+      typeof config.data === 'string'
+        ? JSON.parse(config.data)
+        : config.data;
+    const requestRefreshToken =
+      typeof data === 'object' && data !== null
+        ? (data as Record<string, unknown>).refreshToken
+        : undefined;
+    const authorization = config.headers.get('Authorization');
+    seenRequests.push({authorization, refreshToken: requestRefreshToken});
+
+    if (authorization !== 'Bearer new-access') {
+      throwApiFailure(config, 401, 'UNAUTHORIZED');
+    }
+
+    return {
+      config,
+      data: undefined,
+      headers: {},
+      status: 204,
+      statusText: 'No Content',
+    };
+  };
+
+  await expect(
+    client.post(
+      '/auth/logout',
+      {refreshToken: 'old-refresh'},
+      {adapter},
+    ),
+  ).resolves.toMatchObject({status: 204});
+
+  expect(authSession.refreshAccessToken).toHaveBeenCalledTimes(1);
+  expect(seenRequests).toEqual([
+    {
+      authorization: 'Bearer old-access',
+      refreshToken: 'old-refresh',
+    },
+    {
+      authorization: 'Bearer new-access',
+      refreshToken: 'new-refresh',
+    },
+  ]);
+});
+
 test('403과 공개 인증 API의 401에는 재발급하지 않는다', async () => {
   const authSession: ApiAuthSession = {
     getAccessToken: jest.fn().mockReturnValue('access-token'),
+    getRefreshToken: jest.fn().mockReturnValue('refresh-token'),
     refreshAccessToken: jest.fn(),
   };
   const client = createApiClient('https://api.example.com', authSession);
@@ -193,6 +259,7 @@ test('403과 공개 인증 API의 401에는 재발급하지 않는다', async ()
 test('재시도 요청의 두 번째 401은 다시 재발급하지 않는다', async () => {
   const authSession: ApiAuthSession = {
     getAccessToken: jest.fn().mockReturnValue('old-access'),
+    getRefreshToken: jest.fn().mockReturnValue('refresh-token'),
     refreshAccessToken: jest.fn().mockResolvedValue('new-access'),
   };
   const client = createApiClient('https://api.example.com', authSession);
@@ -222,6 +289,7 @@ test('늦게 도착한 동시 401은 이미 갱신된 토큰으로 재시도한�
   });
   const authSession: ApiAuthSession = {
     getAccessToken: jest.fn(() => accessToken),
+    getRefreshToken: jest.fn().mockReturnValue('refresh-token'),
     refreshAccessToken: jest.fn(async () => {
       accessToken = 'new-access';
       resolveRefresh();

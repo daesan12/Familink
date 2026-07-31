@@ -4,6 +4,7 @@ import TestRenderer from "react-test-renderer";
 
 import App from "../App";
 import { AppShell } from "../src/app-shell";
+import { InvalidCredentialsError } from "../src/features/auth/api/mockAuthGateway";
 import {
   type AuthRestoreResult,
   type AuthSessionCoordinator,
@@ -11,6 +12,7 @@ import {
 import { SignupFlowScreen } from "../src/features/auth/screens/SignupFlowScreen";
 import { SignedInWelcomeScreen } from "../src/features/auth/screens/SignedInWelcomeScreen";
 import type { AuthGateway } from "../src/features/auth/types";
+import { ApiError } from "../src/shared/api";
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
 
@@ -243,7 +245,7 @@ test("로그인 입력을 보존하고 비밀번호 표시 전환을 제공한�
 
 test("로그인 실패 오류를 표시한다", async () => {
   const authGateway = createAuthGateway();
-  authGateway.login.mockRejectedValueOnce(new Error("invalid"));
+  authGateway.login.mockRejectedValueOnce(new InvalidCredentialsError());
   const { renderer } = await renderApp(authGateway);
   await openLogin(renderer);
   await enterValidCredentials(renderer);
@@ -257,6 +259,32 @@ test("로그인 실패 오류를 표시한다", async () => {
   expect(
     renderer.root.findByProps({
       children: "아이디 또는 비밀번호가 일치하지 않습니다.",
+    })
+  ).toBeTruthy();
+});
+
+test("네트워크 로그인 실패를 인증 정보 오류로 오인하지 않는다", async () => {
+  const authGateway = createAuthGateway();
+  authGateway.login.mockRejectedValueOnce(
+    new ApiError({
+      code: "NETWORK_ERROR",
+      kind: "network",
+      message: "네트워크 연결을 확인해 주세요.",
+    })
+  );
+  const { renderer } = await renderApp(authGateway);
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+  });
+
+  expect(
+    renderer.root.findByProps({
+      children: "네트워크 연결을 확인해 주세요.",
     })
   ).toBeTruthy();
 });

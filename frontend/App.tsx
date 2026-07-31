@@ -9,7 +9,7 @@ import type {
   CurrentGroupStore,
   FamilyGroup,
 } from "./src/app-shell";
-import { mockAuthGateway } from "./src/features/auth/api/mockAuthGateway";
+import { apiAuthGateway } from "./src/features/auth/api/authGateway";
 import { LoginBottomSheet } from "./src/features/auth/components/LoginBottomSheet";
 import type { CreateGroupInput } from "./src/features/auth/components/CreateGroupSheet";
 import {
@@ -93,7 +93,7 @@ const DEFAULT_SCREENS: AppScreenRegistry = {
 };
 
 export default function App({
-  authGateway = mockAuthGateway,
+  authGateway = apiAuthGateway,
   authSession = authSessionManager,
   groupStore,
   groups,
