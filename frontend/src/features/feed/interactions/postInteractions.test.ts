@@ -12,7 +12,7 @@ const post: FeedPost = {
   author: {avatarText: '유', id: 'member-yura', name: '유라'},
   body: '게시글',
   commentCount: 0,
-  createdAtLabel: '방금 전',
+  createdAt: '2026-07-30T12:00:00Z',
   groupId: 'group-1',
   id: 'post-1',
   images: [],
@@ -84,6 +84,7 @@ test('postId별 댓글을 작성·수정·삭제하며 다른 게시글 상태�
     author,
     body: ' 새 댓글 ',
     commentId: 'comment-1',
+    createdAt: '2026-07-30T12:00:00Z',
     postId: post.id,
   });
   const updated = updateComment(created, {

@@ -2,6 +2,7 @@ import MaterialDesignIcons from '@react-native-vector-icons/material-design-icon
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {formatRelativeTime} from '../time';
 import type {PostComment} from '../types';
 
 interface CommentItemProps {
@@ -25,7 +26,9 @@ export function CommentItem({
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.authorName}>{comment.author.name}</Text>
-          <Text style={styles.createdAt}>{comment.createdAtLabel}</Text>
+          <Text style={styles.createdAt}>
+            {formatRelativeTime(comment.createdAt)}
+          </Text>
         </View>
         <Text style={styles.body}>{comment.body}</Text>
       </View>

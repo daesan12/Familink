@@ -18,7 +18,7 @@ test('API 경계에서 게시물 이미지를 최대 4장으로 제한한다', (
     },
     body: '가족 여행 기록',
     commentCount: 0,
-    createdAtLabel: '방금 전',
+    createdAt: '2026-07-30T12:00:00Z',
     groupId: 'family-group',
     id: 'post-1',
     images: Array.from({length: 6}, (_, index) => createImage(index + 1)),

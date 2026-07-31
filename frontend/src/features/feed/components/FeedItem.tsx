@@ -1,6 +1,7 @@
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {formatRelativeTime} from '../time';
 import type {FeedPost, ReactionId} from '../types';
 import {PostImageCarousel} from './PostImageCarousel';
 import {ReactionBar, type ReactionAnchor} from './ReactionBar';
@@ -37,7 +38,9 @@ export function FeedItem({
         </View>
         <View style={styles.authorText}>
           <Text style={styles.authorName}>{post.author.name}</Text>
-          <Text style={styles.createdAt}>{post.createdAtLabel}</Text>
+          <Text style={styles.createdAt}>
+            {formatRelativeTime(post.createdAt)}
+          </Text>
         </View>
       </View>
 
