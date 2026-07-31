@@ -32,7 +32,8 @@ export interface FeedReaction {
 export interface PostComment {
   author: FeedMember;
   body: string;
-  createdAtLabel: string;
+  // ISO-8601 UTC 절대 시각. 표시할 때 formatRelativeTime으로 변환한다.
+  createdAt: string;
   id: string;
   postId: string;
 }
@@ -62,7 +63,8 @@ export interface FeedPost {
   body: string;
   commentCount: number;
   currentUserReactionId?: ReactionId | null;
-  createdAtLabel: string;
+  // ISO-8601 UTC 절대 시각. 표시할 때 formatRelativeTime으로 변환한다.
+  createdAt: string;
   groupId: string;
   id: string;
   images: readonly FeedImage[];

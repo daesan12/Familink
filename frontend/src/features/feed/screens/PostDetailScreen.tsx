@@ -31,6 +31,7 @@ import type {
   UpdateCommentInput,
 } from '../types';
 import {MAX_COMMENT_LENGTH} from '../types';
+import {formatRelativeTime} from '../time';
 
 interface PostDetailScreenProps {
   canInteract: boolean;
@@ -215,7 +216,9 @@ export function PostDetailScreen({
           </View>
           <View style={styles.authorText}>
             <Text style={styles.authorName}>{post.author.name}</Text>
-            <Text style={styles.createdAt}>{post.createdAtLabel}</Text>
+            <Text style={styles.createdAt}>
+              {formatRelativeTime(post.createdAt)}
+            </Text>
           </View>
           {post.isOwnedByCurrentUser ? (
             <Pressable

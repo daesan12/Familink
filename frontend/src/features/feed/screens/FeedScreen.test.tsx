@@ -76,7 +76,7 @@ const post: FeedPost = {
   author: {avatarText: '유', id: 'member-yura', name: '유라'},
   body: '가족 여행 기록',
   commentCount: 0,
-  createdAtLabel: '방금 전',
+  createdAt: '2026-07-30T12:00:00Z',
   groupId: 'group-1',
   id: 'post-1',
   images: [],

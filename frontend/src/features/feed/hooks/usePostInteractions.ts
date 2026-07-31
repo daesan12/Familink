@@ -38,6 +38,7 @@ export function usePostInteractions(
           author,
           body,
           commentId: `local-comment-${nextLocalCommentId.current++}`,
+          createdAt: new Date().toISOString(),
           postId,
         }),
       );

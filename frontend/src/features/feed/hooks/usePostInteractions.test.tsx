@@ -9,7 +9,7 @@ const post: FeedPost = {
   author: {avatarText: '유', id: 'member-yura', name: '유라'},
   body: '게시글',
   commentCount: 0,
-  createdAtLabel: '방금 전',
+  createdAt: '2026-07-30T12:00:00Z',
   groupId: 'group-1',
   id: 'post-1',
   images: [],
@@ -38,7 +38,7 @@ test('같은 postId의 초기 댓글 fixture가 바뀌면 Preview 상태를 재�
   const firstComment: PostComment = {
     author: {avatarText: '다', id: 'member-dayoung', name: '다영'},
     body: '첫 댓글',
-    createdAtLabel: '방금 전',
+    createdAt: '2026-07-30T12:00:00Z',
     id: 'comment-1',
     postId: post.id,
   };
