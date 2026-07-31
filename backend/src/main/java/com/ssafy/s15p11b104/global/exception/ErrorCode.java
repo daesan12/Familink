@@ -21,6 +21,7 @@ public enum ErrorCode {
 	NOT_GROUP_MEMBER(HttpStatus.FORBIDDEN, "해당 그룹의 활성 구성원이 아님"),
 	JOIN_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "가입 요청을 찾을 수 없음"),
 	GROUP_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "그룹 구성원을 찾을 수 없음"),
+	CALL_REPORT_NOT_READY(HttpStatus.NOT_FOUND, "건별 통화 리포트가 아직 준비되지 않음"),
 	LOGIN_ID_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 로그인 아이디"),
 	MANAGER_TRANSFER_REQUIRED(HttpStatus.CONFLICT, "다른 활성 구성원에게 관리자 권한을 위임한 후 탈퇴해야 함"),
 	GROUP_MEMBER_ALREADY_LEFT(HttpStatus.CONFLICT, "이미 그룹을 떠난 구성원"),

@@ -55,4 +55,26 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
 		@Param("startInclusive") Instant startInclusive,
 		@Param("endExclusive") Instant endExclusive
 	);
+
+	/**
+	 * 한 피보호자의 통화 중 종료 시각이 구간에 드는 것을 상태로 걸러 조회한다.
+	 *
+	 * <p>일일 리포트 화면의 통화 목록을 만드는 데 쓴다. 구간은 호출자가 업무 시간대 기준일에서
+	 * 파생한 UTC 절대 시각으로 넘긴다.
+	 */
+	@Query("""
+		select session
+		from CallSession session
+		where session.careReceiverMember.id = :careReceiverMemberId
+			and session.status = :status
+			and session.endedAt >= :startInclusive
+			and session.endedAt < :endExclusive
+		order by session.endedAt asc, session.id asc
+		""")
+	List<CallSession> findByCareReceiverMemberAndStatusInEndedAtRange(
+		@Param("careReceiverMemberId") Long careReceiverMemberId,
+		@Param("status") CallStatus status,
+		@Param("startInclusive") Instant startInclusive,
+		@Param("endExclusive") Instant endExclusive
+	);
 }
