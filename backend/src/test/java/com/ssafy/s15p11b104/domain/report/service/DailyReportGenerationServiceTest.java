@@ -25,13 +25,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ssafy.s15p11b104.domain.call.entity.CallReport;
 import com.ssafy.s15p11b104.domain.call.entity.CallSession;
+import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
+import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.report.entity.DailyReport;
 import com.ssafy.s15p11b104.domain.report.entity.EmotionCategory;
 import com.ssafy.s15p11b104.domain.report.repository.DailyReportRepository;
-import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 
 @ExtendWith(MockitoExtension.class)
 class DailyReportGenerationServiceTest {
@@ -40,6 +41,9 @@ class DailyReportGenerationServiceTest {
 
 	@Mock
 	private CallReportCallRepository callReportRepository;
+
+	@Mock
+	private CallSessionRepository callSessionRepository;
 
 	@Mock
 	private DailyReportRepository dailyReportRepository;
@@ -89,6 +93,7 @@ class DailyReportGenerationServiceTest {
 	void setUp() {
 		generationService = new DailyReportGenerationService(
 			callReportRepository,
+			callSessionRepository,
 			dailyReportRepository,
 			groupMemberRepository,
 			analyzer,
@@ -99,6 +104,39 @@ class DailyReportGenerationServiceTest {
 			callback.accept(null);
 			return null;
 		}).when(transactionTemplate).executeWithoutResult(any());
+	}
+
+	@Test
+	void waitsForCompletedCallReportsBeforeGeneratingDailyReports() {
+		when(callSessionRepository.findCareReceiverMemberIdsWithCompletedWithoutReportInEndedAtRange(any(), any(), any()))
+			.thenReturn(List.of(11L));
+
+		generationService.generate(REPORT_DATE);
+
+		verify(analyzer, never()).analyze(any());
+	}
+
+	@Test
+	void generatesReadyMemberReportWhenAnotherMemberReportIsMissing() {
+		stubReport(otherMemberReport, otherSession, otherMember, 22L, "준비된 통화 요약", null);
+		when(callSessionRepository.findCareReceiverMemberIdsWithCompletedWithoutReportInEndedAtRange(any(), any(), any()))
+			.thenReturn(List.of(11L));
+		when(callReportRepository.findCompletedInEndedAtRange(any(), any(), any()))
+			.thenReturn(List.of(otherMemberReport));
+		when(dailyReportRepository.existsByCareReceiverMemberIdAndReportDate(22L, REPORT_DATE)).thenReturn(false);
+		when(analyzer.analyze(any())).thenReturn(new DailyReportAnalysis(
+			"준비된 일일 요약",
+			EmotionCategory.NEUTRAL,
+			"차분함",
+			null
+		));
+		when(groupMemberRepository.findByIdForUpdate(22L)).thenReturn(Optional.of(otherMember));
+		when(otherMember.getGroup()).thenReturn(otherGroup);
+
+		generationService.generate(REPORT_DATE);
+
+		verify(analyzer).analyze(any());
+		verify(dailyReportRepository).save(any(DailyReport.class));
 	}
 
 	@Test

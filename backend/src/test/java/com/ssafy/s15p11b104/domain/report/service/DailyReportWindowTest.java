@@ -25,4 +25,16 @@ class DailyReportWindowTest {
 		assertThat(window.startInclusive()).isEqualTo(Instant.parse("2026-07-29T13:00:00Z"));
 		assertThat(window.endExclusive()).isEqualTo(Instant.parse("2026-07-30T13:00:00Z"));
 	}
+
+	@Test
+	void mapsCallEndedBeforeTwentyTwoToSameReportDate() {
+		assertThat(DailyReportWindow.reportDateForEndedAt(Instant.parse("2026-07-31T12:59:59Z")))
+			.isEqualTo(LocalDate.of(2026, 7, 31));
+	}
+
+	@Test
+	void mapsCallEndedAtTwentyTwoToNextReportDate() {
+		assertThat(DailyReportWindow.reportDateForEndedAt(Instant.parse("2026-07-31T13:00:00Z")))
+			.isEqualTo(LocalDate.of(2026, 8, 1));
+	}
 }

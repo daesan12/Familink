@@ -1,5 +1,6 @@
 package com.ssafy.s15p11b104.domain.call.report;
 
+import java.time.Clock;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -13,6 +14,8 @@ import com.ssafy.s15p11b104.domain.call.report.CallReportInput.TranscriptLine;
 import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallTranscriptRepository;
+import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationDispatcher;
+import com.ssafy.s15p11b104.domain.report.service.DailyReportWindow;
 
 @Service
 public class CallReportGenerationService {
@@ -21,6 +24,8 @@ public class CallReportGenerationService {
 	private final CallTranscriptRepository callTranscriptRepository;
 	private final CallReportCallRepository callReportRepository;
 	private final CallReportAnalyzer analyzer;
+	private final DailyReportGenerationDispatcher dailyReportGenerationDispatcher;
+	private final Clock applicationClock;
 	private final TransactionTemplate transactionTemplate;
 
 	public CallReportGenerationService(
@@ -28,12 +33,16 @@ public class CallReportGenerationService {
 		CallTranscriptRepository callTranscriptRepository,
 		CallReportCallRepository callReportRepository,
 		CallReportAnalyzer analyzer,
+		DailyReportGenerationDispatcher dailyReportGenerationDispatcher,
+		Clock applicationClock,
 		TransactionTemplate transactionTemplate
 	) {
 		this.callSessionRepository = callSessionRepository;
 		this.callTranscriptRepository = callTranscriptRepository;
 		this.callReportRepository = callReportRepository;
 		this.analyzer = analyzer;
+		this.dailyReportGenerationDispatcher = dailyReportGenerationDispatcher;
+		this.applicationClock = applicationClock;
 		this.transactionTemplate = transactionTemplate;
 	}
 
@@ -44,7 +53,14 @@ public class CallReportGenerationService {
 		}
 
 		CallReportAnalysis analysis = analyzer.analyze(target.input());
-		transactionTemplate.executeWithoutResult(status -> saveIfAbsent(target.callSessionId(), analysis));
+		CallSession savedSession = transactionTemplate.execute(status -> saveIfAbsent(target.callSessionId(), analysis));
+		if (savedSession != null && savedSession.getEndedAt() != null) {
+			var reportDate = DailyReportWindow.reportDateForEndedAt(savedSession.getEndedAt());
+			var reportWindow = DailyReportWindow.forReportDate(reportDate);
+			if (!applicationClock.instant().isBefore(reportWindow.endExclusive())) {
+				dailyReportGenerationDispatcher.dispatch(reportDate);
+			}
+		}
 	}
 
 	private GenerationTarget loadTarget(Long callSessionId) {
@@ -71,12 +87,12 @@ public class CallReportGenerationService {
 		return new GenerationTarget(callSessionId, new CallReportInput(transcripts));
 	}
 
-	private void saveIfAbsent(Long callSessionId, CallReportAnalysis analysis) {
+	private CallSession saveIfAbsent(Long callSessionId, CallReportAnalysis analysis) {
 		CallSession session = callSessionRepository.findByIdForUpdate(callSessionId).orElse(null);
 		if (session == null
 			|| session.getStatus() != CallStatus.COMPLETED
 			|| callReportRepository.existsByCallSessionId(callSessionId)) {
-			return;
+			return null;
 		}
 		callReportRepository.save(new CallReport(
 			session,
@@ -85,6 +101,7 @@ public class CallReportGenerationService {
 			analysis.emotionSubcategory(),
 			analysis.guardianMessage()
 		));
+		return session;
 	}
 
 	private record GenerationTarget(Long callSessionId, CallReportInput input) {
