@@ -13,9 +13,11 @@
   },
   "dependencies": {
     "@react-native-vector-icons/material-design-icons": "^12.3.0",
+    "axios": "^1.19.0",
     "lucide-react-native": "^1.27.0",
     "react": "19.2.3",
     "react-native": "0.86.2",
+    "react-native-config": "^1.6.1",
     "react-native-image-picker": "^8.2.1",
     "react-native-safe-area-context": "^5.5.2",
     "react-native-svg": "^15.15.5"

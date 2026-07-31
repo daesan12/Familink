@@ -37,6 +37,13 @@ const requiredPaths = [
   "src/features/feed/hooks/useFeed.ts",
   "src/features/feed/screens/FeedScreen.tsx",
   "src/features/feed/screens/PostDetailScreen.tsx",
+  ".env.development.example",
+  ".env.production.example",
+  "src/shared/api/apiClient.ts",
+  "src/shared/api/apiConfig.ts",
+  "src/shared/api/apiError.ts",
+  "src/shared/api/apiTypes.ts",
+  "src/shared/api/index.ts",
 ];
 
 await Promise.all(
