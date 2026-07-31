@@ -1,6 +1,6 @@
 import BellOff from 'lucide-react-native/icons/bell-off';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
-import {useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
 
 import type {AppScreenProps} from '../../../app-shell';
@@ -8,9 +8,11 @@ import {COLORS, RADII} from '../../../design/tokens';
 import {NotificationDecisionModal} from '../components/NotificationDecisionModal';
 import {NotificationItem} from '../components/NotificationItem';
 import {DEVELOPMENT_NOTIFICATIONS} from '../fixtures/notificationFixtures';
-import type {AppNotification} from '../types';
+import {useNotificationGateway} from '../NotificationGatewayContext';
+import type {AppNotification, NotificationGateway} from '../types';
 
 export interface NotificationsScreenProps extends AppScreenProps {
+  gateway?: NotificationGateway;
   initialNotifications?: readonly AppNotification[];
 }
 
@@ -18,15 +20,22 @@ const NO_READ_IDS: readonly string[] = [];
 
 // 알림 탭은 알림 목록만 담당한다. 알림 설정(I-6)은 마이페이지에서 진입한다.
 export function NotificationsScreen({
+  currentUserId,
+  gateway,
   initialNotifications,
   onCloseNotifications,
   onNotificationRead,
+  onUnreadCountChange,
   onOpenPost,
   readNotificationIds = NO_READ_IDS,
 }: NotificationsScreenProps) {
+  const contextGateway = useNotificationGateway();
+  const resolvedGateway = gateway ?? contextGateway;
+  const usesInjectedNotifications = initialNotifications !== undefined;
   const [notifications, setNotifications] = useState(() => {
     const source =
-      initialNotifications ?? (__DEV__ ? DEVELOPMENT_NOTIFICATIONS : []);
+      initialNotifications ??
+      (resolvedGateway === null && __DEV__ ? DEVELOPMENT_NOTIFICATIONS : []);
     if (readNotificationIds.length === 0) {
       return source;
     }
@@ -34,19 +43,103 @@ export function NotificationsScreen({
     return source.map(notification =>
       notification.isRead || readNotificationIds.includes(notification.id)
         ? {...notification, isRead: true}
-        : notification,
+      : notification,
     );
   });
+  const [isLoading, setIsLoading] = useState(
+    resolvedGateway !== null && !usesInjectedNotifications,
+  );
+  const [hasNext, setHasNext] = useState(false);
+  const [page, setPage] = useState(0);
+  const [serverUnreadCount, setServerUnreadCount] = useState<number | null>(
+    null,
+  );
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const loadingPageRef = useRef(false);
+  const generationRef = useRef(0);
+  const readNotificationIdsRef = useRef(readNotificationIds);
   const [decision, setDecision] = useState<{
     id: string;
     mode: 'approve' | 'reject';
   } | null>(null);
+  const [decisionReadFailedId, setDecisionReadFailedId] = useState<string | null>(
+    null,
+  );
+  const decisionGenerationRef = useRef(0);
   const unreadCount = useMemo(
     () => notifications.filter(notification => !notification.isRead).length,
     [notifications],
   );
+  const displayedUnreadCount = serverUnreadCount ?? unreadCount;
 
-  const markAsRead = (notificationId: string) => {
+  useEffect(() => {
+    readNotificationIdsRef.current = readNotificationIds;
+  }, [readNotificationIds]);
+
+  useEffect(() => {
+    onUnreadCountChange?.(displayedUnreadCount);
+  }, [displayedUnreadCount, onUnreadCountChange]);
+
+  useEffect(() => {
+    if (resolvedGateway === null || usesInjectedNotifications) {
+      setIsLoading(false);
+      setServerUnreadCount(null);
+      return;
+    }
+
+    const generation = ++generationRef.current;
+    let disposed = false;
+    loadingPageRef.current = false;
+    setIsLoading(true);
+    setErrorMessage(null);
+    setPage(0);
+    setHasNext(false);
+    setNotifications([]);
+
+    Promise.all([
+      resolvedGateway.loadPage(0),
+      resolvedGateway.getUnreadCount(),
+    ])
+      .then(([result, count]) => {
+        if (disposed || generationRef.current !== generation) {
+          return;
+        }
+        setNotifications(
+          applyReadIds(result.notifications, readNotificationIdsRef.current),
+        );
+        setHasNext(result.hasNext);
+        setServerUnreadCount(count);
+      })
+      .catch(error => {
+        if (disposed || generationRef.current !== generation) {
+          return;
+        }
+        setErrorMessage(toNotificationErrorMessage(error));
+      })
+      .finally(() => {
+        if (!disposed && generationRef.current === generation) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [
+    currentUserId,
+    resolvedGateway,
+    usesInjectedNotifications,
+  ]);
+
+  const markAsRead = (
+    notificationId: string,
+    onSuccess?: () => void,
+    onFailure?: () => void,
+  ) => {
+    const target = notifications.find(notification => notification.id === notificationId);
+    if (target === undefined || target.isRead) {
+      return;
+    }
     setNotifications(current =>
       current.map(notification =>
         notification.id === notificationId
@@ -54,7 +147,37 @@ export function NotificationsScreen({
           : notification,
       ),
     );
-    onNotificationRead?.(notificationId);
+    setServerUnreadCount(current =>
+      current === null ? null : Math.max(0, current - 1),
+    );
+
+    if (resolvedGateway !== null && !usesInjectedNotifications) {
+      void resolvedGateway
+        .markRead(notificationId)
+        .then(() => {
+          onNotificationRead?.(notificationId);
+          onSuccess?.();
+        })
+        .catch(error => {
+          setNotifications(current => {
+            const restored = current.map(notification =>
+              notification.id === notificationId
+                ? {...notification, isRead: false}
+                : notification,
+            );
+            return restored.some(notification => notification.id === notificationId)
+              ? restored
+              : [...restored, {...target, isRead: false}];
+          });
+          setServerUnreadCount(current =>
+            current === null ? null : current + 1,
+          );
+          onFailure?.();
+          setErrorMessage(toNotificationErrorMessage(error));
+        });
+    } else {
+      onNotificationRead?.(notificationId);
+    }
   };
 
   const handleNotificationPress = (notification: AppNotification) => {
@@ -68,23 +191,97 @@ export function NotificationsScreen({
     notificationId: string,
     mode: 'approve' | 'reject',
   ) => {
+    const decisionGeneration = ++decisionGenerationRef.current;
+    setDecisionReadFailedId(null);
     if (mode === 'reject') {
-      setNotifications(current =>
-        current.filter(notification => notification.id !== notificationId),
-      );
+      if (resolvedGateway !== null && !usesInjectedNotifications) {
+        markAsRead(notificationId, () => {
+          setNotifications(current =>
+            current.filter(notification => notification.id !== notificationId),
+          );
+        });
+      } else {
+        setNotifications(current =>
+          current.filter(notification => notification.id !== notificationId),
+        );
+      }
     } else {
-      markAsRead(notificationId);
+      markAsRead(notificationId, undefined, () =>
+        decisionGenerationRef.current === decisionGeneration
+          ? setDecisionReadFailedId(notificationId)
+          : undefined,
+      );
     }
     setDecision({id: notificationId, mode});
   };
 
   const handleDecisionComplete = () => {
-    if (decision) {
+    if (decision && decisionReadFailedId !== decision.id) {
       setNotifications(current =>
         current.filter(notification => notification.id !== decision.id),
       );
     }
     setDecision(null);
+    setDecisionReadFailedId(null);
+  };
+
+  const handleReadAll = () => {
+    if (displayedUnreadCount === 0) {
+      return;
+    }
+    const previous = notifications;
+    const previousServerUnreadCount = serverUnreadCount;
+    const unreadNotificationIds = notifications
+      .filter(notification => !notification.isRead)
+      .map(notification => notification.id);
+    setNotifications(current =>
+      current.map(notification => ({...notification, isRead: true})),
+    );
+    setServerUnreadCount(0);
+
+    if (resolvedGateway !== null && !usesInjectedNotifications) {
+      void resolvedGateway
+        .markAllRead()
+        .then(() => {
+          unreadNotificationIds.forEach(notificationId =>
+            onNotificationRead?.(notificationId),
+          );
+        })
+        .catch(error => {
+          setNotifications(previous);
+          setServerUnreadCount(previousServerUnreadCount);
+          setErrorMessage(toNotificationErrorMessage(error));
+        });
+    } else {
+      unreadNotificationIds.forEach(notificationId =>
+        onNotificationRead?.(notificationId),
+      );
+    }
+  };
+
+  const handleLoadMore = () => {
+    if (
+      resolvedGateway === null ||
+      usesInjectedNotifications ||
+      !hasNext ||
+      loadingPageRef.current
+    ) {
+      return;
+    }
+
+    loadingPageRef.current = true;
+    const nextPage = page + 1;
+    void resolvedGateway
+      .loadPage(nextPage)
+      .then(result => {
+        setNotifications(current => mergeNotificationPages(current, result.notifications));
+        setPage(nextPage);
+        setHasNext(result.hasNext);
+      })
+      .catch(error => setErrorMessage(toNotificationErrorMessage(error)))
+      .finally(() => {
+        loadingPageRef.current = false;
+      });
   };
 
   return (
@@ -94,31 +291,19 @@ export function NotificationsScreen({
         <View>
           <Text style={styles.sectionTitle}>최근 알림</Text>
           <Text style={styles.unreadCount}>
-            읽지 않은 알림 {unreadCount}개
+            읽지 않은 알림 {displayedUnreadCount}개
           </Text>
         </View>
         <Pressable
           accessibilityRole="button"
-          disabled={unreadCount === 0}
-          onPress={() => {
-            notifications.forEach(notification => {
-              if (!notification.isRead) {
-                onNotificationRead?.(notification.id);
-              }
-            });
-            setNotifications(current =>
-              current.map(notification => ({
-                ...notification,
-                isRead: true,
-              })),
-            );
-          }}
+          disabled={displayedUnreadCount === 0}
+          onPress={handleReadAll}
           style={styles.readAllButton}
         >
           <Text
             style={[
               styles.readAllText,
-              unreadCount === 0 && styles.disabledText,
+              displayedUnreadCount === 0 && styles.disabledText,
             ]}
           >
             모두 읽음
@@ -131,7 +316,11 @@ export function NotificationsScreen({
         }
         data={notifications}
         keyExtractor={notification => notification.id}
-        ListEmptyComponent={<EmptyNotificationState />}
+        ListEmptyComponent={
+          isLoading ? <LoadingNotificationState /> : <EmptyNotificationState />
+        }
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.4}
         renderItem={({item}) => (
           <NotificationItem
             notification={item}
@@ -142,6 +331,11 @@ export function NotificationsScreen({
         )}
         showsVerticalScrollIndicator={false}
       />
+      {errorMessage ? (
+        <Text accessibilityRole="alert" style={styles.errorMessage}>
+          {errorMessage}
+        </Text>
+      ) : null}
       <NotificationDecisionModal
         mode={decision?.mode ?? null}
         onClose={() => setDecision(null)}
@@ -149,6 +343,40 @@ export function NotificationsScreen({
       />
     </View>
   );
+}
+
+function applyReadIds(
+  notifications: readonly AppNotification[],
+  readIds: readonly string[],
+): readonly AppNotification[] {
+  if (readIds.length === 0) {
+    return notifications;
+  }
+  return notifications.map(notification =>
+    notification.isRead || readIds.includes(notification.id)
+      ? {...notification, isRead: true}
+      : notification,
+  );
+}
+
+function mergeNotificationPages(
+  current: readonly AppNotification[],
+  next: readonly AppNotification[],
+): readonly AppNotification[] {
+  const merged = new Map(current.map(notification => [notification.id, notification]));
+  next.forEach(notification => {
+    if (!merged.has(notification.id)) {
+      merged.set(notification.id, notification);
+    }
+  });
+  return [...merged.values()];
+}
+
+function toNotificationErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  return '알림을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
 }
 
 function ScreenHeader({onBack, title}: {onBack?: () => void; title: string}) {
@@ -182,6 +410,14 @@ function EmptyNotificationState() {
   );
 }
 
+function LoadingNotificationState() {
+  return (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyTitle}>알림을 불러오는 중이에요</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   disabledText: {
     color: COLORS.textDisabled,
@@ -210,6 +446,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: 80,
     paddingHorizontal: 24,
+  },
+  errorMessage: {
+    color: COLORS.error,
+    fontSize: 13,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
   },
   emptyTitle: {
     color: COLORS.textStrong,
