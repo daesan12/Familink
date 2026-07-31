@@ -22,6 +22,18 @@ export type {
   UpdatedFamilyGroup,
 } from './api/groupApi';
 export {
+  familyGroupMembershipGateway,
+  loadGroupInviteCode,
+  loadJoinRequests,
+  processJoinRequest,
+} from './api/groupMembershipApi';
+export type {
+  GroupInviteCodeLoader,
+  GroupMembershipGateway,
+  JoinRequestProcessor,
+  JoinRequestsLoader,
+} from './api/groupMembershipApi';
+export {
   DEVELOPMENT_CURRENT_MEMBER_ID,
   DEVELOPMENT_GROUP_MEMBERS,
   DEVELOPMENT_PENDING_JOIN_COUNT,

@@ -34,28 +34,31 @@ const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
 
 afterEach(() => {
   TestRenderer.act(() => {
-    mountedRenderers.splice(0).forEach((renderer) => renderer.unmount());
+    mountedRenderers.splice(0).forEach(renderer => renderer.unmount());
   });
 });
 
 function hasText(renderer: TestRenderer.ReactTestRenderer, value: string) {
-  return renderer.root.findAllByType(Text).some((node) => {
+  return renderer.root.findAllByType(Text).some(node => {
     const children = node.props.children;
     const joined = Array.isArray(children) ? children.join('') : children;
     return joined === value;
   });
 }
 
-function press(renderer: TestRenderer.ReactTestRenderer, label: string) {
+async function press(renderer: TestRenderer.ReactTestRenderer, label: string) {
   const target = renderer.root.findByProps({accessibilityLabel: label});
-  TestRenderer.act(() => {
-    target.props.onPress();
+  await TestRenderer.act(async () => {
+    await target.props.onPress();
   });
 }
 
 async function renderScreen(
   requests: readonly JoinRequest[] = REQUESTS,
-  onProcess?: (groupId: string, input: JoinRequestDecisionInput) => Promise<void>,
+  onProcess?: (
+    groupId: string,
+    input: JoinRequestDecisionInput,
+  ) => Promise<void>,
 ) {
   let renderer: TestRenderer.ReactTestRenderer;
   await TestRenderer.act(async () => {
@@ -87,13 +90,29 @@ test('거절하면 해당 카드가 사라지고 건수가 줄어든다', async 
     return Promise.resolve();
   });
 
-  press(renderer, '손수호 거절');
+  await press(renderer, '손수호 거절');
 
   expect(hasText(renderer, '손수호')).toBe(false);
   expect(hasText(renderer, '승인 요청 1건')).toBe(true);
   expect(decisions).toEqual([
     {joinRequestId: 'jr-suho', decision: 'REJECT', assignedRole: undefined},
   ]);
+});
+
+test('처리에 실패하면 요청 카드를 유지하고 다시 시도할 수 있다', async () => {
+  const renderer = await renderScreen(REQUESTS, async () => {
+    throw new Error('network');
+  });
+
+  await press(renderer, '손수호 거절');
+
+  expect(hasText(renderer, '손수호')).toBe(true);
+  expect(
+    hasText(
+      renderer,
+      '가입 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    ),
+  ).toBe(true);
 });
 
 test('승인하면 역할 선택 모달을 열고, 역할을 고르면 카드가 사라진다', async () => {
@@ -106,10 +125,10 @@ test('승인하면 역할 선택 모달을 열고, 역할을 고르면 카드가
   // 승인 전에는 역할 선택 문구가 없다.
   expect(hasText(renderer, '가족의 역할을 정해주세요')).toBe(false);
 
-  press(renderer, '이종철 승인');
+  await press(renderer, '이종철 승인');
   expect(hasText(renderer, '가족의 역할을 정해주세요')).toBe(true);
 
-  press(renderer, '보호자로 지정');
+  await press(renderer, '보호자로 지정');
 
   // 역할 지정과 함께 카드가 사라지고 모달이 닫힌다.
   expect(hasText(renderer, '이종철')).toBe(false);

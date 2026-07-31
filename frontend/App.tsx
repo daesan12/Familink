@@ -49,9 +49,11 @@ import {
 } from "./src/features/calendar";
 import { FeedScreen } from "./src/features/feed";
 import {
+  familyGroupMembershipGateway,
   familyGroupGateway,
   GroupInfoScreen,
   type FamilyGroupGateway,
+  type GroupMembershipGateway,
   type GroupJoinRequestSummary,
 } from "./src/features/group-info";
 import { NotificationsScreen } from "./src/features/notifications";
@@ -70,6 +72,7 @@ interface AppProps {
   calendarGateway?: CalendarGateway;
   authSession?: AuthSessionCoordinator;
   groupGateway?: FamilyGroupGateway;
+  groupMembershipGateway?: GroupMembershipGateway;
   groupStore?: CurrentGroupStore;
   groups?: readonly FamilyGroup[];
   initialGroupId?: string | null;
@@ -129,6 +132,7 @@ function toPendingJoinRequests(
 
 interface GroupInfoIntegration {
   gateway: FamilyGroupGateway;
+  membership: GroupMembershipGateway;
   renameGroup(groupId: string, name: string): Promise<void>;
 }
 
@@ -147,8 +151,12 @@ function ConnectedGroupInfoScreen(screenProps: AppScreenProps) {
       {...screenProps}
       groupDetailLoader={integration.gateway.getGroupDetail}
       inviteCodeLoader={integration.gateway.getInviteCode}
+      joinRequestsLoader={integration.membership.loadJoinRequests}
       onRenameGroup={(name) =>
         integration.renameGroup(screenProps.currentGroup.id, name)
+      }
+      onProcessJoinRequest={(groupId, input) =>
+        integration.membership.processJoinRequest(groupId, input)
       }
     />
   );
@@ -172,6 +180,7 @@ export default function App({
   calendarGateway,
   authSession = authSessionManager,
   groupGateway = familyGroupGateway,
+  groupMembershipGateway = familyGroupMembershipGateway,
   groupStore = currentGroupStore,
   groups,
   initialGroupId,
@@ -510,8 +519,8 @@ export default function App({
   );
 
   const groupInfoIntegration = useMemo<GroupInfoIntegration>(
-    () => ({ gateway: groupGateway, renameGroup: handleRenameGroup }),
-    [groupGateway, handleRenameGroup]
+    () => ({ gateway: groupGateway, membership: groupMembershipGateway, renameGroup: handleRenameGroup }),
+    [groupGateway, groupMembershipGateway, handleRenameGroup]
   );
   const resolvedScreens = screens ?? DEFAULT_SCREENS;
 

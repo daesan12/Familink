@@ -34,6 +34,7 @@ import type {WeeklyRankingLoader} from '../api/rankingApi';
 import type {FamilyGroupDetail} from '../api/groupApi';
 import type {
   GroupInviteCodeLoader,
+  JoinRequestProcessor,
   JoinRequestsLoader,
 } from '../api/groupMembershipApi';
 import {useWeeklyRanking} from '../hooks/useWeeklyRanking';
@@ -58,6 +59,7 @@ export interface GroupInfoScreenProps extends AppScreenProps {
   groupDetailLoader?: (groupId: string) => Promise<FamilyGroupDetail>;
   inviteCodeLoader?: GroupInviteCodeLoader;
   joinRequestsLoader?: JoinRequestsLoader;
+  onProcessJoinRequest?: JoinRequestProcessor;
   // 그룹 관리 액션 콜백(연동·B-3 전환은 후속). 없으면 로컬 상태만 갱신한다.
   onChangeManager?: (memberId: string) => void;
   onRemoveMember?: (memberId: string) => void;
@@ -87,6 +89,7 @@ export function GroupInfoScreen({
   groupDetailLoader,
   inviteCodeLoader,
   joinRequestsLoader,
+  onProcessJoinRequest,
   onChangeManager,
   onRemoveMember,
   onLeaveGroup,
@@ -389,6 +392,7 @@ export function GroupInfoScreen({
         groupId={currentGroup.id}
         loader={joinRequestsLoader}
         onBack={() => setSubScreen(null)}
+        onProcess={onProcessJoinRequest}
       />
     );
   }
