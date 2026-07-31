@@ -1,5 +1,5 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -20,6 +20,7 @@ const FAMILINK_LOGO = require('../../../assets/images/familink-logo.png');
 
 const MAX_INTERESTS = 10;
 const MAX_INTEREST_LENGTH = 10;
+const EMPTY_INTERESTS: readonly string[] = [];
 
 export const PRESET_INTERESTS: readonly string[] = [
   '가족과 일상',
@@ -50,7 +51,7 @@ interface InterestSelectionScreenProps {
 }
 
 export function InterestSelectionScreen({
-  initialInterests = [],
+  initialInterests = EMPTY_INTERESTS,
   onBack,
   onComplete,
   onSave,
@@ -69,9 +70,25 @@ export function InterestSelectionScreen({
   const [savedVisible, setSavedVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const hasLocalChangesRef = useRef(false);
   const displayedInterests = [...PRESET_INTERESTS, ...customInterests];
 
+  useEffect(() => {
+    if (hasLocalChangesRef.current) {
+      return;
+    }
+
+    const normalized = normalizeInterests(initialInterests);
+    setSelectedInterests(normalized);
+    setCustomInterests(
+      normalized.filter(
+        interest => !PRESET_INTERESTS.includes(interest),
+      ),
+    );
+  }, [initialInterests]);
+
   const handleToggleInterest = (interest: string) => {
+    hasLocalChangesRef.current = true;
     setErrorMessage(null);
     if (selectedInterests.includes(interest)) {
       setSelectedInterests(current =>
@@ -89,6 +106,7 @@ export function InterestSelectionScreen({
   };
 
   const handleAddCustomInterest = (interest: string) => {
+    hasLocalChangesRef.current = true;
     setErrorMessage(null);
 
     if (selectedInterests.includes(interest)) {

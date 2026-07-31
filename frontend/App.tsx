@@ -27,6 +27,11 @@ import {
   type PendingJoinRequest,
 } from "./src/features/auth/screens/GroupOnboardingScreen";
 import { InterestSelectionScreen } from "./src/features/auth/screens/InterestSelectionScreen";
+import {
+  familyInterestGateway,
+  getInterestErrorMessage,
+  type InterestGateway,
+} from "./src/features/auth/api/interestApi";
 import { SignedInWelcomeScreen } from "./src/features/auth/screens/SignedInWelcomeScreen";
 import { SignupFlowScreen } from "./src/features/auth/screens/SignupFlowScreen";
 import { WelcomeScreen } from "./src/features/auth/screens/WelcomeScreen";
@@ -61,6 +66,7 @@ import {
   type GroupJoinRequestSummary,
 } from "./src/features/group-info";
 import { NotificationsScreen } from "./src/features/notifications";
+import { ApiError } from "./src/shared/api";
 
 type RootRoute =
   | "welcome"
@@ -79,6 +85,7 @@ interface AppProps {
   groupMemberGateway?: GroupMemberGateway;
   groupManagementGateway?: GroupManagementGateway;
   groupMembershipGateway?: GroupMembershipGateway;
+  interestGateway?: InterestGateway;
   groupStore?: CurrentGroupStore;
   groups?: readonly FamilyGroup[];
   initialGroupId?: string | null;
@@ -227,6 +234,7 @@ export default function App({
   groupMemberGateway = familyGroupMemberGateway,
   groupManagementGateway = familyGroupManagementGateway,
   groupMembershipGateway = familyGroupMembershipGateway,
+  interestGateway = familyInterestGateway,
   groupStore = currentGroupStore,
   groups,
   initialGroupId,
@@ -252,6 +260,11 @@ export default function App({
       (initialRootRoute === "appShell" && __DEV__ ? DEVELOPMENT_GROUPS : [])),
   ]);
   const [interestGroup, setInterestGroup] = useState<FamilyGroup | null>(null);
+  const [interestMemberId, setInterestMemberId] = useState<string | null>(null);
+  const [interestInitialValues, setInterestInitialValues] = useState<
+    readonly string[]
+  >([]);
+  const [interestLoadFailed, setInterestLoadFailed] = useState(false);
   const [joinRequests, setJoinRequests] =
     useState<readonly PendingJoinRequest[]>(initialJoinRequests);
   const resolvedCalendarGateway = useMemo(
@@ -267,6 +280,7 @@ export default function App({
     !shouldRestoreSession
   );
   const authInvalidationVersionRef = useRef(0);
+  const interestSetupRequestRef = useRef(0);
   const resolvedGroups = availableGroups;
 
   const clearAuthenticationState = useCallback(() => {
@@ -274,6 +288,10 @@ export default function App({
     setActiveGroupId(null);
     setAvailableGroups([]);
     setInterestGroup(null);
+    setInterestMemberId(null);
+    setInterestInitialValues([]);
+    setInterestLoadFailed(false);
+    interestSetupRequestRef.current += 1;
     setJoinRequests([]);
     setGroupOnboardingReturnRoute("welcome");
     setLoginVisible(false);
@@ -443,10 +461,109 @@ export default function App({
     Alert.alert(title, "후속 작업에서 연결될 화면입니다.");
   };
 
+  const resolveInterestMemberId = useCallback(
+    async (groupId: string, knownMemberId?: string | null) => {
+      if (knownMemberId !== undefined && knownMemberId !== null) {
+        return knownMemberId;
+      }
+
+      try {
+        const snapshot = await groupGateway.loadGroups();
+        return (
+          snapshot.groups.find((group) => group.id === groupId)?.myMemberId ??
+          null
+        );
+      } catch {
+        return null;
+      }
+    },
+    [groupGateway]
+  );
+
+  const openInterestSetup = useCallback(
+    (
+      group: FamilyGroup,
+      knownMemberId?: string | null,
+      loadExistingInterests = true,
+    ) => {
+      const requestId = interestSetupRequestRef.current + 1;
+      interestSetupRequestRef.current = requestId;
+      setInterestGroup(group);
+      setInterestMemberId(knownMemberId ?? null);
+      setInterestInitialValues([]);
+      setInterestLoadFailed(
+        onSaveInterests === undefined && loadExistingInterests,
+      );
+      setRoute("interestSetup");
+
+      void (async () => {
+        const memberId = await resolveInterestMemberId(group.id, knownMemberId);
+        let initialValues: readonly string[] = [];
+        let initialLoadFailed = false;
+
+        if (interestSetupRequestRef.current !== requestId) {
+          return;
+        }
+
+        if (
+          onSaveInterests === undefined &&
+          loadExistingInterests &&
+          memberId !== null
+        ) {
+          try {
+            initialValues = (
+              await interestGateway.loadInterests(group.id, memberId)
+            ).interests;
+          } catch (error) {
+            if (interestSetupRequestRef.current !== requestId) {
+              return;
+            }
+            Alert.alert(
+              "관심사를 불러오지 못했어요",
+              getInterestErrorMessage(
+                error,
+                "네트워크 연결을 확인한 뒤 다시 시도해 주세요.",
+              ),
+            );
+            initialLoadFailed = true;
+          }
+        } else if (onSaveInterests === undefined && loadExistingInterests) {
+          if (interestSetupRequestRef.current !== requestId) {
+            return;
+          }
+          Alert.alert(
+            "관심사 설정을 준비하지 못했어요",
+            "현재 그룹의 구성원 정보를 확인한 뒤 다시 시도해 주세요.",
+          );
+          initialLoadFailed = true;
+        }
+
+        if (interestSetupRequestRef.current !== requestId) {
+          return;
+        }
+
+        setInterestMemberId(memberId);
+        setInterestInitialValues(initialValues);
+        setInterestLoadFailed(initialLoadFailed);
+      })();
+    },
+    [
+      interestGateway,
+      onSaveInterests,
+      resolveInterestMemberId,
+    ]
+  );
+
   const handleCreateGroup = async (input: CreateGroupInput) => {
-    const createdGroup = onCreateGroup
-      ? await onCreateGroup(input)
-      : (await groupGateway.createGroup(input)).group;
+    let createdGroup: FamilyGroup;
+    let createdMemberId: string | null = null;
+    if (onCreateGroup !== undefined) {
+      createdGroup = await onCreateGroup(input);
+    } else {
+      const created = await groupGateway.createGroup(input);
+      createdGroup = created.group;
+      createdMemberId = created.managerMemberId;
+    }
     setAvailableGroups((current) => [
       ...current.filter((group) => group.id !== createdGroup.id),
       createdGroup,
@@ -457,8 +574,7 @@ export default function App({
       // 서버가 확정한 그룹만 저장하고 오류 처리는 상위 앱 계층에 위임한다.
     });
     if (createdGroup.role === "careReceiver") {
-      setInterestGroup(createdGroup);
-      setRoute("interestSetup");
+      await openInterestSetup(createdGroup, createdMemberId, false);
       return;
     }
     setRoute("appShell");
@@ -505,7 +621,7 @@ export default function App({
     });
   };
 
-  const handleOpenApprovedGroup = (request: ApprovedJoinRequest) => {
+  const handleOpenApprovedGroup = async (request: ApprovedJoinRequest) => {
     const groupId = request.groupId;
     setAvailableGroups((current) => {
       if (current.some((group) => group.id === groupId)) {
@@ -527,20 +643,63 @@ export default function App({
       // 그룹 진입은 유지하고 영속화 오류 처리는 상위 앱 계층에 위임한다.
     });
     if (request.role === "careReceiver") {
-      setInterestGroup({
+      await openInterestSetup({
         id: groupId,
         name: request.groupName,
         role: request.role,
       });
-      setRoute("interestSetup");
       return;
     }
     setRoute("appShell");
   };
 
   const handleFinishInterestSetup = () => {
+    interestSetupRequestRef.current += 1;
     setInterestGroup(null);
+    setInterestMemberId(null);
+    setInterestInitialValues([]);
+    setInterestLoadFailed(false);
     setRoute("appShell");
+  };
+
+  const handleSaveInterests = async (interests: readonly string[]) => {
+    if (interestGroup === null) {
+      throw new ApiError({
+        code: "INVALID_REQUEST",
+        kind: "invalidResponse",
+        message: "관심사를 저장할 그룹이 없습니다.",
+      });
+    }
+
+    if (onSaveInterests !== undefined) {
+      await onSaveInterests({
+        groupId: interestGroup.id,
+        interests,
+      });
+      return;
+    }
+
+    if (interestMemberId === null) {
+      throw new ApiError({
+        code: "INVALID_REQUEST",
+        kind: "invalidResponse",
+        message: "현재 그룹의 구성원 정보를 확인할 수 없습니다.",
+      });
+    }
+
+    if (interestLoadFailed) {
+      throw new ApiError({
+        code: "INTERESTS_NOT_LOADED",
+        kind: "invalidResponse",
+        message: "관심사를 먼저 불러온 뒤 저장해 주세요.",
+      });
+    }
+
+    await interestGateway.replaceInterests(
+      interestGroup.id,
+      interestMemberId,
+      interests,
+    );
   };
 
   const openGroupOnboarding = (
@@ -689,14 +848,10 @@ export default function App({
         )}
         {route === "interestSetup" && interestGroup !== null && (
           <InterestSelectionScreen
+            initialInterests={interestInitialValues}
             onBack={handleFinishInterestSetup}
             onComplete={handleFinishInterestSetup}
-            onSave={(interests) =>
-              onSaveInterests?.({
-                groupId: interestGroup.id,
-                interests,
-              })
-            }
+            onSave={handleSaveInterests}
             onSkip={handleFinishInterestSetup}
           />
         )}

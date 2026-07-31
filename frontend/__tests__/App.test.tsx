@@ -584,6 +584,263 @@ test("피보호자로 새 그룹을 만들면 관심사 설정 후 앱 셸에 �
   ).toBeTruthy();
 });
 
+test("피보호자 그룹 생성 시 관심사 전체 교체 API를 연결한다", async () => {
+  const groupGateway = createGroupGateway();
+  const interestGateway = {
+    loadInterests: jest.fn().mockResolvedValue({
+      memberId: "member-manager",
+      interests: ["산책"],
+    }),
+    replaceInterests: jest.fn().mockResolvedValue({
+      memberId: "member-manager",
+      interests: ["음악"],
+    }),
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        groupGateway={groupGateway}
+        initialRootRoute="groupOnboarding"
+        interestGateway={interestGateway}
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: "우리 가족만의 공간을 시작해요",
+      })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹 이름" })
+      .props.onChangeText("API 가족");
+    renderer!.root
+      .findByProps({ accessibilityLabel: "피보호자" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "생성하기" })
+      .props.onPress();
+    await Promise.resolve();
+  });
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "음악 관심사" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "관심사 저장하고 다음" })
+      .props.onPress();
+  });
+
+  expect(interestGateway.replaceInterests).toHaveBeenCalledWith(
+    "created-group-api",
+    "member-manager",
+    ["음악"],
+  );
+  expect(interestGateway.loadInterests).not.toHaveBeenCalled();
+});
+
+test("피보호자 그룹 생성 시 관심사 설정 건너뛰기는 API를 호출하지 않는다", async () => {
+  const groupGateway = createGroupGateway();
+  const interestGateway = {
+    loadInterests: jest.fn().mockResolvedValue({
+      memberId: "member-manager",
+      interests: ["산책"],
+    }),
+    replaceInterests: jest.fn().mockResolvedValue({
+      memberId: "member-manager",
+      interests: [],
+    }),
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        groupGateway={groupGateway}
+        initialRootRoute="groupOnboarding"
+        interestGateway={interestGateway}
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: "우리 가족만의 공간을 시작해요",
+      })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹 이름" })
+      .props.onChangeText("API 가족");
+    renderer!.root
+      .findByProps({ accessibilityLabel: "피보호자" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "생성하기" })
+      .props.onPress();
+    await Promise.resolve();
+  });
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "관심사 설정 건너뛰기" })
+      .props.onPress();
+  });
+
+  expect(interestGateway.loadInterests).not.toHaveBeenCalled();
+  expect(interestGateway.replaceInterests).not.toHaveBeenCalled();
+  expect(renderer!.root.findByProps({ children: "API 가족" })).toBeTruthy();
+});
+
+test("관심사 초기 조회 실패 시 기존 목록을 지우는 저장을 보내지 않는다", async () => {
+  const groupGateway = createGroupGateway();
+  groupGateway.loadGroups.mockResolvedValue({
+    groups: [
+      {
+        id: "approved-care-group",
+        name: "돌봄 가족",
+        role: "careReceiver",
+        isManager: false,
+        memberCount: 1,
+        myMemberId: "member-manager",
+      },
+    ],
+    joinRequests: [],
+  });
+  const interestGateway = {
+    loadInterests: jest.fn().mockRejectedValue(new Error("network")),
+    replaceInterests: jest.fn().mockResolvedValue({
+      memberId: "member-manager",
+      interests: [],
+    }),
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        groupGateway={groupGateway}
+        initialJoinRequests={[
+          {
+            groupId: "approved-care-group",
+            groupName: "돌봄 가족",
+            id: "approved-request",
+            role: "careReceiver",
+            status: "APPROVED",
+          },
+        ]}
+        initialRootRoute="groupOnboarding"
+        interestGateway={interestGateway}
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "돌봄 가족 열기" })
+      .props.onPress();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "관심사 저장하고 다음" })
+      .props.onPress();
+  });
+
+  expect(interestGateway.loadInterests).toHaveBeenCalledWith(
+    "approved-care-group",
+    "member-manager",
+  );
+  expect(interestGateway.replaceInterests).not.toHaveBeenCalled();
+});
+
+test("관심사 조회 중 화면을 나가면 늦은 실패 알림을 표시하지 않는다", async () => {
+  const groupGateway = createGroupGateway();
+  groupGateway.loadGroups.mockResolvedValue({
+    groups: [
+      {
+        id: "approved-care-group",
+        name: "돌봄 가족",
+        role: "careReceiver",
+        isManager: false,
+        memberCount: 1,
+        myMemberId: "member-manager",
+      },
+    ],
+    joinRequests: [],
+  });
+  let rejectLoad: (error: Error) => void = () => undefined;
+  const pendingLoad = new Promise<never>((_, reject) => {
+    rejectLoad = reject;
+  });
+  const interestGateway = {
+    loadInterests: jest.fn().mockReturnValue(pendingLoad),
+    replaceInterests: jest.fn().mockResolvedValue({
+      memberId: "member-manager",
+      interests: [],
+    }),
+  };
+  const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        groupGateway={groupGateway}
+        initialJoinRequests={[
+          {
+            groupId: "approved-care-group",
+            groupName: "돌봄 가족",
+            id: "approved-request",
+            role: "careReceiver",
+            status: "APPROVED",
+          },
+        ]}
+        initialRootRoute="groupOnboarding"
+        interestGateway={interestGateway}
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "돌봄 가족 열기" })
+      .props.onPress();
+    await Promise.resolve();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "관심사 설정 건너뛰기" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    rejectLoad(new Error("network"));
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(alertSpy).not.toHaveBeenCalled();
+});
+
 test("초대 코드 참여 요청을 보내면 승인 대기 카드를 표시한다", async () => {
   const onJoinGroup = jest.fn().mockReturnValue({
     groupName: "가족 소모임",
