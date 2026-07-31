@@ -19,6 +19,8 @@ import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationService;
 import com.ssafy.s15p11b104.domain.call.service.AiCallPostToolService;
 import com.ssafy.s15p11b104.domain.call.service.AiCallPromptContextProvider;
 import com.ssafy.s15p11b104.domain.call.service.CallSessionService;
+import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
+import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.call.service.CallTranscriptService;
 import com.ssafy.s15p11b104.domain.calendar.repository.CalendarEventRepository;
 import com.ssafy.s15p11b104.domain.calendar.repository.EventParticipantRepository;
@@ -38,6 +40,7 @@ import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRepository
 import com.ssafy.s15p11b104.domain.notification.repository.NotificationRepository;
 import com.ssafy.s15p11b104.domain.notification.repository.NotificationSettingRepository;
 import com.ssafy.s15p11b104.domain.notification.service.EventReminderService;
+import com.ssafy.s15p11b104.domain.report.repository.DailyReportRepository;
 import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationService;
 
 import jakarta.persistence.EntityManager;
@@ -141,6 +144,15 @@ class BackendApplicationContextTests {
 	 */
 	@MockitoBean
 	private EventReminderService eventReminderService;
+
+	@MockitoBean
+	private DailyReportRepository dailyReportRepository;
+
+	@MockitoBean
+	private CallSessionRepository callSessionRepository;
+
+	@MockitoBean
+	private CallReportCallRepository callReportCallRepository;
 
 	@Test
 	void healthEndpointIsPublic() throws Exception {
