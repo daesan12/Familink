@@ -85,6 +85,7 @@ class PostReadApiTest extends IntegrationTest {
 	private FamilyGroup otherGroup;
 	private GroupMember viewer;
 	private GroupMember author;
+	private GroupMember otherGroupMember;
 	private Post imagePost;
 	private Post textPost;
 
@@ -112,7 +113,7 @@ class PostReadApiTest extends IntegrationTest {
 			new GroupMember(group, viewerUser, GroupRole.GUARDIAN, true, Instant.now()));
 		author = groupMemberRepository.save(
 			new GroupMember(group, authorUser, GroupRole.CARE_RECEIVER, false, Instant.now()));
-		groupMemberRepository.save(
+		otherGroupMember = groupMemberRepository.save(
 			new GroupMember(otherGroup, outsiderUser, GroupRole.GUARDIAN, true, Instant.now()));
 		entityManager.flush();
 
@@ -224,6 +225,42 @@ class PostReadApiTest extends IntegrationTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.dates[0].items[0].postId").value(textPost.getId()))
 			.andExpect(jsonPath("$.data.dates[0].items[0].type").value("TEXT"));
+	}
+
+	@Test
+	void archiveCanFilterByActiveMemberInTheSameGroup() throws Exception {
+		mockMvc.perform(get("/groups/{groupId}/archive", group.getId())
+				.param("memberId", author.getId().toString())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.dates[0].items.length()").value(2));
+
+		mockMvc.perform(get("/groups/{groupId}/archive", group.getId())
+				.param("memberId", viewer.getId().toString())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.dates").isEmpty());
+	}
+
+	@Test
+	void archiveRejectsMemberFromAnotherGroup() throws Exception {
+		mockMvc.perform(get("/groups/{groupId}/archive", group.getId())
+				.param("memberId", otherGroupMember.getId().toString())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
+	void archiveRejectsInactiveMember() throws Exception {
+		author.leave(Instant.now());
+		entityManager.flush();
+
+		mockMvc.perform(get("/groups/{groupId}/archive", group.getId())
+				.param("memberId", author.getId().toString())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test

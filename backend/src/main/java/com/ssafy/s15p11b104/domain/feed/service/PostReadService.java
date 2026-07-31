@@ -99,8 +99,13 @@ public class PostReadService {
 		Long groupId,
 		LocalDate date,
 		String type,
+		Long memberId,
 		Long authenticatedUserId) {
 		getActiveMember(groupId, authenticatedUserId);
+		if (memberId != null) {
+			groupMemberRepository.findActiveByGroupIdAndMemberId(groupId, memberId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REQUEST));
+		}
 		PostArchiveType archiveType = parseType(type);
 		List<Post> posts = postRepository.findPageByGroupId(groupId, Pageable.unpaged()).getContent();
 		Map<Long, List<PostMedia>> mediaByPost = mediaByPost(posts);
@@ -109,6 +114,9 @@ public class PostReadService {
 		for (Post post : posts) {
 			LocalDate postDate = post.getCreatedAt().atZone(BUSINESS_ZONE).toLocalDate();
 			if (date != null && !date.equals(postDate)) {
+				continue;
+			}
+			if (memberId != null && !memberId.equals(post.getAuthorMember().getId())) {
 				continue;
 			}
 			ArchiveItemResponse item = toArchiveItem(

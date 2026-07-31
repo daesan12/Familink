@@ -46,7 +46,8 @@ import {
   type AuthSessionCoordinator,
 } from "./src/features/auth/session";
 import { AiCallScreen } from "./src/features/ai-call";
-import { ArchiveScreen } from "./src/features/archive";
+import { ArchiveScreen, type ArchiveMember } from "./src/features/archive";
+import { loadArchive } from "./src/features/archive/api/archiveApi";
 import {
   CalendarGatewayProvider,
   CalendarScreen,
@@ -243,6 +244,41 @@ function ConnectedGroupInfoScreen(screenProps: AppScreenProps) {
   );
 }
 
+function ConnectedArchiveScreen(screenProps: AppScreenProps) {
+  const integration = useContext(GroupInfoIntegrationContext);
+  const usesDevelopmentFixture =
+    __DEV__ && screenProps.currentGroup.id.startsWith("development-");
+  const loadMembers = useCallback(
+    async (groupId: string): Promise<readonly ArchiveMember[]> => {
+      if (integration === null) {
+        return [];
+      }
+      const members = await integration.members.loadMembers(groupId);
+      return members.map(member => {
+        const name = member.alias ?? member.name;
+        return {
+          avatarText: [...name].slice(0, 2).join("") || "?",
+          id: member.memberId,
+          name,
+        };
+      });
+    },
+    [integration],
+  );
+
+  if (integration === null || usesDevelopmentFixture) {
+    return <ArchiveScreen {...screenProps} />;
+  }
+
+  return (
+    <ArchiveScreen
+      {...screenProps}
+      archiveLoader={loadArchive}
+      membersLoader={loadMembers}
+    />
+  );
+}
+
 function ConnectedFeedScreen(screenProps: AppScreenProps) {
   const currentMemberId = (
     screenProps.currentGroup as typeof screenProps.currentGroup & {
@@ -310,7 +346,7 @@ function ConnectedFeedScreen(screenProps: AppScreenProps) {
 
 const DEFAULT_SCREENS: AppScreenRegistry = {
   aiCall: AiCallScreen,
-  archive: ArchiveScreen,
+  archive: ConnectedArchiveScreen,
   calendar: CalendarScreen,
   feed: ConnectedFeedScreen,
   groupInfo: ConnectedGroupInfoScreen,

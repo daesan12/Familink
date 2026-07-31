@@ -1,9 +1,17 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useMemo, useState} from 'react';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {useEffect, useMemo, useRef, useState} from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import type {ArchiveLoader} from '../api/archiveApi';
 import {
   filterPosts,
   formatDateLabel,
@@ -24,8 +32,10 @@ import type {
 } from '../types';
 
 export interface ArchiveScreenProps extends AppScreenProps {
+  archiveLoader?: ArchiveLoader;
   initialMembers?: readonly ArchiveMember[];
   initialPosts?: readonly ArchivePost[];
+  membersLoader?: (groupId: string) => Promise<readonly ArchiveMember[]>;
 }
 
 const EMPTY_MEMBERS: readonly ArchiveMember[] = [];
@@ -49,19 +59,172 @@ function computeInitialMonth(posts: readonly ArchivePost[]): {
 }
 
 export function ArchiveScreen({
+  archiveLoader,
   initialMembers,
   initialPosts,
+  membersLoader,
+  currentGroup,
   onCloseArchive,
   onOpenPost,
 }: ArchiveScreenProps) {
-  const members =
-    initialMembers ?? (__DEV__ ? DEVELOPMENT_ARCHIVE_MEMBERS : EMPTY_MEMBERS);
-  const posts =
-    initialPosts ?? (__DEV__ ? DEVELOPMENT_ARCHIVE_POSTS : EMPTY_POSTS);
-
   const [selectedMemberId, setSelectedMemberId] = useState<MemberFilter>(null);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [remoteMembers, setRemoteMembers] = useState<readonly ArchiveMember[]>(
+    EMPTY_MEMBERS,
+  );
+  const [remotePosts, setRemotePosts] = useState<readonly ArchivePost[]>(
+    EMPTY_POSTS,
+  );
+  const [remoteCalendarPosts, setRemoteCalendarPosts] = useState<
+    readonly ArchivePost[]
+  >(EMPTY_POSTS);
+  const [remoteCalendarPostsKey, setRemoteCalendarPostsKey] = useState<
+    string | null
+  >(null);
+  const [membersState, setMembersState] = useState<LoadState>(() =>
+    createInitialLoadState(archiveLoader !== undefined),
+  );
+  const [archiveState, setArchiveState] = useState<LoadState>(() =>
+    createInitialLoadState(archiveLoader !== undefined),
+  );
+  const [reloadVersion, setReloadVersion] = useState(0);
+  const membersRequestId = useRef(0);
+  const archiveRequestId = useRef(0);
+
+  const membersRequestKey = createMembersRequestKey(
+    currentGroup.id,
+    reloadVersion,
+  );
+  const archiveRequestKey = createArchiveRequestKey(
+    currentGroup.id,
+    selectedDateKey,
+    selectedMemberId,
+    reloadVersion,
+  );
+  const calendarRequestKey = createCalendarRequestKey(
+    currentGroup.id,
+    selectedMemberId,
+  );
+
+  const members =
+    archiveLoader === undefined
+      ? initialMembers ??
+        (__DEV__ ? DEVELOPMENT_ARCHIVE_MEMBERS : EMPTY_MEMBERS)
+      : membersState.key === membersRequestKey &&
+          membersState.status === 'success'
+        ? remoteMembers
+        : EMPTY_MEMBERS;
+  const posts =
+    archiveLoader === undefined
+      ? initialPosts ?? (__DEV__ ? DEVELOPMENT_ARCHIVE_POSTS : EMPTY_POSTS)
+      : archiveState.key === archiveRequestKey &&
+          archiveState.status === 'success'
+        ? remotePosts
+        : EMPTY_POSTS;
+  const calendarPosts =
+    archiveLoader === undefined || remoteCalendarPostsKey === calendarRequestKey
+      ? archiveLoader === undefined
+        ? posts
+        : remoteCalendarPosts
+      : EMPTY_POSTS;
+
+  useEffect(() => {
+    setSelectedMemberId(null);
+    setSelectedDateKey(null);
+    setIsCalendarOpen(false);
+  }, [currentGroup.id]);
+
+  useEffect(() => {
+    if (archiveLoader === undefined || membersLoader === undefined) {
+      setMembersState({key: membersRequestKey, status: 'success'});
+      return;
+    }
+
+    const requestId = membersRequestId.current + 1;
+    const requestKey = membersRequestKey;
+    membersRequestId.current = requestId;
+    setMembersState({key: requestKey, status: 'loading'});
+    void membersLoader(currentGroup.id)
+      .then(result => {
+        if (membersRequestId.current !== requestId) {
+          return;
+        }
+        setRemoteMembers(result);
+        setMembersState({key: requestKey, status: 'success'});
+      })
+      .catch(error => {
+        if (membersRequestId.current !== requestId) {
+          return;
+        }
+        setMembersState({
+          key: requestKey,
+          message:
+            error instanceof Error
+              ? error.message
+              : '구성원 목록을 불러오지 못했습니다.',
+          status: 'error',
+        });
+      });
+  }, [
+    archiveLoader,
+    currentGroup.id,
+    membersLoader,
+    membersRequestKey,
+    reloadVersion,
+  ]);
+
+  useEffect(() => {
+    if (archiveLoader === undefined) {
+      setArchiveState({key: archiveRequestKey, status: 'success'});
+      return;
+    }
+
+    const requestId = archiveRequestId.current + 1;
+    archiveRequestId.current = requestId;
+    setRemotePosts(EMPTY_POSTS);
+    if (selectedDateKey === null) {
+      setRemoteCalendarPosts(EMPTY_POSTS);
+      setRemoteCalendarPostsKey(null);
+    }
+    setArchiveState({key: archiveRequestKey, status: 'loading'});
+    void archiveLoader(currentGroup.id, {
+      date: selectedDateKey,
+      memberId: selectedMemberId,
+    })
+      .then(result => {
+        if (archiveRequestId.current !== requestId) {
+          return;
+        }
+        setRemotePosts(result);
+        if (selectedDateKey === null) {
+          setRemoteCalendarPosts(result);
+          setRemoteCalendarPostsKey(calendarRequestKey);
+        }
+        setArchiveState({key: archiveRequestKey, status: 'success'});
+      })
+      .catch(error => {
+        if (archiveRequestId.current !== requestId) {
+          return;
+        }
+        setArchiveState({
+          key: archiveRequestKey,
+          message:
+            error instanceof Error
+              ? error.message
+              : '보관함을 불러오지 못했습니다.',
+          status: 'error',
+        });
+      });
+  }, [
+    archiveLoader,
+    archiveRequestKey,
+    currentGroup.id,
+    calendarRequestKey,
+    reloadVersion,
+    selectedDateKey,
+    selectedMemberId,
+  ]);
 
   // 렌더마다 새 객체가 되어 달력 모달의 표시 월을 초기화시키지 않도록 안정화한다.
   const initialMonth = useMemo(() => computeInitialMonth(posts), [posts]);
@@ -72,6 +235,18 @@ export function ArchiveScreen({
   });
   const groups = groupPostsByDate(visiblePosts);
   const isEmpty = visiblePosts.length === 0;
+  const errorMessage =
+    membersState.key === membersRequestKey && membersState.status === 'error'
+      ? membersState.message
+      : archiveState.key === archiveRequestKey && archiveState.status === 'error'
+        ? archiveState.message
+        : null;
+  const isLoading =
+    archiveLoader !== undefined &&
+    ((membersState.key !== membersRequestKey ||
+      membersState.status === 'loading') ||
+      (archiveState.key !== archiveRequestKey ||
+        archiveState.status === 'loading'));
 
   const handleSelectMember = (memberId: MemberFilter) => {
     setSelectedMemberId(memberId);
@@ -146,7 +321,18 @@ export function ArchiveScreen({
         </View>
       ) : null}
 
-      {isEmpty ? (
+      {errorMessage ? (
+        <ArchiveErrorState
+          message={errorMessage}
+          onRetry={() => setReloadVersion(version => version + 1)}
+        />
+      ) : isLoading ? (
+        <ActivityIndicator
+          accessibilityLabel="보관함을 불러오는 중"
+          color={COLORS.purple}
+          style={styles.loading}
+        />
+      ) : isEmpty ? (
         <ArchiveEmptyState
           memberName={
             members.find(member => member.id === selectedMemberId)?.name ?? null
@@ -172,9 +358,63 @@ export function ArchiveScreen({
         memberId={selectedMemberId}
         onClose={() => setIsCalendarOpen(false)}
         onSelectDate={handleSelectDate}
-        posts={posts}
+        posts={calendarPosts}
         visible={isCalendarOpen}
       />
+    </View>
+  );
+}
+
+type LoadState =
+  | {key: string | null; status: 'error'; message: string}
+  | {key: string | null; status: 'loading'}
+  | {key: string | null; status: 'success'};
+
+function createInitialLoadState(isRemote: boolean): LoadState {
+  if (isRemote) {
+    return {key: null, status: 'loading'};
+  }
+  return {key: null, status: 'success'};
+}
+
+function createMembersRequestKey(groupId: string, reloadVersion: number) {
+  return `${groupId}|${reloadVersion}`;
+}
+
+function createArchiveRequestKey(
+  groupId: string,
+  date: string | null,
+  memberId: MemberFilter,
+  reloadVersion: number,
+) {
+  return `${groupId}|${date ?? ''}|${memberId ?? ''}|${reloadVersion}`;
+}
+
+function createCalendarRequestKey(
+  groupId: string,
+  memberId: MemberFilter,
+) {
+  return `${groupId}|${memberId ?? ''}`;
+}
+
+function ArchiveErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <View style={styles.errorState}>
+      <Text style={styles.errorText}>{message}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="보관함 다시 시도"
+        onPress={onRetry}
+        style={styles.retryButton}
+      >
+        <Text style={styles.retryText}>다시 시도</Text>
+      </Pressable>
     </View>
   );
 }
@@ -263,6 +503,17 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
     paddingHorizontal: 24,
   },
+  errorState: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  errorText: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    textAlign: 'center',
+  },
   emptyTitle: {
     color: COLORS.textStrong,
     fontSize: 18,
@@ -281,6 +532,21 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 20,
     paddingTop: 8,
+  },
+  loading: {
+    flex: 1,
+  },
+  retryButton: {
+    alignItems: 'center',
+    marginTop: 12,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  retryText: {
+    color: COLORS.purpleDeep,
+    fontSize: 14,
+    fontWeight: '700',
   },
   screen: {
     backgroundColor: COLORS.background,
