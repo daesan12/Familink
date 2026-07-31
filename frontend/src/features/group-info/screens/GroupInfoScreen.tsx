@@ -10,6 +10,7 @@ import {
 } from '../components/GroupMenuSection';
 import {GroupMemberRow} from '../components/GroupMemberRow';
 import {MemberProfileModal} from '../components/MemberProfileModal';
+import {WeeklyRankingModal} from '../components/WeeklyRankingModal';
 import {
   applyAliasChange,
   applyRoleChange,
@@ -20,6 +21,8 @@ import {
   resolveMemberDisplayName,
 } from '../groupInfoModel';
 import {getDevelopmentGroupInfo} from '../fixtures/groupInfoFixtures';
+import type {WeeklyRankingLoader} from '../api/rankingApi';
+import {useWeeklyRanking} from '../hooks/useWeeklyRanking';
 import type {GroupMember} from '../types';
 
 export interface GroupInfoScreenProps extends AppScreenProps {
@@ -27,6 +30,8 @@ export interface GroupInfoScreenProps extends AppScreenProps {
   currentMemberId?: string;
   initialMembers?: readonly GroupMember[];
   pendingJoinCount?: number;
+  // 주간 효자 랭킹 로더 주입(테스트·연동용). 없으면 기본 로더로 조회한다.
+  rankingLoader?: WeeklyRankingLoader;
 }
 
 const EMPTY_MEMBERS: readonly GroupMember[] = [];
@@ -41,6 +46,7 @@ export function GroupInfoScreen({
   currentMemberId,
   initialMembers,
   pendingJoinCount,
+  rankingLoader,
 }: GroupInfoScreenProps) {
   // 현재 그룹 기준 데이터. props 오버라이드(테스트)가 없으면 그룹 ID로 목업을 조회한다.
   // API 연동 시 이 조회만 서버 응답으로 바꾸면 전환 로직은 그대로 재사용된다.
@@ -59,10 +65,15 @@ export function GroupInfoScreen({
             pendingJoinCount: pendingJoinCount ?? 0,
           };
 
+  // 주간 효자 랭킹을 비동기로 조회한다(useFeed와 같은 로더/훅 패턴).
+  // API 연동 시 rankingLoader만 서버 호출로 바꾸면 화면은 그대로 재사용된다.
+  const ranking = useWeeklyRanking(currentGroup.id, rankingLoader);
+
   const [members, setMembers] = useState<readonly GroupMember[]>(scoped.members);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [aliasDraft, setAliasDraft] = useState('');
   const [profileMemberId, setProfileMemberId] = useState<string | null>(null);
+  const [isRankingOpen, setIsRankingOpen] = useState(false);
   const [scopedGroupId, setScopedGroupId] = useState(currentGroup.id);
 
   // 그룹을 전환하면 목록과 편집 중 상태(호칭 편집·임시 입력·열린 프로필)를
@@ -73,6 +84,7 @@ export function GroupInfoScreen({
     setEditingMemberId(null);
     setAliasDraft('');
     setProfileMemberId(null);
+    setIsRankingOpen(false);
   }
 
   const viewerMemberId = scoped.currentMemberId;
@@ -177,7 +189,7 @@ export function GroupInfoScreen({
           accessibilityHint="이번 주 가족 카네이션 랭킹을 봅니다"
           accessibilityLabel="이번주 우리 가족 효자 랭킹 조회하기"
           accessibilityRole="button"
-          onPress={() => notifyDeferred('효자 랭킹')}
+          onPress={() => setIsRankingOpen(true)}
           style={styles.rankingCard}
         >
           <Text style={styles.rankingText}>
@@ -228,6 +240,13 @@ export function GroupInfoScreen({
       <MemberProfileModal
         member={profileMember}
         onClose={() => setProfileMemberId(null)}
+      />
+
+      <WeeklyRankingModal
+        onClose={() => setIsRankingOpen(false)}
+        onRetry={ranking.retry}
+        state={ranking}
+        visible={isRankingOpen}
       />
     </View>
   );
