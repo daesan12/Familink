@@ -1,6 +1,7 @@
 package com.ssafy.s15p11b104.domain.calendar.repository;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -29,4 +30,47 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
 		@Param("groupId") Long groupId,
 		@Param("startDate") LocalDate startDate,
 		@Param("endDate") LocalDate endDate);
+
+	@Query("""
+		select event
+		from CalendarEvent event
+		where (event.startAt is not null and event.startAt between :timedStartAt and :timedEndAt)
+			or event.eventDate between :firstEventDate and :lastEventDate
+		order by event.id
+		""")
+	List<CalendarEvent> findReminderCandidates(
+		@Param("timedStartAt") Instant timedStartAt,
+		@Param("timedEndAt") Instant timedEndAt,
+		@Param("firstEventDate") LocalDate firstEventDate,
+		@Param("lastEventDate") LocalDate lastEventDate);
+
+	/**
+	 * 전날 09:00 알림을 보낼 일정을 모든 그룹에서 찾는다.
+	 *
+	 * <p>레거시 직접 저장 경로와 일정 알림 회귀 테스트가 사용하는 정밀 후보 조회다.
+	 */
+	@Query("""
+		select event
+		from CalendarEvent event
+		where event.eventDate = :eventDate
+			and event.updatedAt <= :dueAt
+		order by event.id asc
+		""")
+	List<CalendarEvent> findAllDayBeforeReminderTargets(
+		@Param("eventDate") LocalDate eventDate,
+		@Param("dueAt") Instant dueAt);
+
+	/**
+	 * 지정한 구간 안에 시작하는 시간 일정을 모든 그룹에서 찾는다.
+	 */
+	@Query("""
+		select event
+		from CalendarEvent event
+		where event.startAt > :now
+			and event.startAt <= :until
+		order by event.id asc
+		""")
+	List<CalendarEvent> findAllStartingWithin(
+		@Param("now") Instant now,
+		@Param("until") Instant until);
 }

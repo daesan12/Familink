@@ -8,6 +8,9 @@ export interface GroupInfoSnapshot {
   currentMemberId: string;
   // 가입 승인 대기 건수. "승인 요청 N건" 문구에 쓴다.
   pendingJoinCount: number;
+  // 가족 기록 개수. 어떤 조회 API도 내려주지 않아(계약 밖) H-8 그룹 나가기 요약 카드에서만
+  // 목업으로 표시한다. 연동 시 서버 값으로 대체한다.
+  recordCount: number;
 }
 
 // '우리 가족의 이야기' 그룹 (피보호자 2명, 보호자 3명). 이경호가 방장이다.
@@ -19,6 +22,7 @@ const FAMILY_MEMBERS: readonly GroupMember[] = [
     role: 'guardian',
     isManager: false,
     avatarText: '수',
+    joinedAt: '2026-03-04',
     age: 52,
     gender: 'male',
     weeklyRank: 4,
@@ -31,6 +35,7 @@ const FAMILY_MEMBERS: readonly GroupMember[] = [
     role: 'guardian',
     isManager: false,
     avatarText: '대',
+    joinedAt: '2026-04-18',
     age: 47,
     gender: 'male',
     weeklyRank: 5,
@@ -43,6 +48,7 @@ const FAMILY_MEMBERS: readonly GroupMember[] = [
     role: 'guardian',
     isManager: true,
     avatarText: '경',
+    joinedAt: '2026-01-10',
     age: 30,
     gender: 'male',
     weeklyRank: 2,
@@ -55,6 +61,7 @@ const FAMILY_MEMBERS: readonly GroupMember[] = [
     role: 'careReceiver',
     isManager: false,
     avatarText: '유',
+    joinedAt: '2026-05-12',
     age: 24,
     gender: 'female',
     weeklyRank: 3,
@@ -67,6 +74,7 @@ const FAMILY_MEMBERS: readonly GroupMember[] = [
     role: 'careReceiver',
     isManager: false,
     avatarText: '종',
+    joinedAt: '2026-02-27',
     age: 27,
     gender: 'male',
     weeklyRank: 1,
@@ -83,6 +91,7 @@ const COUSINS_MEMBERS: readonly GroupMember[] = [
     role: 'guardian',
     isManager: true,
     avatarText: '준',
+    joinedAt: '2026-01-22',
     age: 28,
     gender: 'male',
     weeklyRank: 2,
@@ -95,6 +104,7 @@ const COUSINS_MEMBERS: readonly GroupMember[] = [
     role: 'guardian',
     isManager: false,
     avatarText: '서',
+    joinedAt: '2026-02-15',
     age: 25,
     gender: 'female',
     weeklyRank: 3,
@@ -107,6 +117,7 @@ const COUSINS_MEMBERS: readonly GroupMember[] = [
     role: 'careReceiver',
     isManager: false,
     avatarText: '말',
+    joinedAt: '2026-06-03',
     age: 79,
     gender: 'female',
     weeklyRank: 1,
@@ -123,6 +134,7 @@ const MATERNAL_MEMBERS: readonly GroupMember[] = [
     role: 'guardian',
     isManager: true,
     avatarText: '영',
+    joinedAt: '2026-01-05',
     age: 51,
     gender: 'female',
     weeklyRank: 1,
@@ -135,6 +147,7 @@ const MATERNAL_MEMBERS: readonly GroupMember[] = [
     role: 'careReceiver',
     isManager: false,
     avatarText: '복',
+    joinedAt: '2026-06-20',
     age: 81,
     gender: 'female',
     weeklyRank: 2,
@@ -146,6 +159,14 @@ const FAMILY_GROUP_INFO: GroupInfoSnapshot = {
   members: FAMILY_MEMBERS,
   currentMemberId: 'member-gyeongho',
   pendingJoinCount: 2,
+  recordCount: 128,
+};
+
+const EMPTY_GROUP_INFO: GroupInfoSnapshot = {
+  members: [],
+  currentMemberId: '',
+  pendingJoinCount: 0,
+  recordCount: 0,
 };
 
 // App.tsx의 DEVELOPMENT_GROUPS 그룹 ID와 맞춘다.
@@ -155,20 +176,23 @@ const DEVELOPMENT_GROUP_INFO: Record<string, GroupInfoSnapshot> = {
     members: COUSINS_MEMBERS,
     currentMemberId: 'member-malsun',
     pendingJoinCount: 0,
+    recordCount: 43,
   },
   'development-empty-group': {
     members: MATERNAL_MEMBERS,
     currentMemberId: 'member-youngsook',
     pendingJoinCount: 1,
+    recordCount: 7,
   },
 };
 
-// 그룹 ID에 해당하는 목업을 돌려준다. 알 수 없는 그룹은 가족 그룹으로 대체한다.
+// 등록된 개발 그룹만 목업을 돌려준다. 실제 서버 그룹 ID에는 가짜 가족 데이터를 붙이지 않는다.
 export function getDevelopmentGroupInfo(groupId: string): GroupInfoSnapshot {
-  return DEVELOPMENT_GROUP_INFO[groupId] ?? FAMILY_GROUP_INFO;
+  return DEVELOPMENT_GROUP_INFO[groupId] ?? EMPTY_GROUP_INFO;
 }
 
 // 기존 참조 호환용(우리 가족 그룹 기준).
 export const DEVELOPMENT_GROUP_MEMBERS = FAMILY_MEMBERS;
 export const DEVELOPMENT_CURRENT_MEMBER_ID = FAMILY_GROUP_INFO.currentMemberId;
-export const DEVELOPMENT_PENDING_JOIN_COUNT = FAMILY_GROUP_INFO.pendingJoinCount;
+export const DEVELOPMENT_PENDING_JOIN_COUNT =
+  FAMILY_GROUP_INFO.pendingJoinCount;

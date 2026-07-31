@@ -16,8 +16,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
 import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationService;
+import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.service.AiCallPostToolService;
 import com.ssafy.s15p11b104.domain.call.service.AiCallPromptContextProvider;
+import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.call.service.CallSessionService;
 import com.ssafy.s15p11b104.domain.call.service.CallTranscriptService;
 import com.ssafy.s15p11b104.domain.calendar.repository.CalendarEventRepository;
@@ -33,6 +35,13 @@ import com.ssafy.s15p11b104.domain.group.repository.GroupJoinRequestRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberInterestRepository;
+import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRegistrationStore;
+import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRepository;
+import com.ssafy.s15p11b104.domain.notification.repository.NotificationCreationStore;
+import com.ssafy.s15p11b104.domain.notification.repository.NotificationRepository;
+import com.ssafy.s15p11b104.domain.notification.repository.NotificationSettingRepository;
+import com.ssafy.s15p11b104.domain.notification.service.EventReminderService;
+import com.ssafy.s15p11b104.domain.report.repository.DailyReportRepository;
 import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationService;
 
 import jakarta.persistence.EntityManager;
@@ -57,6 +66,9 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private CallReportGenerationService callReportGenerationService;
+
+	@MockitoBean
+	private CallReportCallRepository callReportCallRepository;
 
 	@MockitoBean
 	private DailyReportGenerationService dailyReportGenerationService;
@@ -117,6 +129,34 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private EventParticipantRepository eventParticipantRepository;
+
+	@MockitoBean
+	private DeviceTokenRepository deviceTokenRepository;
+
+	@MockitoBean
+	private DeviceTokenRegistrationStore deviceTokenRegistrationStore;
+
+	@MockitoBean
+	private NotificationCreationStore notificationCreationStore;
+
+	@MockitoBean
+	private NotificationRepository notificationRepository;
+
+	@MockitoBean
+	private NotificationSettingRepository notificationSettingRepository;
+
+	@MockitoBean
+	private DailyReportRepository dailyReportRepository;
+
+	/**
+	 * 이 컨텍스트는 JPA 자동 구성을 제외해 {@code TransactionTemplate} 빈이 없으므로, 그것을
+	 * 주입받는 서비스는 목으로 대체한다.
+	 */
+	@MockitoBean
+	private EventReminderService eventReminderService;
+
+	@MockitoBean
+	private CallSessionRepository callSessionRepository;
 
 	@Test
 	void healthEndpointIsPublic() throws Exception {

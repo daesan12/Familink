@@ -19,8 +19,11 @@ export interface FamilyGroup {
 }
 
 export interface AppScreenProps {
+  createCalendarEventRequestId?: number;
   createPostRequestId?: number;
   currentGroup: FamilyGroup;
+  currentUserId?: number;
+  currentUserName?: string;
   onCloseArchive?: () => void;
   onCloseNotifications?: () => void;
   onFullscreenChange?: (isFullscreen: boolean) => void;

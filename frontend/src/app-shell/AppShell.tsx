@@ -1,20 +1,12 @@
 import { useEffect, useState } from 'react';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {COLORS} from '../design/tokens';
+import { COLORS } from '../design/tokens';
 import { BottomTabBar } from './BottomTabBar';
 import { CurrentGroupSwitcher } from './CurrentGroupSwitcher';
-import {
-  resolveAllowedRoute,
-  resolveCurrentGroup,
-} from './navigation';
+import { resolveAllowedRoute, resolveCurrentGroup } from './navigation';
 import type {
   AppRoute,
   AppScreenRegistry,
@@ -23,6 +15,8 @@ import type {
 } from './types';
 
 interface AppShellProps {
+  currentUserId?: number;
+  currentUserName?: string;
   groupStore?: CurrentGroupStore;
   groups: readonly FamilyGroup[];
   initialGroupId?: string | null;
@@ -35,6 +29,8 @@ interface AppShellProps {
 }
 
 export function AppShell({
+  currentUserId,
+  currentUserName,
   groupStore,
   groups,
   initialGroupId,
@@ -49,6 +45,8 @@ export function AppShell({
   const [currentGroupId, setCurrentGroupId] = useState(initialGroupId);
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
   const [createPostRequestId, setCreatePostRequestId] = useState(0);
+  const [createCalendarEventRequestId, setCreateCalendarEventRequestId] =
+    useState(0);
   const [isScreenFullscreen, setIsScreenFullscreen] = useState(false);
   const [isScreenHeaderVisible, setIsScreenHeaderVisible] = useState(true);
   const [openPostId, setOpenPostId] = useState<string | null>(null);
@@ -57,7 +55,7 @@ export function AppShell({
     readonly string[]
   >([]);
   const [isRestoringGroup, setIsRestoringGroup] = useState(
-    Boolean(groupStore && !initialGroupId),
+    Boolean(groupStore && !initialGroupId)
   );
 
   const currentGroup = resolveCurrentGroup(groups, currentGroupId);
@@ -72,7 +70,7 @@ export function AppShell({
     }
 
     setActiveRoute(currentRoute =>
-      resolveAllowedRoute(currentRole, currentRoute),
+      resolveAllowedRoute(currentRole, currentRoute)
     );
   }, [currentRole]);
 
@@ -166,9 +164,7 @@ export function AppShell({
 
   const handleNotificationRead = (notificationId: string) => {
     setReadNotificationIds(current =>
-      current.includes(notificationId)
-        ? current
-        : [...current, notificationId],
+      current.includes(notificationId) ? current : [...current, notificationId]
     );
   };
 
@@ -193,70 +189,108 @@ export function AppShell({
       resolvedRoute !== 'notifications' &&
       resolvedRoute !== 'archive' &&
       resolvedRoute !== 'groupInfo' &&
-      resolvedRoute !== 'profile' ? <View style={styles.header}>
-        {resolvedRoute === 'feed' ? (
-          <View style={styles.headerActions}>
-            <Pressable
-              accessibilityLabel="게시글 보관함"
-              accessibilityRole="button"
-              onPress={() => setActiveRoute('archive')}
-              style={styles.headerIconButton}
-            >
-              <MaterialDesignIcons
-                color={COLORS.textStrong}
-                name="folder"
-                size={27}
-              />
-            </Pressable>
-            <Pressable
-              accessibilityLabel="새 게시글 작성"
-              accessibilityRole="button"
-              onPress={() => setCreatePostRequestId(requestId => requestId + 1)}
-              style={styles.headerIconButton}
-            >
-              <MaterialDesignIcons
-                color={COLORS.textStrong}
-                name="plus"
-                size={29}
-              />
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.headerSide} />
-        )}
-        <CurrentGroupSwitcher
-          currentGroup={currentGroup}
-          groups={groups}
-          isOpen={isGroupMenuOpen}
-          onClose={() => setIsGroupMenuOpen(false)}
-          onCreateGroup={onCreateGroup}
-          onJoinGroup={onJoinGroup}
-          onSelect={handleGroupSelect}
-          onToggle={() => setIsGroupMenuOpen(isOpen => !isOpen)}
-        />
-        {resolvedRoute === 'feed' ? (
-          <Pressable
-            accessibilityLabel="알림"
-            accessibilityRole="button"
-            onPress={() => setActiveRoute('notifications')}
-            style={styles.headerSide}
-          >
-            <MaterialDesignIcons
-              color={COLORS.textStrong}
-              name="bell"
-              size={28}
+      resolvedRoute !== 'profile' ? (
+        <View style={styles.header} testID="app-shell-header">
+          {resolvedRoute === 'calendar' ? (
+            <CurrentGroupSwitcher
+              currentGroup={currentGroup}
+              groups={groups}
+              isOpen={isGroupMenuOpen}
+              onClose={() => setIsGroupMenuOpen(false)}
+              onCreateGroup={onCreateGroup}
+              onJoinGroup={onJoinGroup}
+              onSelect={handleGroupSelect}
+              onToggle={() => setIsGroupMenuOpen(isOpen => !isOpen)}
             />
-          </Pressable>
-        ) : (
-          <View style={styles.headerSide} />
-        )}
-      </View> : null}
+          ) : resolvedRoute === 'feed' ? (
+            <View style={styles.headerActions}>
+              <Pressable
+                accessibilityLabel="게시글 보관함"
+                accessibilityRole="button"
+                onPress={() => setActiveRoute('archive')}
+                style={styles.headerIconButton}
+              >
+                <MaterialDesignIcons
+                  color={COLORS.textStrong}
+                  name="folder"
+                  size={27}
+                />
+              </Pressable>
+              <Pressable
+                accessibilityLabel="새 게시글 작성"
+                accessibilityRole="button"
+                onPress={() =>
+                  setCreatePostRequestId(requestId => requestId + 1)
+                }
+                style={styles.headerIconButton}
+              >
+                <MaterialDesignIcons
+                  color={COLORS.textStrong}
+                  name="plus"
+                  size={29}
+                />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.headerSide} />
+          )}
+          {resolvedRoute === 'calendar' ? (
+            <Pressable
+              accessibilityLabel="일정 추가"
+              accessibilityRole="button"
+              onPress={() =>
+                setCreateCalendarEventRequestId(requestId => requestId + 1)
+              }
+              style={({ pressed }) => [
+                styles.calendarAddButton,
+                pressed && styles.calendarAddButtonPressed,
+              ]}
+            >
+              <MaterialDesignIcons
+                color={COLORS.purpleDeep}
+                name="calendar-plus"
+                size={26}
+              />
+            </Pressable>
+          ) : (
+            <CurrentGroupSwitcher
+              currentGroup={currentGroup}
+              groups={groups}
+              isOpen={isGroupMenuOpen}
+              onClose={() => setIsGroupMenuOpen(false)}
+              onCreateGroup={onCreateGroup}
+              onJoinGroup={onJoinGroup}
+              onSelect={handleGroupSelect}
+              onToggle={() => setIsGroupMenuOpen(isOpen => !isOpen)}
+            />
+          )}
+          {resolvedRoute === 'calendar' ? null : resolvedRoute === 'feed' ? (
+            <Pressable
+              accessibilityLabel="알림"
+              accessibilityRole="button"
+              onPress={() => setActiveRoute('notifications')}
+              style={styles.headerSide}
+            >
+              <MaterialDesignIcons
+                color={COLORS.textStrong}
+                name="bell"
+                size={28}
+              />
+            </Pressable>
+          ) : (
+            <View style={styles.headerSide} />
+          )}
+        </View>
+      ) : null}
 
       <View style={styles.content}>
         {Screen ? (
           <Screen
+            createCalendarEventRequestId={createCalendarEventRequestId}
             createPostRequestId={createPostRequestId}
             currentGroup={currentGroup}
+            currentUserId={currentUserId}
+            currentUserName={currentUserName}
             onCloseArchive={() => setActiveRoute('feed')}
             onCloseNotifications={() => setActiveRoute('feed')}
             onFullscreenChange={setIsScreenFullscreen}
@@ -313,6 +347,17 @@ function getPlaceholderTitle(route: AppRoute): string {
 }
 
 const styles = StyleSheet.create({
+  calendarAddButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.lavenderSurface,
+    borderRadius: 22,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  calendarAddButtonPressed: {
+    opacity: 0.72,
+  },
   content: {
     flex: 1,
   },

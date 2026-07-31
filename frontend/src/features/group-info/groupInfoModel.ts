@@ -56,12 +56,18 @@ export function canManageRoles(
 }
 
 // 축소 프로필 팝업에 쓰는 나이 문구.
-export function formatAge(age: number): string {
+export function formatAge(age: number | null): string {
+  if (age === null) {
+    return '미입력';
+  }
   return `만 ${age}세`;
 }
 
 // 성별 표시 문구.
-export function formatGender(gender: MemberGender): string {
+export function formatGender(gender: MemberGender | null): string {
+  if (gender === null) {
+    return '미입력';
+  }
   return gender === 'male' ? '남자' : '여자';
 }
 

@@ -22,7 +22,7 @@ public abstract class UpdatedAtEntity {
 
 	@PrePersist
 	@PreUpdate
-	void touch() {
+	protected void touch() {
 		updatedAt = Instant.now();
 	}
 

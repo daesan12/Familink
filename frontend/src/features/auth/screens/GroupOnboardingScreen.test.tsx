@@ -1,5 +1,5 @@
 import React from 'react';
-import {AccessibilityInfo, StyleSheet, Text} from 'react-native';
+import {AccessibilityInfo, Alert, StyleSheet, Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import {AUTH_COLORS} from '../theme';
@@ -8,7 +8,7 @@ import {GroupOnboardingScreen} from './GroupOnboardingScreen';
 beforeAll(() => {
   jest
     .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
-    .mockImplementation(() => new Promise<boolean>(() => {}));
+    .mockResolvedValue(false);
 });
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
@@ -103,8 +103,8 @@ test('새 그룹 이름과 역할을 입력해 생성 요청을 전달한다', a
     StyleSheet.flatten(careReceiverOption.props.style).backgroundColor,
   ).toBeDefined();
 
-  await TestRenderer.act(() => {
-    renderer!.root
+  await TestRenderer.act(async () => {
+    await renderer!.root
       .findByProps({accessibilityLabel: '생성하기'})
       .props.onPress();
   });
@@ -113,6 +113,70 @@ test('새 그룹 이름과 역할을 입력해 생성 요청을 전달한다', a
     name: '행복한 우리집',
     role: 'careReceiver',
   });
+});
+
+test('그룹 생성 중 중복 요청을 막고 실패하면 입력 화면을 유지한다', async () => {
+  let rejectCreate: (reason?: unknown) => void = () => {};
+  const onCreateGroup = jest.fn(
+    () =>
+      new Promise<void>((_resolve, reject) => {
+        rejectCreate = reject;
+      }),
+  );
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupOnboardingScreen
+        onBack={jest.fn()}
+        onCreateGroup={onCreateGroup}
+        onJoinByCode={jest.fn()}
+        pendingRequests={[]}
+      />,
+    );
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: '우리 가족만의 공간을 시작해요',
+      })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '그룹 이름'})
+      .props.onChangeText('새 가족');
+  });
+
+  let submission: Promise<void> = Promise.resolve();
+  await TestRenderer.act(async () => {
+    const createButton = renderer!.root.findByProps({
+      accessibilityLabel: '생성하기',
+    });
+    submission = createButton.props.onPress();
+    createButton.props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(onCreateGroup).toHaveBeenCalledTimes(1);
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '생성하기'}).props
+      .accessibilityState,
+  ).toEqual(expect.objectContaining({busy: true, disabled: true}));
+
+  await TestRenderer.act(async () => {
+    rejectCreate(new Error('network'));
+    await submission;
+  });
+
+  expect(alert).toHaveBeenCalledWith(
+    '그룹을 만들지 못했어요',
+    '잠시 후 다시 시도해 주세요.',
+  );
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '그룹 이름'}).props.value,
+  ).toBe('새 가족');
 });
 
 test('초대 코드를 입력하면 칸을 채우고 영문 대문자와 숫자 6자리로 전달한다', async () => {
