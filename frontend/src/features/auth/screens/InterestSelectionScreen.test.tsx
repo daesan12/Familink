@@ -31,6 +31,7 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 async function renderScreen(overrides: {
+  initialInterests?: readonly string[];
   onComplete?: jest.Mock;
   onSave?: jest.Mock;
   onSkip?: jest.Mock;
@@ -43,6 +44,7 @@ async function renderScreen(overrides: {
   await TestRenderer.act(() => {
     renderer = TestRenderer.create(
       <InterestSelectionScreen
+        initialInterests={overrides.initialInterests}
         onBack={jest.fn()}
         onComplete={onComplete}
         onSave={onSave}
@@ -54,6 +56,41 @@ async function renderScreen(overrides: {
 
   return {onComplete, onSave, onSkip, renderer: renderer!};
 }
+
+test('사용자가 선택한 관심사는 늦게 도착한 조회 결과로 덮어쓰지 않는다', async () => {
+  const {renderer} = await renderScreen({initialInterests: ['산책']});
+
+  await TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '음악 관심사'})
+      .props.onPress();
+  });
+
+  await TestRenderer.act(() => {
+    renderer.update(
+      <InterestSelectionScreen
+        initialInterests={['가족과 일상']}
+        onBack={jest.fn()}
+        onComplete={jest.fn()}
+        onSave={jest.fn()}
+        onSkip={jest.fn()}
+      />,
+    );
+  });
+
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '산책 관심사'}).props
+      .accessibilityState.checked,
+  ).toBe(true);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '음악 관심사'}).props
+      .accessibilityState.checked,
+  ).toBe(true);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '가족과 일상 관심사'}).props
+      .accessibilityState.checked,
+  ).toBe(false);
+});
 
 test('기본 관심사와 직접 입력 관심사를 함께 저장한다', async () => {
   const {onComplete, onSave, renderer} = await renderScreen();
