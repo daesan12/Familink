@@ -8,6 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -31,6 +35,7 @@ import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallTranscriptRepository;
 import com.ssafy.s15p11b104.domain.report.entity.EmotionCategory;
+import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationDispatcher;
 
 @ExtendWith(MockitoExtension.class)
 class CallReportGenerationServiceTest {
@@ -50,6 +55,9 @@ class CallReportGenerationServiceTest {
 	private CallReportAnalyzer analyzer;
 
 	@Mock
+	private DailyReportGenerationDispatcher dailyReportGenerationDispatcher;
+
+	@Mock
 	private TransactionTemplate transactionTemplate;
 
 	@Mock
@@ -65,12 +73,8 @@ class CallReportGenerationServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		generationService = new CallReportGenerationService(
-			callSessionRepository,
-			callTranscriptRepository,
-			callReportRepository,
-			analyzer,
-			transactionTemplate
+		generationService = createGenerationService(
+			Clock.fixed(Instant.parse("2026-07-31T13:01:00Z"), ZoneOffset.UTC)
 		);
 		lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
 			TransactionCallback<?> callback = invocation.getArgument(0);
@@ -81,6 +85,18 @@ class CallReportGenerationServiceTest {
 			callback.accept(null);
 			return null;
 		}).when(transactionTemplate).executeWithoutResult(any());
+	}
+
+	private CallReportGenerationService createGenerationService(Clock clock) {
+		return new CallReportGenerationService(
+			callSessionRepository,
+			callTranscriptRepository,
+			callReportRepository,
+			analyzer,
+			dailyReportGenerationDispatcher,
+			clock,
+			transactionTemplate
+		);
 	}
 
 	@Test
@@ -118,6 +134,53 @@ class CallReportGenerationServiceTest {
 		assertThat(report.getEmotionCategory()).isEqualTo(analysis.emotionCategory());
 		assertThat(report.getEmotionSubcategory()).isEqualTo(analysis.emotionSubcategory());
 		assertThat(report.getGuardianMessage()).isEqualTo(analysis.guardianMessage());
+	}
+
+	@Test
+	void dispatchesDailyReportForTheSavedCallReportWindow() {
+		stubEligibleSession();
+		when(callSession.getEndedAt()).thenReturn(Instant.parse("2026-07-31T12:59:59Z"));
+		when(callSessionRepository.findByIdForUpdate(CALL_SESSION_ID)).thenReturn(Optional.of(callSession));
+		when(userTranscript.getSequenceNumber()).thenReturn(1);
+		when(userTranscript.getSpeaker()).thenReturn(SpeakerType.USER);
+		when(userTranscript.getContent()).thenReturn("안녕하세요.");
+		when(callTranscriptRepository.findAllByCallSessionIdOrderBySequenceNumberAsc(CALL_SESSION_ID))
+			.thenReturn(List.of(userTranscript));
+		when(analyzer.analyze(any())).thenReturn(new CallReportAnalysis(
+			"인사를 나눴습니다.",
+			EmotionCategory.NEUTRAL,
+			"차분함",
+			null
+		));
+
+		generationService.generate(CALL_SESSION_ID);
+
+		verify(dailyReportGenerationDispatcher).dispatch(LocalDate.of(2026, 7, 31));
+	}
+
+	@Test
+	void doesNotDispatchDailyReportBeforeTheReportWindowEnds() {
+		generationService = createGenerationService(
+			Clock.fixed(Instant.parse("2026-07-31T12:59:00Z"), ZoneOffset.UTC)
+		);
+		stubEligibleSession();
+		when(callSession.getEndedAt()).thenReturn(Instant.parse("2026-07-31T12:30:00Z"));
+		when(callSessionRepository.findByIdForUpdate(CALL_SESSION_ID)).thenReturn(Optional.of(callSession));
+		when(userTranscript.getSequenceNumber()).thenReturn(1);
+		when(userTranscript.getSpeaker()).thenReturn(SpeakerType.USER);
+		when(userTranscript.getContent()).thenReturn("안녕하세요.");
+		when(callTranscriptRepository.findAllByCallSessionIdOrderBySequenceNumberAsc(CALL_SESSION_ID))
+			.thenReturn(List.of(userTranscript));
+		when(analyzer.analyze(any())).thenReturn(new CallReportAnalysis(
+			"인사를 나눴습니다.",
+			EmotionCategory.NEUTRAL,
+			"차분함",
+			null
+		));
+
+		generationService.generate(CALL_SESSION_ID);
+
+		verify(dailyReportGenerationDispatcher, never()).dispatch(any());
 	}
 
 	@Test

@@ -110,6 +110,24 @@ class DailyReportGenerationIntegrationTest extends IntegrationTest {
 	}
 
 	@Test
+	void doesNotGeneratePartialDailyReportWhileCompletedSessionReportIsMissing() {
+		Fixture fixture = insertFixture();
+		Long readySessionId = insertSession(fixture, CallStatus.COMPLETED, WINDOW_START.plusSeconds(3600));
+		insertSession(fixture, CallStatus.COMPLETED, WINDOW_START.plusSeconds(7200));
+		insertReport(readySessionId, "준비된 통화 요약", null);
+
+		generationService.generate(REPORT_DATE);
+
+		assertThat(jdbcTemplate.queryForObject(
+			"SELECT COUNT(*) FROM daily_reports WHERE care_receiver_member_id = ? AND report_date = ?",
+			Integer.class,
+			fixture.memberId(),
+			REPORT_DATE
+		)).isEqualTo(0);
+		verify(analyzer, org.mockito.Mockito.never()).analyze(any());
+	}
+
+	@Test
 	void repeatedAndConcurrentGenerationCreatesOneDailyReport() throws Exception {
 		Fixture fixture = insertFixture();
 		Long sessionId = insertSession(fixture, CallStatus.COMPLETED, WINDOW_START.plusSeconds(3600));

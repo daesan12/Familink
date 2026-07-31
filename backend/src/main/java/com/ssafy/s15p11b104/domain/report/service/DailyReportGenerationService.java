@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -15,6 +16,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.ssafy.s15p11b104.domain.call.entity.CallReport;
 import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
 import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
+import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.report.entity.DailyReport;
@@ -26,6 +28,7 @@ public class DailyReportGenerationService {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DailyReportGenerationService.class);
 
 	private final CallReportCallRepository callReportRepository;
+	private final CallSessionRepository callSessionRepository;
 	private final DailyReportRepository dailyReportRepository;
 	private final GroupMemberRepository groupMemberRepository;
 	private final DailyReportAnalyzer analyzer;
@@ -33,12 +36,14 @@ public class DailyReportGenerationService {
 
 	public DailyReportGenerationService(
 		CallReportCallRepository callReportRepository,
+		CallSessionRepository callSessionRepository,
 		DailyReportRepository dailyReportRepository,
 		GroupMemberRepository groupMemberRepository,
 		DailyReportAnalyzer analyzer,
 		TransactionTemplate transactionTemplate
 	) {
 		this.callReportRepository = callReportRepository;
+		this.callSessionRepository = callSessionRepository;
 		this.dailyReportRepository = dailyReportRepository;
 		this.groupMemberRepository = groupMemberRepository;
 		this.analyzer = analyzer;
@@ -48,6 +53,13 @@ public class DailyReportGenerationService {
 	public void generate(LocalDate reportDate) {
 		Objects.requireNonNull(reportDate, "reportDate must not be null");
 		DailyReportWindow window = DailyReportWindow.forReportDate(reportDate);
+		Set<Long> membersWithMissingReports = callSessionRepository
+			.findCareReceiverMemberIdsWithCompletedWithoutReportInEndedAtRange(
+			CallStatus.COMPLETED,
+			window.startInclusive(),
+			window.endExclusive())
+			.stream()
+			.collect(Collectors.toSet());
 		Map<Long, List<CallReport>> reportsByMember = callReportRepository
 			.findCompletedInEndedAtRange(CallStatus.COMPLETED, window.startInclusive(), window.endExclusive())
 			.stream()
@@ -58,6 +70,9 @@ public class DailyReportGenerationService {
 			));
 
 		for (Map.Entry<Long, List<CallReport>> entry : reportsByMember.entrySet()) {
+			if (membersWithMissingReports.contains(entry.getKey())) {
+				continue;
+			}
 			generateForMember(reportDate, entry.getKey(), entry.getValue());
 		}
 	}
