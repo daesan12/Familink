@@ -17,6 +17,7 @@ import type { CalendarEventDetail, CalendarMember } from "../types";
 const PROFILE_PLACEHOLDER = require("../../../assets/images/profile-placeholder.png");
 
 interface CalendarEventDetailModalProps {
+  canManage: boolean;
   deleteErrorMessage: string | null;
   deleting: boolean;
   detail: CalendarEventDetail | null;
@@ -31,6 +32,7 @@ interface CalendarEventDetailModalProps {
 }
 
 export function CalendarEventDetailModal({
+  canManage,
   deleteErrorMessage,
   deleting,
   detail,
@@ -146,57 +148,59 @@ export function CalendarEventDetailModal({
                 />
               </ScrollView>
 
-              {deleteErrorMessage ? (
+              {canManage && deleteErrorMessage ? (
                 <Text accessibilityRole="alert" style={styles.deleteError}>
                   {deleteErrorMessage}
                 </Text>
               ) : null}
-              <View style={styles.actionRow}>
-                <Pressable
-                  accessibilityLabel="일정 수정"
-                  accessibilityRole="button"
-                  disabled={deleting}
-                  onPress={onEdit}
-                  style={({ pressed }) => [
-                    styles.actionButton,
-                    styles.editButton,
-                    pressed && styles.actionPressed,
-                    deleting && styles.actionDisabled,
-                  ]}
-                >
-                  <MaterialDesignIcons
-                    color={COLORS.purpleDeep}
-                    name="pencil-outline"
-                    size={20}
-                  />
-                  <Text style={styles.editButtonText}>수정</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityLabel="일정 삭제"
-                  accessibilityRole="button"
-                  disabled={deleting}
-                  onPress={onDelete}
-                  style={({ pressed }) => [
-                    styles.actionButton,
-                    styles.deleteButton,
-                    pressed && styles.actionPressed,
-                    deleting && styles.actionDisabled,
-                  ]}
-                >
-                  {deleting ? (
-                    <ActivityIndicator color={COLORS.error} size="small" />
-                  ) : (
+              {canManage ? (
+                <View style={styles.actionRow}>
+                  <Pressable
+                    accessibilityLabel="일정 수정"
+                    accessibilityRole="button"
+                    disabled={deleting}
+                    onPress={onEdit}
+                    style={({ pressed }) => [
+                      styles.actionButton,
+                      styles.editButton,
+                      pressed && styles.actionPressed,
+                      deleting && styles.actionDisabled,
+                    ]}
+                  >
                     <MaterialDesignIcons
-                      color={COLORS.error}
-                      name="delete-outline"
+                      color={COLORS.purpleDeep}
+                      name="pencil-outline"
                       size={20}
                     />
-                  )}
-                  <Text style={styles.deleteButtonText}>
-                    {deleting ? "삭제 중" : "삭제"}
-                  </Text>
-                </Pressable>
-              </View>
+                    <Text style={styles.editButtonText}>수정</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel="일정 삭제"
+                    accessibilityRole="button"
+                    disabled={deleting}
+                    onPress={onDelete}
+                    style={({ pressed }) => [
+                      styles.actionButton,
+                      styles.deleteButton,
+                      pressed && styles.actionPressed,
+                      deleting && styles.actionDisabled,
+                    ]}
+                  >
+                    {deleting ? (
+                      <ActivityIndicator color={COLORS.error} size="small" />
+                    ) : (
+                      <MaterialDesignIcons
+                        color={COLORS.error}
+                        name="delete-outline"
+                        size={20}
+                      />
+                    )}
+                    <Text style={styles.deleteButtonText}>
+                      {deleting ? "삭제 중" : "삭제"}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
           ) : null}
         </View>

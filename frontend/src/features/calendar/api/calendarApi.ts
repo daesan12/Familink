@@ -1,6 +1,7 @@
 import type {
   CalendarEventDetail,
   CalendarEventSummary,
+  CalendarEventWriteInput,
   CalendarGateway,
   CalendarMember,
   CalendarQuery,
@@ -40,7 +41,8 @@ export function createCalendarHttpGateway({
   const request = async (
     path: string,
     signal?: AbortSignal,
-    method = "GET"
+    method = "GET",
+    body?: unknown
   ): Promise<unknown> => {
     const accessToken = await getAccessToken();
     if (!accessToken) {
@@ -57,7 +59,9 @@ export function createCalendarHttpGateway({
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${accessToken}`,
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
+      body: body === undefined ? undefined : JSON.stringify(body),
       method,
       signal,
     });
@@ -81,6 +85,18 @@ export function createCalendarHttpGateway({
   };
 
   return {
+    async createEvent(groupId, input, signal) {
+      const data = readObject(
+        await request(
+          `/groups/${encodeURIComponent(groupId)}/events`,
+          signal,
+          "POST",
+          toWriteBody(input)
+        ),
+        "일정 생성 응답"
+      );
+      return readId(data.eventId, "일정 ID");
+    },
     async deleteEvent(eventId, signal) {
       await request(`/events/${encodeURIComponent(eventId)}`, signal, "DELETE");
     },
@@ -112,7 +128,35 @@ export function createCalendarHttpGateway({
       );
       return readArray(data.members, "구성원 목록").map(readMember);
     },
+    async updateEvent(eventId, input, signal) {
+      await request(
+        `/events/${encodeURIComponent(eventId)}`,
+        signal,
+        "PATCH",
+        toWriteBody(input)
+      );
+    },
   };
+}
+
+function toWriteBody(input: CalendarEventWriteInput): Record<string, unknown> {
+  return {
+    description: input.description,
+    endAt: input.endAt,
+    endDate: input.endDate,
+    eventDate: input.eventDate,
+    participantMemberIds: input.participantMemberIds.map(readMemberIdForWrite),
+    startAt: input.startAt,
+    title: input.title,
+  };
+}
+
+function readMemberIdForWrite(value: string): number {
+  const memberId = Number(value);
+  if (!Number.isSafeInteger(memberId) || memberId <= 0) {
+    throw new CalendarApiError("참여자 구성원 ID 형식이 올바르지 않아요.");
+  }
+  return memberId;
 }
 
 async function readErrorMessage(response: Response): Promise<string> {

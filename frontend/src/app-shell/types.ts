@@ -19,13 +19,15 @@ export interface FamilyGroup {
 }
 
 export interface AppScreenProps {
+  createCalendarEventRequestId?: number;
   createPostRequestId?: number;
   currentGroup: FamilyGroup;
+  currentUserId?: number;
+  currentUserName?: string;
   onCloseArchive?: () => void;
   onCloseNotifications?: () => void;
   onFullscreenChange?: (isFullscreen: boolean) => void;
   onHeaderVisibilityChange?: (isVisible: boolean) => void;
-  onEditCalendarEvent?: (eventId: string) => void;
   onNotificationRead?: (notificationId: string) => void;
   onOpenNotifications?: () => void;
   onOpenPost?: (postId: string, groupId?: string) => void;
