@@ -163,12 +163,20 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - FK: `group_id -> family_groups.id`,
   `creator_member_id -> group_members.id`,
   `last_editor_member_id -> group_members.id`
-- 컬럼: `title VARCHAR(20)`, `event_date DATE`, `created_at`, `updated_at`
-  NOT NULL; `description VARCHAR(50) NULL`, `start_at TIMESTAMPTZ NULL`,
-  `end_at TIMESTAMPTZ NULL`
+- 컬럼: `title VARCHAR(20)`, `event_date DATE`, `end_date DATE`, `created_at`,
+  `updated_at` NOT NULL; `description VARCHAR(50) NULL`,
+  `start_at TIMESTAMPTZ NULL`, `end_at TIMESTAMPTZ NULL`
+- 날짜 쌍: `event_date`는 시작 날짜, `end_date`는 종료 날짜이며 날짜 일정과
+  시간 일정 모두 항상 채운다. 하루짜리 일정은 두 값이 같다. 특정 날짜와
+  겹치는 일정은 `event_date <= :date AND end_date >= :date`로 조회한다.
+- 날짜 쌍 CHECK: `end_date >= event_date`이다.
 - 시간 쌍 CHECK:
   - 날짜 일정은 `start_at`, `end_at`이 모두 NULL이다.
   - 시간 일정은 두 값이 모두 존재하고 `end_at >= start_at`이다.
+- 날짜 쌍과 시각 쌍의 정합성은 CHECK로 강제하지 않는다. `AT TIME ZONE`이
+  `STABLE` 함수라 CHECK 제약과 생성 컬럼에서 거부되므로, 시간 일정의
+  `event_date`·`end_date`를 서버가 `start_at`·`end_at`의 `Asia/Seoul`
+  날짜로 파생하는 단일 경로로 보장한다.
 - 삭제는 하드 삭제이며 참여자를 함께 정리한다.
 
 ### `event_participants`

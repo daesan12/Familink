@@ -20,6 +20,8 @@ import com.ssafy.s15p11b104.domain.call.service.AiCallPostToolService;
 import com.ssafy.s15p11b104.domain.call.service.AiCallPromptContextProvider;
 import com.ssafy.s15p11b104.domain.call.service.CallSessionService;
 import com.ssafy.s15p11b104.domain.call.service.CallTranscriptService;
+import com.ssafy.s15p11b104.domain.calendar.repository.CalendarEventRepository;
+import com.ssafy.s15p11b104.domain.calendar.repository.EventParticipantRepository;
 import com.ssafy.s15p11b104.domain.carnation.repository.CarnationRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.CommentRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostAnalysisRepository;
@@ -109,6 +111,12 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private CarnationRepository carnationRepository;
+
+	@MockitoBean
+	private CalendarEventRepository calendarEventRepository;
+
+	@MockitoBean
+	private EventParticipantRepository eventParticipantRepository;
 
 	@Test
 	void healthEndpointIsPublic() throws Exception {

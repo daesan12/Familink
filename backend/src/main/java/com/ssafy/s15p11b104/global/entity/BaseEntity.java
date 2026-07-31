@@ -35,6 +35,16 @@ public abstract class BaseEntity {
 		updatedAt = Instant.now();
 	}
 
+	/**
+	 * 엔티티를 변경된 것으로 표시해 {@code updated_at}이 갱신되게 한다.
+	 *
+	 * <p>연관 테이블만 바뀌어 본체 필드가 그대로면 더티 체킹이 UPDATE를 생략하고 {@link #onUpdate()}도
+	 * 실행되지 않는다. 그런 변경도 수정 시각에 반영해야 할 때 호출한다.
+	 */
+	protected void touch() {
+		updatedAt = Instant.now();
+	}
+
 	public Long getId() {
 		return id;
 	}

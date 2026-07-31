@@ -230,9 +230,9 @@ class GroupDeletionForeignKeyContractTest extends IntegrationTest {
 		Long eventId = insertReturningId(
 			"""
 				INSERT INTO calendar_events (
-					group_id, creator_member_id, last_editor_member_id, title, event_date
+					group_id, creator_member_id, last_editor_member_id, title, event_date, end_date
 				)
-				VALUES (?, ?, ?, '일정', DATE '2026-07-30')
+				VALUES (?, ?, ?, '일정', DATE '2026-07-30', DATE '2026-07-30')
 				RETURNING id
 				""",
 			groupId,

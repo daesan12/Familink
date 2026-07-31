@@ -1,6 +1,6 @@
 # 여러 날에 걸친 일정 지원 여부와 날짜 컬럼 구조
 
-- 상태: 제안
+- 상태: 승인·반영 완료
 - 제안자: rudgh8182
 - 작성일: 2026-07-30
 - 차단 변경: 예 (요구사항, API 계약, DB 스키마를 함께 바꾼다)
@@ -163,8 +163,25 @@ API 계약의 구조로만 배제되어 있다.
 
 ## 결정 및 반영
 
-- 결정:
-- 결정자:
-- 결정일:
-- 반영 문서:
+- 결정: 승인 (1안 채택 — `end_date DATE NOT NULL` 추가, `event_date`를
+  시작일로 재정의). 「공통 사항」의 날짜 파생 규칙도 함께 채택해, 시간
+  일정의 `event_date`·`end_date`를 서버가 `start_at`·`end_at`의
+  `Asia/Seoul` 날짜로 파생하고 클라이언트가 보낸 날짜 값을 무시한다.
+  일정 알림의 "전날 09:00" 기준일은 시작 날짜로 확정했다.
+  「확인이 필요한 질문」 중 월간 달력의 기간 일정 표시 방식과 종료일·매일
+  알림 필요 여부는 미결정으로 남겨 `CALENDAR.md` 「미결정 사항」에
+  이관했다. REQ-027 ⑤ "임의 기간 조회는 하지 않는다"는 AI Tool 입력에
+  대한 제약이라는 해석을 유지하며, 겹침 판정의 의미만 `AI_CALL.md`에
+  명시했다.
+- 결정자: 팀 확정 결정을 사용자(rudgh8182)가 전달
+- 결정일: 2026-07-31
+- 반영 문서: `docs/specs/domains/CALENDAR.md`,
+  `docs/specs/contracts/API.md`, `docs/specs/contracts/DATA_MODEL.md`,
+  `docs/specs/domains/AI_CALL.md`
 - 반영 커밋:
+
+`docs/requirements.md`(REQ-025 수용 기준 ①, REQ-026, REQ-027 수용 기준 ⑤)는
+원본 요구사항 스냅샷이므로 수정하지 않고 차이만 여기에 기록한다.
+`applied/CHG-20260730-rudgh8182-calendar-allday-reminder-defaults.md`와 같은
+처리 방식이다. REQ-025 ①의 "날짜"는 이제 시작 날짜와 종료 날짜 쌍을
+뜻하고, REQ-026의 알림 기준일은 시작 날짜다.

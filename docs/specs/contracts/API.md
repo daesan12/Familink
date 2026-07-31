@@ -145,15 +145,24 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 
 | API ID | Method · Path | 백엔드·권한 | 핵심 요청 | 성공 결과 | 명시 오류 |
 |---|---|---|---|---|---|
-| `API-CALENDAR-001` | `GET /groups/{groupId}/events` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; query `startDate`, `endDate` | `200`: `events[{id,title,eventDate,startAt,endAt}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
-| `API-CALENDAR-002` | `GET /events/{eventId}` | Spring Boot · 해당 그룹 활성 구성원 | path `eventId` | `200`: `id`, `groupId`, `title`, `description`, `eventDate`, `startAt`, `endAt`, `creatorMemberId`, `participantMemberIds` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
-| `API-CALENDAR-003` | `POST /groups/{groupId}/events` | Spring Boot · 해당 그룹 활성 구성원 | `title`, `description`, `eventDate`, `startAt`, `endAt`, `participantMemberIds` | `201`: `eventId`, `createdAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
-| `API-CALENDAR-004` | `PATCH /events/{eventId}` | Spring Boot · 작성자 또는 그룹 관리자 | `title`, `description`, `eventDate`, `startAt`, `endAt`, `participantMemberIds` | `200`: `id`, `lastEditorMemberId`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-CALENDAR-001` | `GET /groups/{groupId}/events` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; query `startDate`, `endDate` | `200`: `events[{id,title,eventDate,endDate,startAt,endAt}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-CALENDAR-002` | `GET /events/{eventId}` | Spring Boot · 해당 그룹 활성 구성원 | path `eventId` | `200`: `id`, `groupId`, `title`, `description`, `eventDate`, `endDate`, `startAt`, `endAt`, `creatorMemberId`, `participantMemberIds` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-CALENDAR-003` | `POST /groups/{groupId}/events` | Spring Boot · 해당 그룹 활성 구성원 | `title`, `description`, `eventDate`, `endDate`, `startAt`, `endAt`, `participantMemberIds` | `201`: `eventId`, `createdAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-CALENDAR-004` | `PATCH /events/{eventId}` | Spring Boot · 작성자 또는 그룹 관리자 | `title`, `description`, `eventDate`, `endDate`, `startAt`, `endAt`, `participantMemberIds` | `200`: `id`, `lastEditorMemberId`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-CALENDAR-005` | `DELETE /events/{eventId}` | Spring Boot · 작성자 또는 그룹 관리자 | path `eventId` | `204 No Content` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 
-- 모든 일정은 전날 09:00 KST에 알림을 생성하고, 시간 일정은 추가로
-  시작 1시간 전에 생성한다.
-- 하루종일(날짜) 일정은 `startAt`, `endAt`을 보내지 않거나 null로 보낸다.
+- 모든 일정은 시작 날짜 전날 09:00 KST에 알림을 생성하고, 시간 일정은
+  추가로 시작 1시간 전에 생성한다.
+- `eventDate`는 일정의 시작 날짜, `endDate`는 종료 날짜다. 하루짜리 일정도
+  두 값을 모두 보내고 받으며 이때 두 값은 같다.
+- 하루종일(날짜) 일정은 `startAt`, `endAt`을 보내지 않거나 null로 보내고
+  `eventDate`와 `endDate`로 날짜 범위를 지정한다. `endDate`를 생략하면
+  `eventDate`와 같은 하루짜리 일정으로 저장한다.
+- 시간 일정은 서버가 `startAt`·`endAt`의 `Asia/Seoul` 날짜로 `eventDate`·
+  `endDate`를 파생하며 요청에 담긴 날짜 값을 무시한다.
+- `API-CALENDAR-001`의 query `startDate`·`endDate`는 조회 구간이며, 그
+  구간과 하루라도 겹치는 일정을 반환한다. 같은 이름이지만 응답의
+  `endDate`(일정 종료 날짜)와는 의미가 다르다.
 - `API-CALENDAR-004`는 핵심 요청의 전체 필드 세트를 보내는 전체 갱신이며,
   `startAt`·`endAt`이 없거나 null이면 날짜 일정으로 저장한다.
 - 일정 삭제 시 참여자를 삭제한다. 기존 알림은 `title`, `body` 스냅샷을
