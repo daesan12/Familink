@@ -624,6 +624,59 @@ test("초대 코드 참여 요청을 보내면 승인 대기 카드를 표시한
   );
 });
 
+test("기본 그룹 게이트웨이로 초대 코드 가입 요청과 상태 재조회를 연결한다", async () => {
+  const groupGateway = createGroupGateway();
+  groupGateway.requestJoinByCode = jest.fn().mockResolvedValue({
+    groupId: "group-join-api",
+    groupName: "API 가족",
+    joinRequestId: "request-api",
+    status: "PENDING_ADMIN",
+  });
+  groupGateway.loadGroups.mockResolvedValueOnce({
+    groups: [],
+    joinRequests: [
+      {
+        groupId: "group-join-api",
+        groupName: "API 가족",
+        joinRequestId: "request-api",
+        processedAt: null,
+        requestedAt: "2026-07-31T01:02:03Z",
+        status: "PENDING_ADMIN",
+      },
+    ],
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App initialRootRoute="groupOnboarding" groupGateway={groupGateway} />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+      })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "6자리 초대 코드" })
+      .props.onChangeText("ab12c3");
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "참여 요청 보내기" })
+      .props.onPress();
+  });
+
+  expect(groupGateway.requestJoinByCode).toHaveBeenCalledWith("AB12C3");
+  expect(groupGateway.loadGroups).toHaveBeenCalled();
+  expect(renderer!.root.findByProps({ children: "API 가족" })).toBeTruthy();
+});
+
 test("초대 코드 참여 요청이 실패하면 입력창을 유지하고 대기 카드를 추가하지 않는다", async () => {
   const onJoinGroup = jest
     .fn()
@@ -675,10 +728,13 @@ test("초대 코드 참여 요청이 실패하면 입력창을 유지하고 대�
 
 test("가입 게이트웨이가 없으면 코드 오류 대신 후속 연동을 안내한다", async () => {
   const alertSpy = jest.spyOn(Alert, "alert");
+  const groupGateway = createGroupGateway();
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(() => {
-    renderer = TestRenderer.create(<App initialRootRoute="groupOnboarding" />);
+    renderer = TestRenderer.create(
+      <App initialRootRoute="groupOnboarding" groupGateway={groupGateway} />
+    );
   });
   mountedRenderers.push(renderer!);
 

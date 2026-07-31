@@ -10,6 +10,7 @@ import {
   getInviteCode,
   loadGroups,
   renameGroup,
+  requestJoinByCode,
 } from './groupApi';
 
 function success(data: unknown, status = 200) {
@@ -188,6 +189,30 @@ describe('groupApi', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/groups/81/invite-code');
   });
 
+  it('초대 코드로 가입 요청을 제출하고 대기 상태를 반환한다', async () => {
+    jest.spyOn(apiClient, 'post').mockResolvedValueOnce(
+      success(
+        {
+          groupId: 91,
+          groupName: '가족 모임',
+          joinRequestId: 101,
+          status: 'PENDING_ADMIN',
+        },
+        201,
+      ),
+    );
+
+    await expect(requestJoinByCode('ABC123')).resolves.toEqual({
+      groupId: '91',
+      groupName: '가족 모임',
+      joinRequestId: '101',
+      status: 'PENDING_ADMIN',
+    });
+    expect(apiClient.post).toHaveBeenCalledWith('/join-requests/by-code', {
+      inviteCode: 'ABC123',
+    });
+  });
+
   it.each([
     ['목록 역할', loadGroups, {groups: [{id: 1}], joinRequests: []}, 'get'],
     [
@@ -222,6 +247,12 @@ describe('groupApi', () => {
       'patch',
     ],
     ['초대 코드', () => getInviteCode('1'), {inviteCode: '123'}, 'get'],
+    [
+      '가입 요청 상태',
+      () => requestJoinByCode('ABC123'),
+      {groupId: 1, groupName: '가족 모임', joinRequestId: 2, status: 'APPROVED'},
+      'post',
+    ],
   ] as const)(
     '잘못된 %s 성공 payload를 거부한다',
     async (_label, request, data, method) => {

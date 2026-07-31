@@ -7,6 +7,7 @@ export {
   getInviteCode,
   loadGroups,
   renameGroup,
+  requestJoinByCode,
 } from './api/groupApi';
 export type {
   CreatedFamilyGroup,
@@ -15,6 +16,7 @@ export type {
   FamilyGroupGateway,
   FamilyGroupListSnapshot,
   FamilyGroupSummary,
+  GroupJoinRequestResult,
   GroupJoinRequestStatus,
   GroupJoinRequestSummary,
   UpdatedFamilyGroup,
