@@ -75,6 +75,37 @@ describe('groupApi', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/groups');
   });
 
+  it('processedAt 필드가 생략된 가입 요청도 null로 정규화한다', async () => {
+    jest.spyOn(apiClient, 'get').mockResolvedValueOnce(
+      success({
+        groups: [],
+        joinRequests: [
+          {
+            groupId: 12,
+            groupName: '가족 모임',
+            joinRequestId: 31,
+            requestedAt: '2026-07-31T01:02:03Z',
+            status: 'PENDING_ADMIN',
+          },
+        ],
+      }),
+    );
+
+    await expect(loadGroups()).resolves.toEqual({
+      groups: [],
+      joinRequests: [
+        {
+          groupId: '12',
+          groupName: '가족 모임',
+          joinRequestId: '31',
+          processedAt: null,
+          requestedAt: '2026-07-31T01:02:03Z',
+          status: 'PENDING_ADMIN',
+        },
+      ],
+    });
+  });
+
   it('화면 역할을 서버 역할로 바꿔 그룹을 생성한다', async () => {
     jest.spyOn(apiClient, 'post').mockResolvedValueOnce(
       success(

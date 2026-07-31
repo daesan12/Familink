@@ -222,7 +222,7 @@ function parseJoinRequestSummary(
     !isGroupName(value.groupName) ||
     !isJoinRequestStatus(value.status) ||
     !isInstant(value.requestedAt) ||
-    !isNullableInstant(value.processedAt)
+    (value.processedAt !== undefined && !isNullableInstant(value.processedAt))
   ) {
     return null;
   }
@@ -231,7 +231,7 @@ function parseJoinRequestSummary(
     groupId,
     groupName: value.groupName,
     joinRequestId,
-    processedAt: value.processedAt,
+    processedAt: value.processedAt ?? null,
     requestedAt: value.requestedAt,
     status: value.status,
   };
