@@ -64,6 +64,11 @@ public class Notification extends CreatedAtEntity {
 	@Column(nullable = false, columnDefinition = "notification_type")
 	private NotificationType type;
 
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.NAMED_ENUM)
+	@Column(name = "reminder_slot", columnDefinition = "reminder_slot")
+	private ReminderSlot reminderSlot;
+
 	@Column(nullable = false, columnDefinition = "TEXT")
 	private String title;
 
@@ -77,8 +82,19 @@ public class Notification extends CreatedAtEntity {
 	}
 
 	public Notification(User receiver, NotificationType type, String title, String body) {
+		this(receiver, type, null, title, body);
+	}
+
+	public Notification(
+		User receiver,
+		NotificationType type,
+		ReminderSlot reminderSlot,
+		String title,
+		String body
+	) {
 		this.receiver = receiver;
 		this.type = type;
+		this.reminderSlot = reminderSlot;
 		this.title = title;
 		this.body = body;
 	}
@@ -117,6 +133,10 @@ public class Notification extends CreatedAtEntity {
 
 	public NotificationType getType() {
 		return type;
+	}
+
+	public ReminderSlot getReminderSlot() {
+		return reminderSlot;
 	}
 
 	public String getTitle() {

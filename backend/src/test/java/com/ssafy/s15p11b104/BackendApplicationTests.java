@@ -69,6 +69,25 @@ class BackendApplicationTests extends IntegrationTest {
 	}
 
 	@Test
+	void notificationReminderSlotSchemaMatchesContract() {
+		String enumType = jdbcTemplate.queryForObject(
+			"SELECT udt_name FROM information_schema.columns "
+				+ "WHERE table_schema = 'public' AND table_name = 'notifications' "
+				+ "AND column_name = 'reminder_slot'",
+			String.class);
+		String indexDefinition = jdbcTemplate.queryForObject(
+			"SELECT indexdef FROM pg_indexes "
+				+ "WHERE schemaname = 'public' AND indexname = 'uq_event_reminder_notification'",
+			String.class);
+
+		assertThat(enumType).isEqualTo("reminder_slot");
+		assertThat(indexDefinition)
+			.contains("(receiver_user_id, related_event_id, type, reminder_slot)")
+			.contains("NULLS NOT DISTINCT")
+			.contains("EVENT_REMINDER");
+	}
+
+	@Test
 	@Transactional
 	void bindsCallQueryEnumsUsingPostgreSqlTypes() {
 		Long userId = jdbcTemplate.queryForObject("""
