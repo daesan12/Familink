@@ -286,6 +286,14 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - FK: `user_id -> users.id`
 - 컬럼: `token VARCHAR(500) UNIQUE`, `device_type VARCHAR(20)`,
   `is_active BOOLEAN`, `created_at`, `updated_at` NOT NULL
+- 같은 `token` 문자열은 시스템 전체에서 한 행만 가지며, 활성 행은 동시에
+  한 사용자만 소유한다.
+- 등록은 Unique 제약과 행 잠금 또는 동등한 원자적 upsert로 처리한다. 같은
+  사용자의 재등록·재활성화와 다른 사용자로의 소유권 이전 모두 기존 `id`를
+  유지하고 `user_id`, `device_type`, `is_active`, `updated_at`을 현재
+  등록 결과에 맞게 갱신한다.
+- MVP의 `device_type` 값은 `ANDROID`다. 토큰 해제는 행 삭제가 아니라
+  `is_active=false` 전환이다.
 
 ## Enum
 
@@ -306,7 +314,8 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 
 ## 공통 삭제·보존 규칙
 
-- 회원 탈퇴: 개인정보를 익명화하고 `withdrawn_at`을 기록하되 게시글·댓글·
+- 회원 탈퇴: 개인정보를 익명화하고 `withdrawn_at`을 기록하며 같은
+  트랜잭션에서 사용자의 모든 `device_tokens`를 비활성화한다. 게시글·댓글·
   일정과 과거 그룹 관계는 보존한다.
 - 그룹 나가기·내보내기: `group_members.left_at`을 기록한다.
 - 그룹 삭제: 관리자이면서 다른 활성 구성원이 없을 때만 하드 삭제할 수 있다.
