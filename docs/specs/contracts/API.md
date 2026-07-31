@@ -1,7 +1,7 @@
 # API 계약
 
 > 상태: 일부 확정
-> 기준: 2026-07-31, Notion 활성 API 명세 59건과 승인된 알림 API 응답 계약
+> 기준: 2026-07-31, Notion 활성 API 명세 59건과 승인된 모바일 인증 세션·알림 API 응답 계약
 
 이 문서는 제품 구현에서 사용하는 유일한 로컬 API 계약이다. 아래 목록에는
 Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 요청,
@@ -43,8 +43,11 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
   처리한다.
 - 게시글 분석은 Spring Scheduler가 대상을 선별한 뒤 Spring Boot 내부
   서비스 호출로 수행한다.
-- 인증이 필요한 요청은 Access Token을 사용한다. 재발급은 Refresh Token을
-  사용한다.
+- 인증이 필요한 요청은 `Authorization: Bearer <accessToken>`을 사용한다.
+  `API-AUTH-001~004`처럼 Access Token이 필요 없는 인증 요청에는 이 헤더를
+  자동으로 붙이지 않는다. 재발급은 body의 Refresh Token을 사용하고,
+  `API-AUTH-005` 로그아웃은 유효한 Access Token과 body의 Refresh Token을
+  함께 사용한다.
 - 회원가입과 로그인은 `loginId`와 `password`를 사용한다. 이메일
   회원가입·로그인·인증은 지원하지 않는다.
 - `API-AUTH-001`·`API-AUTH-002`·`API-USERS-002`의 `loginId`는
@@ -89,6 +92,15 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 - `API-AUTH-004`는 현재 Redis에 저장된 Refresh Token과 요청 토큰이 같을
   때만 새 Token Pair로 원자적으로 회전한다. 성공하면 기존 Refresh Token은
   즉시 무효화되고 새 Refresh Token의 유효 기간은 기본 14일로 다시 시작한다.
+- 클라이언트는 보호 API의 `401 UNAUTHORIZED`에만 자동 재발급하고 `403`에는
+  재발급하지 않는다. 동시에 발생한 여러 `401`은 하나의 재발급 결과를
+  공유한다. 성공 시 새 Token Pair 저장을 완료한 뒤 각 원 요청을 한 번만
+  재시도하며, 재시도 요청·재발급 요청 자체·Access Token이 필요 없는 인증
+  요청에는 이 처리를 다시 적용하지 않는다.
+- 재발급의 `400 INVALID_REQUEST`와 `401 INVALID_REFRESH_TOKEN`은 인증을
+  확정적으로 무효화한다. 네트워크·타임아웃·5xx는 세션 거부로 간주하지
+  않으며 저장 세션을 지우지 않는다. 클라이언트 분기는 응답 `message`가
+  아니라 HTTP 상태와 `code`를 사용한다.
 - `API-AUTH-005`는 인증에 사용한 Access Token을 남은 만료 시간 동안
   블랙리스트에 등록하고, 요청 Refresh Token이 현재 저장값일 때 사용자별
   Refresh Token 키를 삭제한다.
