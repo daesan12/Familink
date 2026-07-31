@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.s15p11b104.domain.call.entity.CallReport;
+import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
 import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.GroupMemberCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.MemberAliasCallRepository;
@@ -74,13 +75,13 @@ public class AiCallPromptContextProvider {
 			groupId, careReceiverId, aliases);
 		List<AiCallPromptContext.TodayPostContext> todayPosts = loadTodayPosts(
 			groupId, startOfDay, endOfDay, aliases);
-		AiCallPromptContext.RecentCallContext recentCall = loadRecentCall(careReceiverId);
+		List<AiCallPromptContext.RecentCallContext> recentCalls = loadRecentCalls(careReceiverId);
 
 		AiCallPromptContext promptContext = new AiCallPromptContext(
 			new AiCallPromptContext.CareReceiverContext(careReceiver.getUser().getName(), interests, today),
 			familyMemberContexts.promptContexts(),
 			todayPosts,
-			recentCall
+			recentCalls
 		);
 		return new AiCallSessionContext(promptContext, familyMemberContexts.personReferences());
 	}
@@ -145,15 +146,18 @@ public class AiCallPromptContextProvider {
 			.toList();
 	}
 
-	private AiCallPromptContext.RecentCallContext loadRecentCall(Long careReceiverId) {
-		List<CallReport> reports = callReportRepository.findRecent(careReceiverId, PageRequest.of(0, 1));
-		if (reports.isEmpty()) {
-			return null;
-		}
-
-		CallReport report = reports.getFirst();
-		LocalDate endedDate = report.getCallSession().getEndedAt().atZone(KST).toLocalDate();
-		return new AiCallPromptContext.RecentCallContext(report.getSummary(), endedDate);
+	private List<AiCallPromptContext.RecentCallContext> loadRecentCalls(Long careReceiverId) {
+		return callReportRepository.findRecent(
+				careReceiverId,
+				CallStatus.COMPLETED,
+				PageRequest.of(0, 5)
+			)
+			.stream()
+			.map(report -> new AiCallPromptContext.RecentCallContext(
+				report.getSummary(),
+				report.getCallSession().getEndedAt().atZone(KST).toLocalDate()
+			))
+			.toList();
 	}
 
 	private record FamilyMemberContexts(

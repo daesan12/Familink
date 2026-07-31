@@ -39,11 +39,13 @@ public interface CallReportCallRepository extends JpaRepository<CallReport, Long
 		from CallReport report
 		join fetch report.callSession session
 		where session.careReceiverMember.id = :careReceiverMemberId
+			and session.status = :status
 			and session.endedAt is not null
-		order by session.endedAt desc
+		order by session.endedAt desc, report.id desc
 		""")
 	List<CallReport> findRecent(
 		@Param("careReceiverMemberId") Long careReceiverMemberId,
+		@Param("status") CallStatus status,
 		Pageable pageable
 	);
 }

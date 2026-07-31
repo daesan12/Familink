@@ -120,7 +120,7 @@ class CallSessionServiceTest {
 			),
 			List.of(new AiCallPromptContext.FamilyMemberContext("person_1", "민지", "큰딸")),
 			List.of(),
-			null
+			List.of()
 		);
 		Map<String, AiCallPersonReference> references = Map.of(
 			"person_1",

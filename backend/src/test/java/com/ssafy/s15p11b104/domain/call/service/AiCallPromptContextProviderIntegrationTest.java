@@ -151,7 +151,7 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 	}
 
 	@Test
-	void loadsMostRecentEndedReportForCareReceiver() {
+	void loadsFiveMostRecentCompletedReportsForCareReceiver() {
 		Long currentGroupId = insertGroup("리포트그룹", "RPT001");
 		Long careReceiverId = insertMember(
 			currentGroupId,
@@ -165,19 +165,37 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 			"CARE_RECEIVER"
 		);
 
-		insertReport(currentGroupId, careReceiverId, "과거 요약", "2026-07-26T10:00:00Z", "COMPLETED");
-		insertReport(currentGroupId, careReceiverId, "최신 요약", "2026-07-28T16:30:00Z", "COMPLETED");
-		insertReport(currentGroupId, careReceiverId, "나중에 저장된 오래된 요약",
+		insertReport(currentGroupId, careReceiverId, "조회 범위 밖 요약",
+			"2026-07-20T10:00:00Z", "COMPLETED");
+		insertReport(currentGroupId, careReceiverId, "다섯 번째 요약",
+			"2026-07-24T10:00:00Z", "COMPLETED");
+		insertReport(currentGroupId, careReceiverId, "네 번째 요약",
 			"2026-07-25T10:00:00Z", "COMPLETED");
+		insertReport(currentGroupId, careReceiverId, "세 번째 요약",
+			"2026-07-26T10:00:00Z", "COMPLETED");
+		insertReport(currentGroupId, careReceiverId, "두 번째 요약",
+			"2026-07-27T10:00:00Z", "COMPLETED");
+		insertReport(currentGroupId, careReceiverId, "최신 요약",
+			"2026-07-28T16:30:00Z", "COMPLETED");
 		insertReport(otherGroupId, otherCareReceiverId, "다른 피보호자 최신 요약",
 			"2026-07-30T10:00:00Z", "COMPLETED");
-		insertReport(currentGroupId, careReceiverId, "종료되지 않은 통화 요약", null, "CONNECTING");
+		insertReport(currentGroupId, careReceiverId, "완료되지 않은 최신 통화 요약",
+			"2026-07-31T10:00:00Z", "INCOMPLETE");
 
 		AiCallPromptContext context = promptContextProvider.load(loadMember(careReceiverId)).promptContext();
 
-		assertThat(context.recentCall()).isNotNull();
-		assertThat(context.recentCall().summary()).isEqualTo("최신 요약");
-		assertThat(context.recentCall().endedDateKst()).isEqualTo(LocalDate.of(2026, 7, 29));
+		assertThat(context.recentCalls())
+			.extracting(
+				AiCallPromptContext.RecentCallContext::summary,
+				AiCallPromptContext.RecentCallContext::endedDateKst
+			)
+			.containsExactly(
+				tuple("최신 요약", LocalDate.of(2026, 7, 29)),
+				tuple("두 번째 요약", LocalDate.of(2026, 7, 27)),
+				tuple("세 번째 요약", LocalDate.of(2026, 7, 26)),
+				tuple("네 번째 요약", LocalDate.of(2026, 7, 25)),
+				tuple("다섯 번째 요약", LocalDate.of(2026, 7, 24))
+			);
 	}
 
 	private Long insertGroup(String name, String inviteCode) {

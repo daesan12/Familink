@@ -217,7 +217,7 @@ public class AiCallPromptComposer {
 		appendContext(prompt, "피보호자 정보", context.careReceiver());
 		appendContext(prompt, "가족 구성원 표시명", emptyAsNone(context.familyMembers()));
 		appendContext(prompt, "당일 가족 게시글 분석", emptyAsNone(context.todayPosts()));
-		appendContext(prompt, "최근 통화 요약", context.recentCall() == null ? "없음" : context.recentCall());
+		appendContext(prompt, "최근 통화 요약", emptyAsNone(context.recentCalls()));
 		return prompt.toString();
 	}
 
