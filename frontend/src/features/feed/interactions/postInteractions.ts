@@ -7,11 +7,11 @@ import type {
 } from '../types';
 
 export const REACTION_OPTIONS: readonly Omit<FeedReaction, 'count'>[] = [
-  {emoji: '❤️', id: 'love', label: '사랑해요'},
-  {emoji: '😊', id: 'happy', label: '행복해요'},
-  {emoji: '😂', id: 'laugh', label: '웃겨요'},
-  {emoji: '🤗', id: 'hug', label: '안아줄게요'},
-  {emoji: '👏', id: 'cheer', label: '응원해요'},
+  {emoji: '❤️', id: 'HEART', label: '사랑해요'},
+  {emoji: '😂', id: 'LAUGH', label: '웃겨요'},
+  {emoji: '😮', id: 'SURPRISE', label: '놀랐어요'},
+  {emoji: '😢', id: 'SAD', label: '슬퍼요'},
+  {emoji: '👏', id: 'SUPPORT', label: '응원해요'},
 ];
 
 export interface PostInteractionsState {
