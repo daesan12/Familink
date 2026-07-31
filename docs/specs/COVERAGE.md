@@ -52,7 +52,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-021 가족 피드 게시글 관리 | [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 |  |
 | 요구사항 | REQ-022 게시글 미디어 구성 제한 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
 | 요구사항 | REQ-023 게시글 반응·댓글·게시 알림 | [피드](./domains/FEED_AND_MEDIA.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 대댓글·댓글 반응 없음 |
-| 요구사항 | REQ-024 게시글 보관함 및 필터 | [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 |  |
+| 요구사항 | REQ-024 게시글 보관함 및 필터 | [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | 서버의 활성 구성원 `memberId`·날짜·유형 AND 필터 |
 | 요구사항 | REQ-025 공유 일정 등록·조회·수정·삭제 | [일정](./domains/CALENDAR.md) | 반영·확정 |  |
 | 요구사항 | REQ-026 공유 일정 알림 | [일정](./domains/CALENDAR.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 |  |
 | 요구사항 | REQ-027 공유 캘린더 범위 분리 | [일정](./domains/CALENDAR.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 기기 캘린더 연동 없음 |
@@ -134,11 +134,11 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | IA | G-1 보호자 / 통화 리포트 | [리포트](./domains/REPORTS.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 빈 상태 |
 | IA | F-3 피보호자 / AI 전화 | [AI 통화](./domains/AI_CALL.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 통화 종료 |
 | IA | D-11 카메라 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 |  |
-| IA | D-10 피보호자&보호자 / 피드 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 보관함 구성원 필터 |
+| IA | D-10 피보호자&보호자 / 피드 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 보관함 서버 `memberId` 필터 |
 | IA | D-9 피보호자&보호자 / 피드 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 게시글 보관함 |
 | IA | E-2 피보호자&보호자 / 일정 | [일정](./domains/CALENDAR.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 선택 날짜 목록 |
 | IA | D-9c 피보호자&보호자 / 피드 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 보관함 날짜 필터 |
-| IA | D-10c 피보호자&보호자 / 피드 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 보관함 구성원·날짜 |
+| IA | D-10c 피보호자&보호자 / 피드 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 보관함 `memberId`·날짜 AND 필터 |
 | IA | E-1 피보호자&보호자 / 일정 | [일정](./domains/CALENDAR.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 캘린더 |
 | IA | D-12 갤러리 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 |  |
 | IA | D-5p-1 피보호자&보호자 / 알림 | [알림](./domains/NOTIFICATIONS.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 가입 요청 승인 역할 선택 |
@@ -189,9 +189,9 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-CALLS-001 AI 통화 세션 생성 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md) | 반영 | Spring Boot |
 | 활성 API | API-CALLS-002 WebRTC 연결 결과 전달 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md) | 반영 | Spring Boot |
 | 활성 API | API-CALLS-003 통화 종료 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring Boot |
-| 활성 API | API-CARNATION-001 그룹 잔디·주간 랭킹 조회 | [API](./contracts/API.md), [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영 | Spring Boot |
+| 활성 API | API-CARNATION-001 그룹 잔디·주간 랭킹 조회 | [API](./contracts/API.md), [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영·확정 | KST 월~일, `startDate`·`endDate` 둘 다 지정 또는 생략 |
 | 활성 API | API-CARNATION-002 구성원 카네이션 날짜 조회 | [API](./contracts/API.md), [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영 | Spring Boot |
-| 활성 API | API-COMMENTS-001 댓글 목록 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-COMMENTS-001 댓글 목록 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | `page`·`size`, 오래된순 고정, `updatedAt`, `hasNext` |
 | 활성 API | API-COMMENTS-002 댓글 등록 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
 | 활성 API | API-COMMENTS-003 댓글 수정 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
 | 활성 API | API-COMMENTS-004 댓글 삭제 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
@@ -215,17 +215,17 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-INTERESTS-002 관심사 일괄 수정 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | 0~10개·피보호자 본인 |
 | 활성 API | API-NOTIFICATIONS-001 기기 토큰 등록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
 | 활성 API | API-NOTIFICATIONS-002 미읽음 수 조회 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
-| 활성 API | API-NOTIFICATIONS-003 앱 내부 알림 목록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
+| 활성 API | API-NOTIFICATIONS-003 앱 내부 알림 목록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | `page`·`size`, 최신순 고정 |
 | 활성 API | API-NOTIFICATIONS-004 단일 알림 읽음 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
 | 활성 API | API-NOTIFICATIONS-005 전체 알림 읽음 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
 | 활성 API | API-NOTIFICATIONS-006 푸시 설정 조회 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 7개 유형 |
 | 활성 API | API-NOTIFICATIONS-007 푸시 설정 저장 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 7개 유형 |
 | 활성 API | API-NOTIFICATIONS-008 기기 토큰 비활성화 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | Spring Boot |
-| 활성 API | API-POSTS-001 그룹 피드 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-POSTS-001 그룹 피드 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | `page`·`size`, 최신순 고정 |
 | 활성 API | API-POSTS-002 게시글 상세 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| 활성 API | API-POSTS-003 게시글 보관함 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-POSTS-003 게시글 보관함 조회 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | 활성 `memberId`·`date`·`type` AND 필터 |
 | 활성 API | API-POSTS-004 게시글 등록 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
-| 활성 API | API-POSTS-005 게시글 수정 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
+| 활성 API | API-POSTS-005 게시글 수정 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | `thumbnailUrl` 선택, `media` 전체 교체 |
 | 활성 API | API-POSTS-007 게시글 삭제 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
 | 활성 API | API-REACTIONS-001 게시글 반응 변경 | [API](./contracts/API.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot |
 | 활성 API | API-REPORTS-001 리포트 날짜 조회 | [API](./contracts/API.md), [리포트](./domains/REPORTS.md) | 반영 | 보호자 |

@@ -53,6 +53,14 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 - 그룹 데이터는 해당 그룹의 활성 구성원 범위에서만 접근한다.
 - Spring Boot 통화 API는 Access Token으로 사용자, 현재 그룹, 피보호자
   구성원과 권한을 확인한다. 클라이언트가 이 값을 별도 식별자로 보내지 않는다.
+- `API-POSTS-001`, `API-COMMENTS-001`, `API-NOTIFICATIONS-003`의 목록
+  query는 `page`, `size`만 지원한다. `page`는 0부터 시작하며 기본값은
+  `0`이다. `size`의 기본값은 `20`, 허용 범위는 `1`~`100`이다. 성공
+  결과는 `content[]`, `hasNext`를 포함한다. 음수 `page`, 허용 범위 밖의
+  `size`, 지원하지 않는 `sort` query는 `400 INVALID_REQUEST`로 거부한다.
+- 목록 정렬은 `API-POSTS-001`이 `createdAt DESC, id DESC`,
+  `API-COMMENTS-001`이 `createdAt ASC, id ASC`,
+  `API-NOTIFICATIONS-003`이 `createdAt DESC, id DESC`로 고정된다.
 - API timestamp는 ISO-8601 UTC 절대 시각으로 교환한다. 사용자 화면과
   비즈니스 스케줄에 필요한 경우에만 `Asia/Seoul`로 변환한다.
 
@@ -119,13 +127,13 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 | API ID | Method · Path | 백엔드·권한 | 핵심 요청 | 성공 결과 | 명시 오류 |
 |---|---|---|---|---|---|
 | `API-FILES-001` | `POST /files/presigned-urls` | Spring Boot · Access Token 로그인 사용자 | `purpose`, `files[{fileName,contentType,sizeBytes}]` | `201`: `uploads[{uploadUrl,fileUrl,headers,expiresAt}]` | 명시 없음 |
-| `API-POSTS-001` | `GET /groups/{groupId}/posts` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 원본의 페이지 query | `200`: `content[{id,author,content,media,reactionCounts,myReaction,commentCount,createdAt}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-POSTS-001` | `GET /groups/{groupId}/posts` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 선택 query `page`, `size` | `200`: `content[{id,author,content,media,reactionCounts,myReaction,commentCount,createdAt}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-POSTS-002` | `GET /posts/{postId}` | Spring Boot · 해당 그룹 활성 구성원 | path `postId` | `200`: `id`, `groupId`, `author`, `content`, `media`, `reactions`, `commentCount`, `createdAt`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
-| `API-POSTS-003` | `GET /groups/{groupId}/archive` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; query `date`, `type` | `200`: `dates[{date,items[{postId,type,thumbnailUrl,contentPreview}]}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-POSTS-003` | `GET /groups/{groupId}/archive` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 선택 query `date`, `type`, `memberId`(`group_members.id`) | `200`: `dates[{date,items[{postId,type,thumbnailUrl,contentPreview}]}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-POSTS-004` | `POST /posts` | Spring Boot · 대상 그룹의 활성 구성원 | `groupIds[]`, `content`, `mediaType`, `media[{fileUrl,thumbnailUrl,displayOrder}]` | `201`: `posts[{postId,groupId}]`, `createdAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
-| `API-POSTS-005` | `PATCH /posts/{postId}` | Spring Boot · 작성자 본인 | `content`, `mediaType`, `media[{fileUrl,displayOrder}]` | `200`: `id`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-POSTS-005` | `PATCH /posts/{postId}` | Spring Boot · 작성자 본인 | `content`, `mediaType`, `media[{fileUrl,thumbnailUrl?,displayOrder}]` | `200`: `id`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-POSTS-007` | `DELETE /posts/{postId}` | Spring Boot · 작성자 본인 | path `postId` | `204 No Content` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
-| `API-COMMENTS-001` | `GET /posts/{postId}/comments` | Spring Boot · 해당 그룹 활성 구성원 | path `postId`; 원본의 페이지 query | `200`: `content[{id,author,content,createdAt,updateAt}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-COMMENTS-001` | `GET /posts/{postId}/comments` | Spring Boot · 해당 그룹 활성 구성원 | path `postId`; 선택 query `page`, `size` | `200`: `content[{id,author,content,createdAt,updatedAt}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-COMMENTS-002` | `POST /posts/{postId}/comments` | Spring Boot · 해당 그룹 활성 구성원 | `content` | `201`: `id`, `postId`, `content`, `createdAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-COMMENTS-003` | `PATCH /comments/{commentId}` | Spring Boot · 작성자 본인 | `content` | `200`: `id`, `content`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-COMMENTS-004` | `DELETE /comments/{commentId}` | Spring Boot · 작성자 본인 | path `commentId` | `204 No Content` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
@@ -134,6 +142,15 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 구현 규칙:
 
 - `API-POSTS-004`는 선택한 각 그룹에 독립된 `posts` 행을 만든다.
+- `API-POSTS-003`의 `memberId`는 해당 그룹의 활성
+  `group_members.id`만 허용한다. 생략하면 작성자의 현재 활성 여부와
+  관계없이 조회 가능한 모든 보관함 게시글을 반환하고, 지정하면 작성자
+  구성원이 일치하는 게시글만 반환한다. `date`, `type`, `memberId`를 함께
+  전달하면 모든 조건을 AND로 적용한다. 존재하지 않거나 비활성 또는 다른
+  그룹의 `memberId`는 `400 INVALID_REQUEST`로 거부한다.
+- `API-POSTS-005`의 `media`는 요청에 포함된 항목으로 기존 미디어 전체를
+  교체한다. 미디어 항목에서 `thumbnailUrl`을 생략하면 해당 썸네일은
+  `null`로 저장한다.
 - 보호자의 게시글 작성에 따른 카네이션은 KST 날짜·그룹 기준 하루 최대
   한 번 적립한다.
 - `API-FILES-001`의 `purpose`별 MIME 허용 목록과 최대 크기는 미결정이다.
@@ -183,7 +200,7 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 | `API-REPORTS-001` | `GET /groups/{groupId}/care-receivers/{memberId}/reports/calendar` | Spring Boot · 같은 그룹 활성 보호자 | path `groupId`, `memberId`; query `year`, `month` | `200`: `yearMonth`, `reportDates[]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-REPORTS-002` | `GET /groups/{groupId}/members/{memberId}/reports/daily/{reportDate}` | Spring Boot · 같은 그룹 활성 보호자 | path `groupId`, `memberId`, `reportDate` | `200`: `date`, `dailyReport{id,summary,emotionCategory,emotionSubcategory,guardianMessageSummary}` 또는 `dailyReport=null`, `calls[{callSessionId,startedAt,reportAvailable}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-REPORTS-003` | `GET /call-sessions/{callSessionId}/report` | Spring Boot · 같은 그룹 활성 보호자 | path `callSessionId` | `200`: `callSessionId`, `summary`, `guardianMessage`, `createdAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `404 CALL_REPORT_NOT_READY` |
-| `API-CARNATION-001` | `GET /groups/{groupId}/grass` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 원본의 기간 query | `200`: `weekStart`, `weekEnd`, `rankings[{memberId,displayName,carnationCount,previousWeekWinner}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-CARNATION-001` | `GET /groups/{groupId}/grass` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 선택 query `startDate`, `endDate`(둘 다 지정하거나 둘 다 생략) | `200`: `weekStart`, `weekEnd`, `rankings[{memberId,displayName,carnationCount,previousWeekWinner}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-CARNATION-002` | `GET /groups/{groupId}/members/{memberId}/carnations` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`, `memberId`; query `startDate`, `endDate` | `200`: `memberId`, `startDate`, `endDate`, `earnedDates[]` | 명시 없음 |
 
 - `API-REPORTS-002`의 `guardianMessageSummary`는 일일 대표 보호자 전달
@@ -197,6 +214,11 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
   조회 조건은 UTC를 사용한다.
 - 카네이션 날짜와 주간 랭킹 경계는 KST이며 주는 월요일에 시작한다.
   공동 순위를 허용한다.
+- `API-CARNATION-001`은 `startDate`, `endDate`를 모두 생략하면 KST
+  현재 주의 월요일부터 일요일까지 조회한다. 값을 지정할 때는 둘 다
+  ISO-8601 날짜로 보내고 `startDate`가 월요일이며
+  `endDate = startDate + 6일`이어야 한다. 한쪽만 전달하거나 이 범위를
+  벗어나면 `400 INVALID_REQUEST`다. 과거 기록도 같은 주간 단위로 조회한다.
 
 ## 알림·기기 토큰
 
@@ -204,7 +226,7 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 |---|---|---|---|---|---|
 | `API-NOTIFICATIONS-001` | `POST /device-tokens` | Spring Boot · 본인 | `token`, `deviceType` | `201`: `id`, `deviceType`, `active` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-002` | `GET /notifications/unread-count` | Spring Boot · 본인 | 없음 | `200`: `unreadCount` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
-| `API-NOTIFICATIONS-003` | `GET /notifications` | Spring Boot · 본인 | 원본의 페이지 query | `200`: `content[{id,type,title,body,groupId,actor,relatedJoinRequestId,relatedPostId,relatedEventId,relatedCallReportId,relatedDailyReportId,readAt,createdAt}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-NOTIFICATIONS-003` | `GET /notifications` | Spring Boot · 본인 | 선택 query `page`, `size` | `200`: `content[{id,type,title,body,groupId,actor,relatedJoinRequestId,relatedPostId,relatedEventId,relatedCallReportId,relatedDailyReportId,readAt,createdAt}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-004` | `PATCH /notifications/{notificationId}/read` | Spring Boot · 본인 | path `notificationId` | `200`: `id`, `readAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-005` | `PATCH /notifications/read-all` | Spring Boot · 본인 | 없음 | `200`: `updatedCount`, `readAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-006` | `GET /notification-settings` | Spring Boot · 본인 | 없음 | `200`: 알림 유형 7종의 `settings[{notificationType,enabled}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
