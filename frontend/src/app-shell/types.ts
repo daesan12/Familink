@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 
 export type GroupRole = 'guardian' | 'careReceiver';
 
+export type AiCallResultStatus = 'COMPLETED' | 'CANCELLED' | 'FAILED';
+
 export type AppRoute =
   | 'feed'
   | 'calendar'
@@ -19,6 +21,8 @@ export interface FamilyGroup {
 }
 
 export interface AppScreenProps {
+  accessToken?: string | null;
+  onCallResult?: (status: AiCallResultStatus) => void;
   createCalendarEventRequestId?: number;
   createPostRequestId?: number;
   currentGroup: FamilyGroup;

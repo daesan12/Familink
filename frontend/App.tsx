@@ -1030,6 +1030,7 @@ export default function App({
         )}
         {route === "appShell" && (
           <AppShell
+            accessToken={authSession.getAccessToken()}
             currentUserId={user?.id}
             currentUserName={user?.name}
             groupStore={groupStore}

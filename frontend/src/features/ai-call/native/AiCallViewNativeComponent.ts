@@ -9,7 +9,16 @@ type FullscreenChangeEvent = Readonly<{
   isFullscreen: boolean;
 }>;
 
+export type AiCallResultEvent = Readonly<{
+  status: string;
+}>;
+
 export interface NativeProps extends ViewProps {
+  accessToken?: string | null;
+  groupId?: string | null;
+  onCallResult?:
+    | CodegenTypes.DirectEventHandler<AiCallResultEvent>
+    | null;
   onFullscreenChange?:
     | CodegenTypes.DirectEventHandler<FullscreenChangeEvent>
     | null;

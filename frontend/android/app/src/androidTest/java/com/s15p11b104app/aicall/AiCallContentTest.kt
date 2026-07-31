@@ -137,7 +137,11 @@ class AiCallContentTest {
   fun 디버그_흐름에서_연결_실패와_재시도_화면을_확인한다() {
     composeRule.setContent {
       AiCallTheme {
-        AiCallRoute(onFullscreenChange = {})
+        AiCallRoute(
+            bridgeContext = AiCallBridgeContext("test-access-token", "group-1"),
+            onCallResult = {},
+            onFullscreenChange = {},
+        )
       }
     }
 
