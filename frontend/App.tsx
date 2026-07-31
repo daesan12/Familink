@@ -85,7 +85,14 @@ import {
   type GroupJoinRequestSummary,
   type CarnationGateway,
 } from "./src/features/group-info";
-import { NotificationsScreen } from "./src/features/notifications";
+import {
+  createNotificationGateway,
+  nativeDeviceTokenProvider,
+  NotificationGatewayProvider,
+  NotificationsScreen,
+  type DeviceTokenProvider,
+  type NotificationGateway,
+} from "./src/features/notifications";
 import { createReportGateway, ReportScreen } from "./src/features/reports";
 import type {
   CareReceiverReportTarget,
@@ -117,6 +124,8 @@ interface AppProps {
   groupManagementGateway?: GroupManagementGateway;
   groupMembershipGateway?: GroupMembershipGateway;
   interestGateway?: InterestGateway;
+  notificationGateway?: NotificationGateway;
+  deviceTokenProvider?: DeviceTokenProvider;
   groupStore?: CurrentGroupStore;
   groups?: readonly FamilyGroup[];
   initialGroupId?: string | null;
@@ -141,6 +150,12 @@ interface AppProps {
     Record<string, readonly CareReceiverReportTarget[]>
   >;
   screens?: AppScreenRegistry;
+}
+
+interface PendingDeviceTokenRegistration {
+  deactivationRequested: boolean;
+  promise: Promise<unknown>;
+  token: string;
 }
 
 const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
@@ -412,6 +427,8 @@ export default function App({
   groupManagementGateway = familyGroupManagementGateway,
   groupMembershipGateway = familyGroupMembershipGateway,
   interestGateway = familyInterestGateway,
+  notificationGateway: injectedNotificationGateway,
+  deviceTokenProvider = nativeDeviceTokenProvider,
   groupStore = currentGroupStore,
   groups,
   initialGroupId,
@@ -468,11 +485,26 @@ export default function App({
       createCarnationGateway({ authSession, baseUrl: apiBaseUrl }),
     [apiBaseUrl, authSession, carnationGateway]
   );
+  const resolvedNotificationGateway = useMemo(
+    () =>
+      injectedNotificationGateway ??
+      createNotificationGateway({
+        authSession,
+        baseUrl: apiBaseUrl,
+      }),
+    [apiBaseUrl, authSession, injectedNotificationGateway]
+  );
   const [authenticationResolved, setAuthenticationResolved] = useState(
     !shouldRestoreSession
   );
   const authInvalidationVersionRef = useRef(0);
   const interestSetupRequestRef = useRef(0);
+  const deviceTokenGenerationRef = useRef(0);
+  const activeDeviceTokenRef = useRef<string | null>(null);
+  const deviceTokenLogoutRef = useRef(false);
+  const pendingDeviceTokenRegistrationRef =
+    useRef<PendingDeviceTokenRegistration | null>(null);
+  const deviceTokenDeactivationRef = useRef<Promise<void> | null>(null);
   const resolvedGroups = availableGroups;
 
   const clearAuthenticationState = useCallback(() => {
@@ -489,6 +521,110 @@ export default function App({
     setLoginVisible(false);
     setRoute("welcome");
   }, []);
+
+  const registerCurrentDeviceToken = useCallback(
+    async (refreshedToken?: string) => {
+      await deviceTokenDeactivationRef.current?.catch(() => undefined);
+      if (deviceTokenLogoutRef.current) {
+        return;
+      }
+      const generation = ++deviceTokenGenerationRef.current;
+      const permission =
+        refreshedToken === undefined
+          ? await deviceTokenProvider.requestPermission()
+          : "granted";
+      if (
+        permission !== "granted" ||
+        generation !== deviceTokenGenerationRef.current
+      ) {
+        return;
+      }
+
+      const token = refreshedToken ?? (await deviceTokenProvider.getToken());
+      if (token === null || generation !== deviceTokenGenerationRef.current) {
+        return;
+      }
+
+      const previousActiveToken = activeDeviceTokenRef.current;
+      const registrationPromise =
+        resolvedNotificationGateway.registerDeviceToken(token);
+      const pendingRegistration: PendingDeviceTokenRegistration = {
+        deactivationRequested: false,
+        promise: registrationPromise,
+        token,
+      };
+      pendingDeviceTokenRegistrationRef.current = pendingRegistration;
+      try {
+        await registrationPromise;
+      } finally {
+        if (
+          pendingDeviceTokenRegistrationRef.current === pendingRegistration
+        ) {
+          pendingDeviceTokenRegistrationRef.current = null;
+        }
+      }
+      if (generation === deviceTokenGenerationRef.current) {
+        activeDeviceTokenRef.current = token;
+        if (previousActiveToken !== null && previousActiveToken !== token) {
+          await resolvedNotificationGateway
+            .deactivateDeviceToken(previousActiveToken)
+            .catch(() => undefined);
+        }
+        return;
+      }
+      if (!pendingRegistration.deactivationRequested) {
+        await resolvedNotificationGateway
+          .deactivateDeviceToken(token)
+          .catch(() => undefined);
+      }
+    },
+    [deviceTokenProvider, resolvedNotificationGateway]
+  );
+
+  const deactivateCurrentDeviceToken = useCallback(async () => {
+    ++deviceTokenGenerationRef.current;
+    const previousDeactivation = deviceTokenDeactivationRef.current;
+    const deactivation = (async () => {
+      await previousDeactivation?.catch(() => undefined);
+      const pendingRegistration = pendingDeviceTokenRegistrationRef.current;
+      if (pendingRegistration !== null) {
+        pendingRegistration.deactivationRequested = true;
+      }
+      const tokens = new Set<string>();
+      if (activeDeviceTokenRef.current !== null) {
+        tokens.add(activeDeviceTokenRef.current);
+      }
+      if (pendingRegistration !== null) {
+        tokens.add(pendingRegistration.token);
+      }
+      activeDeviceTokenRef.current = null;
+      if (tokens.size === 0) {
+        return;
+      }
+      await pendingRegistration?.promise.catch(() => undefined);
+      for (const token of tokens) {
+        await resolvedNotificationGateway.deactivateDeviceToken(token);
+      }
+    })();
+    deviceTokenDeactivationRef.current = deactivation;
+    try {
+      await deactivation;
+    } finally {
+      if (deviceTokenDeactivationRef.current === deactivation) {
+        deviceTokenDeactivationRef.current = null;
+      }
+    }
+  }, [resolvedNotificationGateway]);
+
+  useEffect(() => {
+    if (user === null || deviceTokenProvider.subscribeTokenRefresh === undefined) {
+      return;
+    }
+
+    return deviceTokenProvider.subscribeTokenRefresh(token => {
+      void registerCurrentDeviceToken(token).catch(() => undefined);
+    });
+  }, [deviceTokenProvider, registerCurrentDeviceToken, user]);
 
   const enterAuthenticatedState = useCallback(
     async (
@@ -562,7 +698,9 @@ export default function App({
     let invalidated = false;
     const unsubscribe = authSession.subscribeAuthInvalidated(() => {
       invalidated = true;
+      deviceTokenLogoutRef.current = true;
       authInvalidationVersionRef.current += 1;
+      void deactivateCurrentDeviceToken().catch(() => undefined);
       if (!disposed) {
         clearAuthenticationState();
         setAuthenticationResolved(true);
@@ -593,6 +731,7 @@ export default function App({
           if (disposed || invalidated) {
             return;
           }
+          void registerCurrentDeviceToken().catch(() => undefined);
           setAuthenticationResolved(true);
           return;
         }
@@ -615,9 +754,12 @@ export default function App({
     enterAuthenticatedState,
     initialGroupId,
     shouldRestoreSession,
+    deactivateCurrentDeviceToken,
+    registerCurrentDeviceToken,
   ]);
 
   const handleLogin = async (credentials: LoginCredentials) => {
+    deviceTokenLogoutRef.current = false;
     const invalidationVersion = authInvalidationVersionRef.current;
     const authenticatedUser = await authGateway.login(credentials);
     setLoginVisible(false);
@@ -625,14 +767,22 @@ export default function App({
       authenticatedUser,
       () => authInvalidationVersionRef.current === invalidationVersion
     );
+    void registerCurrentDeviceToken().catch(() => undefined);
   };
 
   const handleLogout = async () => {
+    deviceTokenLogoutRef.current = true;
     let failure: unknown;
+    try {
+      await deactivateCurrentDeviceToken();
+    } catch (error) {
+      failure = error;
+    }
+
     try {
       await authGateway.logout();
     } catch (error) {
-      failure = error;
+      failure ??= error;
     }
 
     try {
@@ -1025,75 +1175,77 @@ export default function App({
   return (
     <GroupInfoIntegrationContext.Provider value={groupInfoIntegration}>
       <SafeAreaProvider>
-        <CalendarGatewayProvider gateway={resolvedCalendarGateway}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-        {route === "welcome" && (
-          <>
-            <WelcomeScreen
-              onStartLogin={() => setLoginVisible(true)}
-              onStartSignup={() => setRoute("signup")}
-            />
-            <LoginBottomSheet
-              onDismiss={() => setLoginVisible(false)}
-              onLogin={handleLogin}
-              visible={loginVisible}
-            />
-          </>
-        )}
-        {route === "signup" && (
-          <SignupFlowScreen
-            onCancel={() => setRoute("welcome")}
-            onComplete={() => setRoute("welcome")}
-          />
-        )}
-        {route === "appShell" && (
-          <AppShell
-            apiBaseUrl={apiBaseUrl}
-            authSession={authSession}
-            accessToken={authSession.getAccessToken()}
-            currentUserId={user?.id}
-            currentUserName={user?.name}
-            groupStore={groupStore}
-            groups={resolvedGroups}
-            initialGroupId={activeGroupId}
-            initialRoute={initialShellRoute}
-            onCreateGroup={() => openGroupOnboarding("appShell")}
-            onGroupChange={onGroupChange}
-            onJoinGroup={() => openGroupOnboarding("appShell")}
-            onCallResult={onCallResult}
-            onRequestLogout={handleLogout}
-            screens={resolvedScreens}
-          />
-        )}
-        {route === "signedInWelcome" && user !== null && (
-          <SignedInWelcomeScreen
-            onLogout={handleLogout}
-            onRequestWithdrawal={() => showDeferredFeature("회원 탈퇴")}
-            onStartGroupOnboarding={() =>
-              openGroupOnboarding("signedInWelcome")
-            }
-            userName={user.name}
-          />
-        )}
-        {route === "groupOnboarding" && (
-          <GroupOnboardingScreen
-            onBack={() => setRoute(groupOnboardingReturnRoute)}
-            onCreateGroup={handleCreateGroup}
-            onJoinByCode={handleJoinGroup}
-            onOpenApprovedGroup={handleOpenApprovedGroup}
-            pendingRequests={joinRequests}
-          />
-        )}
-        {route === "interestSetup" && interestGroup !== null && (
-          <InterestSelectionScreen
-            initialInterests={interestInitialValues}
-            onBack={handleFinishInterestSetup}
-            onComplete={handleFinishInterestSetup}
-            onSave={handleSaveInterests}
-            onSkip={handleFinishInterestSetup}
-          />
-        )}
-        </CalendarGatewayProvider>
+        <NotificationGatewayProvider gateway={resolvedNotificationGateway}>
+          <CalendarGatewayProvider gateway={resolvedCalendarGateway}>
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            {route === "welcome" && (
+              <>
+                <WelcomeScreen
+                  onStartLogin={() => setLoginVisible(true)}
+                  onStartSignup={() => setRoute("signup")}
+                />
+                <LoginBottomSheet
+                  onDismiss={() => setLoginVisible(false)}
+                  onLogin={handleLogin}
+                  visible={loginVisible}
+                />
+              </>
+            )}
+            {route === "signup" && (
+              <SignupFlowScreen
+                onCancel={() => setRoute("welcome")}
+                onComplete={() => setRoute("welcome")}
+              />
+            )}
+            {route === "appShell" && (
+              <AppShell
+                apiBaseUrl={apiBaseUrl}
+                authSession={authSession}
+                accessToken={authSession.getAccessToken()}
+                currentUserId={user?.id}
+                currentUserName={user?.name}
+                groupStore={groupStore}
+                groups={resolvedGroups}
+                initialGroupId={activeGroupId}
+                initialRoute={initialShellRoute}
+                onCreateGroup={() => openGroupOnboarding("appShell")}
+                onGroupChange={onGroupChange}
+                onJoinGroup={() => openGroupOnboarding("appShell")}
+                onCallResult={onCallResult}
+                onRequestLogout={handleLogout}
+                screens={resolvedScreens}
+              />
+            )}
+            {route === "signedInWelcome" && user !== null && (
+              <SignedInWelcomeScreen
+                onLogout={handleLogout}
+                onRequestWithdrawal={() => showDeferredFeature("회원 탈퇴")}
+                onStartGroupOnboarding={() =>
+                  openGroupOnboarding("signedInWelcome")
+                }
+                userName={user.name}
+              />
+            )}
+            {route === "groupOnboarding" && (
+              <GroupOnboardingScreen
+                onBack={() => setRoute(groupOnboardingReturnRoute)}
+                onCreateGroup={handleCreateGroup}
+                onJoinByCode={handleJoinGroup}
+                onOpenApprovedGroup={handleOpenApprovedGroup}
+                pendingRequests={joinRequests}
+              />
+            )}
+            {route === "interestSetup" && interestGroup !== null && (
+              <InterestSelectionScreen
+                initialInterests={interestInitialValues}
+                onBack={handleFinishInterestSetup}
+                onComplete={handleFinishInterestSetup}
+                onSave={handleSaveInterests}
+                onSkip={handleFinishInterestSetup}
+              />
+            )}
+          </CalendarGatewayProvider>
+        </NotificationGatewayProvider>
       </SafeAreaProvider>
     </GroupInfoIntegrationContext.Provider>
   );

@@ -20,6 +20,10 @@ import type {
 } from "../src/features/group-info";
 import { ReportScreen } from "../src/features/reports";
 import type { ReportGateway } from "../src/features/reports";
+import type {
+  DeviceTokenProvider,
+  NotificationGateway,
+} from "../src/features/notifications";
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
 
@@ -131,6 +135,12 @@ async function resolveAuthRestore(
   });
 }
 
+async function flushAsyncWork(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function createGroupGateway(): jest.Mocked<FamilyGroupGateway> {
   return {
     createGroup: jest.fn(async (input) => ({
@@ -158,10 +168,47 @@ function createGroupGateway(): jest.Mocked<FamilyGroupGateway> {
   };
 }
 
+function createNotificationGateway(): jest.Mocked<NotificationGateway> {
+  return {
+    deactivateDeviceToken: jest.fn().mockResolvedValue(undefined),
+    getUnreadCount: jest.fn().mockResolvedValue(0),
+    loadPage: jest.fn().mockResolvedValue({hasNext: false, notifications: []}),
+    loadSettings: jest.fn().mockResolvedValue([]),
+    markAllRead: jest.fn().mockResolvedValue({
+      readAt: "2026-08-01T00:00:00Z",
+      updatedCount: 0,
+    }),
+    markRead: jest.fn().mockResolvedValue({
+      id: "1",
+      readAt: "2026-08-01T00:00:00Z",
+    }),
+    registerDeviceToken: jest.fn().mockResolvedValue({
+      active: true,
+      deviceType: "ANDROID",
+      id: "1",
+    }),
+    updateSettings: jest.fn().mockResolvedValue({
+      updatedAt: "2026-08-01T00:00:00Z",
+    }),
+  };
+}
+
+function createDeviceTokenProvider(
+  permission: "granted" | "denied" | "blocked" | "unavailable" = "granted",
+  token: string | null = "fcm-token"
+): jest.Mocked<DeviceTokenProvider> {
+  return {
+    getToken: jest.fn().mockResolvedValue(token),
+    requestPermission: jest.fn().mockResolvedValue(permission),
+  };
+}
+
 async function renderApp(
   authGateway = createAuthGateway(),
   authSession = createAuthSessionCoordinator(),
-  groupGateway = createGroupGateway()
+  groupGateway = createGroupGateway(),
+  notificationGateway?: jest.Mocked<NotificationGateway>,
+  deviceTokenProvider?: jest.Mocked<DeviceTokenProvider>
 ) {
   const onOpenActiveGroup = jest.fn();
   let renderer: TestRenderer.ReactTestRenderer;
@@ -171,7 +218,9 @@ async function renderApp(
       <App
         authGateway={authGateway}
         authSession={authSession}
+        deviceTokenProvider={deviceTokenProvider}
         groupGateway={groupGateway}
+        notificationGateway={notificationGateway}
         onOpenActiveGroup={onOpenActiveGroup}
       />
     );
@@ -183,6 +232,8 @@ async function renderApp(
     authGateway,
     authSession,
     groupGateway,
+    notificationGateway,
+    deviceTokenProvider,
     onOpenActiveGroup,
     renderer: renderer!,
   };
@@ -1361,6 +1412,89 @@ test("로그아웃 확인 후 로컬 세션을 지우고 A-1로 돌아온다", a
   alertSpy.mockRestore();
 });
 
+test("로그인 완료 후 허용된 디바이스 토큰을 등록한다", async () => {
+  const notificationGateway = createNotificationGateway();
+  const deviceTokenProvider = createDeviceTokenProvider("granted", "login-token");
+  const { renderer } = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    createGroupGateway(),
+    notificationGateway,
+    deviceTokenProvider
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  expect(deviceTokenProvider.requestPermission).toHaveBeenCalledTimes(1);
+  expect(deviceTokenProvider.getToken).toHaveBeenCalledTimes(1);
+  expect(notificationGateway.registerDeviceToken).toHaveBeenCalledWith(
+    "login-token"
+  );
+});
+
+test("알림 권한이 거부되면 디바이스 토큰을 등록하지 않는다", async () => {
+  const notificationGateway = createNotificationGateway();
+  const deviceTokenProvider = createDeviceTokenProvider("denied", "denied-token");
+  const { renderer } = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    createGroupGateway(),
+    notificationGateway,
+    deviceTokenProvider
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  expect(deviceTokenProvider.getToken).not.toHaveBeenCalled();
+  expect(notificationGateway.registerDeviceToken).not.toHaveBeenCalled();
+});
+
+test("로그아웃은 인증 로그아웃 전에 활성 디바이스 토큰을 비활성화한다", async () => {
+  const authGateway = createAuthGateway();
+  const notificationGateway = createNotificationGateway();
+  const deviceTokenProvider = createDeviceTokenProvider("granted", "logout-token");
+  const { renderer } = await renderApp(
+    authGateway,
+    createAuthSessionCoordinator(),
+    createGroupGateway(),
+    notificationGateway,
+    deviceTokenProvider
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+  await TestRenderer.act(async () => {
+    await renderer.root.findByType(SignedInWelcomeScreen).props.onLogout();
+  });
+
+  expect(notificationGateway.deactivateDeviceToken).toHaveBeenCalledWith(
+    "logout-token"
+  );
+  expect(
+    notificationGateway.deactivateDeviceToken.mock.invocationCallOrder[0]
+  ).toBeLessThan(authGateway.logout.mock.invocationCallOrder[0]);
+});
+
 test("앱 시작 시 저장된 인증 사용자를 기존 로그인 후 경로로 복원한다", async () => {
   const authSession = createAuthSessionCoordinator({
     status: "authenticated",
@@ -1372,6 +1506,163 @@ test("앱 시작 시 저장된 인증 사용자를 기존 로그인 후 경로�
   expect(
     renderer.root.findByProps({ children: "복원 사용자 님,\n안녕하세요" })
   ).toBeTruthy();
+});
+
+test("저장된 인증 사용자 복원 후에도 디바이스 토큰을 등록한다", async () => {
+  const authSession = createAuthSessionCoordinator({
+    status: "authenticated",
+    user: { id: 7, name: "복원 사용자" },
+  });
+  const notificationGateway = createNotificationGateway();
+  const deviceTokenProvider = createDeviceTokenProvider("granted", "restore-token");
+  await renderApp(
+    createAuthGateway(),
+    authSession,
+    createGroupGateway(),
+    notificationGateway,
+    deviceTokenProvider
+  );
+
+  await TestRenderer.act(async () => {
+    await flushAsyncWork();
+  });
+
+  expect(notificationGateway.registerDeviceToken).toHaveBeenCalledWith(
+    "restore-token"
+  );
+});
+
+test("인증 상태의 토큰 갱신 이벤트는 새 토큰을 등록하고 이전 토큰을 해제한다", async () => {
+  const notificationGateway = createNotificationGateway();
+  const deviceTokenProvider = createDeviceTokenProvider("granted", "initial-token");
+  let refreshListener: ((token: string) => void) | undefined;
+  deviceTokenProvider.subscribeTokenRefresh = jest.fn(listener => {
+    refreshListener = listener;
+    return jest.fn();
+  });
+  const { renderer } = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    createGroupGateway(),
+    notificationGateway,
+    deviceTokenProvider
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  expect(refreshListener).toBeDefined();
+  await TestRenderer.act(async () => {
+    refreshListener!("rotated-token");
+    await flushAsyncWork();
+  });
+
+  expect(notificationGateway.registerDeviceToken).toHaveBeenLastCalledWith(
+    "rotated-token"
+  );
+  expect(notificationGateway.deactivateDeviceToken).toHaveBeenCalledWith(
+    "initial-token"
+  );
+});
+
+test("로그아웃 시작 후 도착한 토큰 갱신은 새 토큰을 등록하지 않는다", async () => {
+  const authGateway = createAuthGateway();
+  const notificationGateway = createNotificationGateway();
+  const deviceTokenProvider = createDeviceTokenProvider("granted", "active-token");
+  let refreshListener: ((token: string) => void) | undefined;
+  deviceTokenProvider.subscribeTokenRefresh = jest.fn(listener => {
+    refreshListener = listener;
+    return jest.fn();
+  });
+  const { renderer } = await renderApp(
+    authGateway,
+    createAuthSessionCoordinator(),
+    createGroupGateway(),
+    notificationGateway,
+    deviceTokenProvider
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  await TestRenderer.act(async () => {
+    const logoutPromise = renderer.root
+      .findByType(SignedInWelcomeScreen)
+      .props.onLogout();
+    refreshListener!("late-token");
+    await logoutPromise;
+    await flushAsyncWork();
+  });
+
+  expect(notificationGateway.registerDeviceToken).not.toHaveBeenCalledWith(
+    "late-token"
+  );
+  expect(authGateway.logout).toHaveBeenCalledTimes(1);
+});
+
+test("인증 무효화 중 빠른 재로그인은 이전 토큰 해제 후 새 토큰을 등록한다", async () => {
+  const authGateway = createAuthGateway();
+  const authSession = createAuthSessionCoordinator();
+  const notificationGateway = createNotificationGateway();
+  const deviceTokenProvider = createDeviceTokenProvider("granted", "same-token");
+  let resolveDeactivation: (() => void) | undefined;
+  notificationGateway.deactivateDeviceToken.mockImplementation(
+    () =>
+      new Promise<void>(resolve => {
+        resolveDeactivation = resolve;
+      })
+  );
+  const { renderer } = await renderApp(
+    authGateway,
+    authSession,
+    createGroupGateway(),
+    notificationGateway,
+    deviceTokenProvider
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  await TestRenderer.act(async () => {
+    authSession.emitInvalidated();
+    await Promise.resolve();
+  });
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  let loginPromise: Promise<void> | undefined;
+  await TestRenderer.act(async () => {
+    loginPromise = renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+    await Promise.resolve();
+    expect(notificationGateway.registerDeviceToken).toHaveBeenCalledTimes(1);
+    resolveDeactivation?.();
+    await loginPromise;
+    await flushAsyncWork();
+  });
+
+  expect(notificationGateway.registerDeviceToken).toHaveBeenCalledTimes(2);
+  expect(
+    notificationGateway.deactivateDeviceToken.mock.invocationCallOrder[0]
+  ).toBeLessThan(
+    notificationGateway.registerDeviceToken.mock.invocationCallOrder[1]
+  );
 });
 
 test("재시도 가능한 복원 오류에서는 인증 화면을 선택하지 않는다", async () => {
@@ -1475,6 +1766,28 @@ test("앱 셸을 명시하면 개발 그룹과 하단 탭을 표시한다", asyn
   ).toBeTruthy();
 
   mountedRenderers.push(renderer!);
+});
+
+test("앱 셸 진입 시 알림 미읽음 개수를 벨 배지에 표시한다", async () => {
+  const notificationGateway = createNotificationGateway();
+  notificationGateway.getUnreadCount.mockResolvedValue(4);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <App
+        initialRootRoute="appShell"
+        notificationGateway={notificationGateway}
+      />
+    );
+    await flushAsyncWork();
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(notificationGateway.getUnreadCount).toHaveBeenCalledTimes(1);
+  expect(
+    renderer!.root.findAllByProps({ children: 4 }).length
+  ).toBeGreaterThan(0);
 });
 
 test("캘린더 헤더는 일정 추가 버튼과 그룹 전환만 표시한다", async () => {

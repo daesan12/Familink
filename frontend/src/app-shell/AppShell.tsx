@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../design/tokens';
+import { useNotificationGateway } from '../features/notifications/NotificationGatewayContext';
 import { BottomTabBar } from './BottomTabBar';
 import { CurrentGroupSwitcher } from './CurrentGroupSwitcher';
 import { resolveAllowedRoute, resolveCurrentGroup } from './navigation';
@@ -63,12 +64,14 @@ export function AppShell({
   const [readNotificationIds, setReadNotificationIds] = useState<
     readonly string[]
   >([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isRestoringGroup, setIsRestoringGroup] = useState(
     Boolean(groupStore && !initialGroupId)
   );
 
   const currentGroup = resolveCurrentGroup(groups, currentGroupId);
   const currentRole = currentGroup?.role;
+  const notificationGateway = useNotificationGateway();
   const resolvedRoute = currentRole
     ? resolveAllowedRoute(currentRole, activeRoute)
     : 'feed';
@@ -82,6 +85,27 @@ export function AppShell({
       resolveAllowedRoute(currentRole, currentRoute)
     );
   }, [currentRole]);
+
+  useEffect(() => {
+    if (notificationGateway === null) {
+      setUnreadNotificationCount(0);
+      return;
+    }
+
+    let disposed = false;
+    notificationGateway
+      .getUnreadCount()
+      .then(count => {
+        if (!disposed) {
+          setUnreadNotificationCount(count);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      disposed = true;
+    };
+  }, [currentUserId, notificationGateway]);
 
   useEffect(() => {
     if (initialGroupId || !groupStore) {
@@ -308,6 +332,15 @@ export function AppShell({
                 name="bell"
                 size={28}
               />
+              {unreadNotificationCount > 0 ? (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadNotificationCount > 99
+                      ? '99+'
+                      : unreadNotificationCount}
+                  </Text>
+                </View>
+              ) : null}
             </Pressable>
           ) : (
             <View style={styles.headerSide} />
@@ -332,6 +365,7 @@ export function AppShell({
             onFullscreenChange={setIsScreenFullscreen}
             onHeaderVisibilityChange={setIsScreenHeaderVisible}
             onNotificationRead={handleNotificationRead}
+            onUnreadCountChange={setUnreadNotificationCount}
             onOpenNotifications={() => setActiveRoute('notifications')}
             onOpenPost={handleOpenPost}
             onRequestLogout={onRequestLogout}
@@ -447,6 +481,25 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     width: 80,
+  },
+  notificationBadge: {
+    alignItems: 'center',
+    backgroundColor: '#D92D20',
+    borderColor: COLORS.background,
+    borderRadius: 9,
+    borderWidth: 2,
+    height: 20,
+    justifyContent: 'center',
+    minWidth: 20,
+    position: 'absolute',
+    right: 5,
+    top: 2,
+  },
+  notificationBadgeText: {
+    color: COLORS.background,
+    fontSize: 10,
+    fontWeight: '700',
+    paddingHorizontal: 2,
   },
   placeholder: {
     alignItems: 'center',

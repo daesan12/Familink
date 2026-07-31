@@ -10,11 +10,16 @@ export type NotificationType =
 export interface AppNotification {
   avatarText: string;
   body: string;
+  createdAt?: string;
   createdAtLabel: string;
   groupId?: string;
   id: string;
   isRead: boolean;
   postId?: string;
+  relatedCallReportId?: string;
+  relatedDailyReportId?: string;
+  relatedEventId?: string;
+  relatedJoinRequestId?: string;
   requestKind?: 'groupJoin';
   title: string;
   type: NotificationType;
@@ -32,4 +37,54 @@ export interface NotificationSetting {
 export interface NotificationSettingGroup {
   title: string;
   types: readonly NotificationType[];
+}
+
+export interface NotificationPage {
+  hasNext: boolean;
+  notifications: readonly AppNotification[];
+}
+
+export interface NotificationReadResult {
+  id: string;
+  readAt: string;
+}
+
+export interface NotificationReadAllResult {
+  readAt: string;
+  updatedCount: number;
+}
+
+export interface NotificationSettingsUpdateResult {
+  updatedAt: string;
+}
+
+export interface DeviceTokenRegistration {
+  active: true;
+  deviceType: 'ANDROID';
+  id: string;
+}
+
+export type DevicePermissionStatus =
+  | 'granted'
+  | 'denied'
+  | 'blocked'
+  | 'unavailable';
+
+export interface DeviceTokenProvider {
+  getToken(): Promise<string | null>;
+  requestPermission(): Promise<DevicePermissionStatus>;
+  subscribeTokenRefresh?: (listener: (token: string) => void) => () => void;
+}
+
+export interface NotificationGateway {
+  deactivateDeviceToken(token: string): Promise<void>;
+  getUnreadCount(): Promise<number>;
+  loadPage(page: number, size?: number): Promise<NotificationPage>;
+  loadSettings(): Promise<readonly NotificationSetting[]>;
+  markAllRead(): Promise<NotificationReadAllResult>;
+  markRead(notificationId: string): Promise<NotificationReadResult>;
+  registerDeviceToken(token: string): Promise<DeviceTokenRegistration>;
+  updateSettings(
+    settings: readonly NotificationSetting[],
+  ): Promise<NotificationSettingsUpdateResult>;
 }
