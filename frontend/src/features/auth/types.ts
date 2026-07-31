@@ -30,6 +30,7 @@ export interface AuthenticatedUser {
 }
 
 export interface AuthGateway {
+  getAccessToken?(): Promise<string | null> | string | null;
   login(credentials: LoginCredentials): Promise<AuthenticatedUser>;
   logout(): Promise<void>;
 }

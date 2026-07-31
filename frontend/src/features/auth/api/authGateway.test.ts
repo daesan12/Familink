@@ -35,12 +35,22 @@ function createClient(): {
 
 function createSession(): jest.Mocked<AuthGatewaySession> {
   return {
+    getAccessToken: jest.fn().mockReturnValue('access-token'),
     getRefreshToken: jest.fn().mockReturnValue('refresh-token'),
     saveSession: jest.fn().mockResolvedValue(undefined),
   };
 }
 
 describe('apiAuthGateway', () => {
+  it('exposes the current access token to authenticated feature gateways', () => {
+    const {client} = createClient();
+    const session = createSession();
+    const gateway = createAuthGateway(client, session, () => NOW);
+
+    expect(gateway.getAccessToken?.()).toBe('access-token');
+    expect(session.getAccessToken).toHaveBeenCalledTimes(1);
+  });
+
   it('stores a validated login session before returning the user', async () => {
     const {client, post} = createClient();
     const session = createSession();

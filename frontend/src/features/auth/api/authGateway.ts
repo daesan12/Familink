@@ -26,6 +26,7 @@ interface LoginResponse extends AuthTokenPairResponse {
 }
 
 export interface AuthGatewaySession {
+  getAccessToken(): string | null;
   getRefreshToken(): string | null;
   saveSession(
     input: LoginSessionInput,
@@ -39,6 +40,7 @@ export function createAuthGateway(
   now: () => number = Date.now,
 ): AuthGateway {
   return {
+    getAccessToken: () => session.getAccessToken(),
     async login(credentials: LoginCredentials): Promise<AuthenticatedUser> {
       const response = await client.post<ApiSuccess<unknown>>(
         '/auth/login',
