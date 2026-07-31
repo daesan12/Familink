@@ -3,12 +3,14 @@ import type {ImageSourcePropType} from 'react-native';
 export const MAX_POST_IMAGES = 4;
 export const MAX_COMMENT_LENGTH = 50;
 
+// 백엔드 REACTION_TYPE(post_reactions.reaction_type)과 동일한 값을 사용해
+// 반응은 별도 매핑 없이 API 응답을 그대로 주고받는다.
 export type ReactionId =
-  | 'love'
-  | 'happy'
-  | 'laugh'
-  | 'hug'
-  | 'cheer';
+  | 'HEART'
+  | 'LAUGH'
+  | 'SURPRISE'
+  | 'SAD'
+  | 'SUPPORT';
 
 export interface FeedMember {
   avatarText: string;

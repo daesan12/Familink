@@ -52,8 +52,8 @@ const DEVELOPMENT_POSTS: readonly FeedPost[] = [
     images: limitPostImages(DEVELOPMENT_MEDIA_STATES.fourImages),
     isOwnedByCurrentUser: true,
     reactions: [
-      {count: 2, emoji: '❤️', id: 'love', label: '사랑해요'},
-      {count: 1, emoji: '😊', id: 'happy', label: '행복해요'},
+      {count: 2, emoji: '❤️', id: 'HEART', label: '사랑해요'},
+      {count: 1, emoji: '😂', id: 'LAUGH', label: '웃겨요'},
     ],
   },
   {
@@ -66,7 +66,7 @@ const DEVELOPMENT_POSTS: readonly FeedPost[] = [
     images: [],
     isOwnedByCurrentUser: false,
     reactions: [
-      {count: 4, emoji: '😊', id: 'happy', label: '행복해요'},
+      {count: 4, emoji: '👏', id: 'SUPPORT', label: '응원해요'},
     ],
   },
   {

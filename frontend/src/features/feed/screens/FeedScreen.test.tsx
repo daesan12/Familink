@@ -60,13 +60,13 @@ jest.mock('../components/ReactionPopover', () => {
       onSelect,
       visible,
     }: {
-      onSelect: (reactionId: 'love') => void;
+      onSelect: (reactionId: 'HEART') => void;
       visible: boolean;
     }) =>
       visible
         ? ReactRuntime.createElement(Pressable, {
             accessibilityLabel: '사랑해요',
-            onPress: () => onSelect('love'),
+            onPress: () => onSelect('HEART'),
           })
         : null,
   };
@@ -134,7 +134,7 @@ test('D-2와 D-3가 같은 postId의 반응 상태를 공유한다', async () =>
   });
 
   expect(onChangeReaction).toHaveBeenCalledWith({
-    nextReactionId: 'love',
+    nextReactionId: 'HEART',
     postId: post.id,
     previousReactionId: null,
   });
