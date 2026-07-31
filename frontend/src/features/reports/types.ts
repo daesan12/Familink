@@ -113,6 +113,7 @@ export interface CareReceiverReportPage {
   displayName: string;
   latestDailyReport: DailyReportView | null;
   memberId: string;
+  reportCalendar?: ReportCalendar;
   todayCalls: readonly CallReportView[];
 }
 

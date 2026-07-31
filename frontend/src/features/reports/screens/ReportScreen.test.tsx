@@ -48,14 +48,29 @@ function createLatestOnlyPage(): CareReceiverReportPage {
   };
 }
 
-test("캘린더 화면은 열지 않고 비활성 아이콘만 표시한다", () => {
+test("캘린더 아이콘을 누르면 생성된 날짜를 선택하는 팝업을 연다", () => {
   const renderer = renderReportScreen([createLatestOnlyPage()]);
   const calendar = renderer.root.findByProps({
     accessibilityLabel: "리포트 캘린더",
   });
 
-  expect(calendar.props.disabled).toBe(true);
-  expect(calendar.props.accessibilityState).toEqual({ disabled: true });
+  TestRenderer.act(() => {
+    calendar.props.onPress();
+  });
+
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "리포트 날짜 선택" })
+  ).toBeTruthy();
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "2026년 7월 16일 리포트 보기",
+    })
+  ).toBeTruthy();
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "2026년 7월 15일 리포트 없음",
+    }).props.disabled
+  ).toBe(true);
 });
 
 test("당일 통화가 없어도 가장 최신 일간 리포트와 날짜를 표시한다", () => {

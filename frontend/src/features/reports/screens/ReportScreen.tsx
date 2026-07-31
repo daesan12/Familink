@@ -17,6 +17,10 @@ import { COLORS, RADII } from "../../../design/tokens";
 import { CallReportDetailModal } from "../components/CallReportDetailModal";
 import { CallReportRow } from "../components/CallReportRow";
 import { DailyReportCard } from "../components/DailyReportCard";
+import {
+  ReportCalendarModal,
+  type ReportCalendarStatus,
+} from "../components/ReportCalendarModal";
 import { ReportPageIndicator } from "../components/ReportPageIndicator";
 import { DEVELOPMENT_REPORT_PAGES } from "../fixtures/reportFixtures";
 import { useCareReceiverReportTargets } from "../hooks/useCareReceiverReportTargets";
@@ -36,6 +40,12 @@ import type {
 
 const EMPTY_REPORT_PAGES: readonly CareReceiverReportPage[] = [];
 const EMPTY_REPORT_TARGETS: readonly CareReceiverReportTarget[] = [];
+const EMPTY_REPORT_DATES: readonly string[] = [];
+
+interface ReportYearMonth {
+  month: number;
+  year: number;
+}
 
 export interface ReportScreenProps extends AppScreenProps {
   careReceivers?: readonly CareReceiverReportPage[];
@@ -54,6 +64,7 @@ export function ReportScreen({
   reportGateway,
 }: ReportScreenProps) {
   const { width } = useWindowDimensions();
+  const [selectedReportDate, setSelectedReportDate] = useState(reportDate);
   const shouldLoadTargets =
     careReceiverTargets === undefined &&
     careReceiverTargetsLoader !== undefined &&
@@ -76,7 +87,7 @@ export function ReportScreen({
       hasRemoteSource &&
       (!shouldLoadTargets || targetState.status === "ready"),
     groupId: currentGroup.id,
-    reportDate,
+    reportDate: selectedReportDate,
     reportGateway,
     targets: resolvedTargets,
   });
@@ -95,7 +106,131 @@ export function ReportScreen({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedDetail, setSelectedDetail] =
     useState<CallReportDetailState | null>(null);
+  const [calendarTarget, setCalendarTarget] = useState<{
+    localReportDates: readonly string[];
+    memberId: string;
+  } | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(() =>
+    parseReportYearMonth(reportDate)
+  );
+  const [calendarDatesByMonth, setCalendarDatesByMonth] = useState<
+    Record<string, readonly string[]>
+  >({});
+  const [calendarStatusByMonth, setCalendarStatusByMonth] = useState<
+    Record<string, ReportCalendarStatus>
+  >({});
+  const calendarLoadGeneration = useRef(0);
+  const calendarRequests = useRef(new Map<string, number>());
   const callRequestId = useRef(0);
+
+  const calendarMonthKey = calendarTarget
+    ? createCalendarMonthKey(
+        currentGroup.id,
+        calendarTarget.memberId,
+        calendarMonth.year,
+        calendarMonth.month
+      )
+    : null;
+  const calendarDates = !calendarTarget
+    ? EMPTY_REPORT_DATES
+    : reportGateway && calendarMonthKey
+      ? (calendarDatesByMonth[calendarMonthKey] ?? EMPTY_REPORT_DATES)
+      : filterReportDatesByMonth(
+          calendarTarget.localReportDates,
+          calendarMonth.year,
+          calendarMonth.month
+        );
+  const calendarStatus =
+    reportGateway && calendarMonthKey
+      ? (calendarStatusByMonth[calendarMonthKey] ?? "loading")
+      : "ready";
+
+  useEffect(() => {
+    setSelectedReportDate(reportDate);
+    setCalendarTarget(null);
+    calendarLoadGeneration.current += 1;
+    calendarRequests.current.clear();
+    setCalendarDatesByMonth({});
+    setCalendarStatusByMonth({});
+  }, [currentGroup.id, reportDate]);
+
+  useEffect(() => {
+    if (!calendarTarget) {
+      return;
+    }
+
+    if (!reportGateway) {
+      return;
+    }
+
+    const generation = calendarLoadGeneration.current;
+    const loadMonth = (targetMonth: ReportYearMonth) => {
+      const key = createCalendarMonthKey(
+        currentGroup.id,
+        calendarTarget.memberId,
+        targetMonth.year,
+        targetMonth.month
+      );
+      if (
+        calendarDatesByMonth[key] !== undefined ||
+        calendarStatusByMonth[key] === "error" ||
+        calendarRequests.current.has(key)
+      ) {
+        return;
+      }
+
+      calendarRequests.current.set(key, generation);
+      setCalendarStatusByMonth((current) => ({
+        ...current,
+        [key]: "loading",
+      }));
+
+      reportGateway
+        .getReportDates(
+          currentGroup.id,
+          calendarTarget.memberId,
+          targetMonth.year,
+          targetMonth.month
+        )
+        .then((calendar) => {
+          if (calendarLoadGeneration.current !== generation) {
+            return;
+          }
+          setCalendarDatesByMonth((current) => ({
+            ...current,
+            [key]: calendar.reportDates,
+          }));
+          setCalendarStatusByMonth((current) => ({
+            ...current,
+            [key]: "ready",
+          }));
+        })
+        .catch(() => {
+          if (calendarLoadGeneration.current === generation) {
+            setCalendarStatusByMonth((current) => ({
+              ...current,
+              [key]: "error",
+            }));
+          }
+        })
+        .finally(() => {
+          if (calendarRequests.current.get(key) === generation) {
+            calendarRequests.current.delete(key);
+          }
+        });
+    };
+
+    loadMonth(calendarMonth);
+    loadMonth(moveReportYearMonth(calendarMonth, -1));
+    loadMonth(moveReportYearMonth(calendarMonth, 1));
+  }, [
+    calendarDatesByMonth,
+    calendarMonth,
+    calendarStatusByMonth,
+    calendarTarget,
+    currentGroup.id,
+    reportGateway,
+  ]);
 
   useEffect(() => {
     setCurrentIndex(0);
@@ -156,6 +291,58 @@ export function ReportScreen({
   const handleCloseDetail = () => {
     callRequestId.current += 1;
     setSelectedDetail(null);
+  };
+
+  const handleOpenCalendar = (page: CareReceiverReportPage) => {
+    const displayedDate =
+      page.latestDailyReport?.reportDate ?? selectedReportDate;
+    if (page.reportCalendar) {
+      const reportCalendarMonth = parseReportYearMonth(
+        `${page.reportCalendar.yearMonth}-01`
+      );
+      const key = createCalendarMonthKey(
+        currentGroup.id,
+        page.memberId,
+        reportCalendarMonth.year,
+        reportCalendarMonth.month
+      );
+      setCalendarDatesByMonth((current) => ({
+        ...current,
+        [key]: page.reportCalendar?.reportDates ?? EMPTY_REPORT_DATES,
+      }));
+      setCalendarStatusByMonth((current) => ({
+        ...current,
+        [key]: "ready",
+      }));
+    }
+    setCalendarMonth(parseReportYearMonth(displayedDate));
+    setCalendarTarget({
+      localReportDates: page.latestDailyReport
+        ? [page.latestDailyReport.reportDate]
+        : [],
+      memberId: page.memberId,
+    });
+  };
+
+  const handleMoveCalendarMonth = (offset: number) => {
+    setCalendarMonth((current) => moveReportYearMonth(current, offset));
+  };
+
+  const handleRetryCalendar = () => {
+    if (!calendarMonthKey) {
+      return;
+    }
+    setCalendarStatusByMonth((current) => ({
+      ...current,
+      [calendarMonthKey]: "loading",
+    }));
+  };
+
+  const handleSelectReportDate = (date: string) => {
+    callRequestId.current += 1;
+    setSelectedDetail(null);
+    setCalendarTarget(null);
+    setSelectedReportDate(date);
   };
 
   const handleRetryDetail = () => {
@@ -240,7 +427,9 @@ export function ReportScreen({
       >
         {pages.map((page) => (
           <ReportPage
+            isToday={selectedReportDate === reportDate}
             key={page.memberId}
+            onOpenCalendar={handleOpenCalendar}
             onOpenCall={handleOpenCall}
             page={page}
             width={width}
@@ -254,6 +443,20 @@ export function ReportScreen({
         detail={selectedDetail}
         onClose={handleCloseDetail}
         onRetry={handleRetryDetail}
+      />
+
+      <ReportCalendarModal
+        month={calendarMonth.month}
+        onClose={() => setCalendarTarget(null)}
+        onNextMonth={() => handleMoveCalendarMonth(1)}
+        onPreviousMonth={() => handleMoveCalendarMonth(-1)}
+        onRetry={handleRetryCalendar}
+        onSelectDate={handleSelectReportDate}
+        reportDates={calendarDates}
+        selectedDate={selectedReportDate}
+        status={calendarStatus}
+        visible={calendarTarget !== null}
+        year={calendarMonth.year}
       />
     </View>
   );
@@ -309,12 +512,20 @@ function getKoreaReportDate(now = new Date()): string {
 }
 
 interface ReportPageProps {
+  isToday: boolean;
+  onOpenCalendar: (page: CareReceiverReportPage) => void;
   onOpenCall: (call: CallReportView) => void;
   page: CareReceiverReportPage;
   width: number;
 }
 
-function ReportPage({ onOpenCall, page, width }: ReportPageProps) {
+function ReportPage({
+  isToday,
+  onOpenCalendar,
+  onOpenCall,
+  page,
+  width,
+}: ReportPageProps) {
   const pageState = getReportPageState(page);
   const sortedTodayCalls = sortCallsByStartedAt(page.todayCalls);
 
@@ -323,11 +534,10 @@ function ReportPage({ onOpenCall, page, width }: ReportPageProps) {
       <View style={styles.header}>
         <Text style={styles.title}>{page.displayName} 님의 통화 리포트</Text>
         <Pressable
-          accessibilityHint="캘린더 화면은 후속 작업에서 제공됩니다"
+          accessibilityHint="생성된 일간 리포트 날짜를 월별로 확인합니다"
           accessibilityLabel="리포트 캘린더"
           accessibilityRole="button"
-          accessibilityState={{ disabled: true }}
-          disabled
+          onPress={() => onOpenCalendar(page)}
           style={styles.calendarButton}
         >
           <MaterialDesignIcons
@@ -352,7 +562,9 @@ function ReportPage({ onOpenCall, page, width }: ReportPageProps) {
           )}
 
           <View style={styles.callSection}>
-            <Text style={styles.callSectionTitle}>오늘의 통화</Text>
+            <Text style={styles.callSectionTitle}>
+              {isToday ? "오늘의 통화" : "선택한 날의 통화"}
+            </Text>
             {sortedTodayCalls.length > 0 ? (
               <View style={styles.callList}>
                 {sortedTodayCalls.map((call) => (
@@ -369,7 +581,9 @@ function ReportPage({ onOpenCall, page, width }: ReportPageProps) {
                 style={styles.emptyCalls}
               >
                 <Text style={styles.emptyCallsText}>
-                  오늘 생성된 통화 리포트가 없어요.
+                  {isToday
+                    ? "오늘 생성된 통화 리포트가 없어요."
+                    : "선택한 날짜에 생성된 통화 리포트가 없어요."}
                 </Text>
               </View>
             )}
@@ -378,6 +592,46 @@ function ReportPage({ onOpenCall, page, width }: ReportPageProps) {
       )}
     </View>
   );
+}
+
+function parseReportYearMonth(reportDate: string): ReportYearMonth {
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(reportDate);
+  if (!match) {
+    throw new Error("reportDate must use YYYY-MM-DD format.");
+  }
+
+  return { month: Number(match[2]), year: Number(match[1]) };
+}
+
+function moveReportYearMonth(
+  current: ReportYearMonth,
+  offset: number
+): ReportYearMonth {
+  const date = new Date(
+    Date.UTC(current.year, current.month - 1 + offset, 1)
+  );
+  return {
+    month: date.getUTCMonth() + 1,
+    year: date.getUTCFullYear(),
+  };
+}
+
+function createCalendarMonthKey(
+  groupId: string,
+  memberId: string,
+  year: number,
+  month: number
+): string {
+  return `${groupId}:${memberId}:${year}-${String(month).padStart(2, "0")}`;
+}
+
+function filterReportDatesByMonth(
+  reportDates: readonly string[],
+  year: number,
+  month: number
+): readonly string[] {
+  const prefix = `${year}-${String(month).padStart(2, "0")}`;
+  return reportDates.filter((date) => date.startsWith(prefix));
 }
 
 function DailyReportPendingCard() {
