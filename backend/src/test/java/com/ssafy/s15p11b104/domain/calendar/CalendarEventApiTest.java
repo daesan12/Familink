@@ -100,6 +100,8 @@ class CalendarEventApiTest extends IntegrationTest {
 	@BeforeEach
 	void setUp() {
 		entityManager.createNativeQuery("DELETE FROM notifications").executeUpdate();
+		entityManager.createNativeQuery("DELETE FROM device_tokens").executeUpdate();
+		entityManager.createNativeQuery("DELETE FROM notification_settings").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM event_participants").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM calendar_events").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM member_interests").executeUpdate();

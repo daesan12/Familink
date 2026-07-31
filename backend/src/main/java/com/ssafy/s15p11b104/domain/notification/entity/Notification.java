@@ -82,7 +82,7 @@ public class Notification extends CreatedAtEntity {
 	}
 
 	public Notification(User receiver, NotificationType type, String title, String body) {
-		this(receiver, type, null, title, body);
+		this(receiver, null, null, type, null, title, body);
 	}
 
 	public Notification(
@@ -92,7 +92,32 @@ public class Notification extends CreatedAtEntity {
 		String title,
 		String body
 	) {
+		this(receiver, null, null, type, reminderSlot, title, body);
+	}
+
+	public Notification(
+		User receiver,
+		User actor,
+		FamilyGroup group,
+		NotificationType type,
+		String title,
+		String body
+	) {
+		this(receiver, actor, group, type, null, title, body);
+	}
+
+	private Notification(
+		User receiver,
+		User actor,
+		FamilyGroup group,
+		NotificationType type,
+		ReminderSlot reminderSlot,
+		String title,
+		String body
+	) {
 		this.receiver = receiver;
+		this.actor = actor;
+		this.group = group;
 		this.type = type;
 		this.reminderSlot = reminderSlot;
 		this.title = title;
@@ -170,5 +195,11 @@ public class Notification extends CreatedAtEntity {
 
 	public Instant getReadAt() {
 		return readAt;
+	}
+
+	public void markRead(Instant readAt) {
+		if (this.readAt == null) {
+			this.readAt = readAt;
+		}
 	}
 }
