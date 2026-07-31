@@ -43,6 +43,13 @@ export interface CreatedFamilyGroup {
   managerMemberId: string;
 }
 
+export interface GroupJoinRequestResult {
+  groupId: string;
+  groupName: string;
+  joinRequestId: string;
+  status: 'PENDING_ADMIN';
+}
+
 export interface FamilyGroupDetail {
   careReceiverCount: number;
   guardianCount: number;
@@ -65,6 +72,9 @@ export interface FamilyGroupGateway {
   getInviteCode(groupId: string): Promise<GroupInviteCode>;
   loadGroups(): Promise<FamilyGroupListSnapshot>;
   renameGroup(groupId: string, name: string): Promise<UpdatedFamilyGroup>;
+  requestJoinByCode?(
+    inviteCode: string,
+  ): Promise<GroupJoinRequestResult>;
 }
 
 export async function loadGroups(): Promise<FamilyGroupListSnapshot> {
@@ -123,12 +133,27 @@ export async function getInviteCode(groupId: string): Promise<GroupInviteCode> {
   return parseEnvelope(response.data, response.status, parseInviteCode);
 }
 
+export async function requestJoinByCode(
+  inviteCode: string,
+): Promise<GroupJoinRequestResult> {
+  const response = await apiClient.post<ApiSuccess<unknown>>(
+    '/join-requests/by-code',
+    {inviteCode},
+  );
+  return parseEnvelope(
+    response.data,
+    response.status,
+    parseGroupJoinRequestResult,
+  );
+}
+
 export const familyGroupGateway: FamilyGroupGateway = {
   createGroup,
   getGroupDetail,
   getInviteCode,
   loadGroups,
   renameGroup,
+  requestJoinByCode,
 };
 
 interface CreatedGroupResponse {
@@ -317,6 +342,32 @@ function parseInviteCode(value: unknown): GroupInviteCode | null {
     return null;
   }
   return {inviteCode: value.inviteCode};
+}
+
+function parseGroupJoinRequestResult(
+  value: unknown,
+): GroupJoinRequestResult | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const groupId = parseId(value.groupId);
+  const joinRequestId = parseId(value.joinRequestId);
+  if (
+    groupId === null ||
+    joinRequestId === null ||
+    !isGroupName(value.groupName) ||
+    value.status !== 'PENDING_ADMIN'
+  ) {
+    return null;
+  }
+
+  return {
+    groupId,
+    groupName: value.groupName,
+    joinRequestId,
+    status: 'PENDING_ADMIN',
+  };
 }
 
 function parseId(value: unknown): string | null {

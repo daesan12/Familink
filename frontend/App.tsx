@@ -410,12 +410,40 @@ export default function App({
   };
 
   const handleJoinGroup = async (inviteCode: string) => {
-    if (onJoinGroup === undefined) {
+    if (onJoinGroup !== undefined) {
+      const request = await onJoinGroup(inviteCode);
+      setJoinRequests((current) => {
+        const withoutDuplicate = current.filter((item) => item.id !== request.id);
+        return [...withoutDuplicate, request];
+      });
+      return;
+    }
+
+    if (groupGateway.requestJoinByCode === undefined) {
       showDeferredFeature("코드로 참여");
       return;
     }
 
-    const request = await onJoinGroup(inviteCode);
+    const submitted = await groupGateway.requestJoinByCode(inviteCode);
+    const request: PendingJoinRequest = {
+      groupId: submitted.groupId,
+      groupName: submitted.groupName,
+      id: submitted.joinRequestId,
+      status: submitted.status,
+    };
+
+    try {
+      const snapshot = await groupGateway.loadGroups();
+      const refreshedRequests = [...toPendingJoinRequests(snapshot.joinRequests)];
+      if (!refreshedRequests.some((item) => item.id === request.id)) {
+        refreshedRequests.push(request);
+      }
+      setJoinRequests(refreshedRequests);
+      return;
+    } catch {
+      // 가입 요청은 이미 생성됐으므로 목록 재조회 실패 시 제출 결과를 유지한다.
+    }
+
     setJoinRequests((current) => {
       const withoutDuplicate = current.filter((item) => item.id !== request.id);
       return [...withoutDuplicate, request];
