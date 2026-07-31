@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Platform, StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -26,6 +26,10 @@ import type {
   AuthGateway,
   LoginCredentials,
 } from "./src/features/auth/types";
+import {
+  authSessionManager,
+  type AuthSessionCoordinator,
+} from "./src/features/auth/session";
 import { AiCallScreen } from "./src/features/ai-call";
 import { ArchiveScreen } from "./src/features/archive";
 import {
@@ -50,6 +54,7 @@ interface AppProps {
   apiBaseUrl?: string;
   authGateway?: AuthGateway;
   calendarGateway?: CalendarGateway;
+  authSession?: AuthSessionCoordinator;
   groupStore?: CurrentGroupStore;
   groups?: readonly FamilyGroup[];
   initialGroupId?: string | null;
@@ -103,6 +108,7 @@ export default function App({
   apiBaseUrl = DEFAULT_API_BASE_URL,
   authGateway = mockAuthGateway,
   calendarGateway,
+  authSession = authSessionManager,
   groupStore,
   groups,
   initialGroupId,
@@ -116,6 +122,7 @@ export default function App({
   onSaveInterests,
   screens,
 }: AppProps) {
+  const shouldRestoreSession = initialRootRoute === "welcome";
   const [route, setRoute] = useState<RootRoute>(initialRootRoute);
   const [groupOnboardingReturnRoute, setGroupOnboardingReturnRoute] =
     useState<Exclude<RootRoute, "groupOnboarding">>("welcome");
@@ -135,30 +142,120 @@ export default function App({
       }),
     [apiBaseUrl, authGateway, calendarGateway]
   );
+  const [authenticationResolved, setAuthenticationResolved] = useState(
+    !shouldRestoreSession
+  );
   const resolvedGroups = [
     ...(groups ?? (__DEV__ ? DEVELOPMENT_GROUPS : [])),
     ...createdGroups,
   ];
 
-  const handleLogin = async (credentials: LoginCredentials) => {
-    const authenticatedUser = await authGateway.login(credentials);
-    setUser(authenticatedUser);
+  const clearAuthenticationState = useCallback(() => {
+    setUser(null);
+    setActiveGroupId(null);
+    setCreatedGroups([]);
+    setInterestGroup(null);
+    setJoinRequests([]);
+    setGroupOnboardingReturnRoute("welcome");
     setLoginVisible(false);
+    setRoute("welcome");
+  }, []);
 
-    if (authenticatedUser.activeGroupId !== null) {
-      setActiveGroupId(authenticatedUser.activeGroupId);
-      onOpenActiveGroup?.(authenticatedUser.activeGroupId);
-      setRoute("appShell");
-      return;
+  const enterAuthenticatedState = useCallback(
+    (authenticatedUser: AuthenticatedUser) => {
+      setUser(authenticatedUser);
+
+      if (authenticatedUser.activeGroupId !== null) {
+        setActiveGroupId(authenticatedUser.activeGroupId);
+        onOpenActiveGroup?.(authenticatedUser.activeGroupId);
+        setRoute("appShell");
+        return;
+      }
+
+      setRoute("signedInWelcome");
+    },
+    [onOpenActiveGroup]
+  );
+
+  useEffect(() => {
+    let disposed = false;
+    let invalidated = false;
+    const unsubscribe = authSession.subscribeAuthInvalidated(() => {
+      invalidated = true;
+      if (!disposed) {
+        clearAuthenticationState();
+        setAuthenticationResolved(true);
+      }
+    });
+
+    if (!shouldRestoreSession) {
+      return unsubscribe;
     }
 
-    setRoute("signedInWelcome");
+    setAuthenticationResolved(false);
+    authSession
+      .restore()
+      .then((result) => {
+        if (disposed || invalidated) {
+          return;
+        }
+        if (result.status === "authenticated") {
+          const restoredUser: AuthenticatedUser = {
+            activeGroupId: initialGroupId ?? null,
+            id: result.user.id,
+            name: result.user.name,
+          };
+          enterAuthenticatedState(restoredUser);
+          setAuthenticationResolved(true);
+          return;
+        }
+        if (result.status === "signedOut") {
+          clearAuthenticationState();
+          setAuthenticationResolved(true);
+        }
+      })
+      .catch(() => {
+        // 확정되지 않은 복원 오류에서는 인증·비로그인 화면을 선택하지 않는다.
+      });
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, [
+    authSession,
+    clearAuthenticationState,
+    enterAuthenticatedState,
+    initialGroupId,
+    shouldRestoreSession,
+  ]);
+
+  const handleLogin = async (credentials: LoginCredentials) => {
+    const authenticatedUser = await authGateway.login(credentials);
+    setLoginVisible(false);
+    enterAuthenticatedState(authenticatedUser);
   };
 
   const handleLogout = async () => {
-    await authGateway.logout();
-    setUser(null);
-    setRoute("welcome");
+    let failure: unknown;
+    try {
+      await authGateway.logout();
+    } catch (error) {
+      failure = error;
+    }
+
+    try {
+      await authSession.clearLocalSession();
+    } catch (error) {
+      failure ??= error;
+    } finally {
+      clearAuthenticationState();
+      setAuthenticationResolved(true);
+    }
+
+    if (failure !== undefined) {
+      throw failure;
+    }
   };
 
   const showDeferredFeature = (title: string) => {
@@ -246,6 +343,10 @@ export default function App({
     setGroupOnboardingReturnRoute(returnRoute);
     setRoute("groupOnboarding");
   };
+
+  if (!authenticationResolved) {
+    return null;
+  }
 
   return (
     <SafeAreaProvider>

@@ -16,6 +16,7 @@ import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRepository;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
 import com.ssafy.s15p11b104.global.exception.ErrorCode;
 import com.ssafy.s15p11b104.global.security.AccessTokenBlacklist;
@@ -34,19 +35,22 @@ public class UserService {
 	private final RefreshTokenStore refreshTokenStore;
 	private final AccessTokenProvider accessTokenProvider;
 	private final AccessTokenBlacklist accessTokenBlacklist;
+	private final DeviceTokenRepository deviceTokenRepository;
 
 	UserService(
 		UserRepository userRepository,
 		GroupMemberRepository groupMemberRepository,
 		RefreshTokenStore refreshTokenStore,
 		AccessTokenProvider accessTokenProvider,
-		AccessTokenBlacklist accessTokenBlacklist
+		AccessTokenBlacklist accessTokenBlacklist,
+		DeviceTokenRepository deviceTokenRepository
 	) {
 		this.userRepository = userRepository;
 		this.groupMemberRepository = groupMemberRepository;
 		this.refreshTokenStore = refreshTokenStore;
 		this.accessTokenProvider = accessTokenProvider;
 		this.accessTokenBlacklist = accessTokenBlacklist;
+		this.deviceTokenRepository = deviceTokenRepository;
 	}
 
 	/**
@@ -121,7 +125,7 @@ public class UserService {
 	 */
 	@Transactional
 	public void withdraw(AuthenticatedUser user) {
-		User account = getActiveUser(user.id());
+		User account = getActiveUserForUpdate(user.id());
 
 		List<GroupMember> activeMemberships = groupMemberRepository
 			.findAllActiveForUpdateByUserId(account.getId());
@@ -131,6 +135,7 @@ public class UserService {
 
 		Instant now = Instant.now();
 		activeMemberships.forEach(membership -> membership.leave(now));
+		deviceTokenRepository.deactivateAllByUserId(account.getId(), now);
 		account.withdraw(now);
 
 		refreshTokenStore.revoke(account.getId());
@@ -159,6 +164,11 @@ public class UserService {
 
 	private User getActiveUser(Long userId) {
 		return userRepository.findByIdAndWithdrawnAtIsNull(userId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
+	}
+
+	private User getActiveUserForUpdate(Long userId) {
+		return userRepository.findActiveByIdForUpdate(userId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 	}
 }

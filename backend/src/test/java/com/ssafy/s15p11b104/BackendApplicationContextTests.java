@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
 import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationService;
+import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.service.AiCallPostToolService;
 import com.ssafy.s15p11b104.domain.call.service.AiCallPromptContextProvider;
 import com.ssafy.s15p11b104.domain.call.service.CallSessionService;
@@ -33,6 +34,13 @@ import com.ssafy.s15p11b104.domain.group.repository.GroupJoinRequestRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberInterestRepository;
+import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRegistrationStore;
+import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRepository;
+import com.ssafy.s15p11b104.domain.notification.repository.NotificationCreationStore;
+import com.ssafy.s15p11b104.domain.notification.repository.NotificationRepository;
+import com.ssafy.s15p11b104.domain.notification.repository.NotificationSettingRepository;
+import com.ssafy.s15p11b104.domain.notification.service.EventReminderService;
+import com.ssafy.s15p11b104.domain.report.repository.DailyReportRepository;
 import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationService;
 
 import jakarta.persistence.EntityManager;
@@ -57,6 +65,9 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private CallReportGenerationService callReportGenerationService;
+
+	@MockitoBean
+	private CallReportCallRepository callReportCallRepository;
 
 	@MockitoBean
 	private DailyReportGenerationService dailyReportGenerationService;
@@ -117,6 +128,27 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private EventParticipantRepository eventParticipantRepository;
+
+	@MockitoBean
+	private DeviceTokenRepository deviceTokenRepository;
+
+	@MockitoBean
+	private DeviceTokenRegistrationStore deviceTokenRegistrationStore;
+
+	@MockitoBean
+	private NotificationCreationStore notificationCreationStore;
+
+	@MockitoBean
+	private NotificationRepository notificationRepository;
+
+	@MockitoBean
+	private NotificationSettingRepository notificationSettingRepository;
+
+	@MockitoBean
+	private DailyReportRepository dailyReportRepository;
+
+	@MockitoBean
+	private EventReminderService eventReminderService;
 
 	@Test
 	void healthEndpointIsPublic() throws Exception {

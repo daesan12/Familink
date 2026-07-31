@@ -34,6 +34,8 @@ import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.notification.entity.DeviceToken;
+import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRepository;
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
 import jakarta.persistence.EntityManager;
@@ -71,6 +73,9 @@ class UserApiTest extends IntegrationTest {
 
 	@Autowired
 	private GroupMemberRepository groupMemberRepository;
+
+	@Autowired
+	private DeviceTokenRepository deviceTokenRepository;
 
 	@Autowired
 	private EntityManager entityManager;
@@ -379,9 +384,32 @@ class UserApiTest extends IntegrationTest {
 	}
 
 	@Test
+	void withdrawalDeactivatesEveryOwnedDeviceTokenAndKeepsOtherUsersTokensActive() throws Exception {
+		Session session = signupAndLogin();
+		signupOtherUser();
+		User user = userRepository.findById(session.userId()).orElseThrow();
+		User other = userRepository.findByLoginIdAndWithdrawnAtIsNull("otheruser").orElseThrow();
+		DeviceToken first = deviceTokenRepository.saveAndFlush(new DeviceToken(user, "first-token", "ANDROID"));
+		DeviceToken second = deviceTokenRepository.saveAndFlush(new DeviceToken(user, "second-token", "ANDROID"));
+		DeviceToken otherToken = deviceTokenRepository.saveAndFlush(
+			new DeviceToken(other, "other-token", "ANDROID"));
+
+		mockMvc.perform(authorized(delete(PATH), session))
+			.andExpect(status().isNoContent());
+
+		assertThat(deviceTokenRepository.findById(first.getId()).orElseThrow().isActive()).isFalse();
+		assertThat(deviceTokenRepository.findById(second.getId()).orElseThrow().isActive()).isFalse();
+		assertThat(deviceTokenRepository.findById(otherToken.getId()).orElseThrow().isActive()).isTrue();
+	}
+
+	@Test
 	void managerOfAnActiveGroupMustTransferTheRoleBeforeWithdrawal() throws Exception {
 		Session session = signupAndLogin();
 		Long memberId = joinGroup(session.userId(), "ABC123", GroupRole.GUARDIAN, true);
+		DeviceToken token = deviceTokenRepository.saveAndFlush(new DeviceToken(
+			userRepository.findById(session.userId()).orElseThrow(),
+			"manager-token",
+			"ANDROID"));
 
 		mockMvc.perform(authorized(delete(PATH), session))
 			.andExpect(status().isConflict())
@@ -391,6 +419,7 @@ class UserApiTest extends IntegrationTest {
 
 		assertThat(userRepository.findById(session.userId()).orElseThrow().getWithdrawnAt()).isNull();
 		assertThat(groupMemberRepository.findById(memberId).orElseThrow().getLeftAt()).isNull();
+		assertThat(deviceTokenRepository.findById(token.getId()).orElseThrow().isActive()).isTrue();
 		assertThat(redisTemplate.hasKey("refresh:" + session.userId())).isTrue();
 	}
 
@@ -461,6 +490,7 @@ class UserApiTest extends IntegrationTest {
 
 	private void clearDatabase() {
 		transactionTemplate.executeWithoutResult(status -> {
+			entityManager.createQuery("delete from DeviceToken").executeUpdate();
 			entityManager.createQuery("delete from GroupMember").executeUpdate();
 			entityManager.createQuery("delete from FamilyGroup").executeUpdate();
 			entityManager.createQuery("delete from User").executeUpdate();

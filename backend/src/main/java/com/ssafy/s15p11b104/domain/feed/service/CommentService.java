@@ -3,6 +3,7 @@ package com.ssafy.s15p11b104.domain.feed.service;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
+import com.ssafy.s15p11b104.domain.notification.event.DomainNotificationEvent;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
 import com.ssafy.s15p11b104.global.exception.ErrorCode;
 
@@ -32,16 +34,19 @@ public class CommentService {
 	private final PostRepository postRepository;
 	private final GroupMemberRepository groupMemberRepository;
 	private final MemberAliasRepository memberAliasRepository;
+	private final ApplicationEventPublisher eventPublisher;
 
 	public CommentService(
 		CommentRepository commentRepository,
 		PostRepository postRepository,
 		GroupMemberRepository groupMemberRepository,
-		MemberAliasRepository memberAliasRepository) {
+		MemberAliasRepository memberAliasRepository,
+		ApplicationEventPublisher eventPublisher) {
 		this.commentRepository = commentRepository;
 		this.postRepository = postRepository;
 		this.groupMemberRepository = groupMemberRepository;
 		this.memberAliasRepository = memberAliasRepository;
+		this.eventPublisher = eventPublisher;
 	}
 
 	@Transactional(readOnly = true)
@@ -75,6 +80,7 @@ public class CommentService {
 		Post post = getPost(postId);
 		GroupMember author = getActiveMember(post.getGroup().getId(), authenticatedUserId);
 		Comment comment = commentRepository.save(new Comment(post, author, request.content()));
+		eventPublisher.publishEvent(new DomainNotificationEvent.CommentCreated(comment.getId()));
 		return new CommentCreateResponse(
 			comment.getId(), postId, comment.getContent(), comment.getCreatedAt());
 	}

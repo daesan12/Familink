@@ -75,6 +75,9 @@ public class Notification extends CreatedAtEntity {
 	@Column(nullable = false, columnDefinition = "TEXT")
 	private String body;
 
+	@Column(name = "source_event_key", length = 160)
+	private String sourceEventKey;
+
 	@Column(name = "read_at")
 	private Instant readAt;
 
@@ -82,7 +85,7 @@ public class Notification extends CreatedAtEntity {
 	}
 
 	public Notification(User receiver, NotificationType type, String title, String body) {
-		this(receiver, type, null, title, body);
+		this(receiver, null, null, type, null, title, body);
 	}
 
 	public Notification(
@@ -92,11 +95,57 @@ public class Notification extends CreatedAtEntity {
 		String title,
 		String body
 	) {
+		this(receiver, null, null, type, reminderSlot, title, body);
+	}
+
+	public Notification(
+		User receiver,
+		User actor,
+		FamilyGroup group,
+		NotificationType type,
+		String title,
+		String body
+	) {
+		this(receiver, actor, group, type, null, title, body);
+	}
+
+	private Notification(
+		User receiver,
+		User actor,
+		FamilyGroup group,
+		NotificationType type,
+		ReminderSlot reminderSlot,
+		String title,
+		String body
+	) {
 		this.receiver = receiver;
+		this.actor = actor;
+		this.group = group;
 		this.type = type;
 		this.reminderSlot = reminderSlot;
 		this.title = title;
 		this.body = body;
+	}
+
+	/**
+	 * 일정 시작 알림을 생성한다.
+	 *
+	 * <p>{@code uq_event_reminder_notification}이 {@code related_event_id}가 있는 행만 중복으로
+	 * 판정하므로 일정 연결은 선택이 아니라 필수다. 발화 주체가 스케줄러이므로 {@code actor}는
+	 * 비워 둔다.
+	 */
+	public static Notification eventReminder(
+		User receiver,
+		CalendarEvent event,
+		ReminderSlot reminderSlot,
+		String title,
+		String body
+	) {
+		Notification notification =
+			new Notification(receiver, NotificationType.EVENT_REMINDER, reminderSlot, title, body);
+		notification.relatedEvent = event;
+		notification.group = event.getGroup();
+		return notification;
 	}
 
 	public User getReceiver() {
@@ -147,7 +196,17 @@ public class Notification extends CreatedAtEntity {
 		return body;
 	}
 
+	public String getSourceEventKey() {
+		return sourceEventKey;
+	}
+
 	public Instant getReadAt() {
 		return readAt;
+	}
+
+	public void markRead(Instant readAt) {
+		if (this.readAt == null) {
+			this.readAt = readAt;
+		}
 	}
 }

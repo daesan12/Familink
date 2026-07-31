@@ -4,7 +4,12 @@ import TestRenderer from "react-test-renderer";
 
 import App from "../App";
 import { AppShell } from "../src/app-shell";
+import {
+  type AuthRestoreResult,
+  type AuthSessionCoordinator,
+} from "../src/features/auth/session";
 import { SignupFlowScreen } from "../src/features/auth/screens/SignupFlowScreen";
+import { SignedInWelcomeScreen } from "../src/features/auth/screens/SignedInWelcomeScreen";
 import type { AuthGateway } from "../src/features/auth/types";
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
@@ -56,25 +61,77 @@ function createAuthGateway(): jest.Mocked<AuthGateway> {
   return {
     login: jest.fn().mockResolvedValue({
       activeGroupId: null,
-      id: "test-user",
+      id: 1,
       name: "이종철",
     }),
     logout: jest.fn().mockResolvedValue(undefined),
   };
 }
 
-async function renderApp(authGateway = createAuthGateway()) {
+interface TestAuthSessionCoordinator
+  extends jest.Mocked<AuthSessionCoordinator> {
+  emitInvalidated(reason?: unknown): void;
+  resolveRestore(): void;
+}
+
+function createAuthSessionCoordinator(
+  restoreResult: AuthRestoreResult = { status: "signedOut" }
+): TestAuthSessionCoordinator {
+  let listener: ((reason: unknown) => void) | null = null;
+  let resolveRestorePromise: ((result: AuthRestoreResult) => void) | null = null;
+  const restorePromise = new Promise<AuthRestoreResult>((resolve) => {
+    resolveRestorePromise = resolve;
+  });
+  const coordinator = {
+    clearLocalSession: jest.fn().mockResolvedValue(undefined),
+    emitInvalidated(reason: unknown = new Error("invalidated")) {
+      listener?.(reason);
+    },
+    resolveRestore() {
+      resolveRestorePromise?.(restoreResult);
+    },
+    restore: jest.fn().mockReturnValue(restorePromise),
+    subscribeAuthInvalidated: jest.fn((nextListener) => {
+      listener = nextListener;
+      return () => {
+        if (listener === nextListener) {
+          listener = null;
+        }
+      };
+    }),
+  };
+  return coordinator;
+}
+
+async function resolveAuthRestore(
+  authSession: TestAuthSessionCoordinator
+): Promise<void> {
+  await TestRenderer.act(async () => {
+    authSession.resolveRestore();
+    await authSession.restore.mock.results[0]?.value;
+  });
+}
+
+async function renderApp(
+  authGateway = createAuthGateway(),
+  authSession = createAuthSessionCoordinator()
+) {
   const onOpenActiveGroup = jest.fn();
   let renderer: TestRenderer.ReactTestRenderer;
 
-  await TestRenderer.act(() => {
+  await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <App authGateway={authGateway} onOpenActiveGroup={onOpenActiveGroup} />
+      <App
+        authGateway={authGateway}
+        authSession={authSession}
+        onOpenActiveGroup={onOpenActiveGroup}
+      />
     );
   });
+  await resolveAuthRestore(authSession);
   mountedRenderers.push(renderer!);
 
-  return { authGateway, onOpenActiveGroup, renderer: renderer! };
+  return { authGateway, authSession, onOpenActiveGroup, renderer: renderer! };
 }
 
 async function openLogin(renderer: TestRenderer.ReactTestRenderer) {
@@ -580,7 +637,7 @@ test("로그인 응답의 현재 회원 이름을 A-10 인사말에 표시한다
   const authGateway = createAuthGateway();
   authGateway.login.mockResolvedValueOnce({
     activeGroupId: null,
-    id: "another-user",
+    id: 2,
     name: "김민지",
   });
   const { renderer } = await renderApp(authGateway);
@@ -605,17 +662,23 @@ test("활성 그룹 사용자는 A-10을 건너뛰고 그룹 진입을 요청한
   const authGateway = createAuthGateway();
   authGateway.login.mockResolvedValueOnce({
     activeGroupId: "active-group-1",
-    id: "test-user",
+    id: 1,
     name: "이종철",
   });
+  const authSession = createAuthSessionCoordinator();
   const onOpenActiveGroup = jest.fn();
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <App authGateway={authGateway} onOpenActiveGroup={onOpenActiveGroup} />
+      <App
+        authGateway={authGateway}
+        authSession={authSession}
+        onOpenActiveGroup={onOpenActiveGroup}
+      />
     );
   });
+  await resolveAuthRestore(authSession);
   mountedRenderers.push(renderer!);
   await openLogin(renderer!);
   await enterValidCredentials(renderer!);
@@ -637,15 +700,17 @@ test("활성 그룹 사용자는 연결된 앱 셸로 이동한다", async () =>
   const authGateway = createAuthGateway();
   authGateway.login.mockResolvedValueOnce({
     activeGroupId: "active-group-1",
-    id: "test-user",
+    id: 1,
     name: "이종철",
   });
+  const authSession = createAuthSessionCoordinator();
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(() => {
     renderer = TestRenderer.create(
       <App
         authGateway={authGateway}
+        authSession={authSession}
         groups={[
           {
             id: "active-group-1",
@@ -656,6 +721,7 @@ test("활성 그룹 사용자는 연결된 앱 셸로 이동한다", async () =>
       />
     );
   });
+  await resolveAuthRestore(authSession);
   mountedRenderers.push(renderer!);
   await openLogin(renderer!);
   await enterValidCredentials(renderer!);
@@ -674,9 +740,9 @@ test("활성 그룹 사용자는 연결된 앱 셸로 이동한다", async () =>
   alertSpy.mockRestore();
 });
 
-test("로그아웃 확인 후 A-1로 돌아온다", async () => {
+test("로그아웃 확인 후 로컬 세션을 지우고 A-1로 돌아온다", async () => {
   const alertSpy = jest.spyOn(Alert, "alert");
-  const { authGateway, renderer } = await renderApp();
+  const { authGateway, authSession, renderer } = await renderApp();
   await openLogin(renderer);
   await enterValidCredentials(renderer);
 
@@ -724,10 +790,90 @@ test("로그아웃 확인 후 A-1로 돌아온다", async () => {
   });
 
   expect(authGateway.logout).toHaveBeenCalledTimes(1);
+  expect(authSession.clearLocalSession).toHaveBeenCalledTimes(1);
   expect(
     renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })
   ).toBeTruthy();
   alertSpy.mockRestore();
+});
+
+test("앱 시작 시 저장된 인증 사용자를 기존 로그인 후 경로로 복원한다", async () => {
+  const authSession = createAuthSessionCoordinator({
+    status: "authenticated",
+    user: { id: 7, name: "복원 사용자" },
+  });
+  const { renderer } = await renderApp(createAuthGateway(), authSession);
+
+  expect(authSession.restore).toHaveBeenCalledTimes(1);
+  expect(
+    renderer.root.findByProps({ children: "복원 사용자 님,\n안녕하세요" })
+  ).toBeTruthy();
+});
+
+test("재시도 가능한 복원 오류에서는 인증 화면을 선택하지 않는다", async () => {
+  const authSession = createAuthSessionCoordinator({
+    error: new Error("network"),
+    status: "retryableError",
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(<App authSession={authSession} />);
+  });
+  await resolveAuthRestore(authSession);
+  mountedRenderers.push(renderer!);
+
+  expect(renderer!.toJSON()).toBeNull();
+});
+
+test("authInvalidated 신호가 오면 사용자 상태를 비우고 A-1로 전환한다", async () => {
+  const authSession = createAuthSessionCoordinator({
+    status: "authenticated",
+    user: { id: 7, name: "복원 사용자" },
+  });
+  const { renderer } = await renderApp(createAuthGateway(), authSession);
+
+  await TestRenderer.act(() => {
+    authSession.emitInvalidated();
+  });
+
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })
+  ).toBeTruthy();
+  expect(
+    renderer.root.findAllByProps({
+      children: "복원 사용자 님,\n안녕하세요",
+    })
+  ).toHaveLength(0);
+});
+
+test("서버 로그아웃 실패에도 로컬 세션과 앱 인증 상태를 지운다", async () => {
+  const authGateway = createAuthGateway();
+  const serverFailure = new Error("server logout failed");
+  authGateway.logout.mockRejectedValueOnce(serverFailure);
+  const { authSession, renderer } = await renderApp(authGateway);
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+  });
+
+  let returnedFailure: unknown;
+  await TestRenderer.act(async () => {
+    try {
+      await renderer.root.findByType(SignedInWelcomeScreen).props.onLogout();
+    } catch (error) {
+      returnedFailure = error;
+    }
+  });
+
+  expect(returnedFailure).toBe(serverFailure);
+  expect(authSession.clearLocalSession).toHaveBeenCalledTimes(1);
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })
+  ).toBeTruthy();
 });
 
 test("앱 셸에 참여 중인 그룹이 없으면 빈 상태를 표시한다", async () => {

@@ -22,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -61,6 +62,9 @@ class CallReportGenerationServiceTest {
 	private TransactionTemplate transactionTemplate;
 
 	@Mock
+	private ApplicationEventPublisher eventPublisher;
+
+	@Mock
 	private CallSession callSession;
 
 	@Mock
@@ -95,7 +99,8 @@ class CallReportGenerationServiceTest {
 			analyzer,
 			dailyReportGenerationDispatcher,
 			clock,
-			transactionTemplate
+			transactionTemplate,
+			eventPublisher
 		);
 	}
 

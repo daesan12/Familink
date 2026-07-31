@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -56,6 +57,9 @@ class DailyReportGenerationServiceTest {
 
 	@Mock
 	private TransactionTemplate transactionTemplate;
+
+	@Mock
+	private ApplicationEventPublisher eventPublisher;
 
 	@Mock
 	private CallReport firstReport;
@@ -97,7 +101,8 @@ class DailyReportGenerationServiceTest {
 			dailyReportRepository,
 			groupMemberRepository,
 			analyzer,
-			transactionTemplate
+			transactionTemplate,
+			eventPublisher
 		);
 		lenient().doAnswer(invocation -> {
 			Consumer<TransactionStatus> callback = invocation.getArgument(0);

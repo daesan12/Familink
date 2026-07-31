@@ -1,7 +1,7 @@
 # 데이터 모델 계약
 
 > 상태: 일부 확정
-> 기준: 2026-07-28 최신 확정 ERD 기준·관계·테이블·제약 문서
+> 기준: 2026-07-31 최신 확정 ERD와 승인된 도메인 이벤트 알림 계약 기준·관계·테이블·제약 문서
 > 데이터베이스: PostgreSQL
 
 이 문서는 현재 사용하는 21개 테이블과 컬럼·Enum·제약의 로컬 계약이다.
@@ -164,8 +164,12 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   `creator_member_id -> group_members.id`,
   `last_editor_member_id -> group_members.id`
 - 컬럼: `title VARCHAR(20)`, `event_date DATE`, `end_date DATE`, `created_at`,
-  `updated_at` NOT NULL; `description VARCHAR(50) NULL`,
+  `updated_at`, `reminder_schedule_updated_at TIMESTAMPTZ` NOT NULL;
+  `description VARCHAR(50) NULL`,
   `start_at TIMESTAMPTZ NULL`, `end_at TIMESTAMPTZ NULL`
+- `reminder_schedule_updated_at`은 일정 등록 시각 또는 날짜·시각 쌍을 마지막으로
+  바꾼 시각이다. 제목·설명·참여자만 바꿀 때는 갱신하지 않으며, 이미 지난
+  일정 시작 알림을 즉시 보내지 않을 때 사용한다.
 - 날짜 쌍: `event_date`는 시작 날짜, `end_date`는 종료 날짜이며 날짜 일정과
   시간 일정 모두 항상 채운다. 하루짜리 일정은 두 값이 같다. 특정 날짜와
   겹치는 일정은 `event_date <= :date AND end_date >= :date`로 조회한다.
@@ -261,8 +265,18 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   - `related_daily_report_id -> daily_reports.id`
 - 컬럼: `type NOTIFICATION_TYPE`, `title TEXT`,
   `body TEXT`, `created_at` NOT NULL; `read_at NULL`,
+  `source_event_key VARCHAR(160) NULL`,
   `reminder_slot NULL` (`DAY_BEFORE` | `HOUR_BEFORE`,
   `EVENT_REMINDER` 알림에만 사용하고 그 외에는 NULL)
+- 일정 시작 외 도메인 이벤트 알림 중복 방지 부분 Unique:
+  `(receiver_user_id, source_event_key)
+  WHERE source_event_key IS NOT NULL`
+- `source_event_key`는
+  `<도메인>:<원본 ID>:<행위>[:<변경 UUID>]` 형식이다. 같은 도메인
+  이벤트를 여러 수신자에게 처리하거나 다시 처리할 때 처음 정한 키를
+  재사용한다. 가입 요청·게시글·댓글·반응·리포트 생성과 가입 요청 결정은
+  원본 ID와 행위로 고정하고, 일정 수정·삭제는 이벤트 생성 때 한 번 만든
+  UUID를 함께 사용한다.
 - 일정 시작 알림 중복 방지 부분 Unique:
   `(receiver_user_id, related_event_id, type, reminder_slot)
   WHERE type = 'EVENT_REMINDER' AND related_event_id IS NOT NULL`
@@ -286,6 +300,14 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - FK: `user_id -> users.id`
 - 컬럼: `token VARCHAR(500) UNIQUE`, `device_type VARCHAR(20)`,
   `is_active BOOLEAN`, `created_at`, `updated_at` NOT NULL
+- 같은 `token` 문자열은 시스템 전체에서 한 행만 가지며, 활성 행은 동시에
+  한 사용자만 소유한다.
+- 등록은 Unique 제약과 행 잠금 또는 동등한 원자적 upsert로 처리한다. 같은
+  사용자의 재등록·재활성화와 다른 사용자로의 소유권 이전 모두 기존 `id`를
+  유지하고 `user_id`, `device_type`, `is_active`, `updated_at`을 현재
+  등록 결과에 맞게 갱신한다.
+- MVP의 `device_type` 값은 `ANDROID`다. 토큰 해제는 행 삭제가 아니라
+  `is_active=false` 전환이다.
 
 ## Enum
 
@@ -306,7 +328,8 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 
 ## 공통 삭제·보존 규칙
 
-- 회원 탈퇴: 개인정보를 익명화하고 `withdrawn_at`을 기록하되 게시글·댓글·
+- 회원 탈퇴: 개인정보를 익명화하고 `withdrawn_at`을 기록하며 같은
+  트랜잭션에서 사용자의 모든 `device_tokens`를 비활성화한다. 게시글·댓글·
   일정과 과거 그룹 관계는 보존한다.
 - 그룹 나가기·내보내기: `group_members.left_at`을 기록한다.
 - 그룹 삭제: 관리자이면서 다른 활성 구성원이 없을 때만 하드 삭제할 수 있다.

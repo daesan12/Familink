@@ -25,7 +25,7 @@ export interface LoginCredentials {
 
 export interface AuthenticatedUser {
   activeGroupId: string | null;
-  id: string;
+  id: number;
   name: string;
 }
 

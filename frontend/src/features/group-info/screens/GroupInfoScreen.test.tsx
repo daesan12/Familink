@@ -2,10 +2,11 @@ import React from 'react';
 import {Alert, Text, TextInput} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
-import type {GroupMember} from '../types';
+import type {GroupMember, WeeklyRankingSnapshot} from '../types';
 import {GroupInfoScreen} from './GroupInfoScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
+jest.mock('@react-native-clipboard/clipboard', () => ({setString: jest.fn()}));
 
 const baseProps = {
   currentGroup: {id: 'group-1', name: '우리 가족', role: 'guardian'} as const,
@@ -52,6 +53,11 @@ const MEMBERS: readonly GroupMember[] = [
   },
 ];
 
+// 랭킹 모달을 열지 않는 테스트는 로더를 대기 상태로 둬 마운트 후
+// 비동기 setState(act 경고)를 막는다. 랭킹 검증 테스트는 아래에서 해소 로더를 쓴다.
+const PENDING_RANKING_LOADER = () =>
+  new Promise<WeeklyRankingSnapshot>(() => {});
+
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
 
 afterEach(() => {
@@ -70,6 +76,7 @@ function renderScreen(currentMemberId = 'm-manager') {
         currentMemberId={currentMemberId}
         initialMembers={MEMBERS}
         pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
       />,
     );
   });
@@ -289,6 +296,7 @@ test('그룹을 바꾸면 그 그룹의 구성원으로 갈아끼운다', () => 
         currentMemberId="m-manager"
         initialMembers={MEMBERS}
         pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
         role="guardian"
       />,
     );
@@ -303,6 +311,7 @@ test('그룹을 바꾸면 그 그룹의 구성원으로 갈아끼운다', () => 
         currentMemberId="b-lead"
         initialMembers={MEMBERS_B}
         pendingJoinCount={0}
+        rankingLoader={PENDING_RANKING_LOADER}
         role="guardian"
       />,
     );
@@ -321,6 +330,7 @@ test('그룹을 바꾸면 편집 중이던 상태가 초기화된다', () => {
         currentMemberId="m-manager"
         initialMembers={MEMBERS}
         pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
         role="guardian"
       />,
     );
@@ -339,6 +349,7 @@ test('그룹을 바꾸면 편집 중이던 상태가 초기화된다', () => {
         currentMemberId="b-lead"
         initialMembers={MEMBERS_B}
         pendingJoinCount={0}
+        rankingLoader={PENDING_RANKING_LOADER}
         role="guardian"
       />,
     );
@@ -346,14 +357,338 @@ test('그룹을 바꾸면 편집 중이던 상태가 초기화된다', () => {
   expect(renderer!.root.findAllByType(TextInput)).toHaveLength(0);
 });
 
-test('초대·관리 메뉴 행은 후속 작업 안내 팝업을 띄운다', () => {
-  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+// 공동 2위(손수호·홍유라)와 지난주 1위 왕관(홍유라)을 담은 랭킹 목업.
+// 필드명은 API-CARNATION-001 응답(rankings/displayName/previousWeekWinner)에 맞춘다.
+const RANKING: WeeklyRankingSnapshot = {
+  weekStart: '2026-07-20',
+  weekEnd: '2026-07-26',
+  rankings: [
+    {
+      memberId: 'r-first',
+      displayName: '강다영',
+      carnationCount: 5,
+      previousWeekWinner: false,
+    },
+    {
+      memberId: 'r-crown',
+      displayName: '홍유라',
+      carnationCount: 3,
+      previousWeekWinner: true,
+    },
+    {
+      memberId: 'r-tie',
+      displayName: '손수호',
+      carnationCount: 3,
+      previousWeekWinner: false,
+    },
+  ],
+};
+
+// 비동기 로더가 성공 상태로 정착할 때까지 flush한 뒤 렌더러를 돌려준다.
+async function renderWithRanking(
+  snapshot: WeeklyRankingSnapshot = RANKING,
+) {
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        pendingJoinCount={2}
+        rankingLoader={() => Promise.resolve(snapshot)}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+  return renderer!;
+}
+
+test('랭킹 카드를 누르면 주간 효자 랭킹을 순위·날짜와 함께 연다', async () => {
+  const renderer = await renderWithRanking();
+
+  // 열기 전에는 모달 내용이 없다.
+  expect(hasText(renderer, '주간 효자 랭킹')).toBe(false);
+
+  press(renderer, '이번주 우리 가족 효자 랭킹 조회하기');
+
+  expect(hasText(renderer, '주간 효자 랭킹')).toBe(true);
+  expect(hasText(renderer, '2026년 7월 20일 ~ 26일')).toBe(true);
+  // 카네이션 5개인 강다영이 1위다.
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '1위 강다영'}),
+  ).toBeTruthy();
+});
+
+test('같은 카네이션 수는 공동 순위로, 지난주 1위는 왕관으로 표시한다', async () => {
+  const renderer = await renderWithRanking();
+
+  press(renderer, '이번주 우리 가족 효자 랭킹 조회하기');
+
+  // 손수호·홍유라는 카네이션 3개로 공동 2위다. 손수호 행에는 왕관 표시가 없다.
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '2위 손수호'}),
+  ).toBeTruthy();
+  // 홍유라는 공동 2위이면서 지난주 1위라 왕관을 단다(라벨에만 왕관 표기가 붙는다).
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '2위 홍유라, 지난주 1위'}),
+  ).toBeTruthy();
+  // 1위(강다영)는 지난주 1위가 아니라 왕관 표기가 없다.
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '1위 강다영'}),
+  ).toBeTruthy();
+});
+
+test('집계 주간이 비면 깨진 날짜 문구 대신 안내만 보여준다', async () => {
+  const renderer = await renderWithRanking({
+    weekStart: '',
+    weekEnd: '',
+    rankings: [],
+  });
+
+  press(renderer, '이번주 우리 가족 효자 랭킹 조회하기');
+
+  expect(hasText(renderer, '주간 효자 랭킹')).toBe(true);
+  expect(hasText(renderer, '아직 집계된 랭킹이 없어요.')).toBe(true);
+  // '이번 주' 날짜 블록과 undefined 섞인 깨진 문구가 노출되지 않는다.
+  expect(hasText(renderer, '이번 주')).toBe(false);
+  const brokenDate = renderer.root.findAllByType(Text).some((node) => {
+    const children = node.props.children;
+    const value = Array.isArray(children) ? children.join('') : children;
+    return typeof value === 'string' && value.includes('undefined');
+  });
+  expect(brokenDate).toBe(false);
+});
+
+test('뒤로 가기를 누르면 랭킹 모달이 닫힌다', async () => {
+  const renderer = await renderWithRanking();
+
+  press(renderer, '이번주 우리 가족 효자 랭킹 조회하기');
+  expect(hasText(renderer, '주간 효자 랭킹')).toBe(true);
+
+  press(renderer, '뒤로 가기');
+  expect(hasText(renderer, '주간 효자 랭킹')).toBe(false);
+});
+
+test('로딩 중에는 랭킹 목록 대신 로딩 표시를 보여준다', () => {
+  // renderScreen은 해소되지 않는 로더를 써 로딩 상태에 머문다.
   const renderer = renderScreen();
 
-  press(renderer, '그룹 코드');
+  press(renderer, '이번주 우리 가족 효자 랭킹 조회하기');
 
-  expect(alertSpy).toHaveBeenCalledWith(
-    '그룹 코드',
-    '후속 작업에서 연결될 화면입니다.',
-  );
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '랭킹 불러오는 중'}),
+  ).toBeTruthy();
+  // 아직 순위 목록은 없다.
+  expect(hasText(renderer, '아직 집계된 랭킹이 없어요.')).toBe(false);
+});
+
+test('로더 실패 시 에러와 다시 시도를 보여주고, 재시도로 복구한다', async () => {
+  // 첫 호출은 실패, 재시도(두 번째 호출)는 성공하는 로더.
+  let calls = 0;
+  const loader = () => {
+    calls += 1;
+    return calls === 1
+      ? Promise.reject(new Error('실패'))
+      : Promise.resolve(RANKING);
+  };
+
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        pendingJoinCount={2}
+        rankingLoader={loader}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '이번주 우리 가족 효자 랭킹 조회하기');
+
+  // 실패 상태: 안내 문구와 다시 시도 버튼이 보인다.
+  expect(
+    hasText(renderer!, '랭킹을 불러오지 못했어요. 다시 시도해 주세요.'),
+  ).toBe(true);
+  const retryButton = renderer!.root.findByProps({
+    accessibilityLabel: '다시 시도',
+  });
+
+  // 다시 시도하면 두 번째 로더 호출이 성공해 순위 목록으로 복구된다.
+  await TestRenderer.act(async () => {
+    retryButton.props.onPress();
+  });
+
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '1위 강다영'}),
+  ).toBeTruthy();
+  expect(
+    hasText(renderer!, '랭킹을 불러오지 못했어요. 다시 시도해 주세요.'),
+  ).toBe(false);
+});
+
+test('그룹관리자 변경 메뉴를 누르면 H-6 화면으로 이동하고 뒤로 복귀한다', () => {
+  const renderer = renderScreen();
+
+  press(renderer, '그룹관리자 변경');
+  expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(true);
+
+  press(renderer, '뒤로 가기');
+  expect(hasText(renderer, '그룹 정보')).toBe(true);
+});
+
+test('구성원 내보내기 메뉴를 누르면 H-7 선택 화면으로 이동한다', () => {
+  const renderer = renderScreen();
+
+  press(renderer, '구성원 내보내기');
+  expect(hasText(renderer, '내보낼 구성원을 선택하세요')).toBe(true);
+});
+
+test('그룹 나가기 메뉴를 누르면 H-8 화면으로 이동한다', () => {
+  const renderer = renderScreen();
+
+  press(renderer, '그룹 나가기');
+  expect(hasText(renderer, '정말 그룹을 나가시겠어요?')).toBe(true);
+  // 요약 카드에 그룹명·관리자 이름이 실데이터로 노출된다(이경호가 방장).
+  expect(hasText(renderer, '우리 가족')).toBe(true);
+  expect(hasText(renderer, '그룹관리자 · 이경호')).toBe(true);
+});
+
+test('그룹 나가기 화면의 관리자 변경 링크는 H-6으로 이동한다', () => {
+  const renderer = renderScreen();
+
+  press(renderer, '그룹 나가기');
+  press(renderer, '그룹관리자 변경하기');
+  expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(true);
+});
+
+test('그룹 삭제 메뉴는 확인 팝업을 띄우고 삭제 콜백을 부른다', () => {
+  const deleted: number[] = [];
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        onDeleteGroup={() => deleted.push(1)}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '그룹 삭제');
+  expect(hasText(renderer!, '정말 그룹을 삭제하시겠어요?')).toBe(true);
+
+  press(renderer!, '그룹 삭제 확정');
+  expect(deleted).toEqual([1]);
+  // 삭제 후 팝업이 닫힌다.
+  expect(hasText(renderer!, '정말 그룹을 삭제하시겠어요?')).toBe(false);
+});
+
+test('그룹명 변경 메뉴를 누르면 H-10 화면으로 이동한다', () => {
+  const renderer = renderScreen();
+
+  press(renderer, '그룹명 변경');
+  expect(hasText(renderer, '그룹 이름을 변경하세요')).toBe(true);
+});
+
+test('그룹관리자 변경을 확정하면 콜백을 부르고 관리자 표시를 옮긴다', () => {
+  const changed: string[] = [];
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        onChangeManager={(id) => changed.push(id)}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '그룹관리자 변경');
+  // 보호자인 손수호를 새 관리자로 선택하고 확정한다.
+  press(renderer!, '손수호 선택');
+  press(renderer!, '그룹관리자 변경하기');
+
+  expect(changed).toEqual(['m-dad']);
+  // 복귀 후 다시 H-6을 열면 손수호가 현재 관리자로 표시된다.
+  press(renderer!, '그룹관리자 변경');
+  const dadRow = renderer!.root.findByProps({accessibilityLabel: '손수호 선택'});
+  expect(dadRow.props.accessibilityState.disabled).toBe(true);
+});
+
+test('그룹 코드 카드를 누르면 그룹 코드 화면으로 이동한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        inviteCodeLoader={() => Promise.resolve({inviteCode: '176203'})}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '그룹 코드');
+  // 하위 화면 로더가 해소되도록 flush한다.
+  await TestRenderer.act(async () => {});
+
+  expect(hasText(renderer!, '가족을 초대해 보세요')).toBe(true);
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '그룹 코드 176203'}),
+  ).toBeTruthy();
+
+  // 뒤로 가면 그룹정보로 돌아온다.
+  press(renderer!, '뒤로 가기');
+  expect(hasText(renderer!, '그룹 정보')).toBe(true);
+});
+
+test('가입 승인 대기 카드를 누르면 승인 화면으로 이동한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        joinRequestsLoader={() =>
+          Promise.resolve([
+            {
+              joinRequestId: 'jr-1',
+              applicantUserId: 'u-1',
+              applicantName: '손수호',
+              profileImageUrl: null,
+              status: 'PENDING_ADMIN' as const,
+              assignedRole: null,
+              processedAt: null,
+              createdAt: '2026-07-30T09:12:00Z',
+            },
+          ])
+        }
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '가입 승인 대기');
+  await TestRenderer.act(async () => {});
+
+  expect(hasText(renderer!, '승인 요청 1건')).toBe(true);
+  expect(hasText(renderer!, '손수호')).toBe(true);
 });

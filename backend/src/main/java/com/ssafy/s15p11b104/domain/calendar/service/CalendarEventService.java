@@ -1,5 +1,6 @@
 package com.ssafy.s15p11b104.domain.calendar.service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -7,9 +8,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +29,10 @@ import com.ssafy.s15p11b104.domain.calendar.repository.CalendarEventRepository;
 import com.ssafy.s15p11b104.domain.calendar.repository.EventParticipantRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.notification.entity.NotificationType;
+import com.ssafy.s15p11b104.domain.notification.entity.ReminderSlot;
+import com.ssafy.s15p11b104.domain.notification.event.DomainNotificationEvent;
+import com.ssafy.s15p11b104.domain.notification.repository.NotificationRepository;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
 import com.ssafy.s15p11b104.global.exception.ErrorCode;
 
@@ -44,14 +51,23 @@ public class CalendarEventService {
 	private final CalendarEventRepository calendarEventRepository;
 	private final EventParticipantRepository eventParticipantRepository;
 	private final GroupMemberRepository groupMemberRepository;
+	private final ApplicationEventPublisher eventPublisher;
+	private final Clock clock;
+	private final NotificationRepository notificationRepository;
 
 	public CalendarEventService(
 		CalendarEventRepository calendarEventRepository,
 		EventParticipantRepository eventParticipantRepository,
-		GroupMemberRepository groupMemberRepository) {
+		GroupMemberRepository groupMemberRepository,
+		ApplicationEventPublisher eventPublisher,
+		Clock clock,
+		NotificationRepository notificationRepository) {
 		this.calendarEventRepository = calendarEventRepository;
 		this.eventParticipantRepository = eventParticipantRepository;
 		this.groupMemberRepository = groupMemberRepository;
+		this.eventPublisher = eventPublisher;
+		this.clock = clock;
+		this.notificationRepository = notificationRepository;
 	}
 
 	/**
@@ -116,10 +132,17 @@ public class CalendarEventService {
 			schedule.eventDate(),
 			schedule.endDate(),
 			schedule.startAt(),
-			schedule.endAt()));
+			schedule.endAt(),
+			clock.instant()));
 		eventParticipantRepository.saveAll(participants.stream()
 			.map(participant -> new EventParticipant(event, participant))
 			.toList());
+		publishCalendarChanged(
+			event,
+			creator,
+			List.of(),
+			memberIds(participants),
+			DomainNotificationEvent.CalendarAction.CREATED);
 
 		return new CalendarEventCreateResponse(event.getId(), event.getCreatedAt());
 	}
@@ -132,10 +155,12 @@ public class CalendarEventService {
 		Long eventId, CalendarEventUpdateRequest request, Long authenticatedUserId) {
 		CalendarEvent event = getEvent(eventId);
 		GroupMember editor = requireEditor(event, authenticatedUserId);
+		List<Long> beforeParticipantMemberIds = eventParticipantRepository.findMemberIdsByEventId(eventId);
 		EventSchedule schedule = resolveSchedule(
 			request.eventDate(), request.endDate(), request.startAt(), request.endAt());
 		List<GroupMember> participants =
 			resolveParticipants(event.getGroup().getId(), request.participantMemberIds());
+		cancelRemindersIfScheduleChanged(event, schedule);
 
 		event.update(
 			editor,
@@ -144,9 +169,16 @@ public class CalendarEventService {
 			schedule.eventDate(),
 			schedule.endDate(),
 			schedule.startAt(),
-			schedule.endAt());
+			schedule.endAt(),
+			clock.instant());
 		replaceParticipants(event, participants);
 		calendarEventRepository.flush();
+		publishCalendarChanged(
+			event,
+			editor,
+			beforeParticipantMemberIds,
+			memberIds(participants),
+			DomainNotificationEvent.CalendarAction.UPDATED);
 
 		return new CalendarEventUpdateResponse(event.getId(), editor.getId(), event.getUpdatedAt());
 	}
@@ -157,10 +189,17 @@ public class CalendarEventService {
 	@Transactional
 	public void delete(Long eventId, Long authenticatedUserId) {
 		CalendarEvent event = getEvent(eventId);
-		requireEditor(event, authenticatedUserId);
+		GroupMember editor = requireEditor(event, authenticatedUserId);
+		List<Long> beforeParticipantMemberIds = eventParticipantRepository.findMemberIdsByEventId(eventId);
 
 		eventParticipantRepository.deleteAllByEventId(event.getId());
 		eventParticipantRepository.flush();
+		publishCalendarChanged(
+			event,
+			editor,
+			beforeParticipantMemberIds,
+			List.of(),
+			DomainNotificationEvent.CalendarAction.DELETED);
 		calendarEventRepository.delete(event);
 	}
 
@@ -260,6 +299,48 @@ public class CalendarEventService {
 		eventParticipantRepository.saveAll(participants.stream()
 			.map(participant -> new EventParticipant(event, participant))
 			.toList());
+	}
+
+	/**
+	 * 일정 시작 시점의 근거가 바뀌면 이미 만든 해당 슬롯 알림만 취소한다.
+	 *
+	 * <p>도메인 이벤트 알림은 새 일정 변경 이벤트로 다시 생성될 수 있으므로 날짜와 시작 시각에
+	 * 대응하는 슬롯만 지운다. 종료 날짜·시각 변경은 알림 시점을 바꾸지 않는다.
+	 */
+	private void cancelRemindersIfScheduleChanged(CalendarEvent event, EventSchedule schedule) {
+		if (!event.getEventDate().equals(schedule.eventDate())) {
+			cancelReminders(event, ReminderSlot.DAY_BEFORE);
+		}
+		if (!java.util.Objects.equals(event.getStartAt(), schedule.startAt())) {
+			cancelReminders(event, ReminderSlot.HOUR_BEFORE);
+		}
+	}
+
+	private void cancelReminders(CalendarEvent event, ReminderSlot reminderSlot) {
+		notificationRepository.deleteAllByRelatedEventIdAndTypeAndReminderSlot(
+			event.getId(), NotificationType.EVENT_REMINDER, reminderSlot);
+	}
+
+	private void publishCalendarChanged(
+		CalendarEvent event,
+		GroupMember actor,
+		List<Long> beforeParticipantMemberIds,
+		List<Long> afterParticipantMemberIds,
+		DomainNotificationEvent.CalendarAction action
+	) {
+		eventPublisher.publishEvent(new DomainNotificationEvent.CalendarChanged(
+			event.getId(),
+			event.getGroup().getId(),
+			actor.getId(),
+			event.getTitle(),
+			beforeParticipantMemberIds,
+			afterParticipantMemberIds,
+			action,
+			UUID.randomUUID()));
+	}
+
+	private List<Long> memberIds(List<GroupMember> members) {
+		return members.stream().map(GroupMember::getId).toList();
 	}
 
 	private void validateQueryRange(LocalDate startDate, LocalDate endDate) {

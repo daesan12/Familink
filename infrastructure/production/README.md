@@ -34,6 +34,13 @@ Copy-Item infrastructure/production/.env.example infrastructure/production/.env
 
 `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`는 비워 두거나 예시 값을 그대로 사용하면 안 됩니다. S3 버킷 이름은 현재 버킷 이름을 유지합니다.
 
+Firebase 서비스 계정 JSON은 저장소 밖의 운영 서버 경로에 두고
+`FIREBASE_CREDENTIALS_FILE`에 그 절대 경로를 지정합니다. Compose는 파일을
+읽기 전용으로 마운트하고 컨테이너의 `GOOGLE_APPLICATION_CREDENTIALS`로만
+전달합니다. `PUSH_ENABLED=true`인데 파일이 없거나 올바르지 않으면 백엔드는
+의도적으로 시작하지 않습니다. `PUSH_ENABLED=false`일 때는
+`FIREBASE_CREDENTIALS_FILE`을 생략할 수 있으며, 백엔드는 푸시만 건너뜁니다.
+
 ## 실행
 
 저장소 루트에서 Compose 파일의 경로를 지정합니다.
