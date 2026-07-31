@@ -58,7 +58,7 @@ export function PostComposerScreen({
   );
   const isDirty = hasComposerChanges(initialValue, body, media);
   const canSubmit =
-    (body.trim().length > 0 || media.length > 0) &&
+    body.trim().length > 0 &&
     (mode === 'create' || isDirty);
   const imageMedia = useMemo(
     () =>
@@ -72,7 +72,7 @@ export function PostComposerScreen({
     [media],
   );
   const video = media.find(
-    (item): item is LocalMedia => item.kind === 'video',
+    (item): item is ComposerMedia => item.kind === 'video',
   );
 
   const requestClose = () => {
@@ -349,13 +349,14 @@ export function PostComposerScreen({
 }
 
 interface VideoPreviewProps {
-  media: LocalMedia;
+  media: ComposerMedia;
   onRemove: () => void;
 }
 
 function VideoPreview({media, onRemove}: VideoPreviewProps) {
-  const durationSeconds = media.durationSeconds
-    ? Math.round(media.durationSeconds)
+  const localMedia = media.sourceType === 'local' ? media : null;
+  const durationSeconds = localMedia?.durationSeconds
+    ? Math.round(localMedia.durationSeconds)
     : null;
 
   return (
@@ -390,7 +391,7 @@ function VideoPreview({media, onRemove}: VideoPreviewProps) {
       </View>
       <View style={styles.videoText}>
         <Text numberOfLines={1} style={styles.videoName}>
-          {media.fileName ?? '선택한 영상'}
+          {localMedia?.fileName ?? '선택한 영상'}
         </Text>
         <Text style={styles.videoDuration}>
           {durationSeconds === null

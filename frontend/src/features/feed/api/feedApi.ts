@@ -333,10 +333,12 @@ function toFeedPost(input: {
     images: limitPostImages(
       input.media.map(item => ({
         accessibilityLabel: `${input.author.displayName}의 게시글 미디어`,
+        fileUrl: item.fileUrl,
         hasPoster: item.type === 'IMAGE' || item.thumbnailUrl !== null,
         id: item.id,
         mediaType: item.type,
         source: {uri: item.thumbnailUrl ?? item.fileUrl},
+        thumbnailUrl: item.thumbnailUrl,
       })),
     ),
     isOwnedByCurrentUser:
