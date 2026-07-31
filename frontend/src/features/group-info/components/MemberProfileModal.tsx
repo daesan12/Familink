@@ -29,12 +29,15 @@ export function MemberProfileModal({
   onClose,
   onRetry,
 }: MemberProfileModalProps) {
-  const isWeeklyWinner = member?.weeklyRank === 1;
+  const isWeeklyWinner =
+    member?.previousWeekWinner ?? member?.weeklyRank === 1;
   // 도장·순위·왕관은 효자 랭킹 요소라 보호자에게만 보여준다.
   // 피보호자는 이름·나이·성별만 표시한다.
   const showRanking =
     member?.role === 'guardian' &&
-    (member.weeklyRank !== undefined || member.weeklyStamps !== undefined);
+    (member.weeklyRank !== undefined ||
+      member.weeklyStamps !== undefined ||
+      member.previousWeekWinner !== undefined);
   // 계약이 7이 아닌 길이를 주더라도 항상 7칸으로 고정한다.
   const stamps = Array.from(
     {length: WEEKLY_STAMP_DAYS},

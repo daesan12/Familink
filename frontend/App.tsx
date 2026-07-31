@@ -77,11 +77,13 @@ import {
   familyGroupManagementGateway,
   familyGroupGateway,
   GroupInfoScreen,
+  createCarnationGateway,
   type FamilyGroupGateway,
   type GroupMemberGateway,
   type GroupManagementGateway,
   type GroupMembershipGateway,
   type GroupJoinRequestSummary,
+  type CarnationGateway,
 } from "./src/features/group-info";
 import { NotificationsScreen } from "./src/features/notifications";
 import { createReportGateway, ReportScreen } from "./src/features/reports";
@@ -108,6 +110,7 @@ interface AppProps {
   apiBaseUrl?: string;
   authGateway?: AuthGateway;
   calendarGateway?: CalendarGateway;
+  carnationGateway?: CarnationGateway;
   authSession?: AuthSessionCoordinator;
   groupGateway?: FamilyGroupGateway;
   groupMemberGateway?: GroupMemberGateway;
@@ -178,6 +181,7 @@ function toPendingJoinRequests(
 
 interface GroupInfoIntegration {
   gateway: FamilyGroupGateway;
+  carnationGateway: CarnationGateway;
   members: GroupMemberGateway;
   management: GroupManagementGateway;
   membership: GroupMembershipGateway;
@@ -209,8 +213,10 @@ function ConnectedGroupInfoScreen(screenProps: AppScreenProps) {
       groupDetailLoader={integration.gateway.getGroupDetail}
       inviteCodeLoader={integration.gateway.getInviteCode}
       joinRequestsLoader={integration.membership.loadJoinRequests}
+      memberCarnationLoader={integration.carnationGateway.loadMemberCarnations}
       membersLoader={integration.members.loadMembers}
       memberProfileLoader={integration.members.loadMemberProfile}
+      rankingLoader={integration.carnationGateway.loadWeeklyRanking}
       onUpdateMemberAlias={(groupId, memberId, alias) =>
         integration.members.updateMemberAlias(groupId, memberId, alias)
       }
@@ -399,6 +405,7 @@ export default function App({
   apiBaseUrl = DEFAULT_API_BASE_URL,
   authGateway = apiAuthGateway,
   calendarGateway,
+  carnationGateway,
   authSession = authSessionManager,
   groupGateway = familyGroupGateway,
   groupMemberGateway = familyGroupMemberGateway,
@@ -454,6 +461,12 @@ export default function App({
       reportGateway ??
       createReportGateway({ authSession, baseUrl: apiBaseUrl }),
     [apiBaseUrl, authSession, reportGateway]
+  );
+  const resolvedCarnationGateway = useMemo(
+    () =>
+      carnationGateway ??
+      createCarnationGateway({ authSession, baseUrl: apiBaseUrl }),
+    [apiBaseUrl, authSession, carnationGateway]
   );
   const [authenticationResolved, setAuthenticationResolved] = useState(
     !shouldRestoreSession
@@ -968,6 +981,7 @@ export default function App({
   const groupInfoIntegration = useMemo<GroupInfoIntegration>(
     () => ({
       gateway: groupGateway,
+      carnationGateway: resolvedCarnationGateway,
       members: groupMemberGateway,
       management: groupManagementGateway,
       membership: groupMembershipGateway,
@@ -983,6 +997,7 @@ export default function App({
       handleDeleteGroup,
       handleLeaveGroup,
       handleRenameGroup,
+      resolvedCarnationGateway,
     ]
   );
   const resolvedScreens = useMemo<AppScreenRegistry>(

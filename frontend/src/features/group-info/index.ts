@@ -66,6 +66,15 @@ export type {
   ManagerUpdater,
   MemberRemover,
 } from './api/groupManagementApi';
+export {createCarnationGateway} from './api/carnationApi';
+export type {
+  CarnationApiError,
+  CarnationCalendar,
+  CarnationGateway,
+  CarnationGatewayOptions,
+  CarnationHttpClient,
+  MemberCarnationLoader,
+} from './api/carnationApi';
 export {
   DEVELOPMENT_CURRENT_MEMBER_ID,
   DEVELOPMENT_GROUP_MEMBERS,

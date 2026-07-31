@@ -29,6 +29,7 @@ import {
   isAliasSaveable,
   resolveMemberDisplayName,
 } from '../groupInfoModel';
+import {getCurrentWeekRange, rankEntries} from '../rankingModel';
 import {resolveManagerName} from '../groupManagementModel';
 import {getDevelopmentGroupInfo} from '../fixtures/groupInfoFixtures';
 import type {WeeklyRankingLoader} from '../api/rankingApi';
@@ -38,6 +39,10 @@ import type {
   JoinRequestProcessor,
   JoinRequestsLoader,
 } from '../api/groupMembershipApi';
+import type {
+  CarnationCalendar,
+  MemberCarnationLoader,
+} from '../api/carnationApi';
 import type {
   GroupMembersLoader,
   MemberAliasUpdater,
@@ -63,6 +68,7 @@ export interface GroupInfoScreenProps extends AppScreenProps {
   recordCount?: number;
   // 주간 효자 랭킹 로더 주입(테스트·연동용). 없으면 기본 로더로 조회한다.
   rankingLoader?: WeeklyRankingLoader;
+  memberCarnationLoader?: MemberCarnationLoader;
   // 그룹 코드·가입 요청 로더 주입(테스트·연동용). 없으면 기본 로더로 조회한다.
   groupDetailLoader?: (groupId: string) => Promise<FamilyGroupDetail>;
   membersLoader?: GroupMembersLoader;
@@ -98,6 +104,7 @@ export function GroupInfoScreen({
   pendingJoinCount,
   recordCount,
   rankingLoader,
+  memberCarnationLoader,
   groupDetailLoader,
   membersLoader,
   memberProfileLoader,
@@ -162,6 +169,9 @@ export function GroupInfoScreen({
   const [membersReloadCount, setMembersReloadCount] = useState(0);
   const [profileDetails, setProfileDetails] = useState<
     Readonly<Record<string, MemberProfile>>
+  >({});
+  const [memberCarnationStamps, setMemberCarnationStamps] = useState<
+    Readonly<Record<string, readonly boolean[]>>
   >({});
   const [profileLoadState, setProfileLoadState] = useState<
     'idle' | 'loading' | 'error'
@@ -230,8 +240,8 @@ export function GroupInfoScreen({
   useEffect(() => {
     if (
       profileMemberId === null ||
-      memberProfileLoader === undefined ||
-      initialMembers !== undefined
+      initialMembers !== undefined ||
+      (memberProfileLoader === undefined && memberCarnationLoader === undefined)
     ) {
       setProfileLoadState('idle');
       setProfileLoadError(null);
@@ -244,15 +254,64 @@ export function GroupInfoScreen({
     setProfileLoadState('loading');
     setProfileLoadError(null);
 
-    memberProfileLoader(currentGroup.id, profileMemberId)
-      .then(profile => {
-        if (isActive && profileRequestVersion.current === requestVersion) {
+    const selectedMember = members.find(
+      member => member.memberId === profileMemberId,
+    );
+    const profileRequest =
+      memberProfileLoader === undefined
+        ? Promise.resolve(null)
+        : memberProfileLoader(currentGroup.id, profileMemberId);
+    const carnationRequest =
+      memberCarnationLoader === undefined || selectedMember?.role !== 'guardian'
+        ? Promise.resolve(null)
+        : (() => {
+            const week = getCurrentWeekRange(new Date());
+            return memberCarnationLoader(
+              currentGroup.id,
+              profileMemberId,
+              week.weekStart,
+              week.weekEnd,
+            );
+          })();
+
+    Promise.allSettled([profileRequest, carnationRequest]).then(
+      ([profileResult, carnationResult]) => {
+        if (!isActive || profileRequestVersion.current !== requestVersion) {
+          return;
+        }
+        if (
+          profileResult.status === 'fulfilled' &&
+          profileResult.value !== null
+        ) {
+          const profile = profileResult.value;
           setProfileDetails(current => ({
             ...current,
             [profile.memberId]: profile,
           }));
-          setProfileLoadState('idle');
         }
+        if (
+          carnationResult.status === 'fulfilled' &&
+          carnationResult.value !== null
+        ) {
+          const calendar = carnationResult.value;
+          setMemberCarnationStamps(current => ({
+            ...current,
+            [calendar.memberId]: toWeeklyStamps(calendar),
+          }));
+        }
+        if (profileResult.status === 'rejected') {
+          setProfileLoadState('error');
+          setProfileLoadError('프로필을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.');
+          return;
+        }
+        if (carnationResult.status === 'rejected') {
+          setProfileLoadState('error');
+          setProfileLoadError(
+            '카네이션 활동을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+          );
+          return;
+        }
+        setProfileLoadState('idle');
       })
       .catch(() => {
         if (!isActive || profileRequestVersion.current !== requestVersion) {
@@ -270,7 +329,9 @@ export function GroupInfoScreen({
   }, [
     currentGroup.id,
     initialMembers,
+    memberCarnationLoader,
     memberProfileLoader,
+    members,
     profileMemberId,
     profileReloadCount,
   ]);
@@ -322,6 +383,7 @@ export function GroupInfoScreen({
     setAliasDraft('');
     setProfileMemberId(null);
     setProfileDetails({});
+    setMemberCarnationStamps({});
     setProfileLoadState('idle');
     setProfileLoadError(null);
     setIsRankingOpen(false);
@@ -522,15 +584,35 @@ export function GroupInfoScreen({
       ? null
       : (() => {
           const profile = profileDetails[profileMemberBase.memberId];
-          return profile === undefined
-            ? profileMemberBase
-            : {
-                ...profileMemberBase,
-                age: profile.age,
-                gender: profile.gender,
-                name: profile.displayName,
-                ...(memberProfileLoader !== undefined ? {alias: null} : {}),
-              };
+          const rankingEntry =
+            ranking.status === 'success'
+              ? rankEntries(ranking.snapshot.rankings).find(
+                  entry => entry.memberId === profileMemberBase.memberId,
+                )
+              : undefined;
+          return {
+            ...profileMemberBase,
+            ...(rankingEntry === undefined
+              ? {}
+              : {
+                  previousWeekWinner: rankingEntry.previousWeekWinner,
+                  weeklyRank: rankingEntry.rank,
+                }),
+            ...(memberCarnationStamps[profileMemberBase.memberId] === undefined
+              ? {}
+              : {
+                  weeklyStamps:
+                    memberCarnationStamps[profileMemberBase.memberId],
+                }),
+            ...(profile === undefined
+              ? {}
+              : {
+                  age: profile.age,
+                  gender: profile.gender,
+                  name: profile.displayName,
+                  ...(memberProfileLoader !== undefined ? {alias: null} : {}),
+                }),
+          };
         })();
 
   const inviteItems: readonly GroupMenuItem[] = [
@@ -762,6 +844,16 @@ export function GroupInfoScreen({
 
 // resolveMemberDisplayName은 향후 프로필 팝업 연동에서 재사용하기 위해 함께 노출한다.
 export {resolveMemberDisplayName};
+
+function toWeeklyStamps(calendar: CarnationCalendar): readonly boolean[] {
+  const earnedDates = new Set(calendar.earnedDates);
+  const start = new Date(`${calendar.startDate}T00:00:00Z`);
+  return Array.from({length: 7}, (_, index) => {
+    const date = new Date(start);
+    date.setUTCDate(date.getUTCDate() + index);
+    return earnedDates.has(date.toISOString().slice(0, 10));
+  });
+}
 
 function isPromiseLike(value: unknown): value is Promise<void> {
   return (
