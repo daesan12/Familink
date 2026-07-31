@@ -44,6 +44,7 @@ export interface PostComment {
   createdAt: string;
   id: string;
   postId: string;
+  updatedAt?: string;
 }
 
 export interface CreateCommentInput {

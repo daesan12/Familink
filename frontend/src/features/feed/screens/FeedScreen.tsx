@@ -1,5 +1,5 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,13 @@ import type {
   FeedPageLoader,
   PostDetailLoader,
 } from '../api/feedApi';
+import {
+  COMMENT_PAGE_SIZE,
+  type CommentCreateResult,
+  type CommentPageLoader,
+  type UpdatedComment,
+} from '../api/commentApi';
+import type {ReactionChangeResult} from '../api/reactionApi';
 import {FeedItem} from '../components/FeedItem';
 import {PostActionsSheet} from '../components/PostActionsSheet';
 import {
@@ -63,16 +70,25 @@ export interface FeedScreenProps extends AppScreenProps {
   loader?: FeedLoader;
   pageLoader?: FeedPageLoader;
   detailLoader?: PostDetailLoader;
-  onChangeReaction?: (input: ChangeReactionInput) => void;
+  onChangeReaction?: (
+    input: ChangeReactionInput,
+  ) => Promise<ReactionChangeResult | void> | ReactionChangeResult | void;
   onConfirmDelete?: (postId: string) => Promise<void> | void;
-  onCreateComment?: (input: CreateCommentInput) => void;
-  onDeleteComment?: (input: DeleteCommentInput) => void;
+  onCreateComment?: (
+    input: CreateCommentInput,
+  ) => Promise<CommentCreateResult | void> | CommentCreateResult | void;
+  onDeleteComment?: (
+    input: DeleteCommentInput,
+  ) => Promise<void> | void;
   onSubmitPost?: (
     payload: PostSubmitPayload,
     onProgress?: (progress: number) => void,
     signal?: AbortSignal,
   ) => Promise<void> | void;
-  onUpdateComment?: (input: UpdateCommentInput) => void;
+  onUpdateComment?: (
+    input: UpdateCommentInput,
+  ) => Promise<UpdatedComment | void> | UpdatedComment | void;
+  commentsLoader?: CommentPageLoader;
 }
 
 interface ComposerState {
@@ -85,10 +101,19 @@ interface OpenReactionPicker {
   postId: string;
 }
 
+interface CommentsState {
+  error: string | null;
+  hasNext: boolean;
+  isLoading: boolean;
+  page: number;
+  postId: string | null;
+}
+
 export function FeedScreen({
   createPostRequestId = 0,
   currentGroup,
   currentMemberId,
+  commentsLoader,
   currentUser,
   detailLoader,
   initialCommentsByPostId,
@@ -132,6 +157,8 @@ export function FeedScreen({
     posts,
     resolvedInitialComments,
   );
+  const interactionsRef = useRef(interactions);
+  interactionsRef.current = interactions;
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [detailPost, setDetailPost] = useState<FeedPost | null>(null);
   const [menuPostId, setMenuPostId] = useState<string | null>(null);
@@ -139,8 +166,19 @@ export function FeedScreen({
   const [openReactionPicker, setOpenReactionPicker] =
     useState<OpenReactionPicker | null>(null);
   const [uploadState, setUploadState] = useState<UploadState>({status: 'idle'});
+  const [commentsState, setCommentsState] = useState<CommentsState>({
+    error: null,
+    hasNext: false,
+    isLoading: false,
+    page: 0,
+    postId: null,
+  });
   const pendingUploadPayload = useRef<PostSubmitPayload | null>(null);
   const uploadAbortController = useRef<AbortController | null>(null);
+  const commentsRequestId = useRef(0);
+  const commentsLoading = useRef(false);
+  const pendingReactionPostIds = useRef(new Set<string>());
+  const nextLocalCommentId = useRef(1);
   const lastCreateRequestId = useRef(createPostRequestId);
   const lastOpenPostRequestId = useRef(0);
   const detailRequestId = useRef(0);
@@ -162,6 +200,15 @@ export function FeedScreen({
     uploadAbortController.current?.abort();
     pendingUploadPayload.current = null;
     setUploadState({status: 'idle'});
+    commentsRequestId.current += 1;
+    commentsLoading.current = false;
+    setCommentsState({
+      error: null,
+      hasNext: false,
+      isLoading: false,
+      page: 0,
+      postId: null,
+    });
   }, [currentGroup.id]);
 
   useEffect(() => {
@@ -189,10 +236,81 @@ export function FeedScreen({
     }
   }, [openPostId, openPostRequestId]);
 
+  const loadCommentsPage = useCallback(
+    (postId: string, page: number, replace: boolean) => {
+      if (commentsLoader === undefined || commentsLoading.current) {
+        return;
+      }
+
+      const requestId = commentsRequestId.current + 1;
+      commentsRequestId.current = requestId;
+      commentsLoading.current = true;
+      setCommentsState(previous => ({
+        error: null,
+        hasNext: replace ? false : previous.hasNext,
+        isLoading: true,
+        page,
+        postId,
+      }));
+
+      void commentsLoader(postId, page, COMMENT_PAGE_SIZE)
+        .then(result => {
+          if (commentsRequestId.current !== requestId) {
+            return;
+          }
+          if (replace) {
+            interactionsRef.current.replaceComments(
+              postId,
+              result.comments,
+              true,
+            );
+          } else {
+            interactionsRef.current.appendComments(postId, result.comments);
+          }
+          setCommentsState({
+            error: null,
+            hasNext: result.hasNext,
+            isLoading: false,
+            page,
+            postId,
+          });
+        })
+        .catch(error => {
+          if (commentsRequestId.current !== requestId) {
+            return;
+          }
+          setCommentsState(previous => ({
+            ...previous,
+            error:
+              error instanceof Error
+                ? error.message
+                : '댓글을 불러오지 못했습니다. 다시 시도해 주세요.',
+            isLoading: false,
+            postId,
+          }));
+        })
+        .finally(() => {
+          if (commentsRequestId.current === requestId) {
+            commentsLoading.current = false;
+          }
+        });
+    },
+    [commentsLoader],
+  );
+
   useEffect(() => {
     if (selectedPostId === null) {
       detailRequestId.current += 1;
       setDetailPost(null);
+      commentsRequestId.current += 1;
+      commentsLoading.current = false;
+      setCommentsState({
+        error: null,
+        hasNext: false,
+        isLoading: false,
+        page: 0,
+        postId: null,
+      });
       return;
     }
 
@@ -200,6 +318,20 @@ export function FeedScreen({
       post => post.id === selectedPostId,
     ) ?? null;
     setDetailPost(fallbackPost);
+
+    if (commentsLoader !== undefined) {
+      commentsRequestId.current += 1;
+      commentsLoading.current = false;
+      loadCommentsPage(selectedPostId, 0, true);
+    } else {
+      setCommentsState({
+        error: null,
+        hasNext: false,
+        isLoading: false,
+        page: 0,
+        postId: selectedPostId,
+      });
+    }
 
     if (detailLoader === undefined) {
       return;
@@ -238,7 +370,14 @@ export function FeedScreen({
     return () => {
       isActive = false;
     };
-  }, [currentGroup.id, currentMemberId, detailLoader, selectedPostId]);
+  }, [
+    commentsLoader,
+    currentGroup.id,
+    currentMemberId,
+    detailLoader,
+    loadCommentsPage,
+    selectedPostId,
+  ]);
 
   useEffect(() => {
     onFullscreenChange?.(Boolean(composer));
@@ -270,21 +409,62 @@ export function FeedScreen({
     postId: string,
     reactionId: ChangeReactionInput['nextReactionId'],
   ) => {
-    if (!reactionId || !resolvedCurrentUser) {
+    if (
+      !reactionId ||
+      !resolvedCurrentUser ||
+      pendingReactionPostIds.current.has(postId)
+    ) {
       return;
     }
 
     const previousReactionId =
       interactions.selectedReactionByPostId[postId] ?? null;
+    const previousReactions =
+      interactions.reactionsByPostId[postId] ?? [];
     const nextReactionId =
       previousReactionId === reactionId ? null : reactionId;
+    pendingReactionPostIds.current.add(postId);
     interactions.changeReaction(postId, reactionId);
-    onChangeReaction?.({
+    const input: ChangeReactionInput = {
       nextReactionId,
       postId,
       previousReactionId,
-    });
+    };
     closeReactionPicker();
+
+    if (onChangeReaction === undefined) {
+      pendingReactionPostIds.current.delete(postId);
+      return;
+    }
+
+    void Promise.resolve()
+      .then(() => onChangeReaction(input))
+      .then(result => {
+        if (result === undefined || result.postId !== postId) {
+          return;
+        }
+        interactionsRef.current.setReaction(
+          postId,
+          result.reactionType,
+          result.reactions,
+        );
+      })
+      .catch(error => {
+        interactionsRef.current.setReaction(
+          postId,
+          previousReactionId,
+          previousReactions,
+        );
+        Alert.alert(
+          '반응을 저장하지 못했습니다',
+          error instanceof Error
+            ? error.message
+            : '네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
+        );
+      })
+      .finally(() => {
+        pendingReactionPostIds.current.delete(postId);
+      });
   };
 
   const handleOpenPost = (postId: string) => {
@@ -296,6 +476,121 @@ export function FeedScreen({
     event: NativeSyntheticEvent<NativeScrollEvent>,
   ) => {
     feedScrollOffset.current = event.nativeEvent.contentOffset.y;
+  };
+
+  const handleCreateComment = (input: CreateCommentInput) => {
+    if (!resolvedCurrentUser) {
+      return;
+    }
+
+    const localCommentId = `local-comment-${nextLocalCommentId.current++}`;
+    interactions.addComment(
+      input.postId,
+      input.body,
+      resolvedCurrentUser,
+      {commentId: localCommentId},
+    );
+    if (onCreateComment === undefined) {
+      return;
+    }
+
+    void Promise.resolve()
+      .then(() => onCreateComment(input))
+      .then(result => {
+        if (result === undefined) {
+          return;
+        }
+        interactionsRef.current.replaceComment(
+          input.postId,
+          {
+            author: resolvedCurrentUser,
+            body: result.content,
+            createdAt: result.createdAt,
+            id: result.id,
+            postId: result.postId,
+            updatedAt: result.createdAt,
+          },
+          localCommentId,
+        );
+      })
+      .catch(error => {
+        interactionsRef.current.deleteComment(input.postId, localCommentId);
+        Alert.alert(
+          '댓글을 저장하지 못했습니다',
+          error instanceof Error
+            ? error.message
+            : '네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
+        );
+      });
+  };
+
+  const handleUpdateComment = (input: UpdateCommentInput) => {
+    const previousComment = interactions.commentsByPostId[input.postId]?.find(
+      comment => comment.id === input.commentId,
+    );
+    interactions.updateComment(
+      input.postId,
+      input.commentId,
+      input.body,
+    );
+    if (onUpdateComment === undefined) {
+      return;
+    }
+
+    void Promise.resolve()
+      .then(() => onUpdateComment(input))
+      .then(result => {
+        if (result === undefined) {
+          return;
+        }
+        interactionsRef.current.updateComment(
+          input.postId,
+          input.commentId,
+          result.content,
+          result.updatedAt,
+        );
+      })
+      .catch(error => {
+        if (previousComment !== undefined) {
+          interactionsRef.current.replaceComment(
+            input.postId,
+            previousComment,
+          );
+        }
+        Alert.alert(
+          '댓글을 수정하지 못했습니다',
+          error instanceof Error
+            ? error.message
+            : '네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
+        );
+      });
+  };
+
+  const handleDeleteComment = (input: DeleteCommentInput) => {
+    const previousComment = interactions.commentsByPostId[input.postId]?.find(
+      comment => comment.id === input.commentId,
+    );
+    interactions.deleteComment(input.postId, input.commentId);
+    if (onDeleteComment === undefined) {
+      return;
+    }
+
+    void Promise.resolve()
+      .then(() => onDeleteComment(input))
+      .catch(error => {
+        if (previousComment !== undefined) {
+          interactionsRef.current.restoreComment(
+            input.postId,
+            previousComment,
+          );
+        }
+        Alert.alert(
+          '댓글을 삭제하지 못했습니다',
+          error instanceof Error
+            ? error.message
+            : '네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
+        );
+      });
   };
 
   const submitComposerPayload = async (payload: PostSubmitPayload) => {
@@ -513,8 +808,11 @@ export function FeedScreen({
             selectedPost.commentCount
           }
           comments={comments}
+          commentsError={commentsState.error}
+          commentsHasNext={commentsState.hasNext}
           currentGroupName={currentGroup.name}
           currentUser={resolvedCurrentUser}
+          isCommentsLoading={commentsState.isLoading}
           isReactionPickerOpen={
             openReactionPicker?.postId === selectedPost.id
           }
@@ -523,36 +821,27 @@ export function FeedScreen({
             setMenuPostId(null);
             setSelectedPostId(null);
           }}
-          onCreateComment={input => {
-            if (!resolvedCurrentUser) {
-              return;
+          onCreateComment={handleCreateComment}
+          onDeleteComment={handleDeleteComment}
+          onLoadMoreComments={() => {
+            if (
+              selectedPostId !== null &&
+              commentsState.hasNext &&
+              !commentsState.isLoading
+            ) {
+              loadCommentsPage(selectedPostId, commentsState.page + 1, false);
             }
-            interactions.addComment(
-              input.postId,
-              input.body,
-              resolvedCurrentUser,
-            );
-            onCreateComment?.(input);
-          }}
-          onDeleteComment={input => {
-            interactions.deleteComment(
-              input.postId,
-              input.commentId,
-            );
-            onDeleteComment?.(input);
           }}
           onMenuPress={() => setMenuPostId(selectedPost.id)}
           onOpenNotifications={onOpenNotifications}
           onScrollBeginDrag={closeReactionPicker}
-          onToggleReactionPicker={handleToggleReactionPicker}
-          onUpdateComment={input => {
-            interactions.updateComment(
-              input.postId,
-              input.commentId,
-              input.body,
-            );
-            onUpdateComment?.(input);
+          onRetryComments={() => {
+            if (selectedPostId !== null) {
+              loadCommentsPage(selectedPostId, 0, true);
+            }
           }}
+          onToggleReactionPicker={handleToggleReactionPicker}
+          onUpdateComment={handleUpdateComment}
           post={selectedPost}
           reactions={reactions}
           selectedReactionId={selectedReactionId}

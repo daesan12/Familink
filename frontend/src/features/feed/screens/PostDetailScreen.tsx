@@ -2,6 +2,7 @@ import MaterialDesignIcons from '@react-native-vector-icons/material-design-icon
 import {useRef, useState} from 'react';
 import {
   Alert,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -37,12 +38,16 @@ interface PostDetailScreenProps {
   canInteract: boolean;
   commentCount: number;
   comments: readonly PostComment[];
+  commentsError?: string | null;
+  commentsHasNext?: boolean;
   currentGroupName: string;
   currentUser: FeedMember | null;
+  isCommentsLoading?: boolean;
   isReactionPickerOpen: boolean;
   onBack: () => void;
   onCreateComment: (input: CreateCommentInput) => void;
   onDeleteComment: (input: DeleteCommentInput) => void;
+  onLoadMoreComments?: () => void;
   onMenuPress: () => void;
   onOpenNotifications?: () => void;
   onScrollBeginDrag: () => void;
@@ -50,6 +55,7 @@ interface PostDetailScreenProps {
     postId: string,
     anchor: ReactionAnchor,
   ) => void;
+  onRetryComments?: () => void;
   onUpdateComment: (input: UpdateCommentInput) => void;
   post: FeedPost;
   reactions: readonly FeedReaction[];
@@ -60,16 +66,21 @@ export function PostDetailScreen({
   canInteract,
   commentCount,
   comments,
+  commentsError = null,
+  commentsHasNext = false,
   currentGroupName,
   currentUser,
+  isCommentsLoading = false,
   isReactionPickerOpen,
   onBack,
   onCreateComment,
   onDeleteComment,
+  onLoadMoreComments,
   onMenuPress,
   onOpenNotifications,
   onScrollBeginDrag,
   onToggleReactionPicker,
+  onRetryComments,
   onUpdateComment,
   post,
   reactions,
@@ -262,7 +273,7 @@ export function PostDetailScreen({
                 onMenuPress={handleOpenCommentMenu}
               />
             ))
-          ) : (
+          ) : (!isCommentsLoading && !commentsError) ? (
             <View accessibilityLabel="댓글 없음" style={styles.emptyComments}>
               <Text style={styles.emptyCommentsTitle}>
                 아직 댓글이 없어요.
@@ -271,8 +282,37 @@ export function PostDetailScreen({
                 가족에게 따뜻한 한마디를 남겨보세요.
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
+        {commentsError ? (
+          <View accessibilityLiveRegion="polite" style={styles.commentsError}>
+            <Text style={styles.commentsErrorText}>{commentsError}</Text>
+            {onRetryComments ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={onRetryComments}
+                style={styles.retryCommentsButton}
+              >
+                <Text style={styles.retryCommentsText}>다시 시도</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+        {isCommentsLoading ? (
+          <ActivityIndicator
+            accessibilityLabel="댓글을 불러오는 중"
+            color={COLORS.purple}
+            style={styles.commentsLoading}
+          />
+        ) : commentsHasNext && onLoadMoreComments ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onLoadMoreComments}
+            style={styles.loadMoreCommentsButton}
+          >
+            <Text style={styles.loadMoreCommentsText}>댓글 더 보기</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
 
       {canInteract && currentUser ? (
@@ -484,6 +524,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
   },
+  commentsError: {
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  commentsErrorText: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  commentsLoading: {
+    paddingVertical: 16,
+  },
   editingHeader: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -531,6 +585,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 0,
   },
+  loadMoreCommentsButton: {
+    alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+    marginHorizontal: 20,
+  },
+  loadMoreCommentsText: {
+    color: COLORS.purpleDeep,
+    fontSize: 13,
+    fontWeight: '700',
+  },
   menuButton: {
     alignItems: 'center',
     height: 44,
@@ -561,6 +626,17 @@ const styles = StyleSheet.create({
   readOnlyNoticeText: {
     color: COLORS.textSubtle,
     fontSize: 13,
+  },
+  retryCommentsButton: {
+    alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  retryCommentsText: {
+    color: COLORS.purpleDeep,
+    fontSize: 13,
+    fontWeight: '700',
   },
   sendButton: {
     alignItems: 'center',

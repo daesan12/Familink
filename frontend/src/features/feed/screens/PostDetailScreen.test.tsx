@@ -192,3 +192,39 @@ test('댓글 입력을 50자로 제한하고 유효한 입력을 등록한 뒤 �
     renderer.unmount();
   });
 });
+
+test('댓글을 불러오는 중이거나 오류일 때 빈 상태를 표시하지 않는다', async () => {
+  const loadingRenderer = await renderScreen({
+    commentCount: 0,
+    comments: [],
+    isCommentsLoading: true,
+  });
+
+  expect(
+    loadingRenderer.root.findAllByProps({accessibilityLabel: '댓글 없음'}),
+  ).toHaveLength(0);
+  expect(
+    loadingRenderer.root.findByProps({accessibilityLabel: '댓글을 불러오는 중'}),
+  ).toBeTruthy();
+
+  await TestRenderer.act(() => {
+    loadingRenderer.unmount();
+  });
+
+  const errorRenderer = await renderScreen({
+    commentCount: 0,
+    comments: [],
+    commentsError: '댓글을 불러오지 못했습니다.',
+  });
+
+  expect(
+    errorRenderer.root.findAllByProps({accessibilityLabel: '댓글 없음'}),
+  ).toHaveLength(0);
+  expect(
+    errorRenderer.root.findByProps({children: '댓글을 불러오지 못했습니다.'}),
+  ).toBeTruthy();
+
+  await TestRenderer.act(() => {
+    errorRenderer.unmount();
+  });
+});
