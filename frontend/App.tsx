@@ -9,7 +9,7 @@ import type {
   CurrentGroupStore,
   FamilyGroup,
 } from "./src/app-shell";
-import { mockAuthGateway } from "./src/features/auth/api/mockAuthGateway";
+import { apiAuthGateway } from "./src/features/auth/api/authGateway";
 import { LoginBottomSheet } from "./src/features/auth/components/LoginBottomSheet";
 import type { CreateGroupInput } from "./src/features/auth/components/CreateGroupSheet";
 import {
@@ -106,7 +106,7 @@ const DEFAULT_API_BASE_URL =
 
 export default function App({
   apiBaseUrl = DEFAULT_API_BASE_URL,
-  authGateway = mockAuthGateway,
+  authGateway = apiAuthGateway,
   calendarGateway,
   authSession = authSessionManager,
   groupStore,

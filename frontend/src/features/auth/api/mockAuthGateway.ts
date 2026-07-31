@@ -1,3 +1,4 @@
+import {ApiError} from '../../../shared/api';
 import type {
   AuthenticatedUser,
   AuthGateway,
@@ -21,9 +22,14 @@ function wait(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, MOCK_DELAY_MS));
 }
 
-export class InvalidCredentialsError extends Error {
+export class InvalidCredentialsError extends ApiError {
   constructor() {
-    super('아이디 또는 비밀번호가 일치하지 않습니다.');
+    super({
+      code: 'INVALID_CREDENTIALS',
+      kind: 'server',
+      message: '아이디 또는 비밀번호가 일치하지 않습니다.',
+      status: 401,
+    });
     this.name = 'InvalidCredentialsError';
   }
 }
