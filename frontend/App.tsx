@@ -31,6 +31,7 @@ import { ArchiveScreen } from "./src/features/archive";
 import { FeedScreen } from "./src/features/feed";
 import { GroupInfoScreen } from "./src/features/group-info";
 import { NotificationsScreen } from "./src/features/notifications";
+import { ProfileTabScreen } from "./src/features/profile";
 
 type RootRoute =
   | "welcome"
@@ -85,6 +86,7 @@ const DEFAULT_SCREENS: AppScreenRegistry = {
   feed: FeedScreen,
   groupInfo: GroupInfoScreen,
   notifications: NotificationsScreen,
+  profile: ProfileTabScreen,
 };
 
 export default function App({
@@ -255,6 +257,7 @@ export default function App({
           onCreateGroup={() => openGroupOnboarding("appShell")}
           onGroupChange={onGroupChange}
           onJoinGroup={() => openGroupOnboarding("appShell")}
+          onRequestLogout={handleLogout}
           screens={screens ?? DEFAULT_SCREENS}
         />
       )}

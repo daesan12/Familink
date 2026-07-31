@@ -41,12 +41,29 @@ export const PRESET_INTERESTS: readonly string[] = [
   '우리 동네 이야기',
 ];
 
+export interface InterestSavedContent {
+  title: string;
+  message: string;
+  buttonLabel: string;
+}
+
+// 온보딩 회원가입 흐름의 저장 완료 문구(기본값).
+const ONBOARDING_SAVED_CONTENT: InterestSavedContent = {
+  title: '관심사 설정 완료',
+  message: '선택한 관심사가 저장되었어요.\n가족 피드에서 다시 만나요!',
+  buttonLabel: '피드로 이동',
+};
+
 interface InterestSelectionScreenProps {
   initialInterests?: readonly string[];
   onBack: () => void;
   onComplete: () => void;
   onSave: (interests: readonly string[]) => Promise<void> | void;
   onSkip: () => void;
+  // 저장 완료 모달 문구. 온보딩과 마이페이지(J-4p)에서 다르게 쓴다.
+  savedContent?: InterestSavedContent;
+  // AppShell 하위 화면으로 임베드할 때는 자체 SafeAreaView를 끄고 부모 인셋을 따른다.
+  embedded?: boolean;
 }
 
 export function InterestSelectionScreen({
@@ -55,6 +72,8 @@ export function InterestSelectionScreen({
   onComplete,
   onSave,
   onSkip,
+  savedContent = ONBOARDING_SAVED_CONTENT,
+  embedded = false,
 }: InterestSelectionScreenProps) {
   const normalizedInitialInterests = normalizeInterests(initialInterests);
   const [selectedInterests, setSelectedInterests] = useState<string[]>(
@@ -128,8 +147,10 @@ export function InterestSelectionScreen({
     }
   };
 
+  const Container = embedded ? View : SafeAreaView;
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <Container style={styles.safeArea}>
       <View style={styles.screen}>
         <View style={styles.header}>
           <AnimatedPressable
@@ -244,13 +265,14 @@ export function InterestSelectionScreen({
         visible={customInputVisible}
       />
       <InterestSavedModal
+        content={savedContent}
         onConfirm={() => {
           setSavedVisible(false);
           onComplete();
         }}
         visible={savedVisible}
       />
-    </SafeAreaView>
+    </Container>
   );
 }
 
@@ -413,11 +435,13 @@ function CustomInterestModal({
 }
 
 interface InterestSavedModalProps {
+  content: InterestSavedContent;
   onConfirm: () => void;
   visible: boolean;
 }
 
 function InterestSavedModal({
+  content,
   onConfirm,
   visible,
 }: InterestSavedModalProps) {
@@ -440,17 +464,15 @@ function InterestSavedModal({
               size={34}
             />
           </View>
-          <Text style={styles.savedTitle}>관심사 설정 완료</Text>
-          <Text style={styles.savedMessage}>
-            {'선택한 관심사가 저장되었어요.\n가족 피드에서 다시 만나요!'}
-          </Text>
+          <Text style={styles.savedTitle}>{content.title}</Text>
+          <Text style={styles.savedMessage}>{content.message}</Text>
           <AnimatedPressable
-            accessibilityLabel="피드로 이동"
+            accessibilityLabel={content.buttonLabel}
             accessibilityRole="button"
             containerStyle={styles.savedButtonContainer}
             onPress={onConfirm}>
             <View style={styles.savedButton}>
-              <Text style={styles.savedButtonLabel}>피드로 이동</Text>
+              <Text style={styles.savedButtonLabel}>{content.buttonLabel}</Text>
             </View>
           </AnimatedPressable>
         </View>

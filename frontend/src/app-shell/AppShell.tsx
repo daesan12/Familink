@@ -30,6 +30,7 @@ interface AppShellProps {
   onCreateGroup?: () => void;
   onGroupChange?: (groupId: string) => void;
   onJoinGroup?: () => void;
+  onRequestLogout?: () => void;
   screens?: AppScreenRegistry;
 }
 
@@ -41,6 +42,7 @@ export function AppShell({
   onCreateGroup,
   onGroupChange,
   onJoinGroup,
+  onRequestLogout,
   screens = {},
 }: AppShellProps) {
   const [activeRoute, setActiveRoute] = useState(initialRoute);
@@ -190,7 +192,8 @@ export function AppShell({
       isScreenHeaderVisible &&
       resolvedRoute !== 'notifications' &&
       resolvedRoute !== 'archive' &&
-      resolvedRoute !== 'groupInfo' ? <View style={styles.header}>
+      resolvedRoute !== 'groupInfo' &&
+      resolvedRoute !== 'profile' ? <View style={styles.header}>
         {resolvedRoute === 'feed' ? (
           <View style={styles.headerActions}>
             <Pressable
@@ -261,6 +264,7 @@ export function AppShell({
             onNotificationRead={handleNotificationRead}
             onOpenNotifications={() => setActiveRoute('notifications')}
             onOpenPost={handleOpenPost}
+            onRequestLogout={onRequestLogout}
             openPostId={openPostId}
             openPostRequestId={openPostRequestId}
             readNotificationIds={readNotificationIds}

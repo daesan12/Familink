@@ -1,48 +1,24 @@
 import BellOff from 'lucide-react-native/icons/bell-off';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
-import Settings from 'lucide-react-native/icons/settings';
 import {useMemo, useState} from 'react';
-import {
-  FlatList,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
 import {NotificationDecisionModal} from '../components/NotificationDecisionModal';
 import {NotificationItem} from '../components/NotificationItem';
-import {
-  DEFAULT_NOTIFICATION_SETTINGS,
-  DEVELOPMENT_NOTIFICATIONS,
-} from '../fixtures/notificationFixtures';
-import type {
-  AppNotification,
-  DevicePermissionStatus,
-  DeviceTokenStatus,
-  NotificationSetting,
-} from '../types';
+import {DEVELOPMENT_NOTIFICATIONS} from '../fixtures/notificationFixtures';
+import type {AppNotification} from '../types';
 
 export interface NotificationsScreenProps extends AppScreenProps {
   initialNotifications?: readonly AppNotification[];
-  initialPermissionStatus?: DevicePermissionStatus;
-  initialSettings?: readonly NotificationSetting[];
-  initialTokenStatus?: DeviceTokenStatus;
-  initialView?: 'list' | 'settings';
 }
 
 const NO_READ_IDS: readonly string[] = [];
 
+// 알림 탭은 알림 목록만 담당한다. 알림 설정(I-6)은 마이페이지에서 진입한다.
 export function NotificationsScreen({
   initialNotifications,
-  initialPermissionStatus = 'allowed',
-  initialSettings = DEFAULT_NOTIFICATION_SETTINGS,
-  initialTokenStatus = 'active',
-  initialView = 'list',
   onCloseNotifications,
   onNotificationRead,
   onOpenPost,
@@ -61,8 +37,6 @@ export function NotificationsScreen({
         : notification,
     );
   });
-  const [settings, setSettings] = useState(initialSettings);
-  const [view, setView] = useState(initialView);
   const [decision, setDecision] = useState<{
     id: string;
     mode: 'approve' | 'reject';
@@ -113,33 +87,9 @@ export function NotificationsScreen({
     setDecision(null);
   };
 
-  if (view === 'settings') {
-    return (
-      <NotificationSettings
-        onBack={() => setView('list')}
-        onToggle={type =>
-          setSettings(current =>
-            current.map(setting =>
-              setting.type === type
-                ? {...setting, enabled: !setting.enabled}
-                : setting,
-            ),
-          )
-        }
-        permissionStatus={initialPermissionStatus}
-        settings={settings}
-        tokenStatus={initialTokenStatus}
-      />
-    );
-  }
-
   return (
     <View style={styles.screen}>
-      <ScreenHeader
-        onBack={onCloseNotifications}
-        onSettings={() => setView('settings')}
-        title="알림"
-      />
+      <ScreenHeader onBack={onCloseNotifications} title="알림" />
       <View style={styles.summary}>
         <View>
           <Text style={styles.sectionTitle}>최근 알림</Text>
@@ -177,9 +127,7 @@ export function NotificationsScreen({
       </View>
       <FlatList
         contentContainerStyle={
-          notifications.length === 0
-            ? styles.emptyList
-            : styles.listContent
+          notifications.length === 0 ? styles.emptyList : styles.listContent
         }
         data={notifications}
         keyExtractor={notification => notification.id}
@@ -203,15 +151,7 @@ export function NotificationsScreen({
   );
 }
 
-function ScreenHeader({
-  onBack,
-  onSettings,
-  title,
-}: {
-  onBack?: () => void;
-  onSettings?: () => void;
-  title: string;
-}) {
+function ScreenHeader({onBack, title}: {onBack?: () => void; title: string}) {
   return (
     <View style={styles.header}>
       <Pressable
@@ -223,18 +163,7 @@ function ScreenHeader({
         <ChevronLeft color={COLORS.textStrong} size={27} strokeWidth={2.2} />
       </Pressable>
       <Text style={styles.headerTitle}>{title}</Text>
-      {onSettings ? (
-        <Pressable
-          accessibilityLabel="알림 설정 열기"
-          accessibilityRole="button"
-          onPress={onSettings}
-          style={styles.headerButton}
-        >
-          <Settings color={COLORS.textStrong} size={23} strokeWidth={2} />
-        </Pressable>
-      ) : (
-        <View style={styles.headerButton} />
-      )}
+      <View style={styles.headerButton} />
     </View>
   );
 }
@@ -249,107 +178,6 @@ function EmptyNotificationState() {
       <Text style={styles.emptyDescription}>
         가족의 새로운 소식이 생기면{'\n'}여기에서 알려드릴게요.
       </Text>
-    </View>
-  );
-}
-
-function NotificationSettings({
-  onBack,
-  onToggle,
-  permissionStatus,
-  settings,
-  tokenStatus,
-}: {
-  onBack: () => void;
-  onToggle: (type: NotificationSetting['type']) => void;
-  permissionStatus: DevicePermissionStatus;
-  settings: readonly NotificationSetting[];
-  tokenStatus: DeviceTokenStatus;
-}) {
-  return (
-    <View style={styles.screen}>
-      <ScreenHeader onBack={onBack} title="알림 설정" />
-      <ScrollView
-        contentContainerStyle={styles.settingsContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.settingsSectionTitle}>푸시 알림</Text>
-        <View style={styles.settingsCard}>
-          {settings.map((setting, index) => (
-            <View
-              key={setting.type}
-              style={[
-                styles.settingRow,
-                index < settings.length - 1 && styles.settingDivider,
-              ]}
-            >
-              <Text style={styles.settingLabel}>{setting.label}</Text>
-              <Switch
-                accessibilityLabel={`${setting.label} 푸시 알림`}
-                onValueChange={() => onToggle(setting.type)}
-                thumbColor={COLORS.background}
-                trackColor={{
-                  false: COLORS.inactive,
-                  true: COLORS.purple,
-                }}
-                value={setting.enabled}
-              />
-            </View>
-          ))}
-        </View>
-        <Text style={styles.settingsSectionTitle}>기기 상태</Text>
-        <View style={styles.settingsCard}>
-          <StatusRow
-            label="알림 권한"
-            positive={permissionStatus === 'allowed'}
-            value={permissionStatus === 'allowed' ? '허용됨' : '거부됨'}
-          />
-          <View style={styles.settingDivider} />
-          <StatusRow
-            label="푸시 토큰"
-            positive={tokenStatus === 'active'}
-            value={tokenStatus === 'active' ? '활성' : '비활성'}
-          />
-        </View>
-        {permissionStatus === 'denied' ? (
-          <Text style={styles.permissionNotice}>
-            기기 설정에서 알림 권한을 허용하면 푸시 알림을 받을 수 있어요.
-          </Text>
-        ) : null}
-      </ScrollView>
-    </View>
-  );
-}
-
-function StatusRow({
-  label,
-  positive,
-  value,
-}: {
-  label: string;
-  positive: boolean;
-  value: string;
-}) {
-  return (
-    <View style={styles.statusRow}>
-      <Text style={styles.settingLabel}>{label}</Text>
-      <View
-        style={[
-          styles.statusBadge,
-          positive ? styles.statusPositive : styles.statusNegative,
-        ]}
-      >
-        <Text
-          style={[
-            styles.statusText,
-            positive
-              ? styles.statusPositiveText
-              : styles.statusNegativeText,
-          ]}
-        >
-          {value}
-        </Text>
-      </View>
     </View>
   );
 }
@@ -413,13 +241,6 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 24,
   },
-  permissionNotice: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 12,
-    paddingHorizontal: 4,
-  },
   readAllButton: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -438,69 +259,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: COLORS.text,
     fontSize: 17,
-    fontWeight: '700',
-  },
-  settingDivider: {
-    borderBottomColor: COLORS.divider,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  settingLabel: {
-    color: COLORS.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  settingRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 60,
-    paddingHorizontal: 18,
-  },
-  settingsCard: {
-    backgroundColor: COLORS.background,
-    borderColor: COLORS.divider,
-    borderCurve: 'continuous',
-    borderRadius: RADII.medium,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  settingsContent: {
-    paddingBottom: 32,
-    paddingHorizontal: 20,
-  },
-  settingsSectionTitle: {
-    color: COLORS.textMuted,
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 10,
-    marginTop: 24,
-  },
-  statusBadge: {
-    borderRadius: RADII.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  statusNegative: {
-    backgroundColor: '#FDECEC',
-  },
-  statusNegativeText: {
-    color: COLORS.error,
-  },
-  statusPositive: {
-    backgroundColor: COLORS.lavenderSurface,
-  },
-  statusPositiveText: {
-    color: COLORS.purpleDeep,
-  },
-  statusRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 60,
-    paddingHorizontal: 18,
-  },
-  statusText: {
-    fontSize: 13,
     fontWeight: '700',
   },
   summary: {
