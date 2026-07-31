@@ -37,6 +37,10 @@ import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 import com.ssafy.s15p11b104.domain.group.repository.FamilyGroupRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.notification.entity.Notification;
+import com.ssafy.s15p11b104.domain.notification.entity.NotificationType;
+import com.ssafy.s15p11b104.domain.notification.entity.ReminderSlot;
+import com.ssafy.s15p11b104.domain.notification.repository.NotificationRepository;
 import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
@@ -76,6 +80,9 @@ class CalendarEventApiTest extends IntegrationTest {
 	@Autowired
 	private EventParticipantRepository eventParticipantRepository;
 
+	@Autowired
+	private NotificationRepository notificationRepository;
+
 	private User managerUser;
 	private User creatorUser;
 	private User memberUser;
@@ -92,6 +99,7 @@ class CalendarEventApiTest extends IntegrationTest {
 
 	@BeforeEach
 	void setUp() {
+		entityManager.createNativeQuery("DELETE FROM notifications").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM event_participants").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM calendar_events").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM member_interests").executeUpdate();
@@ -647,6 +655,121 @@ class CalendarEventApiTest extends IntegrationTest {
 		assertThat(updatedAt).isAfter(createdAt);
 	}
 
+	// --- 일정 시작 알림 연동 ---
+
+	/**
+	 * 알림 시점이 바뀌면 지난 시점 기준으로 만든 알림은 사실이 아니므로 지워야 한다.
+	 */
+	@Test
+	void updateCancelsRemindersWhenEventDateChanges() throws Exception {
+		Long eventId = persistAllDayEvent("일정", LocalDate.of(2026, 8, 5), LocalDate.of(2026, 8, 5));
+		persistReminder(eventId, ReminderSlot.DAY_BEFORE);
+
+		mockMvc.perform(patch("/events/{eventId}", eventId)
+				.with(authenticatedAs(creatorUser.getId()))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"title": "일정", "eventDate": "2026-08-20"}
+					"""))
+			.andExpect(status().isOk());
+
+		entityManager.flush();
+		entityManager.clear();
+		assertThat(notificationRepository.findReceiverIdsByEventAndSlot(
+			eventId, NotificationType.EVENT_REMINDER, ReminderSlot.DAY_BEFORE)).isEmpty();
+	}
+
+	@Test
+	void updateCancelsHourBeforeReminderWhenStartTimeChanges() throws Exception {
+		Long eventId = createTimedEvent("2026-08-05T01:00:00Z", "2026-08-05T02:00:00Z");
+		persistReminder(eventId, ReminderSlot.HOUR_BEFORE);
+
+		mockMvc.perform(patch("/events/{eventId}", eventId)
+				.with(authenticatedAs(creatorUser.getId()))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"title": "일정", "startAt": "2026-08-05T03:00:00Z", "endAt": "2026-08-05T04:00:00Z"}
+					"""))
+			.andExpect(status().isOk());
+
+		entityManager.flush();
+		entityManager.clear();
+		assertThat(notificationRepository.findReceiverIdsByEventAndSlot(
+			eventId, NotificationType.EVENT_REMINDER, ReminderSlot.HOUR_BEFORE)).isEmpty();
+	}
+
+	/**
+	 * 같은 날 안에서 시작 시각만 옮긴 수정은 전날 09:00 알림의 시점을 바꾸지 않는다.
+	 *
+	 * <p>이때 전날 알림까지 지우면 그 시점은 이미 지나 다시 만들어지지 않으므로, 사용자가 이미 받은
+	 * 알림만 대체 없이 사라진다.
+	 */
+	@Test
+	void updateKeepsDayBeforeReminderWhenOnlyStartTimeChangesWithinTheSameDate() throws Exception {
+		Long eventId = createTimedEvent("2026-08-05T01:00:00Z", "2026-08-05T02:00:00Z");
+		persistReminder(eventId, ReminderSlot.DAY_BEFORE);
+
+		mockMvc.perform(patch("/events/{eventId}", eventId)
+				.with(authenticatedAs(creatorUser.getId()))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"title": "일정", "startAt": "2026-08-05T03:00:00Z", "endAt": "2026-08-05T04:00:00Z"}
+					"""))
+			.andExpect(status().isOk());
+
+		entityManager.flush();
+		entityManager.clear();
+		assertThat(notificationRepository.findReceiverIdsByEventAndSlot(
+			eventId, NotificationType.EVENT_REMINDER, ReminderSlot.DAY_BEFORE))
+			.containsExactly(memberUser.getId());
+	}
+
+	/**
+	 * 이미 보낸 알림의 시점이 그대로면 지우지 않는다. 알림 시점이 지난 뒤에는 다시 만들지 않으므로
+	 * 지우면 사용자의 알림 목록에서 영구히 사라진다.
+	 */
+	@Test
+	void updateKeepsRemindersWhenOnlyTitleChanges() throws Exception {
+		Long eventId = persistAllDayEvent("옛 제목", LocalDate.of(2026, 8, 5), LocalDate.of(2026, 8, 5));
+		persistReminder(eventId, ReminderSlot.DAY_BEFORE);
+
+		mockMvc.perform(patch("/events/{eventId}", eventId)
+				.with(authenticatedAs(creatorUser.getId()))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"title": "새 제목", "description": "설명 추가", "eventDate": "2026-08-05"}
+					"""))
+			.andExpect(status().isOk());
+
+		entityManager.flush();
+		entityManager.clear();
+		assertThat(notificationRepository.findReceiverIdsByEventAndSlot(
+			eventId, NotificationType.EVENT_REMINDER, ReminderSlot.DAY_BEFORE))
+			.containsExactly(memberUser.getId());
+	}
+
+	/**
+	 * 일정을 삭제해도 이미 보낸 알림은 남고 일정 참조만 끊긴다. 사용자가 받은 알림의 문구는 그
+	 * 시점의 사실이므로 스냅샷으로 보존한다.
+	 */
+	@Test
+	void deleteKeepsSentRemindersWithoutEventReference() throws Exception {
+		Long eventId = persistAllDayEvent("삭제 대상", LocalDate.of(2026, 8, 5), LocalDate.of(2026, 8, 5));
+		persistReminder(eventId, ReminderSlot.DAY_BEFORE);
+
+		mockMvc.perform(delete("/events/{eventId}", eventId).with(authenticatedAs(creatorUser.getId())))
+			.andExpect(status().isNoContent());
+
+		entityManager.flush();
+		entityManager.clear();
+		Object[] remaining = (Object[]) entityManager.createNativeQuery(
+				"SELECT related_event_id, title, body FROM notifications")
+			.getSingleResult();
+		assertThat(remaining[0]).isNull();
+		assertThat(remaining[1]).isEqualTo("내일 일정 알림");
+		assertThat(remaining[2]).isEqualTo("내일 '삭제 대상' 일정이 있습니다.");
+	}
+
 	@Test
 	void listExposesInstantsForTimedEvent() throws Exception {
 		createTimedEvent("2026-08-05T01:00:00Z", "2026-08-05T02:00:00Z");
@@ -777,6 +900,22 @@ class CalendarEventApiTest extends IntegrationTest {
 		for (GroupMember member : members) {
 			eventParticipantRepository.save(new EventParticipant(event, member));
 		}
+		entityManager.flush();
+		entityManager.clear();
+	}
+
+	/**
+	 * 스케줄러가 이미 보낸 것과 같은 일정 시작 알림을 만들어 둔다.
+	 */
+	private void persistReminder(Long eventId, ReminderSlot reminderSlot) {
+		CalendarEvent event = calendarEventRepository.findById(eventId).orElseThrow();
+		User receiver = userRepository.findById(memberUser.getId()).orElseThrow();
+		notificationRepository.save(Notification.eventReminder(
+			receiver,
+			event,
+			reminderSlot,
+			"내일 일정 알림",
+			"내일 '%s' 일정이 있습니다.".formatted(event.getTitle())));
 		entityManager.flush();
 		entityManager.clear();
 	}

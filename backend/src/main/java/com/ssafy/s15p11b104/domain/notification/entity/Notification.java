@@ -99,6 +99,27 @@ public class Notification extends CreatedAtEntity {
 		this.body = body;
 	}
 
+	/**
+	 * 일정 시작 알림을 생성한다.
+	 *
+	 * <p>{@code uq_event_reminder_notification}이 {@code related_event_id}가 있는 행만 중복으로
+	 * 판정하므로 일정 연결은 선택이 아니라 필수다. 발화 주체가 스케줄러이므로 {@code actor}는
+	 * 비워 둔다.
+	 */
+	public static Notification eventReminder(
+		User receiver,
+		CalendarEvent event,
+		ReminderSlot reminderSlot,
+		String title,
+		String body
+	) {
+		Notification notification =
+			new Notification(receiver, NotificationType.EVENT_REMINDER, reminderSlot, title, body);
+		notification.relatedEvent = event;
+		notification.group = event.getGroup();
+		return notification;
+	}
+
 	public User getReceiver() {
 		return receiver;
 	}
