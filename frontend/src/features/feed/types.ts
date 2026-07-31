@@ -22,10 +22,12 @@ export type FeedMediaType = 'IMAGE' | 'VIDEO';
 
 export interface FeedImage {
   accessibilityLabel: string;
+  fileUrl?: string;
   id: string;
   hasPoster?: boolean;
   mediaType?: FeedMediaType;
   source: ImageSourcePropType;
+  thumbnailUrl?: string | null;
 }
 
 export interface FeedReaction {

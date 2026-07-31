@@ -59,6 +59,10 @@ import {
   loadPostDetail,
 } from "./src/features/feed/api/feedApi";
 import {
+  deletePost,
+  submitPost,
+} from "./src/features/feed/api/postApi";
+import {
   familyGroupMembershipGateway,
   familyGroupMemberGateway,
   familyGroupManagementGateway,
@@ -248,6 +252,18 @@ function ConnectedFeedScreen(screenProps: AppScreenProps) {
       {...screenProps}
       currentMemberId={currentMemberId}
       detailLoader={usesDevelopmentFixture ? undefined : loadPostDetail}
+      onConfirmDelete={usesDevelopmentFixture ? undefined : deletePost}
+      onSubmitPost={
+        usesDevelopmentFixture
+          ? undefined
+          : (payload, onProgress, signal) =>
+              submitPost(
+                screenProps.currentGroup.id,
+                payload,
+                onProgress,
+                signal,
+              ).then(() => undefined)
+      }
       pageLoader={usesDevelopmentFixture ? undefined : loadFeedPage}
     />
   );

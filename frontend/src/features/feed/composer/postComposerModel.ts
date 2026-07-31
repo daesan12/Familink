@@ -72,10 +72,13 @@ export interface LocalMedia {
 }
 
 export interface RemoteMedia {
+  fileUrl?: string;
   id: string;
-  kind: 'image';
+  kind: 'image' | 'video';
   source: ImageSourcePropType;
   sourceType: 'remote';
+  thumbnailSource?: ImageSourcePropType;
+  thumbnailUrl?: string | null;
 }
 
 export type ComposerMedia = LocalMedia | RemoteMedia;
@@ -90,7 +93,9 @@ export interface PostSubmitPayload {
   body: string;
   deletedMediaIds: readonly string[];
   newMedia: readonly LocalMedia[];
+  orderedMedia?: readonly ComposerMedia[];
   postId?: string;
+  retainedMedia?: readonly RemoteMedia[];
   retainedMediaIds: readonly string[];
 }
 
@@ -106,10 +111,16 @@ export function createEditInitialValue(post: FeedPost): PostComposerInitialValue
   return {
     body: post.body,
     media: post.images.map(image => ({
+      fileUrl: image.fileUrl,
       id: image.id,
-      kind: 'image',
+      kind: image.mediaType === 'VIDEO' ? 'video' : 'image',
       source: image.source,
       sourceType: 'remote',
+      thumbnailSource:
+        image.thumbnailUrl !== null && image.thumbnailUrl !== undefined
+          ? {uri: image.thumbnailUrl}
+          : undefined,
+      thumbnailUrl: image.thumbnailUrl,
     })),
     postId: post.id,
   };
@@ -147,7 +158,11 @@ export function buildPostSubmitPayload(
     newMedia: media.filter(
       (item): item is LocalMedia => item.sourceType === 'local',
     ),
+    orderedMedia: media,
     postId: initialValue.postId,
+    retainedMedia: media.filter(
+      (item): item is RemoteMedia => item.sourceType === 'remote',
+    ),
     retainedMediaIds,
   };
 }

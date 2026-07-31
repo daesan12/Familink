@@ -29,6 +29,7 @@ import {
   createEditInitialValue,
   type PostComposerInitialValue,
   type PostSubmitPayload,
+  type UploadState,
 } from '../composer/postComposerModel';
 import {
   DEVELOPMENT_COMMENTS_BY_POST_ID,
@@ -66,7 +67,11 @@ export interface FeedScreenProps extends AppScreenProps {
   onConfirmDelete?: (postId: string) => Promise<void> | void;
   onCreateComment?: (input: CreateCommentInput) => void;
   onDeleteComment?: (input: DeleteCommentInput) => void;
-  onSubmitPost?: (payload: PostSubmitPayload) => void;
+  onSubmitPost?: (
+    payload: PostSubmitPayload,
+    onProgress?: (progress: number) => void,
+    signal?: AbortSignal,
+  ) => Promise<void> | void;
   onUpdateComment?: (input: UpdateCommentInput) => void;
 }
 
@@ -133,6 +138,9 @@ export function FeedScreen({
   const [composer, setComposer] = useState<ComposerState | null>(null);
   const [openReactionPicker, setOpenReactionPicker] =
     useState<OpenReactionPicker | null>(null);
+  const [uploadState, setUploadState] = useState<UploadState>({status: 'idle'});
+  const pendingUploadPayload = useRef<PostSubmitPayload | null>(null);
+  const uploadAbortController = useRef<AbortController | null>(null);
   const lastCreateRequestId = useRef(createPostRequestId);
   const lastOpenPostRequestId = useRef(0);
   const detailRequestId = useRef(0);
@@ -151,6 +159,9 @@ export function FeedScreen({
     setDetailPost(null);
     setMenuPostId(null);
     setOpenReactionPicker(null);
+    uploadAbortController.current?.abort();
+    pendingUploadPayload.current = null;
+    setUploadState({status: 'idle'});
   }, [currentGroup.id]);
 
   useEffect(() => {
@@ -159,6 +170,8 @@ export function FeedScreen({
       createPostRequestId !== lastCreateRequestId.current
     ) {
       lastCreateRequestId.current = createPostRequestId;
+      pendingUploadPayload.current = null;
+      setUploadState({status: 'idle'});
       setComposer({mode: 'create'});
       setOpenReactionPicker(null);
     }
@@ -285,21 +298,87 @@ export function FeedScreen({
     feedScrollOffset.current = event.nativeEvent.contentOffset.y;
   };
 
+  const submitComposerPayload = async (payload: PostSubmitPayload) => {
+    if (onSubmitPost === undefined) {
+      Alert.alert(
+        'API 연결 전 단계예요',
+        '작성·수정 데이터와 콜백 호출까지 준비됐습니다.',
+      );
+      return;
+    }
+    if (
+      uploadState.status === 'preparing' ||
+      uploadState.status === 'uploading'
+    ) {
+      return;
+    }
+
+    pendingUploadPayload.current = payload;
+    const controller = new AbortController();
+    uploadAbortController.current = controller;
+    setUploadState({status: 'preparing'});
+    try {
+      await onSubmitPost(
+        payload,
+        progress => setUploadState({progress, status: 'uploading'}),
+        controller.signal,
+      );
+      if (controller.signal.aborted) {
+        return;
+      }
+      setUploadState({status: 'success'});
+      pendingUploadPayload.current = null;
+      setComposer(null);
+      setSelectedPostId(null);
+      setDetailPost(null);
+      feed.retry();
+    } catch (error) {
+      if (
+        (controller.signal.aborted &&
+          pendingUploadPayload.current !== payload) ||
+        (isUploadCancelled(error) && pendingUploadPayload.current !== payload)
+      ) {
+        return;
+      }
+      if (controller.signal.aborted || isUploadCancelled(error)) {
+        setUploadState({status: 'cancelled'});
+      } else {
+        setUploadState({
+          message:
+            error instanceof Error
+              ? error.message
+              : '게시글 저장에 실패했습니다. 다시 시도해 주세요.',
+          status: 'failure',
+        });
+      }
+    } finally {
+      if (uploadAbortController.current === controller) {
+        uploadAbortController.current = null;
+      }
+    }
+  };
+
+  const cancelComposer = () => {
+    uploadAbortController.current?.abort();
+    uploadAbortController.current = null;
+    pendingUploadPayload.current = null;
+    setUploadState({status: 'idle'});
+    setComposer(null);
+  };
+
   if (composer) {
     return (
       <PostComposerScreen
         initialValue={composer.initialValue}
         mode={composer.mode}
-        onCancel={() => setComposer(null)}
-        onSubmit={payload => {
-          onSubmitPost?.(payload);
-          if (!onSubmitPost) {
-            Alert.alert(
-              'API 연결 전 단계예요',
-              '작성·수정 데이터와 콜백 호출까지 준비됐습니다.',
-            );
+        onCancel={cancelComposer}
+        onRetryUpload={() => {
+          if (pendingUploadPayload.current !== null) {
+            void submitComposerPayload(pendingUploadPayload.current);
           }
         }}
+        onSubmit={payload => void submitComposerPayload(payload)}
+        uploadState={uploadState}
       />
     );
   }
@@ -343,6 +422,8 @@ export function FeedScreen({
       return;
     }
     setMenuPostId(null);
+    pendingUploadPayload.current = null;
+    setUploadState({status: 'idle'});
     setComposer({
       initialValue: createEditInitialValue(menuPost),
       mode: 'edit',
@@ -386,6 +467,11 @@ export function FeedScreen({
             isDeleteSubmitting.current = true;
             Promise.resolve()
               .then(() => onConfirmDelete(postId))
+              .then(() => {
+                feed.retry();
+                setSelectedPostId(null);
+                setDetailPost(null);
+              })
               .catch(() => {
                 Alert.alert(
                   '삭제 요청을 처리하지 못했어요',
@@ -569,6 +655,15 @@ export function FeedScreen({
         visible={openReactionPicker !== null}
       />
     </View>
+  );
+}
+
+function isUploadCancelled(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'UPLOAD_CANCELLED'
   );
 }
 
