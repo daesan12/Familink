@@ -37,6 +37,7 @@ import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRegistrati
 import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRepository;
 import com.ssafy.s15p11b104.domain.notification.repository.NotificationRepository;
 import com.ssafy.s15p11b104.domain.notification.repository.NotificationSettingRepository;
+import com.ssafy.s15p11b104.domain.notification.service.EventReminderService;
 import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationService;
 
 import jakarta.persistence.EntityManager;
@@ -133,6 +134,13 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private NotificationSettingRepository notificationSettingRepository;
+
+	/**
+	 * 이 컨텍스트는 JPA 자동 구성을 제외해 {@code TransactionTemplate} 빈이 없으므로, 그것을
+	 * 주입받는 서비스는 목으로 대체한다.
+	 */
+	@MockitoBean
+	private EventReminderService eventReminderService;
 
 	@Test
 	void healthEndpointIsPublic() throws Exception {

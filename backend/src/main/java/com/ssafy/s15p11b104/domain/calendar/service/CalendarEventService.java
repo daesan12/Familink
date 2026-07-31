@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -26,6 +27,9 @@ import com.ssafy.s15p11b104.domain.calendar.repository.CalendarEventRepository;
 import com.ssafy.s15p11b104.domain.calendar.repository.EventParticipantRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.notification.entity.NotificationType;
+import com.ssafy.s15p11b104.domain.notification.entity.ReminderSlot;
+import com.ssafy.s15p11b104.domain.notification.repository.NotificationRepository;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
 import com.ssafy.s15p11b104.global.exception.ErrorCode;
 
@@ -44,14 +48,17 @@ public class CalendarEventService {
 	private final CalendarEventRepository calendarEventRepository;
 	private final EventParticipantRepository eventParticipantRepository;
 	private final GroupMemberRepository groupMemberRepository;
+	private final NotificationRepository notificationRepository;
 
 	public CalendarEventService(
 		CalendarEventRepository calendarEventRepository,
 		EventParticipantRepository eventParticipantRepository,
-		GroupMemberRepository groupMemberRepository) {
+		GroupMemberRepository groupMemberRepository,
+		NotificationRepository notificationRepository) {
 		this.calendarEventRepository = calendarEventRepository;
 		this.eventParticipantRepository = eventParticipantRepository;
 		this.groupMemberRepository = groupMemberRepository;
+		this.notificationRepository = notificationRepository;
 	}
 
 	/**
@@ -136,6 +143,7 @@ public class CalendarEventService {
 			request.eventDate(), request.endDate(), request.startAt(), request.endAt());
 		List<GroupMember> participants =
 			resolveParticipants(event.getGroup().getId(), request.participantMemberIds());
+		cancelRemindersIfScheduleChanged(event, schedule);
 
 		event.update(
 			editor,
@@ -162,6 +170,33 @@ public class CalendarEventService {
 		eventParticipantRepository.deleteAllByEventId(event.getId());
 		eventParticipantRepository.flush();
 		calendarEventRepository.delete(event);
+	}
+
+	/**
+	 * 알림 시점이 바뀌는 수정이면 그 시점에 이미 만든 일정 시작 알림을 지운다.
+	 *
+	 * <p>지운 알림은 스케줄러가 새 시점에 다시 만든다. 이미 보낸 알림의 시점이 그대로면 지우지
+	 * 않는다. 알림 시점이 지난 뒤에는 다시 만들지 않으므로, 시점이 바뀌지 않은 알림을 지우면
+	 * 대체될 것 없이 사용자의 알림 목록에서 영구히 사라진다.
+	 *
+	 * <p>그래서 두 알림 시점을 각자의 근거가 바뀔 때만 지운다. 전날 09:00 알림은 시작 날짜에서,
+	 * 시작 1시간 전 알림은 시작 시각에서 나온다. 시작 시각만 같은 날 안에서 옮긴 수정이 전날
+	 * 알림까지 지우지 않는 이유다. 종료 날짜·시각은 어느 알림 시점에도 쓰이지 않으므로 보지 않는다.
+	 *
+	 * <p>{@code event.update()} 전에 호출해야 삭제가 수정 반영보다 먼저 일어난다.
+	 */
+	private void cancelRemindersIfScheduleChanged(CalendarEvent event, EventSchedule schedule) {
+		if (!event.getEventDate().equals(schedule.eventDate())) {
+			cancelReminders(event, ReminderSlot.DAY_BEFORE);
+		}
+		if (!Objects.equals(event.getStartAt(), schedule.startAt())) {
+			cancelReminders(event, ReminderSlot.HOUR_BEFORE);
+		}
+	}
+
+	private void cancelReminders(CalendarEvent event, ReminderSlot reminderSlot) {
+		notificationRepository.deleteAllByRelatedEventIdAndTypeAndReminderSlot(
+			event.getId(), NotificationType.EVENT_REMINDER, reminderSlot);
 	}
 
 	private GroupMember getActiveMember(Long groupId, Long authenticatedUserId) {
