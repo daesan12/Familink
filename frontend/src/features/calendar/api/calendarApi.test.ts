@@ -313,6 +313,26 @@ test("상세 응답의 잘못된 식별자를 거부한다", async () => {
   );
 });
 
+test("일정 수정 응답에 API-CALENDAR-004 필드가 없으면 거부한다", async () => {
+  const client = createClient();
+  client.patch.mockResolvedValueOnce(
+    success({id: 15, updatedAt: "2026-07-31T06:00:00Z"})
+  );
+  const gateway = createCalendarHttpGateway({client});
+
+  await expect(
+    gateway.updateEvent("15", {
+      description: null,
+      endAt: null,
+      endDate: "2026-08-01",
+      eventDate: "2026-07-31",
+      participantMemberIds: [],
+      startAt: null,
+      title: "가족 모임",
+    })
+  ).rejects.toBeInstanceOf(CalendarApiError);
+});
+
 test.each([null, undefined])(
   "normalizes an absent event description to an empty string",
   async description => {

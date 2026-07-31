@@ -110,6 +110,9 @@ export function createCalendarHttpGateway({
         requestConfig(signal)
       );
       assertStatus(response.status, 200);
+      parseApiEnvelope(response.data, response.status, value =>
+        readEventUpdateResponse(value)
+      );
     },
   };
 }
@@ -158,6 +161,22 @@ function readEventDetail(value: unknown): CalendarEventDetail {
       item.participantMemberIds,
       "참여자 ID 목록"
     ).map((participantId) => readId(participantId, "참여자 구성원 ID")),
+  };
+}
+
+function readEventUpdateResponse(value: unknown): {
+  id: string;
+  lastEditorMemberId: string;
+  updatedAt: string;
+} {
+  const item = readObject(value, "일정 수정 응답");
+  return {
+    id: readId(item.id, "일정 ID"),
+    lastEditorMemberId: readId(
+      item.lastEditorMemberId,
+      "최종 수정자 구성원 ID"
+    ),
+    updatedAt: readString(item.updatedAt, "일정 수정 시각"),
   };
 }
 
