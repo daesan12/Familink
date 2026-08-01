@@ -16,6 +16,7 @@ export type AppRoute =
 
 export interface FamilyGroup {
   id: string;
+  myMemberId?: string;
   name: string;
   role: GroupRole;
 }

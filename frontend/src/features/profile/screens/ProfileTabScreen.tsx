@@ -1,17 +1,30 @@
 import {useMemo} from 'react';
 
 import type {AppScreenProps} from '../../../app-shell';
+import {createInterestGateway, type InterestGateway} from '../../auth';
 import {createProfileGateway, type ProfileGateway} from '../api/profileApi';
 import {CareReceiverMyPageScreen} from './CareReceiverMyPageScreen';
 import {MyPageScreen} from './MyPageScreen';
 
 interface ProfileTabScreenProps extends AppScreenProps {
+  interestGateway?: InterestGateway;
   profileGateway?: ProfileGateway;
 }
 
 // 마이페이지(프로필) 탭 진입점. 현재 그룹에서의 역할에 따라 화면을 고른다.
 // 보호자는 효자 도장(I-1), 피보호자는 관심사 설정(J-1)을 본다.
 export function ProfileTabScreen(props: ProfileTabScreenProps) {
+  const interestGateway = useMemo(
+    () =>
+      props.interestGateway ??
+      (props.authSession === undefined
+        ? undefined
+        : createInterestGateway({
+            authSession: props.authSession,
+            baseUrl: props.apiBaseUrl,
+          })),
+    [props.apiBaseUrl, props.authSession, props.interestGateway],
+  );
   const profileGateway = useMemo(
     () =>
       props.profileGateway ??
@@ -41,6 +54,7 @@ export function ProfileTabScreen(props: ProfileTabScreenProps) {
     return (
       <CareReceiverMyPageScreen
         {...props}
+        interestGateway={interestGateway}
         onRequestWithdrawal={onRequestWithdrawal}
         profileGateway={profileGateway}
       />

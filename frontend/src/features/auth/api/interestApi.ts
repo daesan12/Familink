@@ -1,4 +1,12 @@
-import {ApiError, apiClient, type ApiSuccess} from '../../../shared/api';
+import type {AxiosInstance} from 'axios';
+
+import {
+  ApiError,
+  apiClient,
+  createApiClient,
+  type ApiAuthSession,
+  type ApiSuccess,
+} from '../../../shared/api';
 import {parseApiEnvelope} from '../../group-info/api/groupApi';
 
 export interface MemberInterests {
@@ -22,12 +30,28 @@ export interface InterestGateway {
   replaceInterests: InterestsReplacer;
 }
 
+export type InterestHttpClient = Pick<AxiosInstance, 'get' | 'put'>;
+
+export interface InterestGatewayOptions {
+  authSession?: ApiAuthSession;
+  baseUrl?: string;
+  client?: InterestHttpClient;
+}
+
 /** API-INTERESTS-001: 피보호자 본인 또는 같은 그룹 보호자의 관심사를 조회한다. */
 export async function loadInterests(
   groupId: string,
   memberId: string,
 ): Promise<MemberInterests> {
-  const response = await apiClient.get<ApiSuccess<unknown>>(
+  return loadInterestsWithClient(apiClient, groupId, memberId);
+}
+
+async function loadInterestsWithClient(
+  client: InterestHttpClient,
+  groupId: string,
+  memberId: string,
+): Promise<MemberInterests> {
+  const response = await client.get<ApiSuccess<unknown>>(
     interestPath(groupId, memberId),
   );
   const result = parseApiEnvelope(
@@ -45,8 +69,17 @@ export async function replaceInterests(
   memberId: string,
   interests: readonly string[],
 ): Promise<MemberInterests> {
+  return replaceInterestsWithClient(apiClient, groupId, memberId, interests);
+}
+
+async function replaceInterestsWithClient(
+  client: InterestHttpClient,
+  groupId: string,
+  memberId: string,
+  interests: readonly string[],
+): Promise<MemberInterests> {
   const normalizedInterests = normalizeInterests(interests);
-  const response = await apiClient.put<ApiSuccess<unknown>>(
+  const response = await client.put<ApiSuccess<unknown>>(
     interestPath(groupId, memberId),
     {interests: normalizedInterests},
   );
@@ -59,10 +92,24 @@ export async function replaceInterests(
   return result;
 }
 
-export const familyInterestGateway: InterestGateway = {
-  loadInterests,
-  replaceInterests,
-};
+export function createInterestGateway(
+  options: InterestGatewayOptions = {},
+): InterestGateway {
+  const client =
+    options.client ??
+    (options.baseUrl === undefined && options.authSession === undefined
+      ? apiClient
+      : createApiClient(options.baseUrl, options.authSession));
+
+  return {
+    loadInterests: (groupId, memberId) =>
+      loadInterestsWithClient(client, groupId, memberId),
+    replaceInterests: (groupId, memberId, interests) =>
+      replaceInterestsWithClient(client, groupId, memberId, interests),
+  };
+}
+
+export const familyInterestGateway: InterestGateway = createInterestGateway();
 
 export function getInterestErrorMessage(
   error: unknown,

@@ -11,7 +11,9 @@ jest.mock('lucide-react-native/icons/check', () => 'Check');
 jest.mock('lucide-react-native/icons/chevron-left', () => 'ChevronLeft');
 jest.mock('lucide-react-native/icons/x', () => 'X');
 jest.mock('../../auth', () => ({
+  createInterestGateway: jest.fn(),
   DatePickerSheet: () => null,
+  getInterestErrorMessage: (_error: unknown, fallback: string) => fallback,
   InterestSelectionScreen: () => null,
 }));
 
