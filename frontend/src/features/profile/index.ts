@@ -1,6 +1,7 @@
 export {ProfileTabScreen} from './screens/ProfileTabScreen';
 export {
   createProfileGateway,
+  getProfileWithdrawErrorMessage,
   profileGateway,
   type ProfileGateway,
   type ProfileGatewayOptions,

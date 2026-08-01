@@ -11,7 +11,10 @@ import MaterialDesignIcons from "@react-native-vector-icons/material-design-icon
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AnimatedPressable } from "../components/AnimatedPressable";
-import { LogoutConfirmationModal } from "../components/LogoutConfirmationModal";
+import {
+  AccountActionConfirmationModal,
+  type AccountAction,
+} from "../components/LogoutConfirmationModal";
 import { useScreenEntrance } from "../hooks/useScreenEntrance";
 import { AUTH_COLORS, AUTH_LAYOUT } from "../theme";
 
@@ -20,7 +23,7 @@ const FAMILINK_LOGO = require("../../../assets/images/familink-logo.png");
 
 interface SignedInWelcomeScreenProps {
   onLogout: () => Promise<void>;
-  onRequestWithdrawal: () => void;
+  onRequestWithdrawal: () => Promise<void>;
   onStartGroupOnboarding: () => void;
   userName: string;
 }
@@ -32,7 +35,7 @@ export function SignedInWelcomeScreen({
   userName,
 }: SignedInWelcomeScreenProps) {
   const entranceStyle = useScreenEntrance("signed-in-welcome");
-  const [logoutVisible, setLogoutVisible] = useState(false);
+  const [accountAction, setAccountAction] = useState<AccountAction | null>(null);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -89,7 +92,7 @@ export function SignedInWelcomeScreen({
                 accessibilityLabel="로그아웃"
                 accessibilityRole="button"
                 hitSlop={10}
-                onPress={() => setLogoutVisible(true)}
+                onPress={() => setAccountAction("logout")}
               >
                 <Text style={styles.accountActionText}>로그아웃</Text>
               </AnimatedPressable>
@@ -100,7 +103,7 @@ export function SignedInWelcomeScreen({
                 accessibilityLabel="회원탈퇴"
                 accessibilityRole="button"
                 hitSlop={10}
-                onPress={onRequestWithdrawal}
+                onPress={() => setAccountAction("withdrawal")}
               >
                 <Text style={styles.accountActionText}>회원탈퇴</Text>
               </AnimatedPressable>
@@ -109,10 +112,11 @@ export function SignedInWelcomeScreen({
         </ScrollView>
       </Animated.View>
 
-      <LogoutConfirmationModal
-        onCancel={() => setLogoutVisible(false)}
-        onConfirm={onLogout}
-        visible={logoutVisible}
+      <AccountActionConfirmationModal
+        action={accountAction ?? "logout"}
+        onCancel={() => setAccountAction(null)}
+        onConfirm={accountAction === "withdrawal" ? onRequestWithdrawal : onLogout}
+        visible={accountAction !== null}
       />
     </SafeAreaView>
   );

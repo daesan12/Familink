@@ -31,6 +31,7 @@ interface AppShellProps {
   onJoinGroup?: () => void;
   onCallResult?: (status: 'COMPLETED' | 'CANCELLED' | 'FAILED') => void;
   onRequestLogout?: () => void;
+  onRequestWithdrawal?: () => Promise<void>;
   screens?: AppScreenRegistry;
 }
 
@@ -49,6 +50,7 @@ export function AppShell({
   onJoinGroup,
   onCallResult,
   onRequestLogout,
+  onRequestWithdrawal,
   screens = {},
 }: AppShellProps) {
   const [activeRoute, setActiveRoute] = useState(initialRoute);
@@ -369,6 +371,7 @@ export function AppShell({
             onOpenNotifications={() => setActiveRoute('notifications')}
             onOpenPost={handleOpenPost}
             onRequestLogout={onRequestLogout}
+            onRequestWithdrawal={onRequestWithdrawal}
             openPostId={openPostId}
             openPostRequestId={openPostRequestId}
             readNotificationIds={readNotificationIds}

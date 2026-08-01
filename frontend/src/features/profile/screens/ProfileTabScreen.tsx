@@ -37,7 +37,7 @@ export function ProfileTabScreen(props: ProfileTabScreenProps) {
     [props.apiBaseUrl, props.authSession, props.profileGateway],
   );
 
-  const onRequestWithdrawal =
+  const fallbackWithdrawal =
     profileGateway === undefined
       ? undefined
       : async () => {
@@ -49,13 +49,14 @@ export function ProfileTabScreen(props: ProfileTabScreenProps) {
             // onRequestLogout 내부에서 정리하도록 맡긴다.
           }
         };
+  const withdrawalHandler = props.onRequestWithdrawal ?? fallbackWithdrawal;
 
   if (props.role === 'careReceiver') {
     return (
       <CareReceiverMyPageScreen
         {...props}
         interestGateway={interestGateway}
-        onRequestWithdrawal={onRequestWithdrawal}
+        onRequestWithdrawal={withdrawalHandler}
         profileGateway={profileGateway}
       />
     );
@@ -63,7 +64,7 @@ export function ProfileTabScreen(props: ProfileTabScreenProps) {
   return (
     <MyPageScreen
       {...props}
-      onRequestWithdrawal={onRequestWithdrawal}
+      onRequestWithdrawal={withdrawalHandler}
       profileGateway={profileGateway}
     />
   );

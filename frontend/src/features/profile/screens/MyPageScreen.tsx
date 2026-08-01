@@ -40,7 +40,6 @@ import {ProfileGuideScreen} from './ProfileGuideScreen';
 export interface MyPageScreenProps extends AppScreenProps {
   // 초기 프로필 주입(테스트·연동용). 없으면 mock 프로필을 사용한다.
   initialProfile?: GuardianProfile;
-  onRequestWithdrawal?: () => Promise<void> | void;
   profileGateway?: ProfileGateway;
 }
 

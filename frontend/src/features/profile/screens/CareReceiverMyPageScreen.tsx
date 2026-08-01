@@ -35,7 +35,6 @@ export interface CareReceiverMyPageScreenProps extends AppScreenProps {
   // 초기 프로필 주입(테스트·연동용). 없으면 mock 프로필을 사용한다.
   initialProfile?: CareReceiverProfile;
   interestGateway?: InterestGateway;
-  onRequestWithdrawal?: () => Promise<void> | void;
   profileGateway?: ProfileGateway;
 }
 

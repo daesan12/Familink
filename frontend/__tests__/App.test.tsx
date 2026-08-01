@@ -24,6 +24,7 @@ import type {
   DeviceTokenProvider,
   NotificationGateway,
 } from "../src/features/notifications";
+import type { ProfileGateway } from "../src/features/profile";
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
 
@@ -193,6 +194,24 @@ function createNotificationGateway(): jest.Mocked<NotificationGateway> {
   };
 }
 
+function createProfileGateway(): jest.Mocked<ProfileGateway> {
+  return {
+    loadCurrentProfile: jest.fn().mockResolvedValue({
+      birthDate: "1990-01-01",
+      gender: "MALE",
+      loginId: "familink",
+      name: "이종철",
+      profileImageUrl: null,
+    }),
+    updateCurrentProfile: jest.fn().mockResolvedValue({
+      id: "1",
+      name: "이종철",
+      updatedAt: "2026-08-01T00:00:00Z",
+    }),
+    withdrawCurrentUser: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
 function createDeviceTokenProvider(
   permission: "granted" | "denied" | "blocked" | "unavailable" = "granted",
   token: string | null = "fcm-token"
@@ -208,7 +227,8 @@ async function renderApp(
   authSession = createAuthSessionCoordinator(),
   groupGateway = createGroupGateway(),
   notificationGateway?: jest.Mocked<NotificationGateway>,
-  deviceTokenProvider?: jest.Mocked<DeviceTokenProvider>
+  deviceTokenProvider?: jest.Mocked<DeviceTokenProvider>,
+  profileGateway?: jest.Mocked<ProfileGateway>
 ) {
   const onOpenActiveGroup = jest.fn();
   let renderer: TestRenderer.ReactTestRenderer;
@@ -222,6 +242,7 @@ async function renderApp(
         groupGateway={groupGateway}
         notificationGateway={notificationGateway}
         onOpenActiveGroup={onOpenActiveGroup}
+        profileGateway={profileGateway}
       />
     );
   });
@@ -234,6 +255,7 @@ async function renderApp(
     groupGateway,
     notificationGateway,
     deviceTokenProvider,
+    profileGateway,
     onOpenActiveGroup,
     renderer: renderer!,
   };
@@ -255,6 +277,19 @@ async function enterValidCredentials(renderer: TestRenderer.ReactTestRenderer) {
     renderer.root
       .findByProps({ accessibilityLabel: "로그인 비밀번호" })
       .props.onChangeText("familink123");
+  });
+}
+
+async function loginToSignedInWelcome(
+  renderer: TestRenderer.ReactTestRenderer
+): Promise<void> {
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+    await flushAsyncWork();
   });
 }
 
@@ -1410,6 +1445,248 @@ test("로그아웃 확인 후 로컬 세션을 지우고 A-1로 돌아온다", a
     renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })
   ).toBeTruthy();
   alertSpy.mockRestore();
+});
+
+test("회원탈퇴를 취소하면 탈퇴 API를 호출하지 않는다", async () => {
+  const profileGateway = createProfileGateway();
+  const { renderer } = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    createGroupGateway(),
+    undefined,
+    undefined,
+    profileGateway
+  );
+  await loginToSignedInWelcome(renderer);
+
+  await TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "회원탈퇴" })
+      .props.onPress();
+  });
+
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "회원탈퇴 확인",
+    })
+  ).toBeTruthy();
+  expect(
+    renderer.root.findByProps({
+      children:
+        "탈퇴하면 개인정보가 익명화되고 계정을 복구할 수 없습니다. 계속할까요?",
+    })
+  ).toBeTruthy();
+
+  await TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "회원탈퇴 취소" })
+      .props.onPress();
+  });
+
+  expect(profileGateway.withdrawCurrentUser).not.toHaveBeenCalled();
+  expect(renderer.root.findByType(SignedInWelcomeScreen)).toBeTruthy();
+  expect(
+    renderer.root.findAllByProps({ accessibilityLabel: "회원탈퇴 확인" })
+  ).toHaveLength(0);
+});
+
+test("회원탈퇴 확인을 연속 제출해도 단일 요청만 보낸다", async () => {
+  const profileGateway = createProfileGateway();
+  let resolveWithdrawal: (() => void) | undefined;
+  const withdrawalPromise = new Promise<void>(resolve => {
+    resolveWithdrawal = resolve;
+  });
+  profileGateway.withdrawCurrentUser.mockReturnValue(withdrawalPromise);
+  const { renderer } = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    createGroupGateway(),
+    undefined,
+    undefined,
+    profileGateway
+  );
+  await loginToSignedInWelcome(renderer);
+
+  await TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "회원탈퇴" })
+      .props.onPress();
+  });
+
+  const confirmButton = renderer.root.findByProps({
+    accessibilityLabel: "회원탈퇴 확인하기",
+  });
+  await TestRenderer.act(async () => {
+    confirmButton.props.onPress();
+    confirmButton.props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(profileGateway.withdrawCurrentUser).toHaveBeenCalledTimes(1);
+  resolveWithdrawal?.();
+  await TestRenderer.act(async () => {
+    await withdrawalPromise;
+    await flushAsyncWork();
+  });
+  expect(renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })).toBeTruthy();
+});
+
+test("회원탈퇴 204 성공 후 로그아웃 API 없이 로컬 상태를 지우고 시작 화면으로 이동한다", async () => {
+  const authGateway = createAuthGateway();
+  const authSession = createAuthSessionCoordinator();
+  const notificationGateway = createNotificationGateway();
+  const deviceTokenProvider = createDeviceTokenProvider("granted", "withdraw-token");
+  const profileGateway = createProfileGateway();
+  const { renderer } = await renderApp(
+    authGateway,
+    authSession,
+    createGroupGateway(),
+    notificationGateway,
+    deviceTokenProvider,
+    profileGateway
+  );
+  await loginToSignedInWelcome(renderer);
+
+  await TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "회원탈퇴" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "회원탈퇴 확인하기" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  expect(profileGateway.withdrawCurrentUser).toHaveBeenCalledTimes(1);
+  expect(authGateway.logout).not.toHaveBeenCalled();
+  expect(authSession.clearLocalSession).toHaveBeenCalledTimes(1);
+  expect(notificationGateway.deactivateDeviceToken).not.toHaveBeenCalled();
+  expect(renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })).toBeTruthy();
+});
+
+test.each([
+  [
+    "관리자 위임 필요",
+    new ApiError({
+      code: "MANAGER_TRANSFER_REQUIRED",
+      kind: "server",
+      message: "관리자 위임이 필요합니다.",
+      status: 409,
+    }),
+  ],
+  [
+    "인증 만료",
+    new ApiError({
+      code: "UNAUTHORIZED",
+      kind: "server",
+      message: "인증이 만료되었습니다.",
+      status: 401,
+    }),
+  ],
+  [
+    "네트워크 오류",
+    new ApiError({
+      code: "NETWORK_ERROR",
+      kind: "network",
+      message: "네트워크 연결을 확인해 주세요.",
+    }),
+  ],
+  [
+    "시간초과 오류",
+    new ApiError({
+      code: "API_TIMEOUT",
+      kind: "timeout",
+      message: "요청 시간이 초과되었습니다.",
+    }),
+  ],
+])(
+  "회원탈퇴 %s 시 상태를 보존하고 재시도할 수 있다",
+  async (_label, failure) => {
+    const alertSpy = jest.spyOn(Alert, "alert");
+    const authSession = createAuthSessionCoordinator();
+    const profileGateway = createProfileGateway();
+    profileGateway.withdrawCurrentUser
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce(undefined);
+    const { renderer } = await renderApp(
+      createAuthGateway(),
+      authSession,
+      createGroupGateway(),
+      undefined,
+      undefined,
+      profileGateway
+    );
+    await loginToSignedInWelcome(renderer);
+
+    await TestRenderer.act(() => {
+      renderer.root
+        .findByProps({ accessibilityLabel: "회원탈퇴" })
+        .props.onPress();
+    });
+    await TestRenderer.act(async () => {
+      renderer.root
+        .findByProps({ accessibilityLabel: "회원탈퇴 확인하기" })
+        .props.onPress();
+      await flushAsyncWork();
+    });
+
+    expect(profileGateway.withdrawCurrentUser).toHaveBeenCalledTimes(1);
+    expect(authSession.clearLocalSession).not.toHaveBeenCalled();
+    expect(renderer.root.findByType(SignedInWelcomeScreen)).toBeTruthy();
+    expect(alertSpy).toHaveBeenCalledWith(
+      "회원 탈퇴에 실패했습니다.",
+      expect.any(String)
+    );
+
+    await TestRenderer.act(async () => {
+      renderer.root
+        .findByProps({ accessibilityLabel: "회원탈퇴 확인하기" })
+        .props.onPress();
+      await flushAsyncWork();
+    });
+
+    expect(profileGateway.withdrawCurrentUser).toHaveBeenCalledTimes(2);
+    expect(renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })).toBeTruthy();
+  }
+);
+
+test("서버 탈퇴 성공 후 로컬 세션 정리가 실패해도 화면을 초기화하고 경고한다", async () => {
+  const alertSpy = jest.spyOn(Alert, "alert");
+  const authSession = createAuthSessionCoordinator();
+  authSession.clearLocalSession.mockRejectedValueOnce(
+    new Error("local storage unavailable")
+  );
+  const profileGateway = createProfileGateway();
+  const { renderer } = await renderApp(
+    createAuthGateway(),
+    authSession,
+    createGroupGateway(),
+    undefined,
+    undefined,
+    profileGateway
+  );
+  await loginToSignedInWelcome(renderer);
+
+  await TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "회원탈퇴" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "회원탈퇴 확인하기" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  expect(profileGateway.withdrawCurrentUser).toHaveBeenCalledTimes(1);
+  expect(renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })).toBeTruthy();
+  expect(alertSpy).toHaveBeenCalledWith(
+    "회원 탈퇴 완료",
+    expect.stringContaining("로컬 로그인 정보 정리")
+  );
 });
 
 test("로그인 완료 후 허용된 디바이스 토큰을 등록한다", async () => {

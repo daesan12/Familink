@@ -46,6 +46,7 @@ export interface AppScreenProps {
   onOpenNotifications?: () => void;
   onOpenPost?: (postId: string, groupId?: string) => void;
   onRequestLogout?: () => void;
+  onRequestWithdrawal?: () => Promise<void>;
   openPostId?: string | null;
   openPostRequestId?: number;
   readNotificationIds?: readonly string[];

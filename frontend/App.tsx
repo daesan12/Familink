@@ -98,7 +98,12 @@ import type {
   CareReceiverReportTarget,
   ReportGateway,
 } from "./src/features/reports";
-import { ProfileTabScreen } from "./src/features/profile";
+import {
+  createProfileGateway,
+  getProfileWithdrawErrorMessage,
+  ProfileTabScreen,
+  type ProfileGateway,
+} from "./src/features/profile";
 import { API_BASE_URL, ApiError } from "./src/shared/api";
 
 type RootRoute =
@@ -125,6 +130,7 @@ interface AppProps {
   groupMembershipGateway?: GroupMembershipGateway;
   interestGateway?: InterestGateway;
   notificationGateway?: NotificationGateway;
+  profileGateway?: ProfileGateway;
   deviceTokenProvider?: DeviceTokenProvider;
   groupStore?: CurrentGroupStore;
   groups?: readonly FamilyGroup[];
@@ -380,6 +386,14 @@ const DEFAULT_SCREENS: AppScreenRegistry = {
 
 const DEFAULT_API_BASE_URL = API_BASE_URL;
 
+function createProfileScreenRenderer(
+  profileGateway: ProfileGateway,
+): AppScreenRenderer {
+  return function ConfiguredProfileScreen(screenProps) {
+    return <ProfileTabScreen {...screenProps} profileGateway={profileGateway} />;
+  };
+}
+
 function createReportScreenRenderer(
   reportGateway: ReportGateway,
   groupMemberGateway: GroupMemberGateway,
@@ -428,6 +442,7 @@ export default function App({
   groupMembershipGateway = familyGroupMembershipGateway,
   interestGateway = familyInterestGateway,
   notificationGateway: injectedNotificationGateway,
+  profileGateway,
   deviceTokenProvider = nativeDeviceTokenProvider,
   groupStore = currentGroupStore,
   groups,
@@ -479,6 +494,12 @@ export default function App({
       createReportGateway({ authSession, baseUrl: apiBaseUrl }),
     [apiBaseUrl, authSession, reportGateway]
   );
+  const resolvedProfileGateway = useMemo(
+    () =>
+      profileGateway ??
+      createProfileGateway({ authSession, baseUrl: apiBaseUrl }),
+    [apiBaseUrl, authSession, profileGateway]
+  );
   const resolvedCarnationGateway = useMemo(
     () =>
       carnationGateway ??
@@ -502,9 +523,11 @@ export default function App({
   const deviceTokenGenerationRef = useRef(0);
   const activeDeviceTokenRef = useRef<string | null>(null);
   const deviceTokenLogoutRef = useRef(false);
+  const suppressDeviceTokenDeactivationRef = useRef(false);
   const pendingDeviceTokenRegistrationRef =
     useRef<PendingDeviceTokenRegistration | null>(null);
   const deviceTokenDeactivationRef = useRef<Promise<void> | null>(null);
+  const withdrawalInFlightRef = useRef<Promise<void> | null>(null);
   const resolvedGroups = availableGroups;
 
   const clearAuthenticationState = useCallback(() => {
@@ -616,6 +639,16 @@ export default function App({
     }
   }, [resolvedNotificationGateway]);
 
+  const cancelCurrentDeviceTokenRegistration = useCallback(async () => {
+    ++deviceTokenGenerationRef.current;
+    const pendingRegistration = pendingDeviceTokenRegistrationRef.current;
+    if (pendingRegistration !== null) {
+      pendingRegistration.deactivationRequested = true;
+    }
+
+    await pendingRegistration?.promise.catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     if (user === null || deviceTokenProvider.subscribeTokenRefresh === undefined) {
       return;
@@ -700,7 +733,10 @@ export default function App({
       invalidated = true;
       deviceTokenLogoutRef.current = true;
       authInvalidationVersionRef.current += 1;
-      void deactivateCurrentDeviceToken().catch(() => undefined);
+      const cleanup = suppressDeviceTokenDeactivationRef.current
+        ? cancelCurrentDeviceTokenRegistration()
+        : deactivateCurrentDeviceToken();
+      void cleanup.catch(() => undefined);
       if (!disposed) {
         clearAuthenticationState();
         setAuthenticationResolved(true);
@@ -754,12 +790,14 @@ export default function App({
     enterAuthenticatedState,
     initialGroupId,
     shouldRestoreSession,
+    cancelCurrentDeviceTokenRegistration,
     deactivateCurrentDeviceToken,
     registerCurrentDeviceToken,
   ]);
 
   const handleLogin = async (credentials: LoginCredentials) => {
     deviceTokenLogoutRef.current = false;
+    suppressDeviceTokenDeactivationRef.current = false;
     const invalidationVersion = authInvalidationVersionRef.current;
     const authenticatedUser = await authGateway.login(credentials);
     setLoginVisible(false);
@@ -772,6 +810,7 @@ export default function App({
 
   const handleLogout = async () => {
     deviceTokenLogoutRef.current = true;
+    suppressDeviceTokenDeactivationRef.current = false;
     let failure: unknown;
     try {
       await deactivateCurrentDeviceToken();
@@ -796,6 +835,70 @@ export default function App({
 
     if (failure !== undefined) {
       throw failure;
+    }
+  };
+
+  const handleWithdrawal = () => {
+    const existingRequest = withdrawalInFlightRef.current;
+    if (existingRequest !== null) {
+      return existingRequest;
+    }
+
+    const request = (async () => {
+      deviceTokenLogoutRef.current = true;
+      suppressDeviceTokenDeactivationRef.current = true;
+
+      try {
+        await cancelCurrentDeviceTokenRegistration();
+        await resolvedProfileGateway.withdrawCurrentUser();
+      } catch (error) {
+        deviceTokenLogoutRef.current = false;
+        suppressDeviceTokenDeactivationRef.current = false;
+        throw error;
+      }
+
+      let localCleanupFailure: unknown;
+      try {
+        await authSession.clearLocalSession();
+      } catch (error) {
+        localCleanupFailure = error;
+      }
+
+      activeDeviceTokenRef.current = null;
+      pendingDeviceTokenRegistrationRef.current = null;
+      clearAuthenticationState();
+      setAuthenticationResolved(true);
+
+      if (localCleanupFailure !== undefined) {
+        Alert.alert(
+          "회원 탈퇴 완료",
+          "계정 탈퇴는 완료되었지만 이 기기의 로컬 로그인 정보 정리가 실패했습니다. 앱을 다시 시작해 주세요.",
+        );
+      }
+    })();
+
+    withdrawalInFlightRef.current = request;
+    void request.then(
+      () => {
+        if (withdrawalInFlightRef.current === request) {
+          withdrawalInFlightRef.current = null;
+        }
+      },
+      () => {
+        if (withdrawalInFlightRef.current === request) {
+          withdrawalInFlightRef.current = null;
+        }
+      },
+    );
+    return request;
+  };
+
+  const handleSignedInWelcomeWithdrawal = async () => {
+    try {
+      await handleWithdrawal();
+    } catch (error) {
+      Alert.alert("회원 탈퇴에 실패했습니다.", getProfileWithdrawErrorMessage(error));
+      throw error;
     }
   };
 
@@ -1154,6 +1257,7 @@ export default function App({
     () =>
       screens ?? {
         ...DEFAULT_SCREENS,
+        profile: createProfileScreenRenderer(resolvedProfileGateway),
         report: createReportScreenRenderer(
           resolvedReportGateway,
           groupMemberGateway,
@@ -1163,6 +1267,7 @@ export default function App({
     [
       groupMemberGateway,
       reportTargetsByGroup,
+      resolvedProfileGateway,
       resolvedReportGateway,
       screens,
     ]
@@ -1213,13 +1318,14 @@ export default function App({
                 onJoinGroup={() => openGroupOnboarding("appShell")}
                 onCallResult={onCallResult}
                 onRequestLogout={handleLogout}
+                onRequestWithdrawal={handleWithdrawal}
                 screens={resolvedScreens}
               />
             )}
             {route === "signedInWelcome" && user !== null && (
               <SignedInWelcomeScreen
                 onLogout={handleLogout}
-                onRequestWithdrawal={() => showDeferredFeature("회원 탈퇴")}
+                onRequestWithdrawal={handleSignedInWelcomeWithdrawal}
                 onStartGroupOnboarding={() =>
                   openGroupOnboarding("signedInWelcome")
                 }
