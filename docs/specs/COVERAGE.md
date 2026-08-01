@@ -98,10 +98,10 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 원본 종류 | ID·이름 | 반영 문서 | 상태 | 비고 |
 |---|---|---|---|---|
 | IA | J-5 보호자 / 이용 가이드 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 |  |
-| IA | J-3p 피보호자 / 관심사 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 직접 입력 |
-| IA | J-4 피보호자 / 관심사 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 최종 선택 |
-| IA | J-4p 피보호자 / 관심사 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 저장 결과 |
-| IA | J-1 피보호자 / 프로필 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 |  |
+| IA | J-3p 피보호자 / 관심사 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 서버 조회 성공 후 직접 입력 |
+| IA | J-4 피보호자 / 관심사 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 조회 로딩·오류·재시도, 최종 선택 |
+| IA | J-4p 피보호자 / 관심사 선택 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 저장 실패 시 편집값 유지, 저장 결과 |
+| IA | J-1 피보호자 / 프로필 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 관심사 설정 진입·복귀 |
 | IA | I-3 보호자 / 프로필 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영·불일치 보존 | 제목은 보호자, 본문은 피보호자 편집으로 역할 표기 충돌 |
 | IA | J-2 피보호자 / 프로필 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영 | 편집 |
 | IA | I-7 피보호자 / 이용 가이드 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [UI](./UI_AND_NAVIGATION.md) | 반영·불일치 보존 | 화면 이름과 설명의 역할 표기가 어긋남 |
