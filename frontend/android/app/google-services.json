@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "245918839329",
+    "project_id": "familink-8cf3f",
+    "storage_bucket": "familink-8cf3f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:245918839329:android:18de3ad4ee0268efa2a960",
+        "android_client_info": {
+          "package_name": "com.s15p11b104app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZLw8uP0Ve1BIhT_HMBFgcXuxahN9FM6I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

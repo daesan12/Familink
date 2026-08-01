@@ -270,7 +270,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 
 | 원본 종류 | ID·이름 | 반영 문서 | 상태 | 비고 |
 |---|---|---|---|---|
-| 기술 결정 | 기술 스택 / 아키텍처 명확히 결정 | [공통](./COMMON.md), [API](./contracts/API.md), [데이터](./contracts/DATA_MODEL.md) | 반영 | AI 통화 화면만 Kotlin, 나머지 React Native, Spring Boot·PostgreSQL |
+| 기술 결정 | 기술 스택 / 아키텍처 명확히 결정 | [공통](./COMMON.md), [API](./contracts/API.md), [데이터](./contracts/DATA_MODEL.md) | 반영 | AI 통화 화면과 푸시 등록 토큰만 Kotlin, 나머지 React Native, Spring Boot·PostgreSQL |
 | 기술 결정 | AI 전화 Tool Calling 및 통화 전후 처리 | [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring 단일 백엔드·Tool과 비-Tool 주입 분리 |
 | 기술 결정 | 게시물 멀티모달 분석 방식 — A안 확정 | [피드](./domains/FEED_AND_MEDIA.md), [데이터](./contracts/DATA_MODEL.md) | 반영·확정 | 이미지·영상 `gemini-3.5-flash`; 텍스트 `gemini-2.5-flash-lite`; 저장소 MIME 사용 |
 | AI 설계 | AI 요약 리포트 생성 | [리포트](./domains/REPORTS.md), [데이터](./contracts/DATA_MODEL.md) | 반영 | 건당·일일 리포트 모두 `Gemini 3.5 Flash` |
