@@ -1,6 +1,12 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useMemo, useState} from 'react';
-import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {
@@ -13,55 +19,58 @@ import {
 } from '../profileModel';
 import {CarnationStamp} from './CarnationStamp';
 
+export type MonthlyStampLoadState =
+  | {status: 'idle'}
+  | {status: 'loading'}
+  | {message: string; status: 'error'}
+  | {status: 'empty'}
+  | {earnedDates: readonly string[]; status: 'success'};
+
 interface MonthlyStampModalProps {
   visible: boolean;
-  initialYear: number;
-  initialMonth: number;
-  // 이동 가능한 하한(가입월)·상한(현재월). 범위 밖으로는 넘어가지 않는다.
-  minYear: number;
-  minMonth: number;
+  year: number;
+  month: number;
+  minYear?: number;
+  minMonth?: number;
   maxYear: number;
   maxMonth: number;
-  postDates: readonly string[];
+  state: MonthlyStampLoadState;
   onClose: () => void;
+  onMonthChange: (year: number, month: number) => void;
+  onRetry: () => void;
 }
 
-// I-5 월간 도장. 마이페이지 위에 뜨는 오버레이. 7열 주 단위로 배열하고,
-// 기준 달은 진하게, 인접 달(이전 달 말·다음 달 초) 스필오버는 흐리게 표시한다.
-// 좌/우 화살표로 가입월~현재월 범위 안에서만 달을 이동한다.
+// I-5 월간 효자 도장 모달. 선택 월과 조회 상태를 부모가 관리하는 제어형 컴포넌트다.
+// 인접 월 날짜는 달력 정렬을 위해서만 표시하며, 조회 결과로 도장을 채우지 않는다.
 export function MonthlyStampModal({
   visible,
-  initialYear,
-  initialMonth,
+  year,
+  month,
   minYear,
   minMonth,
   maxYear,
   maxMonth,
-  postDates,
+  state,
   onClose,
+  onMonthChange,
+  onRetry,
 }: MonthlyStampModalProps) {
-  const [cursor, setCursor] = useState({year: initialYear, month: initialMonth});
-  // 모달을 닫았다 다시 열면 기준 월로 되돌린다(이전에 넘겨 본 달이 남지 않게).
-  const [wasVisible, setWasVisible] = useState(visible);
-  if (visible !== wasVisible) {
-    setWasVisible(visible);
-    if (visible) {
-      setCursor({year: initialYear, month: initialMonth});
-    }
-  }
-
-  const postDateSet = useMemo(() => new Set(postDates), [postDates]);
-  const weeks = useMemo(
-    () => chunkIntoWeeks(buildMonthGrid(cursor.year, cursor.month, postDateSet)),
-    [cursor, postDateSet],
-  );
-
-  const cursorOrdinal = monthOrdinal(cursor.year, cursor.month);
-  const canGoPrev = cursorOrdinal > monthOrdinal(minYear, minMonth);
+  const cursorOrdinal = monthOrdinal(year, month);
+  const canGoPrev =
+    minYear === undefined || minMonth === undefined
+      ? true
+      : cursorOrdinal > monthOrdinal(minYear, minMonth);
   const canGoNext = cursorOrdinal < monthOrdinal(maxYear, maxMonth);
+  const earnedDates = state.status === 'success' ? state.earnedDates : [];
+  const monthPrefix = `${year}-${String(month).padStart(2, '0')}-`;
+  const postDateSet = new Set(
+    earnedDates.filter(date => date.startsWith(monthPrefix)),
+  );
+  const weeks = chunkIntoWeeks(buildMonthGrid(year, month, postDateSet));
 
   const goMonth = (delta: number) => {
-    setCursor(current => shiftMonth(current.year, current.month, delta));
+    const next = shiftMonth(year, month, delta);
+    onMonthChange(next.year, next.month);
   };
 
   return (
@@ -73,12 +82,11 @@ export function MonthlyStampModal({
     >
       {visible ? (
         <Pressable
-          accessibilityLabel="월간 도장 닫기"
+          accessibilityLabel="월간 효자 도장 닫기"
           accessibilityRole="button"
           onPress={onClose}
           style={styles.backdrop}
         >
-          {/* 카드 내부 터치가 배경 닫기로 전파되지 않도록 별도 Pressable로 감싼다. */}
           <Pressable
             accessibilityViewIsModal
             accessible={false}
@@ -101,9 +109,7 @@ export function MonthlyStampModal({
                   size={24}
                 />
               </Pressable>
-              <Text style={styles.title}>
-                {formatMonthTitle(cursor.year, cursor.month)}
-              </Text>
+              <Text style={styles.title}>{formatMonthTitle(year, month)}</Text>
               <Pressable
                 accessibilityLabel="다음 달"
                 accessibilityRole="button"
@@ -121,29 +127,60 @@ export function MonthlyStampModal({
               </Pressable>
             </View>
 
-            <View style={styles.weekdayRow}>
-              {WEEKDAY_LABELS.map(label => (
-                <Text key={label} style={styles.weekdayLabel}>
-                  {label}
-                </Text>
-              ))}
-            </View>
+            {state.status === 'idle' || state.status === 'loading' ? (
+              <View
+                accessibilityLabel="월간 카네이션 불러오는 중"
+                style={styles.statusBlock}
+              >
+                <ActivityIndicator color={COLORS.purple} size="large" />
+              </View>
+            ) : state.status === 'error' ? (
+              <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
+                <Text style={styles.errorText}>{state.message}</Text>
+                <Pressable
+                  accessibilityLabel="월간 카네이션 다시 시도"
+                  accessibilityRole="button"
+                  onPress={onRetry}
+                  style={styles.retryButton}
+                >
+                  <MaterialDesignIcons
+                    color={COLORS.text}
+                    name="refresh"
+                    size={18}
+                  />
+                  <Text style={styles.retryText}>다시 시도</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                {state.status === 'empty' ? (
+                  <Text style={styles.emptyText}>이번 달에는 기록이 없어요.</Text>
+                ) : null}
+                <View style={styles.weekdayRow}>
+                  {WEEKDAY_LABELS.map(label => (
+                    <Text key={label} style={styles.weekdayLabel}>
+                      {label}
+                    </Text>
+                  ))}
+                </View>
 
-            <View style={styles.grid}>
-              {weeks.map((week, weekIndex) => (
-                <View key={`week-${weekIndex}`} style={styles.weekRow}>
-                  {week.map(cell => (
-                    <View key={cell.iso} style={styles.cell}>
-                      <CarnationStamp
-                        dimmed={!cell.inMonth}
-                        filled={cell.filled}
-                        size={38}
-                      />
+                <View style={styles.grid}>
+                  {weeks.map((week, weekIndex) => (
+                    <View key={`week-${weekIndex}`} style={styles.weekRow}>
+                      {week.map(cell => (
+                        <View key={cell.iso} style={styles.cell}>
+                          <CarnationStamp
+                            dimmed={!cell.inMonth}
+                            filled={cell.filled}
+                            size={38}
+                          />
+                        </View>
+                      ))}
                     </View>
                   ))}
                 </View>
-              ))}
-            </View>
+              </>
+            )}
           </Pressable>
         </Pressable>
       ) : null}
@@ -171,6 +208,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
+  emptyText: {
+    color: COLORS.textSubtle,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  errorText: {
+    color: COLORS.textMuted,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
   grid: {
     gap: 10,
   },
@@ -189,6 +237,28 @@ const styles = StyleSheet.create({
   },
   navButtonDisabled: {
     opacity: 0.4,
+  },
+  retryButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.divider,
+    borderCurve: 'continuous',
+    borderRadius: RADII.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 48,
+    paddingHorizontal: 18,
+  },
+  retryText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  statusBlock: {
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 32,
   },
   title: {
     color: COLORS.textStrong,

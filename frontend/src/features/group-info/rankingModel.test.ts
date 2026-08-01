@@ -1,7 +1,9 @@
 import {
   avatarInitial,
   formatWeekRange,
+  getCurrentMonthRange,
   getCurrentWeekRange,
+  getMonthRange,
   rankEntries,
 } from './rankingModel';
 import type {WeeklyRankingEntry} from './types';
@@ -23,6 +25,26 @@ describe('getCurrentWeekRange', () => {
     expect(getCurrentWeekRange(new Date(2026, 7, 2))).toEqual({
       weekStart: '2026-07-27',
       weekEnd: '2026-08-02',
+    });
+  });
+});
+
+describe('getCurrentMonthRange', () => {
+  test('KST 날짜가 월 경계에 걸려도 KST 현재 월의 1일과 말일을 돌려준다', () => {
+    expect(getCurrentMonthRange(new Date('2026-07-31T15:30:00.000Z'))).toEqual({
+      endDate: '2026-08-31',
+      month: 8,
+      startDate: '2026-08-01',
+      year: 2026,
+    });
+  });
+
+  test('윤년 2월의 마지막 날짜를 계산한다', () => {
+    expect(getMonthRange(2028, 2)).toEqual({
+      endDate: '2028-02-29',
+      month: 2,
+      startDate: '2028-02-01',
+      year: 2028,
     });
   });
 });

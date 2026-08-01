@@ -388,9 +388,16 @@ const DEFAULT_API_BASE_URL = API_BASE_URL;
 
 function createProfileScreenRenderer(
   profileGateway: ProfileGateway,
+  carnationGateway: CarnationGateway,
 ): AppScreenRenderer {
   return function ConfiguredProfileScreen(screenProps) {
-    return <ProfileTabScreen {...screenProps} profileGateway={profileGateway} />;
+    return (
+      <ProfileTabScreen
+        {...screenProps}
+        carnationGateway={carnationGateway}
+        profileGateway={profileGateway}
+      />
+    );
   };
 }
 
@@ -1257,7 +1264,10 @@ export default function App({
     () =>
       screens ?? {
         ...DEFAULT_SCREENS,
-        profile: createProfileScreenRenderer(resolvedProfileGateway),
+        profile: createProfileScreenRenderer(
+          resolvedProfileGateway,
+          resolvedCarnationGateway,
+        ),
         report: createReportScreenRenderer(
           resolvedReportGateway,
           groupMemberGateway,
@@ -1269,6 +1279,7 @@ export default function App({
       reportTargetsByGroup,
       resolvedProfileGateway,
       resolvedReportGateway,
+      resolvedCarnationGateway,
       screens,
     ]
   );

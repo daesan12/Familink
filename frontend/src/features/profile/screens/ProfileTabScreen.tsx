@@ -2,11 +2,13 @@ import {useMemo} from 'react';
 
 import type {AppScreenProps} from '../../../app-shell';
 import {createInterestGateway, type InterestGateway} from '../../auth';
+import type {CarnationGateway} from '../../group-info';
 import {createProfileGateway, type ProfileGateway} from '../api/profileApi';
 import {CareReceiverMyPageScreen} from './CareReceiverMyPageScreen';
 import {MyPageScreen} from './MyPageScreen';
 
 interface ProfileTabScreenProps extends AppScreenProps {
+  carnationGateway?: CarnationGateway;
   interestGateway?: InterestGateway;
   profileGateway?: ProfileGateway;
 }
@@ -64,6 +66,7 @@ export function ProfileTabScreen(props: ProfileTabScreenProps) {
   return (
     <MyPageScreen
       {...props}
+      carnationGateway={props.carnationGateway}
       onRequestWithdrawal={withdrawalHandler}
       profileGateway={profileGateway}
     />
