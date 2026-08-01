@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -12,18 +12,67 @@ import MaterialDesignIcons from "@react-native-vector-icons/material-design-icon
 import { AUTH_COLORS } from "../theme";
 import { AnimatedPressable } from "./AnimatedPressable";
 
-interface LogoutConfirmationModalProps {
+export type AccountAction = "logout" | "withdrawal";
+
+interface AccountActionConfirmationModalProps {
+  action?: AccountAction;
   onCancel: () => void;
   onConfirm: () => Promise<void>;
   visible: boolean;
 }
 
-export function LogoutConfirmationModal({
+const ACTION_COPY: Record<
+  AccountAction,
+  {
+    cancelLabel: string;
+    confirmButtonLabel: string;
+    confirmText: string;
+    dialogLabel: string;
+    message: string;
+    title: string;
+    closeLabel: string;
+  }
+> = {
+  logout: {
+    cancelLabel: "로그아웃 취소",
+    closeLabel: "로그아웃 창 닫기",
+    confirmButtonLabel: "로그아웃 확인하기",
+    confirmText: "로그아웃",
+    dialogLabel: "로그아웃 확인",
+    message: "이 계정에서 로그아웃할까요?",
+    title: "잠시만요",
+  },
+  withdrawal: {
+    cancelLabel: "회원탈퇴 취소",
+    closeLabel: "회원탈퇴 창 닫기",
+    confirmButtonLabel: "회원탈퇴 확인하기",
+    confirmText: "회원탈퇴",
+    dialogLabel: "회원탈퇴 확인",
+    message: "탈퇴하면 개인정보가 익명화되고 계정을 복구할 수 없습니다. 계속할까요?",
+    title: "정말 탈퇴하시겠어요?",
+  },
+};
+
+export function AccountActionConfirmationModal({
+  action = "logout",
   onCancel,
   onConfirm,
   visible,
-}: LogoutConfirmationModalProps) {
+}: AccountActionConfirmationModalProps) {
   const [submitting, setSubmitting] = useState(false);
+  const copy = ACTION_COPY[action];
+
+  useEffect(() => {
+    if (!visible) {
+      setSubmitting(false);
+    }
+  }, [visible]);
+
+  const handleCancel = () => {
+    if (!submitting) {
+      onCancel();
+    }
+  };
 
   const handleConfirm = () => {
     if (submitting) {
@@ -37,7 +86,7 @@ export function LogoutConfirmationModal({
   return (
     <Modal
       animationType="fade"
-      onRequestClose={onCancel}
+      onRequestClose={handleCancel}
       statusBarTranslucent
       transparent
       visible={visible}
@@ -46,21 +95,21 @@ export function LogoutConfirmationModal({
         <Pressable
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
-          onPress={onCancel}
+          onPress={handleCancel}
           style={StyleSheet.absoluteFill}
         />
 
         <View
-          accessibilityLabel="로그아웃 확인"
+          accessibilityLabel={copy.dialogLabel}
           accessibilityViewIsModal
           style={styles.card}
         >
           <AnimatedPressable
-            accessibilityLabel="로그아웃 창 닫기"
+            accessibilityLabel={copy.closeLabel}
             accessibilityRole="button"
             containerStyle={styles.closeButton}
             hitSlop={10}
-            onPress={onCancel}
+            onPress={handleCancel}
           >
             <MaterialDesignIcons
               color={AUTH_COLORS.muted}
@@ -69,16 +118,16 @@ export function LogoutConfirmationModal({
             />
           </AnimatedPressable>
 
-          <Text style={styles.title}>잠시만요</Text>
-          <Text style={styles.message}>이 계정에서 로그아웃할까요?</Text>
+          <Text style={styles.title}>{copy.title}</Text>
+          <Text style={styles.message}>{copy.message}</Text>
 
           <View style={styles.actions}>
             <AnimatedPressable
-              accessibilityLabel="로그아웃 취소"
+              accessibilityLabel={copy.cancelLabel}
               accessibilityRole="button"
               containerStyle={styles.actionContainer}
               disabled={submitting}
-              onPress={onCancel}
+              onPress={handleCancel}
             >
               <View style={[styles.action, styles.cancelAction]}>
                 <Text style={styles.cancelLabel}>취소</Text>
@@ -86,7 +135,7 @@ export function LogoutConfirmationModal({
             </AnimatedPressable>
 
             <AnimatedPressable
-              accessibilityLabel="로그아웃 확인하기"
+              accessibilityLabel={copy.confirmButtonLabel}
               accessibilityRole="button"
               accessibilityState={{ busy: submitting }}
               containerStyle={styles.actionContainer}
@@ -97,7 +146,7 @@ export function LogoutConfirmationModal({
                 {submitting ? (
                   <ActivityIndicator color={AUTH_COLORS.primaryDeep} />
                 ) : (
-                  <Text style={styles.confirmLabel}>로그아웃</Text>
+                  <Text style={styles.confirmLabel}>{copy.confirmText}</Text>
                 )}
               </View>
             </AnimatedPressable>
@@ -107,6 +156,9 @@ export function LogoutConfirmationModal({
     </Modal>
   );
 }
+
+// 기존 import 호환성을 유지하면서 계정 작업 전반에서 재사용한다.
+export const LogoutConfirmationModal = AccountActionConfirmationModal;
 
 const styles = StyleSheet.create({
   modal: {
