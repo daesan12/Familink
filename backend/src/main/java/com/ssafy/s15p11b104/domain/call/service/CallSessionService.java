@@ -147,9 +147,9 @@ public class CallSessionService {
 
 	private PreparedCall prepareCall(CallActor actor, PersonaDefinition persona) {
 		GroupMember careReceiver = groupMemberRepository.findActiveForUpdate(actor.careReceiverMemberId())
-			.orElseThrow(() -> CallApiException.unauthorized("활성 피보호자 정보를 찾을 수 없습니다."));
+			.orElseThrow(() -> CallApiException.forbidden("활성 피보호자 정보를 찾을 수 없습니다."));
 		if (careReceiver.getRole() != GroupRole.CARE_RECEIVER) {
-			throw CallApiException.unauthorized("AI 전화는 피보호자만 사용할 수 있습니다.");
+			throw CallApiException.forbidden("AI 전화는 피보호자만 사용할 수 있습니다.");
 		}
 		if (callSessionRepository.existsByCareReceiverMemberIdAndStatusIn(careReceiver.getId(), ACTIVE_STATUSES)) {
 			throw CallApiException.activeCallExists();
