@@ -203,6 +203,9 @@ function createProfileGateway(): jest.Mocked<ProfileGateway> {
       name: "이종철",
       profileImageUrl: null,
     }),
+    uploadProfileImage: jest
+      .fn()
+      .mockResolvedValue('https://cdn.example.com/profile.webp'),
     updateCurrentProfile: jest.fn().mockResolvedValue({
       id: "1",
       name: "이종철",

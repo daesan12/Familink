@@ -1,6 +1,7 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useState, type ReactNode} from 'react';
+import {useRef, useState, type ReactNode} from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Pressable,
@@ -10,25 +11,31 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import {launchImageLibrary} from 'react-native-image-picker';
 
 import {DatePickerSheet} from '../../auth';
 import {COLORS, RADII} from '../../../design/tokens';
-import {getProfileWithdrawErrorMessage} from '../api/profileApi';
+import {
+  getProfileSaveErrorMessage,
+  getProfileWithdrawErrorMessage,
+} from '../api/profileApi';
 import {
   formatDisplayDate,
   formatGenderLabel,
   GENDER_OPTIONS,
   parseDisplayDate,
+  parsePickedProfileImage,
+  type ProfileImageValidationError,
   toIsoDate,
 } from '../profileModel';
-import type {BaseProfile, Gender} from '../types';
+import type {BaseProfile, Gender, ProfileImageChange} from '../types';
 
 const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
 
 interface ProfileEditScreenProps<T extends BaseProfile> {
   profile: T;
   onBack: () => void;
-  onSave: (profile: T) => void;
+  onSave: (profile: T, imageChange: ProfileImageChange) => Promise<void>;
   onWithdraw?: () => Promise<void> | void;
 }
 
@@ -40,7 +47,6 @@ function toIsoValue(display: string): string {
 
 // I-2·J-2 프로필 편집. 성별 드롭다운(I-3), 생년월일 스크롤 휠 선택기(회원가입과 동일)를 포함한다.
 // 이름·성별·생년월일만 편집하고 역할별 추가 필드(랭킹·관심사 등)는 그대로 보존한다.
-// 저장은 목업(로컬 상태 반영) 수준이다.
 export function ProfileEditScreen<T extends BaseProfile>({
   profile,
   onBack,
@@ -50,17 +56,98 @@ export function ProfileEditScreen<T extends BaseProfile>({
   const [name, setName] = useState(profile.name);
   const [gender, setGender] = useState<Gender>(profile.gender);
   const [birthDate, setBirthDate] = useState(profile.birthDate);
+  const [imageChange, setImageChange] = useState<ProfileImageChange>({
+    type: 'unchanged',
+  });
   const [isGenderOpen, setIsGenderOpen] = useState(false);
   const [isDateOpen, setIsDateOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
-  const handleSave = () => {
-    onSave({
+  const previewImageUrl =
+    imageChange.type === 'replace'
+      ? imageChange.asset.uri
+      : imageChange.type === 'remove'
+        ? null
+        : profile.profileImageUrl;
+
+  const handleSave = async () => {
+    if (savingRef.current) {
+      return;
+    }
+
+    savingRef.current = true;
+    setIsGenderOpen(false);
+    setIsDateOpen(false);
+    setIsSaving(true);
+    const nextProfile = {
       ...profile,
       name: name.trim() === '' ? profile.name : name.trim(),
       gender,
       birthDate,
-    });
-    onBack();
+      profileImageUrl: previewImageUrl,
+    };
+
+    try {
+      await onSave(nextProfile, imageChange);
+      onBack();
+    } catch (error) {
+      savingRef.current = false;
+      setIsSaving(false);
+      Alert.alert(
+        '프로필 수정에 실패했어요.',
+        getProfileSaveErrorMessage(error),
+      );
+    }
+  };
+
+  const handlePickProfileImage = async () => {
+    if (savingRef.current) {
+      return;
+    }
+
+    try {
+      const result = await launchImageLibrary({
+        mediaType: 'photo',
+        restrictMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+        selectionLimit: 1,
+      });
+      if (result.errorCode !== undefined) {
+        Alert.alert(
+          '프로필 사진을 선택할 수 없어요.',
+          result.errorCode === 'permission'
+            ? '사진 접근 권한을 확인한 뒤 다시 시도해 주세요.'
+            : result.errorMessage ?? '잠시 후 다시 시도해 주세요.',
+        );
+        return;
+      }
+      if (result.didCancel) {
+        return;
+      }
+
+      const pickedAsset = result.assets?.[0];
+      if (pickedAsset === undefined) {
+        Alert.alert(
+          '프로필 사진을 사용할 수 없어요.',
+          getProfileImageValidationMessage('metadata'),
+        );
+        return;
+      }
+      const parsed = parsePickedProfileImage(pickedAsset);
+      if (parsed.error !== null) {
+        Alert.alert(
+          '프로필 사진을 사용할 수 없어요.',
+          getProfileImageValidationMessage(parsed.error),
+        );
+        return;
+      }
+      setImageChange({asset: parsed.asset, type: 'replace'});
+    } catch {
+      Alert.alert(
+        '프로필 사진을 선택할 수 없어요.',
+        '잠시 후 다시 시도해 주세요.',
+      );
+    }
   };
 
   const handleOpenDate = () => {
@@ -87,6 +174,8 @@ export function ProfileEditScreen<T extends BaseProfile>({
         <Pressable
           accessibilityLabel="뒤로 가기"
           accessibilityRole="button"
+          accessibilityState={{disabled: isSaving}}
+          disabled={isSaving}
           hitSlop={8}
           onPress={onBack}
           style={styles.headerButton}
@@ -101,15 +190,21 @@ export function ProfileEditScreen<T extends BaseProfile>({
         <Pressable
           accessibilityLabel="프로필 저장"
           accessibilityRole="button"
+          accessibilityState={{disabled: isSaving}}
+          disabled={isSaving}
           hitSlop={8}
           onPress={handleSave}
           style={styles.headerButton}
         >
-          <MaterialDesignIcons
-            color={COLORS.purpleDeep}
-            name="check"
-            size={20}
-          />
+          {isSaving ? (
+            <ActivityIndicator color={COLORS.purpleDeep} size="small" />
+          ) : (
+            <MaterialDesignIcons
+              color={COLORS.purpleDeep}
+              name="check"
+              size={20}
+            />
+          )}
         </Pressable>
       </View>
 
@@ -118,31 +213,55 @@ export function ProfileEditScreen<T extends BaseProfile>({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
-          accessibilityLabel="프로필 이미지 변경"
-          accessibilityRole="button"
-          onPress={() =>
-            Alert.alert(
-              '프로필 이미지 변경',
-              '후속 작업에서 연결될 기능입니다.',
-            )
-          }
-          style={styles.avatarWrap}
-        >
-          <Image
-            accessibilityIgnoresInvertColors
-            source={
-              profile.profileImageUrl
-                ? {uri: profile.profileImageUrl}
-                : PROFILE_PLACEHOLDER
-            }
-            style={styles.avatar}
-          />
-        </Pressable>
+        <View style={styles.avatarWrap}>
+          <Pressable
+            accessibilityLabel="프로필 이미지 변경"
+            accessibilityRole="button"
+            accessibilityState={{disabled: isSaving}}
+            disabled={isSaving}
+            onPress={handlePickProfileImage}
+            style={styles.avatarButton}
+          >
+            <Image
+              accessibilityIgnoresInvertColors
+              resizeMode="cover"
+              source={
+                previewImageUrl
+                  ? {uri: previewImageUrl}
+                  : PROFILE_PLACEHOLDER
+              }
+              style={styles.avatar}
+            />
+          </Pressable>
+          {previewImageUrl ? (
+            <Pressable
+              accessibilityLabel="프로필 이미지 제거"
+              accessibilityRole="button"
+              accessibilityState={{disabled: isSaving}}
+              disabled={isSaving}
+              hitSlop={8}
+              onPress={() =>
+                setImageChange(
+                  profile.profileImageUrl
+                    ? {type: 'remove'}
+                    : {type: 'unchanged'},
+                )
+              }
+              style={styles.avatarRemoveButton}
+            >
+              <MaterialDesignIcons
+                color={COLORS.background}
+                name="close"
+                size={18}
+              />
+            </Pressable>
+          ) : null}
+        </View>
 
         <Field label="이름">
           <TextInput
             accessibilityLabel="이름 입력"
+            editable={!isSaving}
             onChangeText={setName}
             placeholder="이름"
             placeholderTextColor={COLORS.textSubtle}
@@ -162,6 +281,8 @@ export function ProfileEditScreen<T extends BaseProfile>({
           <Pressable
             accessibilityLabel="생년월일 선택"
             accessibilityRole="button"
+            accessibilityState={{disabled: isSaving}}
+            disabled={isSaving}
             onPress={handleOpenDate}
             style={styles.fieldBox}
           >
@@ -178,6 +299,8 @@ export function ProfileEditScreen<T extends BaseProfile>({
           <Pressable
             accessibilityLabel="성별 선택"
             accessibilityRole="button"
+            accessibilityState={{disabled: isSaving}}
+            disabled={isSaving}
             onPress={toggleGender}
             style={[styles.fieldBox, isGenderOpen && styles.fieldBoxActive]}
           >
@@ -235,6 +358,8 @@ export function ProfileEditScreen<T extends BaseProfile>({
         <Pressable
           accessibilityLabel="회원 탈퇴"
           accessibilityRole="button"
+          accessibilityState={{disabled: isSaving}}
+          disabled={isSaving}
           hitSlop={8}
           onPress={() => {
             if (onWithdraw === undefined) {
@@ -271,10 +396,23 @@ export function ProfileEditScreen<T extends BaseProfile>({
         onCancel={() => setIsDateOpen(false)}
         onConfirm={handleConfirmDate}
         value={toIsoValue(birthDate)}
-        visible={isDateOpen}
+        visible={isDateOpen && !isSaving}
       />
     </View>
   );
+}
+
+function getProfileImageValidationMessage(
+  error: ProfileImageValidationError,
+): string {
+  switch (error) {
+    case 'size':
+      return '사진은 10MB 이하만 선택할 수 있어요.';
+    case 'type':
+      return 'JPEG, PNG, WebP 사진만 선택할 수 있어요.';
+    case 'metadata':
+      return '사진 정보를 확인할 수 없어요. 다른 사진을 선택해 주세요.';
+  }
 }
 
 function Field({label, children}: {label: string; children: ReactNode}) {
@@ -294,11 +432,26 @@ const styles = StyleSheet.create({
     height: 110,
     width: 110,
   },
+  avatarButton: {
+    borderRadius: RADII.pill,
+  },
+  avatarRemoveButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.imageOverlay,
+    borderRadius: RADII.pill,
+    height: 30,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    width: 30,
+  },
   avatarWrap: {
     alignItems: 'center',
     alignSelf: 'center',
     marginBottom: 8,
     marginTop: 8,
+    position: 'relative',
   },
   content: {
     paddingBottom: 40,

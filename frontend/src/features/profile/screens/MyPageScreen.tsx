@@ -38,7 +38,7 @@ import {
   toApiProfileUpdate,
 } from '../profileModel';
 import type {ProfileGateway} from '../api/profileApi';
-import type {GuardianProfile} from '../types';
+import type {GuardianProfile, ProfileImageChange} from '../types';
 import {ProfileEditScreen} from './ProfileEditScreen';
 import {ProfileGuideScreen} from './ProfileGuideScreen';
 
@@ -320,20 +320,31 @@ export function MyPageScreen({
     selectedMonth.year,
   ]);
 
-  const handleProfileSave = (nextProfile: GuardianProfile) => {
-    setProfile(nextProfile);
+  const handleProfileSave = async (
+    nextProfile: GuardianProfile,
+    imageChange: ProfileImageChange,
+  ) => {
     if (profileGateway === undefined) {
+      setProfile(nextProfile);
       return;
     }
 
-    profileGateway
-      .updateCurrentProfile(toApiProfileUpdate(nextProfile))
-      .catch(() => {
-        Alert.alert(
-          '프로필 수정에 실패했어요.',
-          '입력 값을 확인하고 다시 시도해 주세요.',
-        );
-      });
+    const profileImageUrl =
+      imageChange.type === 'replace'
+        ? await profileGateway.uploadProfileImage(imageChange.asset)
+        : imageChange.type === 'remove'
+          ? null
+          : undefined;
+    await profileGateway.updateCurrentProfile(
+      toApiProfileUpdate(nextProfile, profileImageUrl),
+    );
+    setProfile({
+      ...nextProfile,
+      profileImageUrl:
+        profileImageUrl === undefined
+          ? nextProfile.profileImageUrl
+          : profileImageUrl,
+    });
   };
 
   const handleLogout = () => {

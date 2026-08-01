@@ -2,7 +2,11 @@ import React from 'react';
 import {Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
+import type {ProfileGateway} from '../api/profileApi';
+import {MyPageProfileCard} from '../components/MyPageProfileCard';
+import {CARE_RECEIVER_PROFILE} from '../fixtures/profileFixtures';
 import {CareReceiverMyPageScreen} from './CareReceiverMyPageScreen';
+import {ProfileEditScreen} from './ProfileEditScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
 // 알림 공개 진입점을 통해 NotificationsScreen이 함께 로드되므로 lucide 아이콘을 mock 처리한다.
@@ -10,6 +14,9 @@ jest.mock('lucide-react-native/icons/bell-off', () => 'BellOff');
 jest.mock('lucide-react-native/icons/check', () => 'Check');
 jest.mock('lucide-react-native/icons/chevron-left', () => 'ChevronLeft');
 jest.mock('lucide-react-native/icons/x', () => 'X');
+jest.mock('react-native-image-picker', () => ({
+  launchImageLibrary: jest.fn(),
+}));
 // auth 공개 진입점(생년월일 선택기·관심사 화면)은 스텁으로 대체한다.
 jest.mock('../../auth', () => {
   const ReactModule = require('react');
@@ -157,6 +164,53 @@ test('로그아웃을 누르면 onRequestLogout을 호출한다', () => {
     renderer.root.findByProps({accessibilityLabel: '로그아웃'}).props.onPress();
   });
   expect(onRequestLogout).toHaveBeenCalledTimes(1);
+});
+
+test('프로필 이미지 제거는 null로 저장하고 성공한 뒤에만 부모 상태를 갱신한다', async () => {
+  const updateCurrentProfile = jest.fn().mockResolvedValue({
+    id: '2',
+    name: CARE_RECEIVER_PROFILE.name,
+    updatedAt: '2026-08-01T00:00:00Z',
+  });
+  const profileGateway: ProfileGateway = {
+    loadCurrentProfile: jest.fn().mockResolvedValue({
+      birthDate: '1959-05-20',
+      gender: 'male',
+      loginId: CARE_RECEIVER_PROFILE.loginId,
+      name: CARE_RECEIVER_PROFILE.name,
+      profileImageUrl: 'https://cdn.example.com/old.webp',
+    }),
+    updateCurrentProfile,
+    uploadProfileImage: jest.fn(),
+    withdrawCurrentUser: jest.fn(),
+  };
+  const renderer = render({profileGateway});
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '프로필 편집'})
+      .props.onPress();
+  });
+  const editScreen = renderer.root.findByType(ProfileEditScreen);
+
+  await TestRenderer.act(async () => {
+    await editScreen.props.onSave(
+      {...CARE_RECEIVER_PROFILE, profileImageUrl: null},
+      {type: 'remove'},
+    );
+    editScreen.props.onBack();
+  });
+
+  expect(profileGateway.uploadProfileImage).not.toHaveBeenCalled();
+  expect(updateCurrentProfile).toHaveBeenCalledWith(
+    expect.objectContaining({profileImageUrl: null}),
+  );
+  expect(renderer.root.findByType(MyPageProfileCard).props).toMatchObject({
+    profileImageUrl: null,
+  });
 });
 
 test('서버 조회가 끝날 때까지 편집 화면을 표시하지 않는다', async () => {

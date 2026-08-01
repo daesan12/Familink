@@ -7,9 +7,75 @@ import {
   formatMonthTitle,
   monthOrdinal,
   parseDisplayDate,
+  parsePickedProfileImage,
   shiftMonth,
+  toApiProfileUpdate,
   toIsoDate,
 } from './profileModel';
+
+test('프로필 이미지 메타데이터를 업로드 계약으로 정규화한다', () => {
+  expect(
+    parsePickedProfileImage({
+      fileName: 'profile.jpg',
+      fileSize: 1024,
+      type: 'IMAGE/JPEG; charset=binary',
+      uri: 'content://profile',
+    }),
+  ).toEqual({
+    asset: {
+      contentType: 'image/jpeg',
+      fileName: 'profile.jpg',
+      sizeBytes: 1024,
+      uri: 'content://profile',
+    },
+    error: null,
+  });
+});
+
+test('프로필 이미지는 허용 MIME과 10 MiB 제한을 검증한다', () => {
+  expect(
+    parsePickedProfileImage({
+      fileName: 'profile.gif',
+      fileSize: 1024,
+      type: 'image/gif',
+      uri: 'content://profile',
+    }),
+  ).toEqual({asset: null, error: 'type'});
+  expect(
+    parsePickedProfileImage({
+      fileName: 'profile.jpg',
+      fileSize: 10 * 1024 * 1024 + 1,
+      type: 'image/jpeg',
+      uri: 'content://profile',
+    }),
+  ).toEqual({asset: null, error: 'size'});
+  expect(
+    parsePickedProfileImage({
+      fileName: undefined,
+      fileSize: 1024,
+      type: 'image/jpeg',
+      uri: 'content://profile',
+    }),
+  ).toEqual({asset: null, error: 'metadata'});
+});
+
+test('프로필 이미지 변경이 없으면 PATCH에서 이미지 필드를 생략한다', () => {
+  const profile = {
+    birthDate: '1995.03.17',
+    gender: 'male' as const,
+    name: '홍길동',
+  };
+
+  expect(toApiProfileUpdate(profile)).not.toHaveProperty('profileImageUrl');
+  expect(toApiProfileUpdate(profile, null)).toHaveProperty(
+    'profileImageUrl',
+    null,
+  );
+  expect(toApiProfileUpdate(profile, 'https://cdn.example.com/profile.jpg')).toHaveProperty(
+    'profileImageUrl',
+    'https://cdn.example.com/profile.jpg',
+  );
+});
 
 test('calculates profile age using the Asia/Seoul business date', () => {
   const birthDate = '2000-07-31';

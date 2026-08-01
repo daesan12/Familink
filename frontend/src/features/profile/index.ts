@@ -1,11 +1,13 @@
 export {ProfileTabScreen} from './screens/ProfileTabScreen';
 export {
   createProfileGateway,
+  getProfileSaveErrorMessage,
   getProfileWithdrawErrorMessage,
   profileGateway,
   type ProfileGateway,
   type ProfileGatewayOptions,
   type ProfileHttpClient,
+  type ProfileUploadTransport,
   type ProfileUpdateInput,
   type ProfileUpdateResult,
   type UserProfile,
@@ -25,4 +27,6 @@ export type {
   CareReceiverProfile,
   Gender,
   GuardianProfile,
+  ProfileImageAsset,
+  ProfileImageChange,
 } from './types';

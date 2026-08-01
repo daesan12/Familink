@@ -1,5 +1,17 @@
 export type Gender = 'male' | 'female';
 
+export interface ProfileImageAsset {
+  contentType: string;
+  fileName: string;
+  sizeBytes: number;
+  uri: string;
+}
+
+export type ProfileImageChange =
+  | {type: 'unchanged'}
+  | {type: 'remove'}
+  | {asset: ProfileImageAsset; type: 'replace'};
+
 // 마이페이지·프로필 편집에서 두 역할이 공통으로 다루는 본인 프로필 필드.
 // 필드명은 ACCOUNT_AND_PROFILE 계약을 따르며 API 연동 전이라 mock 값으로 채운다.
 export interface BaseProfile {
