@@ -31,6 +31,7 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 async function renderScreen(overrides: {
+  getSaveErrorMessage?: (error: unknown) => string;
   initialInterests?: readonly string[];
   onComplete?: jest.Mock;
   onSave?: jest.Mock;
@@ -44,6 +45,7 @@ async function renderScreen(overrides: {
   await TestRenderer.act(() => {
     renderer = TestRenderer.create(
       <InterestSelectionScreen
+        getSaveErrorMessage={overrides.getSaveErrorMessage}
         initialInterests={overrides.initialInterests}
         onBack={jest.fn()}
         onComplete={onComplete}
@@ -216,3 +218,71 @@ test('건너뛰기를 누르면 저장 없이 피드 이동을 요청한다', as
   expect(onSkip).toHaveBeenCalledTimes(1);
   expect(onSave).not.toHaveBeenCalled();
 });
+
+test('저장 실패 문구를 매핑하고 선택값을 유지한 채 재시도한다', async () => {
+  const onSave = jest
+    .fn()
+    .mockRejectedValueOnce(new Error('forbidden'))
+    .mockResolvedValueOnce(undefined);
+  const {renderer} = await renderScreen({
+    getSaveErrorMessage: () => '이 관심사를 수정할 권한이 없어요.',
+    onSave,
+  });
+
+  await TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '음악 관심사'})
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({accessibilityLabel: '관심사 저장하고 다음'})
+      .props.onPress();
+  });
+
+  expect(hasText(renderer, '이 관심사를 수정할 권한이 없어요.')).toBe(true);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '음악 관심사'}).props
+      .accessibilityState.checked,
+  ).toBe(true);
+
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({accessibilityLabel: '관심사 저장하고 다음'})
+      .props.onPress();
+  });
+  expect(onSave).toHaveBeenCalledTimes(2);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '관심사 저장 완료'}),
+  ).toBeTruthy();
+});
+
+test('저장 중에는 중복 제출하지 않는다', async () => {
+  let resolveSave: (() => void) | undefined;
+  const onSave = jest.fn(
+    () =>
+      new Promise<void>(resolve => {
+        resolveSave = resolve;
+      }),
+  );
+  const {renderer} = await renderScreen({onSave});
+  const saveButton = renderer.root.findByProps({
+    accessibilityLabel: '관심사 저장하고 다음',
+  });
+
+  let firstSave: Promise<void>;
+  await TestRenderer.act(() => {
+    firstSave = saveButton.props.onPress();
+    saveButton.props.onPress();
+  });
+  expect(onSave).toHaveBeenCalledTimes(1);
+
+  await TestRenderer.act(async () => {
+    resolveSave?.();
+    await firstSave!;
+  });
+});
+
+function hasText(renderer: TestRenderer.ReactTestRenderer, value: string) {
+  return renderer.root.findAllByProps({children: value}).length > 0;
+}

@@ -1,9 +1,22 @@
-import {useEffect, useState} from 'react';
-import {Alert, ScrollView, StyleSheet, Text, View} from 'react-native';
+import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
+import {useEffect, useRef, useState} from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import type {AppScreenProps} from '../../../app-shell';
-import {COLORS} from '../../../design/tokens';
-import {InterestSelectionScreen} from '../../auth';
+import {COLORS, RADII} from '../../../design/tokens';
+import {
+  getInterestErrorMessage,
+  InterestSelectionScreen,
+  type InterestGateway,
+} from '../../auth';
 import {NotificationSettingsScreen} from '../../notifications';
 import type {ProfileGateway} from '../api/profileApi';
 import {MyPageFooter} from '../components/MyPageFooter';
@@ -21,6 +34,7 @@ import {ProfileGuideScreen} from './ProfileGuideScreen';
 export interface CareReceiverMyPageScreenProps extends AppScreenProps {
   // 초기 프로필 주입(테스트·연동용). 없으면 mock 프로필을 사용한다.
   initialProfile?: CareReceiverProfile;
+  interestGateway?: InterestGateway;
   onRequestWithdrawal?: () => Promise<void> | void;
   profileGateway?: ProfileGateway;
 }
@@ -28,9 +42,19 @@ export interface CareReceiverMyPageScreenProps extends AppScreenProps {
 // 하위 전체화면. 진입 시 하단 탭을 숨긴다.
 type SubScreen = 'edit' | 'interest' | 'guide' | 'notificationSettings' | null;
 
+type InterestLoadState =
+  | {status: 'idle'}
+  | {scopeKey: string; status: 'loading'}
+  | {message: string; scopeKey: string; status: 'error'}
+  | {interests: readonly string[]; scopeKey: string; status: 'ready'};
+
+const IDLE_INTEREST_LOAD_STATE: InterestLoadState = {status: 'idle'};
+
 // J-1 마이페이지(피보호자). 효자 도장 대신 관심사 설정을 다루고, 프로필 편집·알림 설정·이용가이드는 보호자와 공유한다.
 export function CareReceiverMyPageScreen({
+  currentGroup,
   initialProfile,
+  interestGateway,
   onFullscreenChange,
   onRequestLogout,
   onRequestWithdrawal,
@@ -40,6 +64,13 @@ export function CareReceiverMyPageScreen({
     initialProfile ?? CARE_RECEIVER_PROFILE,
   );
   const [subScreen, setSubScreen] = useState<SubScreen>(null);
+  const [interestLoadState, setInterestLoadState] =
+    useState<InterestLoadState>(IDLE_INTEREST_LOAD_STATE);
+  const interestRequestGenerationRef = useRef(0);
+  const interestScopeKey = `${currentGroup.id}:${currentGroup.myMemberId ?? ''}`;
+  const currentInterestScopeRef = useRef(interestScopeKey);
+  const previousInterestScopeRef = useRef(interestScopeKey);
+  currentInterestScopeRef.current = interestScopeKey;
 
   // 하위 전체화면에 들어가면 하단 탭을 숨긴다(보호자 마이페이지와 같은 방식).
   useEffect(() => {
@@ -47,6 +78,24 @@ export function CareReceiverMyPageScreen({
 
     return () => onFullscreenChange?.(false);
   }, [subScreen, onFullscreenChange]);
+
+  useEffect(() => {
+    if (previousInterestScopeRef.current === interestScopeKey) {
+      return;
+    }
+
+    previousInterestScopeRef.current = interestScopeKey;
+    interestRequestGenerationRef.current += 1;
+    setInterestLoadState(IDLE_INTEREST_LOAD_STATE);
+    setSubScreen(current => (current === 'interest' ? null : current));
+  }, [interestScopeKey]);
+
+  useEffect(
+    () => () => {
+      interestRequestGenerationRef.current += 1;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (profileGateway === undefined) {
@@ -99,6 +148,103 @@ export function CareReceiverMyPageScreen({
     Alert.alert('로그아웃', '후속 작업에서 연결될 기능입니다.');
   };
 
+  const closeInterestSettings = () => {
+    interestRequestGenerationRef.current += 1;
+    setInterestLoadState(IDLE_INTEREST_LOAD_STATE);
+    setSubScreen(null);
+  };
+
+  const loadInterestSettings = async () => {
+    const requestGeneration = ++interestRequestGenerationRef.current;
+    const scopeKey = interestScopeKey;
+    const memberId = currentGroup.myMemberId;
+    setSubScreen('interest');
+
+    if (interestGateway === undefined) {
+      setInterestLoadState({
+        message: '로그인 정보를 확인한 뒤 다시 시도해 주세요.',
+        scopeKey,
+        status: 'error',
+      });
+      return;
+    }
+
+    if (memberId === undefined) {
+      setInterestLoadState({
+        message: '현재 그룹의 구성원 정보를 확인한 뒤 다시 시도해 주세요.',
+        scopeKey,
+        status: 'error',
+      });
+      return;
+    }
+
+    setInterestLoadState({scopeKey, status: 'loading'});
+    try {
+      const remote = await interestGateway.loadInterests(
+        currentGroup.id,
+        memberId,
+      );
+      if (
+        interestRequestGenerationRef.current !== requestGeneration ||
+        currentInterestScopeRef.current !== scopeKey
+      ) {
+        return;
+      }
+
+      setProfile(current => ({...current, interests: remote.interests}));
+      setInterestLoadState({
+        interests: remote.interests,
+        scopeKey,
+        status: 'ready',
+      });
+    } catch (error) {
+      if (
+        interestRequestGenerationRef.current !== requestGeneration ||
+        currentInterestScopeRef.current !== scopeKey
+      ) {
+        return;
+      }
+
+      setInterestLoadState({
+        message: getInterestErrorMessage(
+          error,
+          '관심사를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+        ),
+        scopeKey,
+        status: 'error',
+      });
+    }
+  };
+
+  const saveInterestSettings = async (interests: readonly string[]) => {
+    const scopeKey = interestScopeKey;
+    const requestGeneration = interestRequestGenerationRef.current;
+    const memberId = currentGroup.myMemberId;
+
+    if (interestGateway === undefined || memberId === undefined) {
+      throw new Error('현재 그룹의 구성원 정보를 확인할 수 없습니다.');
+    }
+
+    const remote = await interestGateway.replaceInterests(
+      currentGroup.id,
+      memberId,
+      interests,
+    );
+    if (
+      interestRequestGenerationRef.current !== requestGeneration ||
+      currentInterestScopeRef.current !== scopeKey
+    ) {
+      return;
+    }
+
+    setProfile(current => ({...current, interests: remote.interests}));
+    setInterestLoadState({
+      interests: remote.interests,
+      scopeKey,
+      status: 'ready',
+    });
+  };
+
   if (subScreen === 'edit') {
     return (
       <ProfileEditScreen
@@ -111,15 +257,39 @@ export function CareReceiverMyPageScreen({
   }
 
   if (subScreen === 'interest') {
+    if (
+      interestLoadState.status === 'idle' ||
+      interestLoadState.scopeKey !== interestScopeKey ||
+      interestLoadState.status === 'loading'
+    ) {
+      return <InterestRequestStateScreen onBack={closeInterestSettings} />;
+    }
+
+    if (interestLoadState.status === 'error') {
+      return (
+        <InterestRequestStateScreen
+          errorMessage={interestLoadState.message}
+          onBack={closeInterestSettings}
+          onRetry={loadInterestSettings}
+        />
+      );
+    }
+
     // J-3·J-3p·J-4 관심사 선택 화면을 재사용한다. 저장 완료 시 J-4p 문구를 띄우고 J-1로 돌아간다.
     return (
       <InterestSelectionScreen
         embedded
-        initialInterests={profile.interests}
-        onBack={() => setSubScreen(null)}
-        onComplete={() => setSubScreen(null)}
-        onSave={interests => setProfile(current => ({...current, interests}))}
-        onSkip={() => setSubScreen(null)}
+        getSaveErrorMessage={error =>
+          getInterestErrorMessage(
+            error,
+            '관심사를 저장하지 못했어요. 다시 시도해 주세요.',
+          )
+        }
+        initialInterests={interestLoadState.interests}
+        onBack={closeInterestSettings}
+        onComplete={closeInterestSettings}
+        onSave={saveInterestSettings}
+        onSkip={closeInterestSettings}
         savedContent={{
           buttonLabel: '확인',
           message: `${profile.name}님의 관심사가\n수정되었습니다.`,
@@ -141,7 +311,7 @@ export function CareReceiverMyPageScreen({
     {
       key: 'interest-settings',
       label: '관심사 설정',
-      onPress: () => setSubScreen('interest'),
+      onPress: loadInterestSettings,
     },
     {
       key: 'notification-settings',
@@ -177,6 +347,75 @@ export function CareReceiverMyPageScreen({
   );
 }
 
+interface InterestRequestStateScreenProps {
+  errorMessage?: string;
+  onBack: () => void;
+  onRetry?: () => void;
+}
+
+function InterestRequestStateScreen({
+  errorMessage,
+  onBack,
+  onRetry,
+}: InterestRequestStateScreenProps) {
+  const isLoading = errorMessage === undefined;
+
+  return (
+    <View style={styles.requestStateScreen}>
+      <View style={styles.requestStateHeader}>
+        <Pressable
+          accessibilityLabel="관심사 조회에서 뒤로 가기"
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={onBack}
+          style={styles.requestStateBackButton}>
+          <MaterialDesignIcons
+            color={COLORS.purpleDeep}
+            name="chevron-left"
+            size={30}
+          />
+        </Pressable>
+        <Text style={styles.requestStateHeaderTitle}>관심사 설정</Text>
+      </View>
+
+      <View
+        accessibilityLiveRegion="polite"
+        style={styles.requestStateContent}>
+        {isLoading ? (
+          <>
+            <ActivityIndicator color={COLORS.purpleDeep} size="large" />
+            <Text style={styles.requestStateTitle}>
+              관심사를 불러오는 중이에요.
+            </Text>
+          </>
+        ) : (
+          <>
+            <MaterialDesignIcons
+              color={COLORS.error}
+              name="alert-circle-outline"
+              size={46}
+            />
+            <Text style={styles.requestStateTitle}>
+              관심사를 불러오지 못했어요
+            </Text>
+            <Text style={styles.requestStateMessage}>{errorMessage}</Text>
+            <Pressable
+              accessibilityLabel="관심사 다시 시도"
+              accessibilityRole="button"
+              onPress={onRetry}
+              style={({pressed}) => [
+                styles.requestStateRetryButton,
+                pressed && styles.requestStateRetryButtonPressed,
+              ]}>
+              <Text style={styles.requestStateRetryLabel}>다시 시도</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   content: {
     gap: 16,
@@ -195,6 +434,71 @@ const styles = StyleSheet.create({
     color: COLORS.textStrong,
     fontSize: 22,
     fontWeight: '700',
+  },
+  requestStateBackButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.lavenderSurface,
+    borderRadius: RADII.pill,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  requestStateContent: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: 96,
+    paddingHorizontal: 32,
+  },
+  requestStateHeader: {
+    alignItems: 'center',
+    borderBottomColor: COLORS.divider,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: 14,
+    paddingBottom: 12,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  requestStateHeaderTitle: {
+    color: COLORS.textStrong,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  requestStateMessage: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  requestStateRetryButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.purpleDeep,
+    borderRadius: RADII.pill,
+    height: 48,
+    justifyContent: 'center',
+    marginTop: 24,
+    minWidth: 144,
+    paddingHorizontal: 28,
+  },
+  requestStateRetryButtonPressed: {
+    opacity: 0.82,
+  },
+  requestStateRetryLabel: {
+    color: COLORS.background,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  requestStateScreen: {
+    backgroundColor: COLORS.background,
+    flex: 1,
+  },
+  requestStateTitle: {
+    color: COLORS.textStrong,
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 18,
   },
   screen: {
     backgroundColor: COLORS.background,
