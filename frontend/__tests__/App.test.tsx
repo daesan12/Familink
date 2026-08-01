@@ -1926,8 +1926,9 @@ test("이전 세션 토큰 정리가 끝난 뒤 같은 토큰을 새 세션에 �
         resolveDeactivation = resolve;
       })
   );
-  const withdrawalRejection = expect(withdrawalPromise).rejects.toBe(
-    withdrawalFailure
+  const withdrawalResult = withdrawalPromise?.then(
+    () => undefined,
+    error => error
   );
   rejectWithdrawal?.(withdrawalFailure);
   await TestRenderer.act(async () => {
@@ -1945,7 +1946,7 @@ test("이전 세션 토큰 정리가 끝난 뒤 같은 토큰을 새 세션에 �
 
   resolveDeactivation?.();
   await TestRenderer.act(async () => {
-    await withdrawalRejection;
+    await expect(withdrawalResult).resolves.toBe(withdrawalFailure);
     await flushAsyncWork();
   });
   expect(notificationGateway.registerDeviceToken).toHaveBeenCalledTimes(2);
