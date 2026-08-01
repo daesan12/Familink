@@ -4,7 +4,13 @@ jest.mock('react-native-config', () => ({
 }));
 
 import {ApiError, apiClient} from '../../../shared/api';
-import {loadInterests, replaceInterests} from './interestApi';
+import {
+  createInterestGateway,
+  getInterestErrorMessage,
+  loadInterests,
+  replaceInterests,
+  type InterestHttpClient,
+} from './interestApi';
 
 function success(data: unknown, status = 200) {
   return {
@@ -29,6 +35,23 @@ describe('interestApi', () => {
     });
     expect(apiClient.get).toHaveBeenCalledWith(
       '/groups/11/members/21/interests',
+    );
+  });
+
+  it('팩토리는 주입한 인증 클라이언트를 사용하고 경로를 인코딩한다', async () => {
+    const client = {
+      get: jest
+        .fn()
+        .mockResolvedValueOnce(success({memberId: 21, interests: []})),
+      put: jest.fn(),
+    } as unknown as InterestHttpClient;
+    const gateway = createInterestGateway({client});
+
+    await expect(
+      gateway.loadInterests('11 / 우리 가족', '21'),
+    ).resolves.toEqual({memberId: '21', interests: []});
+    expect(client.get).toHaveBeenCalledWith(
+      '/groups/11%20%2F%20%EC%9A%B0%EB%A6%AC%20%EA%B0%80%EC%A1%B1/members/21/interests',
     );
   });
 
@@ -92,5 +115,21 @@ describe('interestApi', () => {
     jest.spyOn(apiClient, 'put').mockRejectedValueOnce(forbidden);
 
     await expect(replaceInterests('11', '21', ['산책'])).rejects.toBe(forbidden);
+  });
+
+  it.each([
+    ['UNAUTHORIZED', '로그인이 만료되었습니다. 다시 로그인해 주세요.'],
+    ['FORBIDDEN', '현재 그룹에서 관심사를 조회하거나 수정할 권한이 없습니다.'],
+    ['INVALID_REQUEST', '관심사는 0~10개이며 각 값은 1~10자로 입력해 주세요.'],
+    ['NETWORK_ERROR', '네트워크 연결을 확인한 뒤 다시 시도해 주세요.'],
+    ['API_TIMEOUT', '네트워크 연결을 확인한 뒤 다시 시도해 주세요.'],
+  ])('%s 오류를 사용자 안내 문구로 매핑한다', (code, expected) => {
+    const error = new ApiError({
+      code,
+      kind: 'server',
+      message: 'server message',
+    });
+
+    expect(getInterestErrorMessage(error, 'fallback')).toBe(expected);
   });
 });

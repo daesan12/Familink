@@ -55,7 +55,8 @@ const ONBOARDING_SAVED_CONTENT: InterestSavedContent = {
   buttonLabel: '피드로 이동',
 };
 
-interface InterestSelectionScreenProps {
+export interface InterestSelectionScreenProps {
+  getSaveErrorMessage?: (error: unknown) => string;
   initialInterests?: readonly string[];
   onBack: () => void;
   onComplete: () => void;
@@ -68,6 +69,8 @@ interface InterestSelectionScreenProps {
 }
 
 export function InterestSelectionScreen({
+  getSaveErrorMessage = () =>
+    '관심사를 저장하지 못했어요. 다시 시도해주세요.',
   initialInterests = EMPTY_INTERESTS,
   onBack,
   onComplete,
@@ -90,6 +93,7 @@ export function InterestSelectionScreen({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const hasLocalChangesRef = useRef(false);
+  const savingRef = useRef(false);
   const displayedInterests = [...PRESET_INTERESTS, ...customInterests];
 
   useEffect(() => {
@@ -149,18 +153,20 @@ export function InterestSelectionScreen({
   };
 
   const handleSave = async () => {
-    if (saving) {
+    if (savingRef.current) {
       return;
     }
 
+    savingRef.current = true;
     setErrorMessage(null);
     setSaving(true);
     try {
       await onSave(selectedInterests);
       setSavedVisible(true);
-    } catch {
-      setErrorMessage('관심사를 저장하지 못했어요. 다시 시도해주세요.');
+    } catch (error) {
+      setErrorMessage(getSaveErrorMessage(error));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
