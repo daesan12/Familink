@@ -2,6 +2,12 @@ import React from 'react';
 import {Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
+import type {
+  CarnationCalendar,
+  CarnationGateway,
+} from '../../group-info';
+import {CarnationStamp} from '../components/CarnationStamp';
+import {MyPageProfileCard} from '../components/MyPageProfileCard';
 import {MyPageScreen} from './MyPageScreen';
 import type {ProfileGateway} from '../api/profileApi';
 
@@ -25,7 +31,33 @@ afterEach(() => {
   TestRenderer.act(() => {
     mountedRenderers.splice(0).forEach(renderer => renderer.unmount());
   });
+  jest.useRealTimers();
 });
+
+function flushPromises() {
+  return Promise.resolve().then(() => Promise.resolve());
+}
+
+function calendar(
+  startDate: string,
+  endDate: string,
+  earnedDates: readonly string[] = [],
+): CarnationCalendar {
+  return {earnedDates, endDate, memberId: 'member-1', startDate};
+}
+
+function gatewayWithEmptyWeek(): CarnationGateway {
+  return {
+    loadMemberCarnations: jest
+      .fn()
+      .mockResolvedValue(calendar('2026-07-27', '2026-08-02')),
+    loadWeeklyRanking: jest.fn().mockResolvedValue({
+      rankings: [],
+      weekEnd: '2026-08-02',
+      weekStart: '2026-07-27',
+    }),
+  };
+}
 
 function render(extra: Record<string, unknown> = {}) {
   let renderer: TestRenderer.ReactTestRenderer;
@@ -122,5 +154,277 @@ test('renders the profile returned by the API gateway', async () => {
     renderer!.root
       .findAllByType(Text)
       .some(node => String(node.props.children).includes('API User')),
+  ).toBe(true);
+});
+
+test('KST 현재 주 월요일부터 일요일까지 병렬 조회하고 도장·순위·왕관을 반영한다', async () => {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date('2026-07-26T15:30:00.000Z'));
+  const loadWeeklyRanking = jest.fn().mockResolvedValue({
+    rankings: [
+      {
+        carnationCount: 5,
+        displayName: '다른 보호자',
+        memberId: 'member-2',
+        previousWeekWinner: false,
+      },
+      {
+        carnationCount: 3,
+        displayName: '이종철',
+        memberId: 'member-1',
+        previousWeekWinner: true,
+      },
+    ],
+    weekEnd: '2026-08-02',
+    weekStart: '2026-07-27',
+  });
+  const loadMemberCarnations = jest
+    .fn()
+    .mockResolvedValue(
+      calendar('2026-07-27', '2026-08-02', ['2026-07-27', '2026-07-30']),
+    );
+  const carnationGateway: CarnationGateway = {
+    loadMemberCarnations,
+    loadWeeklyRanking,
+  };
+
+  const renderer = render({
+    carnationGateway,
+    currentGroup: {
+      id: 'group-1',
+      myMemberId: 'member-1',
+      name: '우리 가족',
+      role: 'guardian',
+    },
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+
+  expect(loadWeeklyRanking).toHaveBeenCalledWith(
+    'group-1',
+    '2026-07-27',
+    '2026-08-02',
+  );
+  expect(loadMemberCarnations).toHaveBeenCalledWith(
+    'group-1',
+    'member-1',
+    '2026-07-27',
+    '2026-08-02',
+  );
+  expect(renderer.root.findByType(MyPageProfileCard).props).toMatchObject({
+    hasCrown: true,
+    rank: 2,
+  });
+  expect(
+    renderer.root.findAllByType(CarnationStamp).map(stamp => stamp.props.filled),
+  ).toEqual([true, false, false, true, false, false, false]);
+});
+
+test('화면을 열어 둔 채 KST 주 경계를 넘으면 새 주를 다시 조회한다', async () => {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date('2026-07-26T14:59:30.000Z'));
+  const carnationGateway = gatewayWithEmptyWeek();
+  render({
+    carnationGateway,
+    currentGroup: {...baseProps.currentGroup, myMemberId: 'member-1'},
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+  expect(carnationGateway.loadWeeklyRanking).toHaveBeenLastCalledWith(
+    'group-1',
+    '2026-07-20',
+    '2026-07-26',
+  );
+
+  await TestRenderer.act(async () => {
+    jest.advanceTimersByTime(60_000);
+    await flushPromises();
+  });
+  expect(carnationGateway.loadWeeklyRanking).toHaveBeenLastCalledWith(
+    'group-1',
+    '2026-07-27',
+    '2026-08-02',
+  );
+});
+
+test('myMemberId가 없으면 카네이션 API를 호출하지 않고 재시도 상태를 표시한다', async () => {
+  const carnationGateway = gatewayWithEmptyWeek();
+  const renderer = render({carnationGateway});
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+
+  expect(hasText(renderer, '현재 그룹의 구성원 정보를 확인할 수 없어 카네이션을 불러올 수 없습니다.')).toBe(
+    true,
+  );
+  expect(carnationGateway.loadWeeklyRanking).not.toHaveBeenCalled();
+  expect(carnationGateway.loadMemberCarnations).not.toHaveBeenCalled();
+
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '주간 카네이션 다시 시도'})
+      .props.onPress();
+  });
+  expect(carnationGateway.loadWeeklyRanking).not.toHaveBeenCalled();
+});
+
+test('주간 기록이 없으면 빈 상태를 표시한다', async () => {
+  const renderer = render({
+    carnationGateway: gatewayWithEmptyWeek(),
+    currentGroup: {
+      ...baseProps.currentGroup,
+      myMemberId: 'member-1',
+    },
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+
+  expect(hasText(renderer, '이번 주에는 기록이 없어요.')).toBe(true);
+});
+
+test('월 이동은 선택 월을 재조회하고 이전 월의 늦은 응답은 무시한다', async () => {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
+  let resolveAugust!: (value: CarnationCalendar) => void;
+  let resolveJuly!: (value: CarnationCalendar) => void;
+  const augustPromise = new Promise<CarnationCalendar>(resolve => {
+    resolveAugust = resolve;
+  });
+  const julyPromise = new Promise<CarnationCalendar>(resolve => {
+    resolveJuly = resolve;
+  });
+  const loadMemberCarnations = jest.fn(
+    (_groupId: string, _memberId: string, startDate: string) => {
+      if (startDate === '2026-07-27') {
+        return Promise.resolve(calendar('2026-07-27', '2026-08-02'));
+      }
+      if (startDate === '2026-08-01') {
+        return augustPromise;
+      }
+      return julyPromise;
+    },
+  );
+  const carnationGateway: CarnationGateway = {
+    loadMemberCarnations,
+    loadWeeklyRanking: jest.fn().mockResolvedValue({
+      rankings: [],
+      weekEnd: '2026-08-02',
+      weekStart: '2026-07-27',
+    }),
+  };
+  const renderer = render({
+    carnationGateway,
+    currentGroup: {
+      id: 'group-1',
+      myMemberId: 'member-1',
+      name: '우리 가족',
+      role: 'guardian',
+    },
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '월간 효자 도장 보기'})
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+  expect(loadMemberCarnations).toHaveBeenCalledWith(
+    'group-1',
+    'member-1',
+    '2026-08-01',
+    '2026-08-31',
+  );
+
+  TestRenderer.act(() => {
+    renderer.root.findByProps({accessibilityLabel: '이전 달'}).props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+  expect(loadMemberCarnations).toHaveBeenCalledWith(
+    'group-1',
+    'member-1',
+    '2026-07-01',
+    '2026-07-31',
+  );
+
+  await TestRenderer.act(async () => {
+    resolveJuly(calendar('2026-07-01', '2026-07-31', ['2026-07-03']));
+    await flushPromises();
+  });
+  expect(hasText(renderer, '2026년 7월')).toBe(true);
+  expect(
+    renderer.root
+      .findAllByType(CarnationStamp)
+      .filter(stamp => stamp.props.filled),
+  ).toHaveLength(1);
+
+  await TestRenderer.act(async () => {
+    resolveAugust(calendar('2026-08-01', '2026-08-31', ['2026-08-08']));
+    await flushPromises();
+  });
+  expect(
+    renderer.root
+      .findAllByType(CarnationStamp)
+      .filter(stamp => stamp.props.filled),
+  ).toHaveLength(1);
+});
+
+test('월간 네트워크 오류는 재시도로 다시 조회한다', async () => {
+  const loadMemberCarnations = jest
+    .fn()
+    .mockResolvedValueOnce(calendar('2026-07-27', '2026-08-02'))
+    .mockRejectedValueOnce(new Error('network'))
+    .mockResolvedValueOnce(
+      calendar('2026-08-01', '2026-08-31', ['2026-08-02']),
+    );
+  const carnationGateway: CarnationGateway = {
+    loadMemberCarnations,
+    loadWeeklyRanking: jest.fn().mockResolvedValue({
+      rankings: [],
+      weekEnd: '2026-08-02',
+      weekStart: '2026-07-27',
+    }),
+  };
+  const renderer = render({
+    carnationGateway,
+    currentGroup: {...baseProps.currentGroup, myMemberId: 'member-1'},
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '월간 효자 도장 보기'})
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+
+  expect(hasText(renderer, '카네이션 기록을 불러오지 못했어요. 다시 시도해 주세요.')).toBe(
+    true,
+  );
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '월간 카네이션 다시 시도'})
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+  expect(loadMemberCarnations).toHaveBeenCalledTimes(3);
+  expect(
+    renderer.root
+      .findAllByType(CarnationStamp)
+      .some(stamp => stamp.props.filled),
   ).toBe(true);
 });

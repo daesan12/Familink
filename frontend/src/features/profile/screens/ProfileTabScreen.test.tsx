@@ -51,7 +51,7 @@ function hasText(renderer: TestRenderer.ReactTestRenderer, value: string) {
 test('보호자 역할이면 효자 도장이 있는 마이페이지를 보여준다', () => {
   const renderer = render('guardian');
   expect(hasText(renderer, '이종철 님')).toBe(true);
-  expect(hasText(renderer, GUARDIAN_STAMP_TITLE)).toBe(true);
+  expect(hasText(renderer, '효자 도장 현황')).toBe(true);
 });
 
 test('피보호자 역할이면 관심사 설정이 있는 마이페이지를 보여준다', () => {
@@ -61,5 +61,3 @@ test('피보호자 역할이면 관심사 설정이 있는 마이페이지를 �
     renderer.root.findAllByProps({accessibilityLabel: '관심사 설정'}).length,
   ).toBeGreaterThan(0);
 });
-
-const GUARDIAN_STAMP_TITLE = '2026년 7월 3째주 효자도장 현황';

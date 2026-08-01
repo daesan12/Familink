@@ -1,5 +1,12 @@
 import type {RankedEntry, WeeklyRankingEntry} from './types';
 
+export interface MonthRange {
+  endDate: string;
+  month: number;
+  startDate: string;
+  year: number;
+}
+
 // ISO 날짜(YYYY-MM-DD)로 포맷한다. 한 자리 월·일은 0을 붙인다.
 // 주어진 시각을 KST 날짜로 변환한 뒤 그 주의 월요일~일요일을 구한다.
 // 카네이션 API-002의 구성원별 날짜 조회 범위는 이 값을 사용한다.
@@ -25,6 +32,43 @@ export function getCurrentWeekRange(today: Date): {
   const sunday = new Date(monday);
   sunday.setUTCDate(sunday.getUTCDate() + 6);
   return {weekStart: toIsoDateUtc(monday), weekEnd: toIsoDateUtc(sunday)};
+}
+
+// KST 기준 현재 연·월과 그 달의 1일~말일을 계산한다.
+// 화면의 기기 시간대와 무관하게 카네이션 API 조회 범위를 고정한다.
+export function getCurrentMonthRange(today: Date): MonthRange {
+  const {year, month} = getKoreaDateParts(today);
+  return getMonthRange(year, month);
+}
+
+// 주어진 연·월의 첫날과 마지막 날을 ISO 날짜로 만든다.
+export function getMonthRange(year: number, month: number): MonthRange {
+  const firstDay = new Date(Date.UTC(year, month - 1, 1));
+  const lastDay = new Date(Date.UTC(year, month, 0));
+  return {
+    endDate: toIsoDateUtc(lastDay),
+    month,
+    startDate: toIsoDateUtc(firstDay),
+    year,
+  };
+}
+
+function getKoreaDateParts(today: Date): {
+  day: number;
+  month: number;
+  year: number;
+} {
+  const koreaDate = new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+  }).formatToParts(today);
+  return {
+    day: Number(koreaDate.find(part => part.type === 'day')?.value),
+    month: Number(koreaDate.find(part => part.type === 'month')?.value),
+    year: Number(koreaDate.find(part => part.type === 'year')?.value),
+  };
 }
 
 function toIsoDateUtc(date: Date): string {
