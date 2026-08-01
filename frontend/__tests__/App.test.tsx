@@ -1787,6 +1787,94 @@ test("회원탈퇴 실패 전에 인증이 무효화되면 활성·등록 중 �
   expect(renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })).toBeTruthy();
 });
 
+test("이전 세션의 탈퇴 실패가 재로그인한 세션의 디바이스 토큰을 덮어쓰지 않는다", async () => {
+  const authGateway = createAuthGateway();
+  const notificationGateway = createNotificationGateway();
+  const deviceTokenProvider = createDeviceTokenProvider("granted", "first-token");
+  let refreshListener: ((token: string) => void) | undefined;
+  deviceTokenProvider.subscribeTokenRefresh = jest.fn(listener => {
+    refreshListener = listener;
+    return jest.fn();
+  });
+  const profileGateway = createProfileGateway();
+  const withdrawalFailure = new ApiError({
+    code: "NETWORK_ERROR",
+    kind: "network",
+    message: "네트워크 연결을 확인해 주세요.",
+  });
+  let rejectWithdrawal: ((reason: unknown) => void) | undefined;
+  profileGateway.withdrawCurrentUser.mockReturnValueOnce(
+    new Promise<void>((_resolve, reject) => {
+      rejectWithdrawal = reject;
+    })
+  );
+  let resolveRegistration:
+    | ((value: Awaited<ReturnType<NotificationGateway["registerDeviceToken"]>>) => void)
+    | undefined;
+  notificationGateway.registerDeviceToken.mockImplementationOnce(async token => ({
+    active: true,
+    deviceType: "ANDROID",
+    id: token,
+  }));
+  notificationGateway.registerDeviceToken.mockReturnValueOnce(
+    new Promise(resolve => {
+      resolveRegistration = resolve;
+    })
+  );
+  const { renderer } = await renderApp(
+    authGateway,
+    createAuthSessionCoordinator(),
+    createGroupGateway(),
+    notificationGateway,
+    deviceTokenProvider,
+    profileGateway
+  );
+  await loginToSignedInWelcome(renderer);
+
+  await TestRenderer.act(async () => {
+    refreshListener?.("withdrawal-token");
+    await flushAsyncWork();
+  });
+  let withdrawalPromise: Promise<void> | undefined;
+  await TestRenderer.act(async () => {
+    withdrawalPromise = renderer.root
+      .findByType(SignedInWelcomeScreen)
+      .props.onRequestWithdrawal();
+    await flushAsyncWork();
+  });
+  resolveRegistration?.({
+    active: true,
+    deviceType: "ANDROID",
+    id: "withdrawal-registration",
+  });
+  await TestRenderer.act(async () => {
+    await flushAsyncWork();
+  });
+  expect(profileGateway.withdrawCurrentUser).toHaveBeenCalledTimes(1);
+
+  await TestRenderer.act(async () => {
+    await renderer.root.findByType(SignedInWelcomeScreen).props.onLogout();
+  });
+  deviceTokenProvider.getToken.mockResolvedValue("second-token");
+  await loginToSignedInWelcome(renderer);
+
+  rejectWithdrawal?.(withdrawalFailure);
+  await TestRenderer.act(async () => {
+    await expect(withdrawalPromise).rejects.toBe(withdrawalFailure);
+    await flushAsyncWork();
+  });
+
+  expect(notificationGateway.deactivateDeviceToken).not.toHaveBeenCalledWith(
+    "second-token"
+  );
+  await TestRenderer.act(async () => {
+    await renderer.root.findByType(SignedInWelcomeScreen).props.onLogout();
+  });
+  expect(notificationGateway.deactivateDeviceToken).toHaveBeenCalledWith(
+    "second-token"
+  );
+});
+
 test("서버 탈퇴 성공 후 로컬 세션 정리가 실패해도 화면을 초기화하고 경고한다", async () => {
   const alertSpy = jest.spyOn(Alert, "alert");
   const authSession = createAuthSessionCoordinator();
