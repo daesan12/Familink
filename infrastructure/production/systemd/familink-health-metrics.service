@@ -1,0 +1,11 @@
+[Unit]
+Description=Publish Familink backend and Redis health to CloudWatch
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Environment=AWS_REGION=ap-northeast-2
+Environment=CLOUDWATCH_NAMESPACE=Familink/Health
+Environment=COMPOSE_PROJECT=familink-production
+ExecStart=/usr/bin/env bash /opt/familink/infrastructure/production/scripts/publish-cloudwatch-health.sh

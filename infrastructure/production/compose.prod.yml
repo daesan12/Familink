@@ -63,6 +63,13 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:-ap-northeast-2}
+        awslogs-group: ${CLOUDWATCH_BACKEND_LOG_GROUP:-/familink/prod/backend}
+        awslogs-stream: ${CLOUDWATCH_BACKEND_LOG_STREAM:-backend}
+        awslogs-create-group: "false"
 
   redis:
     image: redis:7.4-alpine
@@ -99,6 +106,8 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certbot/www:/var/www/certbot:ro
+      - ./nginx/certbot/conf:/etc/letsencrypt:ro
     depends_on:
       backend:
         condition: service_healthy
@@ -110,6 +119,13 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:-ap-northeast-2}
+        awslogs-group: ${CLOUDWATCH_NGINX_LOG_GROUP:-/familink/prod/nginx}
+        awslogs-stream: ${CLOUDWATCH_NGINX_LOG_STREAM:-nginx}
+        awslogs-create-group: "false"
 
 volumes:
   redis-prod-data:
