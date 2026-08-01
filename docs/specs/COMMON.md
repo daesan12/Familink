@@ -82,7 +82,19 @@
   최소 지원 Android 버전과 시험 기기 목록은 미결정이다.
 - 모바일 앱의 AI 전화 화면과 통화 엔진만 Android Kotlin 네이티브
   모듈로 구현한다. AI 전화를 제외한 모바일 화면과 기능은 React Native로
-  구현하며, React Native와 Kotlin의 브리지는 AI 전화 경계에서만 사용한다.
+  구현한다.
+- React Native와 Kotlin의 브리지는 AI 전화 경계와 푸시 등록 토큰 경계
+  두 곳에서만 사용한다. 그 외 기능에 새 브리지를 추가하지 않는다.
+- 푸시 등록 토큰 경계의 Kotlin 구성요소는 FCM 등록 토큰의 발급과 갱신
+  전달만 담당한다. `FirebaseMessagingService`는 `onNewToken`으로 받은
+  토큰을 React Native에 전달하는 역할로 한정하며 알림 표시를 담당하지
+  않는다. 알림 목록·읽음·설정 화면과 그 상태 관리는 React Native가
+  구현한다.
+- 푸시 등록 토큰 경계의 Kotlin 구성요소는 서비스 API를 직접 호출하지
+  않는다. `API-NOTIFICATIONS-001`과 `API-NOTIFICATIONS-008` 호출은 React
+  Native가 수행한다. React Native 컨텍스트가 없는 상태에서 토큰이
+  갱신되면 네이티브에서 등록하지 않고, 다음 로그인 또는 세션 복원 시
+  React Native가 토큰을 재조회해 등록한다.
 - 모든 서비스 API, 인증·인가, AI 오케스트레이션과 DB 접근은 Spring Boot
   단일 백엔드가 담당한다.
 - AI 전화 음성은 Kotlin 모듈과 OpenAI Realtime이 WebRTC로 직접
@@ -93,6 +105,11 @@
 - 게시글 분석의 Gemini 호출은 SSAFY GMS 프록시를 사용한다.
   `GMS_API_KEY`는 프록시 인증 키로 서버에서만 보관하며
   `x-goog-api-key` 헤더로 전달한다.
+- Android 클라이언트 설정 파일 `google-services.json`은 프로젝트·앱
+  식별자를 담은 비밀이 아닌 파일이므로 저장소에 커밋한다. Android API
+  키에는 Firebase 관련 API 제한을 적용하고 Generative Language API
+  접근은 허용하지 않는다. 푸시 발송 권한을 가진 서버의 Firebase service
+  account JSON은 기존대로 저장소 밖에 보관한다.
 - Spring Boot는 통화 세션·전사·건별 리포트·일일 리포트를 생성·갱신하고,
   게시글 분석과 리포트 생성 시 별도 백엔드를 두지 않고 각 도메인의
   Gemini Gateway를 호출한다.
