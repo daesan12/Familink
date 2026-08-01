@@ -1,14 +1,19 @@
-import type {AxiosInstance} from 'axios';
+import axios, {type AxiosInstance} from 'axios';
 
 import {
   ApiError,
   apiClient,
   createApiClient,
   isApiSuccess,
+  normalizeApiError,
   type ApiAuthSession,
   type ApiSuccess,
 } from '../../../shared/api';
-import type {Gender} from '../types';
+import {
+  hasInvalidFileNameCharacter,
+  PROFILE_IMAGE_LIMITS,
+} from '../profileModel';
+import type {Gender, ProfileImageAsset} from '../types';
 
 export interface UserProfile {
   birthDate: string;
@@ -34,17 +39,53 @@ export interface ProfileUpdateResult {
 
 export interface ProfileGateway {
   loadCurrentProfile(): Promise<UserProfile>;
+  uploadProfileImage(asset: ProfileImageAsset): Promise<string>;
   updateCurrentProfile(input: ProfileUpdateInput): Promise<ProfileUpdateResult>;
   withdrawCurrentUser(): Promise<void>;
 }
 
-export type ProfileHttpClient = Pick<AxiosInstance, 'delete' | 'get' | 'patch'>;
+export type ProfileHttpClient = Pick<
+  AxiosInstance,
+  'delete' | 'get' | 'patch' | 'post'
+>;
+
+interface ProfileUploadRequestConfig {
+  headers: Record<string, string>;
+}
+
+export interface ProfileUploadTransport {
+  readFile(uri: string): Promise<Blob>;
+  put(
+    uploadUrl: string,
+    data: Blob,
+    config: ProfileUploadRequestConfig,
+  ): Promise<void>;
+}
 
 export interface ProfileGatewayOptions {
   authSession?: ApiAuthSession;
   baseUrl?: string;
   client?: ProfileHttpClient;
+  uploadTransport?: ProfileUploadTransport;
 }
+
+const defaultUploadTransport: ProfileUploadTransport = {
+  async readFile(uri) {
+    const response = await fetch(uri);
+    if (!response.ok) {
+      throw new ApiError({
+        code: 'MEDIA_READ_FAILED',
+        kind: 'network',
+        message: '선택한 사진을 읽지 못했습니다.',
+        status: response.status,
+      });
+    }
+    return response.blob();
+  },
+  async put(uploadUrl, data, config) {
+    await axios.put(uploadUrl, data, {headers: config.headers});
+  },
+};
 
 export function createProfileGateway(
   options: ProfileGatewayOptions = {},
@@ -54,11 +95,47 @@ export function createProfileGateway(
     (options.baseUrl === undefined && options.authSession === undefined
       ? apiClient
       : createApiClient(options.baseUrl, options.authSession));
+  const uploadTransport = options.uploadTransport ?? defaultUploadTransport;
 
   return {
     async loadCurrentProfile() {
       const response = await client.get<ApiSuccess<unknown>>('/users/me');
       return parseApiEnvelope(response.data, response.status, parseUserProfile);
+    },
+
+    async uploadProfileImage(asset) {
+      assertProfileImageAsset(asset);
+
+      try {
+        const response = await client.post<ApiSuccess<unknown>>(
+          '/files/presigned-urls',
+          {
+            files: [
+              {
+                contentType: asset.contentType,
+                fileName: asset.fileName,
+                sizeBytes: asset.sizeBytes,
+              },
+            ],
+            purpose: 'profile-image',
+          },
+        );
+        if (response.status !== 201) {
+          throw invalidResponse(response.status);
+        }
+        const upload = parseApiEnvelope(
+          response.data,
+          response.status,
+          parseProfileImageUpload,
+        );
+        const blob = await uploadTransport.readFile(asset.uri);
+        await uploadTransport.put(upload.uploadUrl, blob, {
+          headers: upload.headers,
+        });
+        return upload.fileUrl;
+      } catch (error) {
+        throw normalizeApiError(error);
+      }
     },
 
     async updateCurrentProfile(input) {
@@ -83,6 +160,28 @@ export function createProfileGateway(
 }
 
 export const profileGateway = createProfileGateway();
+
+export function getProfileSaveErrorMessage(error: unknown): string {
+  if (!(error instanceof ApiError)) {
+    return '잠시 후 다시 시도해 주세요.';
+  }
+
+  switch (error.code) {
+    case 'MEDIA_READ_FAILED':
+      return '선택한 사진을 읽지 못했습니다. 다른 사진을 선택해 주세요.';
+    case 'INVALID_REQUEST':
+      return '선택한 사진 또는 입력 값을 확인해 주세요.';
+    case 'UNAUTHORIZED':
+      return '로그인이 만료되었습니다. 다시 로그인해 주세요.';
+    case 'FORBIDDEN':
+      return '프로필을 수정할 권한이 없습니다.';
+    case 'NETWORK_ERROR':
+    case 'API_TIMEOUT':
+      return '네트워크 연결을 확인하고 다시 시도해 주세요.';
+    default:
+      return error.message || '잠시 후 다시 시도해 주세요.';
+  }
+}
 
 export function getProfileWithdrawErrorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) {
@@ -153,6 +252,77 @@ function parseProfileUpdateResult(value: unknown): ProfileUpdateResult | null {
   }
 
   return {id, name, updatedAt};
+}
+
+interface ProfileImageUpload {
+  expiresAt: string;
+  fileUrl: string;
+  headers: Record<string, string>;
+  uploadUrl: string;
+}
+
+function parseProfileImageUpload(value: unknown): ProfileImageUpload | null {
+  if (!isRecord(value) || !Array.isArray(value.uploads)) {
+    return null;
+  }
+  if (value.uploads.length !== 1 || !isRecord(value.uploads[0])) {
+    return null;
+  }
+
+  const upload = value.uploads[0];
+  const uploadUrl = readNonEmptyString(upload.uploadUrl);
+  const fileUrl = readNonEmptyString(upload.fileUrl);
+  const expiresAt = readInstant(upload.expiresAt);
+  const headers = readStringRecord(upload.headers);
+  if (
+    uploadUrl === null ||
+    fileUrl === null ||
+    expiresAt === null ||
+    headers === null ||
+    !Object.keys(headers).some(key => key.toLowerCase() === 'content-type')
+  ) {
+    return null;
+  }
+
+  return {expiresAt, fileUrl, headers, uploadUrl};
+}
+
+function readStringRecord(value: unknown): Record<string, string> | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const entries = Object.entries(value);
+  if (
+    entries.length === 0 ||
+    entries.some(
+      ([key, item]) => key.trim().length === 0 || typeof item !== 'string',
+    )
+  ) {
+    return null;
+  }
+  return Object.fromEntries(entries) as Record<string, string>;
+}
+
+function assertProfileImageAsset(asset: ProfileImageAsset): void {
+  const allowedTypes: readonly string[] = PROFILE_IMAGE_LIMITS.allowedTypes;
+  if (
+    !allowedTypes.includes(asset.contentType) ||
+    asset.sizeBytes <= 0 ||
+    !Number.isSafeInteger(asset.sizeBytes) ||
+    asset.sizeBytes > PROFILE_IMAGE_LIMITS.maxSizeBytes ||
+    asset.uri.trim().length === 0 ||
+    asset.fileName.trim().length === 0 ||
+    asset.fileName.length > 255 ||
+    hasInvalidFileNameCharacter(asset.fileName)
+  ) {
+    throw new ApiError({
+      code: 'INVALID_REQUEST',
+      kind: 'server',
+      message: '업로드할 프로필 이미지 정보가 올바르지 않습니다.',
+      status: 400,
+    });
+  }
 }
 
 function readGender(value: unknown): Gender | null {

@@ -8,7 +8,9 @@ import type {
 } from '../../group-info';
 import {CarnationStamp} from '../components/CarnationStamp';
 import {MyPageProfileCard} from '../components/MyPageProfileCard';
+import {GUARDIAN_PROFILE} from '../fixtures/profileFixtures';
 import {MyPageScreen} from './MyPageScreen';
+import {ProfileEditScreen} from './ProfileEditScreen';
 import type {ProfileGateway} from '../api/profileApi';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
@@ -17,6 +19,9 @@ jest.mock('lucide-react-native/icons/bell-off', () => 'BellOff');
 jest.mock('lucide-react-native/icons/check', () => 'Check');
 jest.mock('lucide-react-native/icons/chevron-left', () => 'ChevronLeft');
 jest.mock('lucide-react-native/icons/x', () => 'X');
+jest.mock('react-native-image-picker', () => ({
+  launchImageLibrary: jest.fn(),
+}));
 // 프로필 편집 진입 시 로드되는 생년월일 스크롤 선택기는 스텁으로 대체한다.
 jest.mock('../../auth', () => ({DatePickerSheet: () => null}));
 
@@ -133,6 +138,7 @@ test('renders the profile returned by the API gateway', async () => {
       name: 'API User',
       profileImageUrl: null,
     }),
+    uploadProfileImage: jest.fn(),
     updateCurrentProfile: jest.fn(),
     withdrawCurrentUser: jest.fn(),
   };
@@ -155,6 +161,69 @@ test('renders the profile returned by the API gateway', async () => {
       .findAllByType(Text)
       .some(node => String(node.props.children).includes('API User')),
   ).toBe(true);
+});
+
+test('새 프로필 이미지는 업로드 후 안정적인 URL로 저장하고 부모 상태를 갱신한다', async () => {
+  const localAsset = {
+    contentType: 'image/webp',
+    fileName: 'profile.webp',
+    sizeBytes: 1024,
+    uri: 'content://profile.webp',
+  } as const;
+  const updateCurrentProfile = jest.fn().mockResolvedValue({
+    id: '1',
+    name: '변경된 이름',
+    updatedAt: '2026-08-01T00:00:00Z',
+  });
+  const profileGateway: ProfileGateway = {
+    loadCurrentProfile: jest.fn().mockResolvedValue({
+      birthDate: '1999-08-02',
+      gender: 'male',
+      loginId: GUARDIAN_PROFILE.loginId,
+      name: GUARDIAN_PROFILE.name,
+      profileImageUrl: 'https://cdn.example.com/old.webp',
+    }),
+    updateCurrentProfile,
+    uploadProfileImage: jest
+      .fn()
+      .mockResolvedValue('https://cdn.example.com/new.webp'),
+    withdrawCurrentUser: jest.fn(),
+  };
+  const renderer = render({profileGateway});
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '프로필 편집'})
+      .props.onPress();
+  });
+  const editScreen = renderer.root.findByType(ProfileEditScreen);
+  const nextProfile = {
+    ...GUARDIAN_PROFILE,
+    name: '변경된 이름',
+    profileImageUrl: localAsset.uri,
+  };
+
+  await TestRenderer.act(async () => {
+    await editScreen.props.onSave(nextProfile, {
+      asset: localAsset,
+      type: 'replace',
+    });
+    editScreen.props.onBack();
+  });
+
+  expect(profileGateway.uploadProfileImage).toHaveBeenCalledWith(localAsset);
+  expect(updateCurrentProfile).toHaveBeenCalledWith(
+    expect.objectContaining({
+      name: '변경된 이름',
+      profileImageUrl: 'https://cdn.example.com/new.webp',
+    }),
+  );
+  expect(renderer.root.findByType(MyPageProfileCard).props).toMatchObject({
+    name: '변경된 이름',
+    profileImageUrl: 'https://cdn.example.com/new.webp',
+  });
 });
 
 test('KST 현재 주 월요일부터 일요일까지 병렬 조회하고 도장·순위·왕관을 반영한다', async () => {

@@ -1,5 +1,70 @@
 import type {UserProfile} from './api/profileApi';
-import type {Gender} from './types';
+import type {Gender, ProfileImageAsset} from './types';
+
+export const PROFILE_IMAGE_LIMITS = {
+  allowedTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  maxSizeBytes: 10 * 1024 * 1024,
+} as const;
+
+export type ProfileImageValidationError = 'metadata' | 'size' | 'type';
+
+export type ProfileImageAssetResult =
+  | {asset: ProfileImageAsset; error: null}
+  | {asset: null; error: ProfileImageValidationError};
+
+interface PickedProfileImageMetadata {
+  fileName?: string;
+  fileSize?: number;
+  type?: string;
+  uri?: string;
+}
+
+export function parsePickedProfileImage(
+  value: PickedProfileImageMetadata,
+): ProfileImageAssetResult {
+  const uri = value.uri?.trim();
+  const fileName = value.fileName?.trim();
+  const contentType = value.type?.split(';', 1)[0].trim().toLowerCase();
+  const sizeBytes = value.fileSize;
+
+  if (
+    uri === undefined ||
+    uri.length === 0 ||
+    fileName === undefined ||
+    fileName.length === 0 ||
+    fileName.length > 255 ||
+    hasInvalidFileNameCharacter(fileName) ||
+    contentType === undefined ||
+    contentType.length === 0 ||
+    sizeBytes === undefined ||
+    !Number.isSafeInteger(sizeBytes) ||
+    sizeBytes <= 0
+  ) {
+    return {asset: null, error: 'metadata'};
+  }
+
+  const allowedTypes: readonly string[] = PROFILE_IMAGE_LIMITS.allowedTypes;
+  if (!allowedTypes.includes(contentType)) {
+    return {asset: null, error: 'type'};
+  }
+  if (sizeBytes > PROFILE_IMAGE_LIMITS.maxSizeBytes) {
+    return {asset: null, error: 'size'};
+  }
+
+  return {
+    asset: {contentType, fileName, sizeBytes, uri},
+    error: null,
+  };
+}
+
+export function hasInvalidFileNameCharacter(value: string): boolean {
+  return Array.from(value).some(character => {
+    const code = character.charCodeAt(0);
+    return (
+      character === '\\' || character === '/' || code <= 31 || code === 127
+    );
+  });
+}
 
 // 성별 코드값을 화면 표시 문구로 바꾼다.
 export function formatGenderLabel(gender: Gender): string {
@@ -50,12 +115,14 @@ export function formatIsoDate(value: string): string {
     : formatDisplayDate(parsed.year, parsed.month, parsed.day);
 }
 
-export function toApiProfileUpdate(profile: {
-  birthDate: string;
-  gender: Gender;
-  name: string;
-  profileImageUrl?: string | null;
-}): {
+export function toApiProfileUpdate(
+  profile: {
+    birthDate: string;
+    gender: Gender;
+    name: string;
+  },
+  profileImageUrl?: string | null,
+): {
   birthDate?: string;
   gender: 'FEMALE' | 'MALE';
   name: string;
@@ -80,8 +147,8 @@ export function toApiProfileUpdate(profile: {
     gender: profile.gender === 'male' ? 'MALE' : 'FEMALE',
     name: profile.name,
   };
-  if (profile.profileImageUrl !== undefined) {
-    input.profileImageUrl = profile.profileImageUrl;
+  if (profileImageUrl !== undefined) {
+    input.profileImageUrl = profileImageUrl;
   }
   return input;
 }

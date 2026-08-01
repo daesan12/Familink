@@ -27,7 +27,7 @@ import {
 } from '../components/MyPageSettingsSection';
 import {CARE_RECEIVER_PROFILE} from '../fixtures/profileFixtures';
 import {mergeUserProfile, toApiProfileUpdate} from '../profileModel';
-import type {CareReceiverProfile} from '../types';
+import type {CareReceiverProfile, ProfileImageChange} from '../types';
 import {ProfileEditScreen} from './ProfileEditScreen';
 import {ProfileGuideScreen} from './ProfileGuideScreen';
 
@@ -123,20 +123,31 @@ export function CareReceiverMyPageScreen({
     };
   }, [profileGateway]);
 
-  const handleProfileSave = (nextProfile: CareReceiverProfile) => {
-    setProfile(nextProfile);
+  const handleProfileSave = async (
+    nextProfile: CareReceiverProfile,
+    imageChange: ProfileImageChange,
+  ) => {
     if (profileGateway === undefined) {
+      setProfile(nextProfile);
       return;
     }
 
-    profileGateway
-      .updateCurrentProfile(toApiProfileUpdate(nextProfile))
-      .catch(() => {
-        Alert.alert(
-          '?꾨줈???섏젙???ㅽ뙣?덉뒿?덈떎.',
-          '?낅젰 媛믪쓣 ?뺤씤??二쇱꽭??吏?뺤쓣 ?쒕룄??二쇱꽭??',
-        );
-      });
+    const profileImageUrl =
+      imageChange.type === 'replace'
+        ? await profileGateway.uploadProfileImage(imageChange.asset)
+        : imageChange.type === 'remove'
+          ? null
+          : undefined;
+    await profileGateway.updateCurrentProfile(
+      toApiProfileUpdate(nextProfile, profileImageUrl),
+    );
+    setProfile({
+      ...nextProfile,
+      profileImageUrl:
+        profileImageUrl === undefined
+          ? nextProfile.profileImageUrl
+          : profileImageUrl,
+    });
   };
 
   const handleLogout = () => {

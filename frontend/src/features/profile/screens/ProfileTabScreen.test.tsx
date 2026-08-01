@@ -10,6 +10,9 @@ jest.mock('lucide-react-native/icons/bell-off', () => 'BellOff');
 jest.mock('lucide-react-native/icons/check', () => 'Check');
 jest.mock('lucide-react-native/icons/chevron-left', () => 'ChevronLeft');
 jest.mock('lucide-react-native/icons/x', () => 'X');
+jest.mock('react-native-image-picker', () => ({
+  launchImageLibrary: jest.fn(),
+}));
 jest.mock('../../auth', () => ({
   createInterestGateway: jest.fn(),
   DatePickerSheet: () => null,

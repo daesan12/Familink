@@ -3,6 +3,7 @@ import {
   createProfileGateway,
   getProfileWithdrawErrorMessage,
   type ProfileHttpClient,
+  type ProfileUploadTransport,
 } from './profileApi';
 
 function success(data: unknown, status = 200) {
@@ -17,7 +18,15 @@ function createClient(): jest.Mocked<ProfileHttpClient> {
     delete: jest.fn(),
     get: jest.fn(),
     patch: jest.fn(),
+    post: jest.fn(),
   } as unknown as jest.Mocked<ProfileHttpClient>;
+}
+
+function createUploadTransport(): jest.Mocked<ProfileUploadTransport> {
+  return {
+    put: jest.fn(),
+    readFile: jest.fn(),
+  };
 }
 
 describe('profileApi', () => {
@@ -86,6 +95,146 @@ describe('profileApi', () => {
     });
   });
 
+  it('presigned 응답 헤더를 그대로 사용해 프로필 이미지를 업로드한다', async () => {
+    const client = createClient();
+    const uploadTransport = createUploadTransport();
+    const blob = {} as Blob;
+    client.post.mockResolvedValueOnce(
+      success(
+        {
+          uploads: [
+            {
+              expiresAt: '2026-08-01T08:10:00Z',
+              fileUrl:
+                'https://cdn.example.com/profile-image/profile-photo.jpg',
+              headers: {
+                'Content-Type': 'image/jpeg',
+                'x-amz-meta-token': 'signed',
+              },
+              uploadUrl: 'https://s3.example.com/signed-upload',
+            },
+          ],
+        },
+        201,
+      ),
+    );
+    uploadTransport.readFile.mockResolvedValueOnce(blob);
+    uploadTransport.put.mockResolvedValueOnce();
+    const gateway = createProfileGateway({client, uploadTransport});
+
+    await expect(
+      gateway.uploadProfileImage({
+        contentType: 'image/jpeg',
+        fileName: 'profile-photo.jpg',
+        sizeBytes: 1024,
+        uri: 'content://profile-photo',
+      }),
+    ).resolves.toBe(
+      'https://cdn.example.com/profile-image/profile-photo.jpg',
+    );
+    expect(client.post).toHaveBeenCalledWith('/files/presigned-urls', {
+      files: [
+        {
+          contentType: 'image/jpeg',
+          fileName: 'profile-photo.jpg',
+          sizeBytes: 1024,
+        },
+      ],
+      purpose: 'profile-image',
+    });
+    expect(uploadTransport.readFile).toHaveBeenCalledWith(
+      'content://profile-photo',
+    );
+    expect(uploadTransport.put).toHaveBeenCalledWith(
+      'https://s3.example.com/signed-upload',
+      blob,
+      {
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'x-amz-meta-token': 'signed',
+        },
+      },
+    );
+  });
+
+  it('presigned 응답이 단일 업로드와 Content-Type을 제공하지 않으면 거부한다', async () => {
+    const client = createClient();
+    const uploadTransport = createUploadTransport();
+    client.post.mockResolvedValueOnce(
+      success(
+        {
+          uploads: [
+            {
+              expiresAt: '2026-08-01T08:10:00Z',
+              fileUrl:
+                'https://cdn.example.com/profile-image/profile-photo.jpg',
+              headers: {'x-amz-meta-token': 'signed'},
+              uploadUrl: 'https://s3.example.com/signed-upload',
+            },
+          ],
+        },
+        201,
+      ),
+    );
+    const gateway = createProfileGateway({client, uploadTransport});
+
+    await expect(
+      gateway.uploadProfileImage({
+        contentType: 'image/jpeg',
+        fileName: 'profile-photo.jpg',
+        sizeBytes: 1024,
+        uri: 'content://profile-photo',
+      }),
+    ).rejects.toMatchObject<Partial<ApiError>>({
+      code: 'INVALID_API_RESPONSE',
+      kind: 'invalidResponse',
+    });
+    expect(uploadTransport.readFile).not.toHaveBeenCalled();
+    expect(uploadTransport.put).not.toHaveBeenCalled();
+  });
+
+  it('허용되지 않은 프로필 이미지는 presigned 요청 전에 거부한다', async () => {
+    const client = createClient();
+    const gateway = createProfileGateway({client});
+
+    await expect(
+      gateway.uploadProfileImage({
+        contentType: 'image/gif',
+        fileName: 'profile.gif',
+        sizeBytes: 1024,
+        uri: 'content://profile-photo',
+      }),
+    ).rejects.toMatchObject<Partial<ApiError>>({code: 'INVALID_REQUEST'});
+    expect(client.post).not.toHaveBeenCalled();
+  });
+
+  it('로컬 파일을 읽지 못하면 S3 업로드를 실행하지 않고 실패한다', async () => {
+    const client = createClient();
+    const uploadTransport = createUploadTransport();
+    client.post.mockResolvedValueOnce(profileImagePresignResponse());
+    uploadTransport.readFile.mockRejectedValueOnce(new Error('read failed'));
+    const gateway = createProfileGateway({client, uploadTransport});
+
+    await expect(gateway.uploadProfileImage(validProfileAsset())).rejects.toBeInstanceOf(
+      ApiError,
+    );
+    expect(uploadTransport.put).not.toHaveBeenCalled();
+  });
+
+  it('S3 PUT이 실패하면 fileUrl을 반환하지 않는다', async () => {
+    const client = createClient();
+    const uploadTransport = createUploadTransport();
+    client.post.mockResolvedValueOnce(profileImagePresignResponse());
+    uploadTransport.readFile.mockResolvedValueOnce({} as Blob);
+    uploadTransport.put.mockRejectedValueOnce(new Error('upload failed'));
+    const gateway = createProfileGateway({client, uploadTransport});
+
+    await expect(gateway.uploadProfileImage(validProfileAsset())).rejects.toBeInstanceOf(
+      ApiError,
+    );
+    expect(uploadTransport.put).toHaveBeenCalledTimes(1);
+  });
+
   it('회원 탈퇴는 204 응답만 성공으로 처리한다', async () => {
     const client = createClient();
     client.delete.mockResolvedValueOnce({status: 204} as never);
@@ -115,3 +264,28 @@ describe('profileApi', () => {
     });
   });
 });
+
+function validProfileAsset() {
+  return {
+    contentType: 'image/jpeg',
+    fileName: 'profile-photo.jpg',
+    sizeBytes: 1024,
+    uri: 'content://profile-photo',
+  } as const;
+}
+
+function profileImagePresignResponse() {
+  return success(
+    {
+      uploads: [
+        {
+          expiresAt: '2026-08-01T08:10:00Z',
+          fileUrl: 'https://cdn.example.com/profile-image/profile-photo.jpg',
+          headers: {'Content-Type': 'image/jpeg'},
+          uploadUrl: 'https://s3.example.com/signed-upload',
+        },
+      ],
+    },
+    201,
+  );
+}
