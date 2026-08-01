@@ -140,4 +140,4 @@
 - 결정일: 2026-07-31
 - 반영 문서: `docs/specs/domains/CALENDAR.md`,
   `docs/specs/UI_AND_NAVIGATION.md`
-- 반영 커밋:
+- 반영 커밋: `147d3d5`
