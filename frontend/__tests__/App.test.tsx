@@ -1655,6 +1655,138 @@ test.each([
   }
 );
 
+test("회원탈퇴 실패 중 완료된 디바이스 토큰 등록을 이후 로그아웃에서 해제한다", async () => {
+  const authGateway = createAuthGateway();
+  const notificationGateway = createNotificationGateway();
+  const deviceTokenProvider = createDeviceTokenProvider(
+    "granted",
+    "pending-withdraw-token"
+  );
+  const profileGateway = createProfileGateway();
+  const withdrawalFailure = new ApiError({
+    code: "NETWORK_ERROR",
+    kind: "network",
+    message: "네트워크 연결을 확인해 주세요.",
+  });
+  profileGateway.withdrawCurrentUser.mockRejectedValueOnce(withdrawalFailure);
+  let resolveRegistration:
+    | ((value: Awaited<ReturnType<NotificationGateway["registerDeviceToken"]>>) => void)
+    | undefined;
+  const registrationPromise = new Promise<
+    Awaited<ReturnType<NotificationGateway["registerDeviceToken"]>>
+  >(resolve => {
+    resolveRegistration = resolve;
+  });
+  notificationGateway.registerDeviceToken.mockReturnValueOnce(registrationPromise);
+  const { renderer } = await renderApp(
+    authGateway,
+    createAuthSessionCoordinator(),
+    createGroupGateway(),
+    notificationGateway,
+    deviceTokenProvider,
+    profileGateway
+  );
+  await loginToSignedInWelcome(renderer);
+
+  let withdrawalPromise: Promise<void> | undefined;
+  await TestRenderer.act(async () => {
+    withdrawalPromise = renderer.root
+      .findByType(SignedInWelcomeScreen)
+      .props.onRequestWithdrawal();
+    await flushAsyncWork();
+  });
+  expect(profileGateway.withdrawCurrentUser).not.toHaveBeenCalled();
+
+  resolveRegistration?.({
+    active: true,
+    deviceType: "ANDROID",
+    id: "1",
+  });
+  await TestRenderer.act(async () => {
+    await expect(withdrawalPromise).rejects.toBe(withdrawalFailure);
+    await flushAsyncWork();
+  });
+
+  expect(renderer.root.findByType(SignedInWelcomeScreen)).toBeTruthy();
+  await TestRenderer.act(async () => {
+    await renderer.root.findByType(SignedInWelcomeScreen).props.onLogout();
+  });
+  expect(notificationGateway.deactivateDeviceToken).toHaveBeenCalledWith(
+    "pending-withdraw-token"
+  );
+  expect(authGateway.logout).toHaveBeenCalledTimes(1);
+});
+
+test("회원탈퇴 실패 전에 인증이 무효화되면 활성·등록 중 디바이스 토큰을 해제한다", async () => {
+  const authSession = createAuthSessionCoordinator();
+  const notificationGateway = createNotificationGateway();
+  const deviceTokenProvider = createDeviceTokenProvider(
+    "granted",
+    "active-before-withdrawal"
+  );
+  let refreshListener: ((token: string) => void) | undefined;
+  deviceTokenProvider.subscribeTokenRefresh = jest.fn(listener => {
+    refreshListener = listener;
+    return jest.fn();
+  });
+  const profileGateway = createProfileGateway();
+  const withdrawalFailure = new ApiError({
+    code: "UNAUTHORIZED",
+    kind: "server",
+    message: "인증이 만료되었습니다.",
+    status: 401,
+  });
+  profileGateway.withdrawCurrentUser.mockRejectedValueOnce(withdrawalFailure);
+  let resolveRegistration:
+    | ((value: Awaited<ReturnType<NotificationGateway["registerDeviceToken"]>>) => void)
+    | undefined;
+  const registrationPromise = new Promise<
+    Awaited<ReturnType<NotificationGateway["registerDeviceToken"]>>
+  >(resolve => {
+    resolveRegistration = resolve;
+  });
+  const { renderer } = await renderApp(
+    createAuthGateway(),
+    authSession,
+    createGroupGateway(),
+    notificationGateway,
+    deviceTokenProvider,
+    profileGateway
+  );
+  await loginToSignedInWelcome(renderer);
+  notificationGateway.registerDeviceToken.mockReturnValueOnce(registrationPromise);
+  await TestRenderer.act(async () => {
+    refreshListener?.("invalidated-withdraw-token");
+    await flushAsyncWork();
+  });
+
+  let withdrawalPromise: Promise<void> | undefined;
+  await TestRenderer.act(async () => {
+    withdrawalPromise = renderer.root
+      .findByType(SignedInWelcomeScreen)
+      .props.onRequestWithdrawal();
+    await flushAsyncWork();
+    authSession.emitInvalidated();
+  });
+  resolveRegistration?.({
+    active: true,
+    deviceType: "ANDROID",
+    id: "1",
+  });
+  await TestRenderer.act(async () => {
+    await expect(withdrawalPromise).rejects.toBe(withdrawalFailure);
+    await flushAsyncWork();
+  });
+
+  expect(notificationGateway.deactivateDeviceToken).toHaveBeenCalledWith(
+    "invalidated-withdraw-token"
+  );
+  expect(notificationGateway.deactivateDeviceToken).toHaveBeenCalledWith(
+    "active-before-withdrawal"
+  );
+  expect(renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })).toBeTruthy();
+});
+
 test("서버 탈퇴 성공 후 로컬 세션 정리가 실패해도 화면을 초기화하고 경고한다", async () => {
   const alertSpy = jest.spyOn(Alert, "alert");
   const authSession = createAuthSessionCoordinator();
