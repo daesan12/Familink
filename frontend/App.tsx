@@ -161,6 +161,7 @@ interface AppProps {
 interface PendingDeviceTokenRegistration {
   deactivationRequested: boolean;
   promise: Promise<unknown>;
+  sessionVersion: number;
   token: string;
 }
 
@@ -529,6 +530,7 @@ export default function App({
   const interestSetupRequestRef = useRef(0);
   const deviceTokenGenerationRef = useRef(0);
   const activeDeviceTokenRef = useRef<string | null>(null);
+  const activeDeviceTokenSessionVersionRef = useRef<number | null>(null);
   const deviceTokenLogoutRef = useRef(false);
   const suppressDeviceTokenDeactivationRef = useRef(false);
   const pendingDeviceTokenRegistrationRef =
@@ -559,28 +561,42 @@ export default function App({
         return;
       }
       const generation = ++deviceTokenGenerationRef.current;
+      const sessionVersion = authInvalidationVersionRef.current;
       const permission =
         refreshedToken === undefined
           ? await deviceTokenProvider.requestPermission()
           : "granted";
       if (
         permission !== "granted" ||
-        generation !== deviceTokenGenerationRef.current
+        generation !== deviceTokenGenerationRef.current ||
+        sessionVersion !== authInvalidationVersionRef.current
       ) {
         return;
       }
 
       const token = refreshedToken ?? (await deviceTokenProvider.getToken());
-      if (token === null || generation !== deviceTokenGenerationRef.current) {
+      if (
+        token === null ||
+        generation !== deviceTokenGenerationRef.current ||
+        sessionVersion !== authInvalidationVersionRef.current
+      ) {
         return;
       }
 
+      await deviceTokenDeactivationRef.current?.catch(() => undefined);
+      if (
+        generation !== deviceTokenGenerationRef.current ||
+        sessionVersion !== authInvalidationVersionRef.current
+      ) {
+        return;
+      }
       const previousActiveToken = activeDeviceTokenRef.current;
       const registrationPromise =
         resolvedNotificationGateway.registerDeviceToken(token);
       const pendingRegistration: PendingDeviceTokenRegistration = {
         deactivationRequested: false,
         promise: registrationPromise,
+        sessionVersion,
         token,
       };
       pendingDeviceTokenRegistrationRef.current = pendingRegistration;
@@ -593,8 +609,12 @@ export default function App({
           pendingDeviceTokenRegistrationRef.current = null;
         }
       }
-      if (generation === deviceTokenGenerationRef.current) {
+      if (
+        generation === deviceTokenGenerationRef.current &&
+        sessionVersion === authInvalidationVersionRef.current
+      ) {
         activeDeviceTokenRef.current = token;
+        activeDeviceTokenSessionVersionRef.current = sessionVersion;
         if (previousActiveToken !== null && previousActiveToken !== token) {
           await resolvedNotificationGateway
             .deactivateDeviceToken(previousActiveToken)
@@ -628,6 +648,7 @@ export default function App({
         tokens.add(pendingRegistration.token);
       }
       activeDeviceTokenRef.current = null;
+      activeDeviceTokenSessionVersionRef.current = null;
       if (tokens.size === 0) {
         return;
       }
@@ -653,7 +674,16 @@ export default function App({
       pendingRegistration.deactivationRequested = true;
     }
 
-    await pendingRegistration?.promise.catch(() => undefined);
+    if (pendingRegistration === null) {
+      return null;
+    }
+
+    try {
+      await pendingRegistration.promise;
+      return pendingRegistration.token;
+    } catch {
+      return null;
+    }
   }, []);
 
   useEffect(() => {
@@ -803,19 +833,25 @@ export default function App({
   ]);
 
   const handleLogin = async (credentials: LoginCredentials) => {
-    deviceTokenLogoutRef.current = false;
-    suppressDeviceTokenDeactivationRef.current = false;
     const invalidationVersion = authInvalidationVersionRef.current;
     const authenticatedUser = await authGateway.login(credentials);
+    if (authInvalidationVersionRef.current !== invalidationVersion) {
+      return;
+    }
+    authInvalidationVersionRef.current += 1;
+    const authenticatedSessionVersion = authInvalidationVersionRef.current;
+    deviceTokenLogoutRef.current = false;
+    suppressDeviceTokenDeactivationRef.current = false;
     setLoginVisible(false);
     await enterAuthenticatedState(
       authenticatedUser,
-      () => authInvalidationVersionRef.current === invalidationVersion
+      () => authInvalidationVersionRef.current === authenticatedSessionVersion
     );
     void registerCurrentDeviceToken().catch(() => undefined);
   };
 
   const handleLogout = async () => {
+    authInvalidationVersionRef.current += 1;
     deviceTokenLogoutRef.current = true;
     suppressDeviceTokenDeactivationRef.current = false;
     let failure: unknown;
@@ -851,16 +887,83 @@ export default function App({
       return existingRequest;
     }
 
+    const authInvalidationVersion = authInvalidationVersionRef.current;
+    const activeTokenAtStart = activeDeviceTokenRef.current;
     const request = (async () => {
       deviceTokenLogoutRef.current = true;
       suppressDeviceTokenDeactivationRef.current = true;
+      let settledRegistrationToken: string | null = null;
 
       try {
-        await cancelCurrentDeviceTokenRegistration();
+        settledRegistrationToken = await cancelCurrentDeviceTokenRegistration();
         await resolvedProfileGateway.withdrawCurrentUser();
       } catch (error) {
-        deviceTokenLogoutRef.current = false;
         suppressDeviceTokenDeactivationRef.current = false;
+        if (authInvalidationVersionRef.current !== authInvalidationVersion) {
+          const tokensToDeactivate = new Set<string>();
+          if (activeTokenAtStart !== null) {
+            tokensToDeactivate.add(activeTokenAtStart);
+          }
+          if (settledRegistrationToken !== null) {
+            tokensToDeactivate.add(settledRegistrationToken);
+          }
+          const previousDeactivation = deviceTokenDeactivationRef.current;
+          const cleanup = (async () => {
+            await previousDeactivation?.catch(() => undefined);
+            for (const token of tokensToDeactivate) {
+              const currentSessionVersion = authInvalidationVersionRef.current;
+              const currentPendingRegistration =
+                pendingDeviceTokenRegistrationRef.current;
+              const belongsToCurrentActiveSession =
+                activeDeviceTokenRef.current === token &&
+                activeDeviceTokenSessionVersionRef.current ===
+                  currentSessionVersion;
+              const belongsToCurrentPendingSession =
+                currentPendingRegistration?.token === token &&
+                currentPendingRegistration.sessionVersion ===
+                  currentSessionVersion;
+              if (
+                belongsToCurrentActiveSession ||
+                belongsToCurrentPendingSession
+              ) {
+                continue;
+              }
+              if (activeDeviceTokenRef.current === token) {
+                activeDeviceTokenRef.current = null;
+                activeDeviceTokenSessionVersionRef.current = null;
+              }
+              if (currentPendingRegistration?.token === token) {
+                pendingDeviceTokenRegistrationRef.current = null;
+              }
+              await resolvedNotificationGateway
+                .deactivateDeviceToken(token)
+                .catch(() => undefined);
+            }
+          })();
+          deviceTokenDeactivationRef.current = cleanup;
+          try {
+            await cleanup;
+          } finally {
+            if (deviceTokenDeactivationRef.current === cleanup) {
+              deviceTokenDeactivationRef.current = null;
+            }
+          }
+        } else if (settledRegistrationToken !== null) {
+          deviceTokenLogoutRef.current = false;
+          const previousActiveToken = activeDeviceTokenRef.current;
+          activeDeviceTokenRef.current = settledRegistrationToken;
+          activeDeviceTokenSessionVersionRef.current = authInvalidationVersion;
+          if (
+            previousActiveToken !== null &&
+            previousActiveToken !== settledRegistrationToken
+          ) {
+            await resolvedNotificationGateway
+              .deactivateDeviceToken(previousActiveToken)
+              .catch(() => undefined);
+          }
+        } else {
+          deviceTokenLogoutRef.current = false;
+        }
         throw error;
       }
 
@@ -872,6 +975,7 @@ export default function App({
       }
 
       activeDeviceTokenRef.current = null;
+      activeDeviceTokenSessionVersionRef.current = null;
       pendingDeviceTokenRegistrationRef.current = null;
       clearAuthenticationState();
       setAuthenticationResolved(true);
