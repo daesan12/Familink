@@ -1,5 +1,5 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useRef, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {
   Animated,
   Image,
@@ -14,10 +14,11 @@ import {
 import {launchImageLibrary} from 'react-native-image-picker';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
+import {ApiError} from '../../../shared/api';
 import {
-  checkLoginIdAvailability,
-  submitSignup,
-} from '../api/mockSignupApi';
+  signupGateway,
+  type SignupGateway,
+} from '../api/signupApi';
 import {AnimatedPressable} from '../components/AnimatedPressable';
 import {DatePickerSheet} from '../components/DatePickerSheet';
 import {FloatingIllustration} from '../components/FloatingIllustration';
@@ -48,6 +49,27 @@ const MALE_ILLUSTRATION = require('../../../assets/images/gender-male.png');
 const FEMALE_ILLUSTRATION = require('../../../assets/images/gender-female.png');
 const COMPLETE_ILLUSTRATION = require('../../../assets/images/signup-complete-family.png');
 const FAMILINK_LOGO = require('../../../assets/images/familink-logo.png');
+type SignupField = 'birthDate' | 'gender' | 'loginId' | 'name' | 'password';
+type SignupFieldErrors = Partial<Record<SignupField, string>>;
+
+const FIELD_ERROR_MESSAGES: Record<SignupField, string> = {
+  birthDate: '생년월일을 다시 선택해주세요.',
+  gender: '성별을 선택해주세요.',
+  loginId: '아이디는 영문·숫자 5 ~ 15자로 입력해주세요.',
+  name: '이름은 2 ~ 10자로 입력해주세요.',
+  password: '비밀번호는 영문·숫자 8 ~ 16자로 입력해주세요.',
+};
+const FIELD_STEPS: Record<SignupField, Exclude<SignupStep, 5>> = {
+  birthDate: 3,
+  gender: 4,
+  loginId: 1,
+  name: 1,
+  password: 2,
+};
+const NETWORK_ERROR_MESSAGE =
+  '네트워크 연결을 확인하고 다시 시도해주세요.';
+const SIGNUP_ERROR_MESSAGE =
+  '회원가입에 실패했습니다. 잠시 후 다시 시도해주세요.';
 const INITIAL_DRAFT: SignupDraft = {
   profileImageUri: null,
   name: '',
@@ -59,11 +81,13 @@ const INITIAL_DRAFT: SignupDraft = {
 };
 
 interface SignupFlowScreenProps {
+  gateway?: SignupGateway;
   onCancel: () => void;
   onComplete: () => void;
 }
 
 export function SignupFlowScreen({
+  gateway = signupGateway,
   onCancel,
   onComplete,
 }: SignupFlowScreenProps) {
@@ -73,15 +97,41 @@ export function SignupFlowScreen({
     useState<LoginIdAvailability>('idle');
   const [showPasswordMismatch, setShowPasswordMismatch] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<SignupFieldErrors>({});
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const isMountedRef = useRef(true);
   const loginIdRef = useRef(draft.loginId);
+  const loginIdRequestIdRef = useRef(0);
+  const submittingRef = useRef(false);
   const screenEntranceStyle = useScreenEntrance(step);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      loginIdRequestIdRef.current += 1;
+    };
+  }, []);
 
   const updateDraft = <Key extends keyof SignupDraft>(
     key: Key,
     value: SignupDraft[Key],
   ) => {
     setDraft(current => ({...current, [key]: value}));
+  };
+
+  const clearFieldError = (field: SignupField) => {
+    setFieldErrors(current => {
+      if (current[field] === undefined) {
+        return current;
+      }
+
+      const next = {...current};
+      delete next[field];
+      return next;
+    });
+    setSubmissionError(null);
   };
 
   const handleBack = () => {
@@ -113,12 +163,34 @@ export function SignupFlowScreen({
       return;
     }
     const checkedLoginId = draft.loginId;
+    const requestId = loginIdRequestIdRef.current + 1;
+    loginIdRequestIdRef.current = requestId;
+    clearFieldError('loginId');
     setLoginIdAvailability('checking');
-    const available = await checkLoginIdAvailability(checkedLoginId);
-    if (loginIdRef.current !== checkedLoginId) {
-      return;
+    try {
+      const available = await gateway.checkLoginIdAvailability(checkedLoginId);
+      if (
+        !isMountedRef.current ||
+        loginIdRequestIdRef.current !== requestId ||
+        loginIdRef.current !== checkedLoginId
+      ) {
+        return;
+      }
+      setLoginIdAvailability(available ? 'available' : 'duplicated');
+    } catch (error) {
+      if (
+        !isMountedRef.current ||
+        loginIdRequestIdRef.current !== requestId ||
+        loginIdRef.current !== checkedLoginId
+      ) {
+        return;
+      }
+      setLoginIdAvailability('idle');
+      setFieldErrors(current => ({
+        ...current,
+        loginId: getLoginIdCheckErrorMessage(error),
+      }));
     }
-    setLoginIdAvailability(available ? 'available' : 'duplicated');
   };
 
   const handleBasicInfoNext = () => {
@@ -142,16 +214,66 @@ export function SignupFlowScreen({
   };
 
   const handleSubmit = async () => {
-    if (!canSubmitSignup(draft)) {
+    if (
+      submittingRef.current ||
+      !canSubmitSignup(draft) ||
+      draft.gender === null
+    ) {
       return;
     }
+    submittingRef.current = true;
+    setFieldErrors({});
+    setSubmissionError(null);
     setSubmitting(true);
     try {
-      await submitSignup(draft);
-      goForward(5);
+      await gateway.signup({
+        birthDate: draft.birthDate,
+        gender: draft.gender,
+        loginId: draft.loginId,
+        name: draft.name,
+        password: draft.password,
+      });
+      if (isMountedRef.current) {
+        goForward(5);
+      }
+    } catch (error) {
+      if (isMountedRef.current) {
+        applySignupFailure(error);
+      }
     } finally {
-      setSubmitting(false);
+      submittingRef.current = false;
+      if (isMountedRef.current) {
+        setSubmitting(false);
+      }
     }
+  };
+
+  const applySignupFailure = (error: unknown) => {
+    if (error instanceof ApiError && error.code === 'LOGIN_ID_DUPLICATED') {
+      loginIdRequestIdRef.current += 1;
+      setLoginIdAvailability('duplicated');
+      setStep(1);
+      return;
+    }
+
+    const mappedErrors = mapSignupFieldErrors(error);
+    const fields = Object.keys(mappedErrors) as SignupField[];
+    if (fields.length > 0) {
+      setFieldErrors(mappedErrors);
+      if (mappedErrors.loginId !== undefined) {
+        loginIdRequestIdRef.current += 1;
+        setLoginIdAvailability('idle');
+      }
+      setStep(
+        fields.reduce<Exclude<SignupStep, 5>>(
+          (earliest, field) => Math.min(earliest, FIELD_STEPS[field]) as Exclude<SignupStep, 5>,
+          4,
+        ),
+      );
+      return;
+    }
+
+    setSubmissionError(getSignupErrorMessage(error));
   };
 
   return (
@@ -168,14 +290,21 @@ export function SignupFlowScreen({
             <BasicInfoStep
               availability={loginIdAvailability}
               draft={draft}
+              loginIdError={fieldErrors.loginId}
+              nameError={fieldErrors.name}
               onBack={handleBack}
               onChangeLoginId={value => {
                 const nextLoginId = value.replace(/[^A-Za-z0-9]/g, '');
+                loginIdRequestIdRef.current += 1;
                 loginIdRef.current = nextLoginId;
+                clearFieldError('loginId');
                 updateDraft('loginId', nextLoginId);
                 setLoginIdAvailability('idle');
               }}
-              onChangeName={value => updateDraft('name', value)}
+              onChangeName={value => {
+                clearFieldError('name');
+                updateDraft('name', value);
+              }}
               onCheckLoginId={handleCheckLoginId}
               onNext={handleBasicInfoNext}
               onPickProfile={handlePickProfile}
@@ -184,9 +313,11 @@ export function SignupFlowScreen({
           {step === 2 && (
             <PasswordStep
               draft={draft}
+              errorMessage={fieldErrors.password}
               mismatch={showPasswordMismatch}
               onBack={handleBack}
               onChangeConfirmation={value => {
+                clearFieldError('password');
                 updateDraft(
                   'passwordConfirmation',
                   value.replace(/[^A-Za-z0-9]/g, ''),
@@ -194,6 +325,7 @@ export function SignupFlowScreen({
                 setShowPasswordMismatch(false);
               }}
               onChangePassword={value => {
+                clearFieldError('password');
                 updateDraft(
                   'password',
                   value.replace(/[^A-Za-z0-9]/g, ''),
@@ -206,6 +338,7 @@ export function SignupFlowScreen({
           {step === 3 && (
             <BirthDateStep
               birthDate={draft.birthDate}
+              errorMessage={fieldErrors.birthDate}
               onBack={handleBack}
               onNext={() => goForward(4)}
               onOpenPicker={() => setDatePickerVisible(true)}
@@ -213,11 +346,15 @@ export function SignupFlowScreen({
           )}
           {step === 4 && (
             <GenderStep
+              errorMessage={fieldErrors.gender ?? submissionError ?? undefined}
               gender={draft.gender}
               loading={submitting}
               onBack={handleBack}
               onNext={handleSubmit}
-              onSelect={value => updateDraft('gender', value)}
+              onSelect={value => {
+                clearFieldError('gender');
+                updateDraft('gender', value);
+              }}
             />
           )}
           {step === 5 && (
@@ -228,6 +365,7 @@ export function SignupFlowScreen({
       <DatePickerSheet
         onCancel={() => setDatePickerVisible(false)}
         onConfirm={value => {
+          clearFieldError('birthDate');
           updateDraft('birthDate', value);
           setDatePickerVisible(false);
         }}
@@ -238,9 +376,51 @@ export function SignupFlowScreen({
   );
 }
 
+function mapSignupFieldErrors(error: unknown): SignupFieldErrors {
+  if (!(error instanceof ApiError) || error.code !== 'INVALID_REQUEST') {
+    return {};
+  }
+
+  const mapped: SignupFieldErrors = {};
+  error.errors.forEach(({field}) => {
+    if (isSignupField(field)) {
+      mapped[field] = FIELD_ERROR_MESSAGES[field];
+    }
+  });
+  return mapped;
+}
+
+function isSignupField(field: string): field is SignupField {
+  return Object.prototype.hasOwnProperty.call(FIELD_STEPS, field);
+}
+
+function getLoginIdCheckErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'INVALID_REQUEST') {
+      return FIELD_ERROR_MESSAGES.loginId;
+    }
+    if (error.code === 'NETWORK_ERROR' || error.code === 'API_TIMEOUT') {
+      return NETWORK_ERROR_MESSAGE;
+    }
+  }
+  return '아이디 중복 확인에 실패했습니다. 다시 시도해주세요.';
+}
+
+function getSignupErrorMessage(error: unknown): string {
+  if (
+    error instanceof ApiError &&
+    (error.code === 'NETWORK_ERROR' || error.code === 'API_TIMEOUT')
+  ) {
+    return NETWORK_ERROR_MESSAGE;
+  }
+  return SIGNUP_ERROR_MESSAGE;
+}
+
 interface BasicInfoStepProps {
   availability: LoginIdAvailability;
   draft: SignupDraft;
+  loginIdError?: string;
+  nameError?: string;
   onBack: () => void;
   onChangeLoginId: (value: string) => void;
   onChangeName: (value: string) => void;
@@ -252,6 +432,8 @@ interface BasicInfoStepProps {
 function BasicInfoStep({
   availability,
   draft,
+  loginIdError,
+  nameError,
   onBack,
   onChangeLoginId,
   onChangeName,
@@ -299,20 +481,30 @@ function BasicInfoStep({
       <Text style={styles.profileHint}>프로필 사진은 나중에 등록해도 돼요</Text>
       <View style={styles.basicFields}>
         <FormField
+          accessibilityLabel="회원가입 이름"
+          invalid={nameError !== undefined}
           label="이름"
           maxLength={10}
           onChangeText={onChangeName}
           placeholder="이름은 2 ~ 10자로 입력해주세요."
           value={draft.name}
         />
+        {nameError !== undefined && (
+          <ValidationMessage message={nameError} variant="error" />
+        )}
         <FormField
+          accessibilityLabel="회원가입 아이디"
           autoCapitalize="none"
+          invalid={
+            loginIdError !== undefined || availability === 'duplicated'
+          }
           label="아이디"
           maxLength={15}
           onChangeText={onChangeLoginId}
           placeholder="영문·숫자 5 ~ 15자로 입력해주세요."
           trailing={
             <Pressable
+              accessibilityLabel="아이디 중복 확인"
               accessibilityRole="button"
               disabled={
                 !isValidLoginId(draft.loginId) ||
@@ -340,6 +532,9 @@ function BasicInfoStep({
             variant="error"
           />
         )}
+        {loginIdError !== undefined && (
+          <ValidationMessage message={loginIdError} variant="error" />
+        )}
       </View>
     </StepLayout>
   );
@@ -347,6 +542,7 @@ function BasicInfoStep({
 
 interface PasswordStepProps {
   draft: SignupDraft;
+  errorMessage?: string;
   mismatch: boolean;
   onBack: () => void;
   onChangeConfirmation: (value: string) => void;
@@ -356,6 +552,7 @@ interface PasswordStepProps {
 
 function PasswordStep({
   draft,
+  errorMessage,
   mismatch,
   onBack,
   onChangeConfirmation,
@@ -398,7 +595,9 @@ function PasswordStep({
       />
       <View style={styles.passwordFields}>
         <FormField
+          accessibilityLabel="회원가입 비밀번호"
           autoCapitalize="none"
+          invalid={errorMessage !== undefined}
           label="비밀번호"
           maxLength={16}
           onChangeText={onChangePassword}
@@ -407,7 +606,11 @@ function PasswordStep({
           trailing={visibilityButton}
           value={draft.password}
         />
+        {errorMessage !== undefined && (
+          <ValidationMessage message={errorMessage} variant="error" />
+        )}
         <FormField
+          accessibilityLabel="회원가입 비밀번호 확인"
           autoCapitalize="none"
           invalid={mismatch}
           label="비밀번호 확인"
@@ -430,6 +633,7 @@ function PasswordStep({
 
 interface BirthDateStepProps {
   birthDate: string;
+  errorMessage?: string;
   onBack: () => void;
   onNext: () => void;
   onOpenPicker: () => void;
@@ -437,6 +641,7 @@ interface BirthDateStepProps {
 
 function BirthDateStep({
   birthDate,
+  errorMessage,
   onBack,
   onNext,
   onOpenPicker,
@@ -459,6 +664,7 @@ function BirthDateStep({
       <View style={styles.birthdateField}>
         <Text style={styles.fieldLabel}>생년월일</Text>
         <AnimatedPressable
+          accessibilityLabel="생년월일 선택"
           accessibilityRole="button"
           onPress={onOpenPicker}>
           <View style={styles.dateButton}>
@@ -476,12 +682,16 @@ function BirthDateStep({
             />
           </View>
         </AnimatedPressable>
+        {errorMessage !== undefined && (
+          <ValidationMessage message={errorMessage} variant="error" />
+        )}
       </View>
     </StepLayout>
   );
 }
 
 interface GenderStepProps {
+  errorMessage?: string;
   gender: Gender | null;
   loading: boolean;
   onBack: () => void;
@@ -490,6 +700,7 @@ interface GenderStepProps {
 }
 
 function GenderStep({
+  errorMessage,
   gender,
   loading,
   onBack,
@@ -527,6 +738,9 @@ function GenderStep({
           selected={gender === 'FEMALE'}
         />
       </View>
+      {errorMessage !== undefined && (
+        <ValidationMessage message={errorMessage} variant="error" />
+      )}
     </StepLayout>
   );
 }
@@ -548,6 +762,7 @@ function GenderCard({
 }: GenderCardProps) {
   return (
     <AnimatedPressable
+      accessibilityLabel={`성별 ${label}`}
       accessibilityRole="radio"
       accessibilityState={{selected}}
       containerStyle={styles.genderCardWrapper}
