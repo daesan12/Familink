@@ -25,6 +25,35 @@
       "Effect": "Allow",
       "Action": "kms:Decrypt",
       "Resource": "<SSM_KMS_KEY_ARN>"
+    },
+    {
+      "Sid": "PublishProductionMetrics",
+      "Effect": "Allow",
+      "Action": "cloudwatch:PutMetricData",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "cloudwatch:namespace": [
+            "Familink/EC2",
+            "Familink/Health"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "DescribeProductionLogStreams",
+      "Effect": "Allow",
+      "Action": "logs:DescribeLogStreams",
+      "Resource": "arn:aws:logs:ap-northeast-2:<AWS_ACCOUNT_ID>:log-group:/familink/prod/*"
+    },
+    {
+      "Sid": "WriteProductionLogStreams",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:ap-northeast-2:<AWS_ACCOUNT_ID>:log-group:/familink/prod/*:log-stream:*"
     }
   ]
 }
