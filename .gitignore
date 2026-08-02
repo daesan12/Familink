@@ -43,3 +43,10 @@ tmp/
 **/.cxx/
 **/.kotlin/
 *.log
+
+# Android release signing
+# release keystore와 서명값은 커밋하지 않는다. debug.keystore는 공개된 개발용 키라 추적을 유지한다.
+frontend/android/keystore.properties
+*.jks
+*.keystore
+!frontend/android/app/debug.keystore

@@ -80,6 +80,26 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+/**
+ * Release 서명값 로딩. 우선순위: 환경변수 > frontend/android/keystore.properties.
+ * keystore.properties는 git에 커밋하지 않는다 (keystore.properties.example 참고).
+ * 값이 없어도 configuration은 통과시키고, 실패는 validateReleaseSigning task가 담당한다.
+ */
+def releaseKeystorePropsFile = rootProject.file("keystore.properties")
+def releaseKeystoreProps = new Properties()
+if (releaseKeystorePropsFile.exists()) {
+    releaseKeystorePropsFile.withInputStream { releaseKeystoreProps.load(it) }
+}
+def releaseSigningValue = { String name ->
+    def value = System.getenv(name) ?: releaseKeystoreProps.getProperty(name)
+    return (value == null || value.trim().isEmpty()) ? null : value.trim()
+}
+def releaseStoreFilePath = releaseSigningValue("RELEASE_STORE_FILE")
+def releaseStorePassword = releaseSigningValue("RELEASE_STORE_PASSWORD")
+def releaseKeyAlias = releaseSigningValue("RELEASE_KEY_ALIAS")
+def releaseKeyPassword = releaseSigningValue("RELEASE_KEY_PASSWORD")
+def hasReleaseSigning = releaseStoreFilePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -104,6 +124,14 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(releaseStoreFilePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
     }
     buildTypes {
         debug {
@@ -111,13 +139,62 @@ android {
             manifestPlaceholders = [usesCleartextTraffic: "true"]
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             manifestPlaceholders = [usesCleartextTraffic: "false"]
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
+    }
+}
+
+/**
+ * S15P11B104-226: release 서명값이 없거나 debug 인증서로 서명하려 하면 release 빌드를 실패시킨다.
+ * 실행 시점(doLast) 검사라서 debug 빌드와 IDE sync에는 영향이 없다.
+ */
+def signingCertificate = { File storeFile, String storePassword, String alias ->
+    def keyStore = java.security.KeyStore.getInstance(storeFile, storePassword.toCharArray())
+    def cert = keyStore.getCertificate(alias)
+    if (cert == null) {
+        throw new GradleException("keystore에 alias '${alias}'가 없습니다: ${storeFile}")
+    }
+    return cert
+}
+def certSha256 = { cert ->
+    java.security.MessageDigest.getInstance("SHA-256").digest(cert.encoded).encodeHex().toString()
+}
+
+tasks.register("validateReleaseSigning") {
+    doLast {
+        if (!hasReleaseSigning) {
+            throw new GradleException(
+                "release 서명값이 없습니다. RELEASE_STORE_FILE, RELEASE_STORE_PASSWORD, " +
+                "RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD를 환경변수 또는 " +
+                "frontend/android/keystore.properties로 주입하세요. " +
+                "(frontend/android/keystore.properties.example 참고)")
+        }
+        def releaseStoreFile = rootProject.file(releaseStoreFilePath)
+        if (!releaseStoreFile.exists()) {
+            throw new GradleException("release keystore 파일이 없습니다: ${releaseStoreFile}")
+        }
+        def releaseCert = signingCertificate(releaseStoreFile, releaseStorePassword, releaseKeyAlias)
+        def subject = ((java.security.cert.X509Certificate) releaseCert).subjectX500Principal.name
+        if (subject.contains("CN=Android Debug")) {
+            throw new GradleException("release 서명 인증서가 debug 인증서(CN=Android Debug)입니다: ${releaseStoreFile}")
+        }
+        // debug.keystore가 저장소에서 제거되면 지문 비교는 건너뛴다. CN 검사가 debug 인증서를 계속 차단한다.
+        def debugKeystoreFile = file('debug.keystore')
+        if (debugKeystoreFile.exists()) {
+            def debugCert = signingCertificate(debugKeystoreFile, 'android', 'androiddebugkey')
+            if (certSha256(releaseCert) == certSha256(debugCert)) {
+                throw new GradleException("release 서명 인증서 지문이 debug.keystore와 동일합니다. 별도 release keystore를 사용하세요.")
+            }
+        }
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name == "preReleaseBuild") {
+        task.dependsOn("validateReleaseSigning")
     }
 }
 
