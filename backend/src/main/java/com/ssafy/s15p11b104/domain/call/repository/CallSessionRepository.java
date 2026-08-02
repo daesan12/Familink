@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +16,7 @@ import org.springframework.data.repository.query.Param;
 import com.ssafy.s15p11b104.domain.call.entity.CallReport;
 import com.ssafy.s15p11b104.domain.call.entity.CallSession;
 import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
+import com.ssafy.s15p11b104.domain.call.entity.TranscriptIntegrityStatus;
 
 import jakarta.persistence.LockModeType;
 
@@ -80,6 +82,22 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select session from CallSession session where session.id = :sessionId")
 	Optional<CallSession> findByIdForUpdate(@Param("sessionId") Long sessionId);
+
+	@Query("""
+		select session.id
+		from CallSession session
+		where session.status in :terminalStatuses
+			and session.endedAt <= :cutoff
+			and session.transcriptIntegrityStatus = :collectingStatus
+			and session.transcriptFinalizedAt is null
+		order by session.endedAt, session.id
+		""")
+	List<Long> findTranscriptFinalizationCandidateIds(
+		@Param("terminalStatuses") Collection<CallStatus> terminalStatuses,
+		@Param("collectingStatus") TranscriptIntegrityStatus collectingStatus,
+		@Param("cutoff") Instant cutoff,
+		Pageable pageable
+	);
 
 	@Query("""
 		select distinct session.careReceiverMember.id

@@ -3,6 +3,7 @@ package com.ssafy.s15p11b104.domain.call.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
@@ -80,6 +81,9 @@ class CallSessionServiceTest {
 	private CallReportGenerationDispatcher callReportGenerationDispatcher;
 
 	@Mock
+	private CallTranscriptService callTranscriptService;
+
+	@Mock
 	private CallSessionLeaseService callSessionLeaseService;
 
 	@Mock
@@ -111,6 +115,7 @@ class CallSessionServiceTest {
 			realtimeGateway,
 			sidebandSessionManager,
 			callReportGenerationDispatcher,
+			callTranscriptService,
 			callSessionLeaseService,
 			transactionTemplate,
 			Clock.fixed(NOW, ZoneOffset.UTC)
@@ -172,15 +177,22 @@ class CallSessionServiceTest {
 	void endsCallByUserRequest() {
 		stubOwnedSessionForEnd();
 		when(callSession.getStatus()).thenReturn(CallStatus.IN_PROGRESS, CallStatus.COMPLETED);
+		when(callTranscriptService.finalizeSession(CALL_SESSION_ID, true)).thenReturn(true);
 
 		callSessionService.end(CALL_SESSION_ID, CallTerminationType.USER_REQUESTED);
 
 		verify(callSession).endByUser(any(Instant.class));
 		verify(callSession, never()).markUnexpectedDisconnect(any(Instant.class));
-		InOrder closeOrder = inOrder(sidebandSessionManager, realtimeGateway, callReportGenerationDispatcher);
+		InOrder closeOrder = inOrder(
+			sidebandSessionManager,
+			realtimeGateway,
+			callTranscriptService,
+			callReportGenerationDispatcher
+		);
 		closeOrder.verify(sidebandSessionManager).prepareClose(CALL_SESSION_ID);
 		closeOrder.verify(realtimeGateway).hangUp(OPEN_AI_CALL_ID);
 		closeOrder.verify(sidebandSessionManager).finishClose(CALL_SESSION_ID);
+		closeOrder.verify(callTranscriptService).finalizeSession(CALL_SESSION_ID, true);
 		closeOrder.verify(callReportGenerationDispatcher).dispatch(CALL_SESSION_ID);
 	}
 
@@ -211,6 +223,7 @@ class CallSessionServiceTest {
 	void rejectsLateConnectedResultAfterRecoveringExpiredSessionAndClosesCall() {
 		stubOwnedSession();
 		when(callSessionLeaseService.recoverIfExpired(callSession, NOW)).thenReturn(true);
+		when(callSession.getStatus()).thenReturn(CallStatus.CONNECTING, CallStatus.FAILED);
 
 		assertThatThrownBy(
 			() -> callSessionService.recordConnectionResult(
@@ -231,6 +244,22 @@ class CallSessionServiceTest {
 	}
 
 	@Test
+	void doesNotFinalizeAgainForDuplicateFailedConnectionResult() {
+		when(callSessionRepository.findForUpdate(CALL_SESSION_ID, CARE_RECEIVER_MEMBER_ID))
+			.thenReturn(Optional.of(callSession));
+		when(callSession.getStatus()).thenReturn(CallStatus.FAILED);
+
+		callSessionService.recordConnectionResult(
+			CALL_SESSION_ID,
+			new CallConnectionResultRequest(ConnectionResult.FAILED, "provider_failed")
+		);
+
+		verify(callSession, never()).markConnectionFailed(any(Instant.class));
+		verify(sidebandSessionManager, never()).prepareClose(any());
+		verify(callTranscriptService, never()).finalizeSession(any(), anyBoolean());
+	}
+
+	@Test
 	void preservesRecoveredIncompleteStatusForLateUserEnd() {
 		stubOwnedSessionForEnd();
 		when(callSessionLeaseService.recoverIfExpired(callSession, NOW)).thenReturn(true);
@@ -247,6 +276,7 @@ class CallSessionServiceTest {
 		when(callSessionRepository.findForUpdate(CALL_SESSION_ID, CARE_RECEIVER_MEMBER_ID))
 			.thenReturn(Optional.of(callSession));
 		when(sidebandSessionManager.prepareClose(CALL_SESSION_ID)).thenReturn(OPEN_AI_CALL_ID);
+		when(sidebandSessionManager.finishClose(CALL_SESSION_ID)).thenReturn(true);
 	}
 
 	private void stubOwnedSessionForEnd() {

@@ -1,5 +1,7 @@
 package com.ssafy.s15p11b104.domain.call.config;
 
+import java.util.List;
+
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
@@ -151,35 +153,42 @@ public class AiCallDevDataInitializer implements ApplicationRunner {
 	}
 
 	private void insertRecentCallReport() {
-		jdbcTemplate.execute("""
+		List<Long> callSessionIds = jdbcTemplate.queryForList("""
 			with care_receiver as (
 				select member.id as member_id, member.group_id
 				from group_members member
 				join users user_account on user_account.id = member.user_id
 				where user_account.login_id = 'ai-call-user' and member.left_at is null
-			), inserted_session as (
-				insert into call_sessions (
-					group_id, care_receiver_member_id, persona_id, status, created_at, started_at, ended_at
-				)
-				select group_id, member_id, 5, 'COMPLETED',
-					current_timestamp - interval '1 day 10 minutes',
-					current_timestamp - interval '1 day 10 minutes',
-					current_timestamp - interval '1 day'
-				from care_receiver
-				where not exists (
-					select 1
-					from call_reports report
-					join call_sessions session on session.id = report.call_session_id
-					where session.care_receiver_member_id = care_receiver.member_id
-				)
-				returning id
 			)
+			insert into call_sessions (
+				group_id, care_receiver_member_id, persona_id, status,
+				created_at, started_at, ended_at,
+				transcript_integrity_status, transcript_finalized_at
+			)
+			select group_id, member_id, 5, 'COMPLETED',
+				current_timestamp - interval '1 day 10 minutes',
+				current_timestamp - interval '1 day 10 minutes',
+				current_timestamp - interval '1 day',
+				'COMPLETE', current_timestamp - interval '1 day'
+			from care_receiver
+			where not exists (
+				select 1
+				from call_reports report
+				join call_sessions session on session.id = report.call_session_id
+				where session.care_receiver_member_id = care_receiver.member_id
+			)
+			returning id
+			""", Long.class);
+		if (callSessionIds.isEmpty()) {
+			return;
+		}
+
+		jdbcTemplate.update("""
 			insert into call_reports (
 				call_session_id, summary, emotion_category, emotion_subcategory, guardian_message
 			)
-			select id, '산책과 야구 이야기를 나누며 편안하게 통화를 마쳤습니다.',
-				'NEUTRAL', '편안함', null
-			from inserted_session
-			""");
+			values (?, '산책과 야구 이야기를 나누며 편안하게 통화를 마쳤습니다.',
+				'NEUTRAL', '편안함', null)
+			""", callSessionIds.get(0));
 	}
 }

@@ -42,6 +42,7 @@ public class CallSessionService {
 	private final OpenAiRealtimeGateway realtimeGateway;
 	private final SidebandSessionManager sidebandSessionManager;
 	private final CallReportGenerationDispatcher callReportGenerationDispatcher;
+	private final CallTranscriptService callTranscriptService;
 	private final CallSessionLeaseService callSessionLeaseService;
 	private final TransactionTemplate transactionTemplate;
 	private final Clock clock;
@@ -56,6 +57,7 @@ public class CallSessionService {
 		OpenAiRealtimeGateway realtimeGateway,
 		SidebandSessionManager sidebandSessionManager,
 		CallReportGenerationDispatcher callReportGenerationDispatcher,
+		CallTranscriptService callTranscriptService,
 		CallSessionLeaseService callSessionLeaseService,
 		TransactionTemplate transactionTemplate,
 		Clock clock
@@ -69,6 +71,7 @@ public class CallSessionService {
 		this.realtimeGateway = realtimeGateway;
 		this.sidebandSessionManager = sidebandSessionManager;
 		this.callReportGenerationDispatcher = callReportGenerationDispatcher;
+		this.callTranscriptService = callTranscriptService;
 		this.callSessionLeaseService = callSessionLeaseService;
 		this.transactionTemplate = transactionTemplate;
 		this.clock = clock;
@@ -100,7 +103,7 @@ public class CallSessionService {
 			String openAiCallId = openAiCall == null ? null : openAiCall.callId();
 			sidebandSessionManager.close(preparedCall.callSessionId());
 			realtimeGateway.hangUp(openAiCallId);
-			handleUnexpectedDisconnect(preparedCall.callSessionId());
+			handleUnexpectedDisconnect(preparedCall.callSessionId(), true);
 			throw CallApiException.aiConnectionFailed();
 		}
 	}
@@ -112,22 +115,29 @@ public class CallSessionService {
 		validateConnectionResult(request);
 		CallActor actor = callActorResolver.resolve();
 		Instant now = clock.instant();
-		boolean accepted = Objects.requireNonNull(transactionTemplate.execute(status -> {
+		ConnectionResultOutcome outcome = Objects.requireNonNull(transactionTemplate.execute(status -> {
 			CallSession session = findOwnedSessionForUpdate(callSessionId, actor);
+			CallStatus previousStatus = session.getStatus();
 			if (callSessionLeaseService.recoverIfExpired(session, now)) {
-				return request.result() == ConnectionResult.FAILED
+				boolean accepted = request.result() == ConnectionResult.FAILED
 					&& session.getStatus() == CallStatus.FAILED;
+				return new ConnectionResultOutcome(
+					accepted,
+					ACTIVE_STATUSES.contains(previousStatus) && !ACTIVE_STATUSES.contains(session.getStatus())
+				);
 			}
 			applyConnectionResult(session, request.result(), now);
-			return true;
+			return new ConnectionResultOutcome(
+				true,
+				ACTIVE_STATUSES.contains(previousStatus) && !ACTIVE_STATUSES.contains(session.getStatus())
+			);
 		}));
-		if (!accepted) {
-			hangUp(callSessionId);
-			throw CallApiException.invalidCallStatus();
+		if (outcome.finalizationRequired()) {
+			boolean drained = hangUp(callSessionId);
+			callTranscriptService.finalizeSession(callSessionId, drained);
 		}
-
-		if (request.result() == ConnectionResult.FAILED) {
-			hangUp(callSessionId);
+		if (!outcome.accepted()) {
+			throw CallApiException.invalidCallStatus();
 		}
 		return new CallSessionIdResponse(callSessionId);
 	}
@@ -144,12 +154,14 @@ public class CallSessionService {
 			} catch (IllegalStateException exception) {
 				throw CallApiException.invalidCallStatus();
 			}
-			boolean reportGenerationRequired = previousStatus == CallStatus.IN_PROGRESS
-				&& session.getStatus() == CallStatus.COMPLETED;
-			return new TerminationResult(session.getId(), reportGenerationRequired);
+			boolean finalizationRequired = ACTIVE_STATUSES.contains(previousStatus)
+				&& !ACTIVE_STATUSES.contains(session.getStatus());
+			return new TerminationResult(session.getId(), finalizationRequired);
 		}));
-		hangUp(callSessionId);
-		if (result.reportGenerationRequired()) {
+		boolean drained = hangUp(callSessionId);
+		boolean reportGenerationRequired = result.finalizationRequired()
+			&& callTranscriptService.finalizeSession(result.callSessionId(), drained);
+		if (reportGenerationRequired) {
 			callReportGenerationDispatcher.dispatch(result.callSessionId());
 		}
 		return new CallSessionIdResponse(result.callSessionId());
@@ -222,16 +234,25 @@ public class CallSessionService {
 		}
 	}
 
-	private void handleUnexpectedDisconnect(long callSessionId) {
-		transactionTemplate.executeWithoutResult(status ->
-			callSessionRepository.findByIdForUpdate(callSessionId)
-				.ifPresent(session -> session.markUnexpectedDisconnect(clock.instant())));
+	private void handleUnexpectedDisconnect(Long callSessionId, Boolean transcriptHealthy) {
+		boolean finalizationRequired = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+			CallSession session = callSessionRepository.findByIdForUpdate(callSessionId).orElse(null);
+			if (session == null) {
+				return false;
+			}
+			CallStatus previousStatus = session.getStatus();
+			session.markUnexpectedDisconnect(clock.instant());
+			return ACTIVE_STATUSES.contains(previousStatus) && !ACTIVE_STATUSES.contains(session.getStatus());
+		}));
+		if (finalizationRequired) {
+			callTranscriptService.finalizeSession(callSessionId, Boolean.TRUE.equals(transcriptHealthy));
+		}
 	}
 
-	private void hangUp(Long callSessionId) {
+	private boolean hangUp(Long callSessionId) {
 		String openAiCallId = sidebandSessionManager.prepareClose(callSessionId);
 		realtimeGateway.hangUp(openAiCallId);
-		sidebandSessionManager.finishClose(callSessionId);
+		return sidebandSessionManager.finishClose(callSessionId);
 	}
 
 	private void validateSdp(String sdpOffer) {
@@ -256,6 +277,9 @@ public class CallSessionService {
 	) {
 	}
 
-	private record TerminationResult(Long callSessionId, boolean reportGenerationRequired) {
+	private record TerminationResult(Long callSessionId, boolean finalizationRequired) {
+	}
+
+	private record ConnectionResultOutcome(boolean accepted, boolean finalizationRequired) {
 	}
 }

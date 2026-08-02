@@ -1,10 +1,5 @@
 package com.ssafy.s15p11b104.domain.call.service;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
@@ -28,10 +23,9 @@ final class SidebandTranscriptHandler {
 	private final ObjectMapper objectMapper;
 	private final CallTranscriptService callTranscriptService;
 	private final StringBuilder textBuffer = new StringBuilder();
-	private final Map<String, TranscriptReservation> reservations = new HashMap<>();
-	private final Set<String> processedItemIds = new HashSet<>();
 
-	private int nextSequence = 1;
+	private boolean integrityFailure;
+	private boolean fragmentedTextOpen;
 	private boolean closed;
 
 	SidebandTranscriptHandler(
@@ -51,19 +45,32 @@ final class SidebandTranscriptHandler {
 
 		textBuffer.append(data);
 		if (!last) {
+			fragmentedTextOpen = true;
 			return;
 		}
 
 		String eventJson = textBuffer.toString();
 		textBuffer.setLength(0);
+		fragmentedTextOpen = false;
 		handleEvent(eventJson);
 	}
 
+	synchronized boolean hasIntegrityFailure() {
+		return integrityFailure;
+	}
+
 	synchronized void close() {
+		if (closed) {
+			return;
+		}
+
+		boolean truncatedTextMessage = fragmentedTextOpen;
 		closed = true;
 		textBuffer.setLength(0);
-		reservations.clear();
-		processedItemIds.clear();
+		fragmentedTextOpen = false;
+		if (truncatedTextMessage) {
+			failClosed(null, "TRUNCATED_TEXT_MESSAGE");
+		}
 	}
 
 	private void handleEvent(String eventJson) {
@@ -76,24 +83,26 @@ final class SidebandTranscriptHandler {
 				callSessionId,
 				exception.getClass().getSimpleName()
 			);
+			failClosed(null, "MALFORMED_EVENT");
 			return;
 		}
 		if (event == null || !event.isObject()) {
 			LOGGER.warn("Sideband 이벤트가 JSON 객체가 아닙니다. callSessionId={}", callSessionId);
+			failClosed(null, "NON_OBJECT_EVENT");
 			return;
 		}
 
 		String eventType = textValue(event, "type");
 		if (ITEM_ADDED.equals(eventType)) {
-			reserveSequence(event);
+			reserveItem(event);
 			return;
 		}
 		if (INPUT_TRANSCRIPT_COMPLETED.equals(eventType)) {
-			saveCompletedTranscript(event, SpeakerType.USER);
+			completeTranscript(event, SpeakerType.USER);
 			return;
 		}
 		if (OUTPUT_TRANSCRIPT_DONE.equals(eventType)) {
-			saveCompletedTranscript(event, SpeakerType.ASSISTANT);
+			completeTranscript(event, SpeakerType.ASSISTANT);
 			return;
 		}
 		if (INPUT_TRANSCRIPT_FAILED.equals(eventType)) {
@@ -101,7 +110,7 @@ final class SidebandTranscriptHandler {
 		}
 	}
 
-	private void reserveSequence(JsonNode event) {
+	private void reserveItem(JsonNode event) {
 		JsonNode item = event.path("item");
 		if (!"message".equals(textValue(item, "type"))) {
 			return;
@@ -110,17 +119,26 @@ final class SidebandTranscriptHandler {
 		SpeakerType speaker = speakerFromRole(textValue(item, "role"));
 		String itemId = textValue(item, "id");
 		if (speaker == null || !StringUtils.hasText(itemId)) {
-			return;
-		}
-		if (processedItemIds.contains(itemId) || reservations.containsKey(itemId)) {
+			failClosed(itemId, "INVALID_TRANSCRIPT_RESERVATION");
 			return;
 		}
 
-		reservations.put(itemId, new TranscriptReservation(speaker, nextSequence));
-		nextSequence++;
+		try {
+			if (callTranscriptService.reserveItem(callSessionId, speaker, itemId) == null) {
+				integrityFailure = true;
+			}
+		} catch (RuntimeException exception) {
+			LOGGER.error(
+				"Sideband 전사 예약을 저장하지 못했습니다. callSessionId={}, itemId={}, errorType={}",
+				callSessionId,
+				itemId,
+				exception.getClass().getSimpleName()
+			);
+			failClosed(itemId, "RESERVATION_PERSISTENCE_FAILED");
+		}
 	}
 
-	private void saveCompletedTranscript(JsonNode event, SpeakerType eventSpeaker) {
+	private void completeTranscript(JsonNode event, SpeakerType speaker) {
 		String eventId = textValue(event, "event_id");
 		String itemId = textValue(event, "item_id");
 		if (!StringUtils.hasText(itemId)) {
@@ -129,69 +147,56 @@ final class SidebandTranscriptHandler {
 				callSessionId,
 				eventId
 			);
-			return;
-		}
-		if (processedItemIds.contains(itemId)) {
-			return;
-		}
-
-		TranscriptReservation reservation = reservations.get(itemId);
-		if (reservation == null || reservation.speaker() != eventSpeaker) {
-			LOGGER.warn(
-				"Sideband 완료 전사의 순번 또는 화자를 확인할 수 없습니다. callSessionId={}, eventId={}, itemId={}",
-				callSessionId,
-				eventId,
-				itemId
-			);
-			return;
-		}
-
-		String transcript = textValue(event, "transcript");
-		if (!StringUtils.hasText(transcript)) {
-			markProcessed(itemId);
+			failClosed(null, "MISSING_COMPLETION_ITEM_ID");
 			return;
 		}
 
 		try {
-			callTranscriptService.saveIfAbsent(
+			callTranscriptService.completeItem(
 				callSessionId,
-				eventSpeaker,
-				transcript,
-				reservation.sequenceNumber(),
-				itemId
+				speaker,
+				itemId,
+				textValue(event, "transcript")
 			);
-			markProcessed(itemId);
 		} catch (RuntimeException exception) {
 			LOGGER.error(
-				"Sideband 완료 전사를 저장하지 못했습니다. "
-					+ "callSessionId={}, eventId={}, itemId={}, errorType={}",
+				"Sideband 완료 전사를 처리하지 못했습니다. callSessionId={}, eventId={}, itemId={}, errorType={}",
 				callSessionId,
 				eventId,
 				itemId,
 				exception.getClass().getSimpleName()
 			);
+			failClosed(itemId, "COMPLETION_PERSISTENCE_FAILED");
 		}
 	}
 
 	private void handleFailedTranscript(JsonNode event) {
 		String eventId = textValue(event, "event_id");
 		String itemId = textValue(event, "item_id");
-		if (!StringUtils.hasText(itemId)) {
-			return;
-		}
-
-		markProcessed(itemId);
 		LOGGER.warn(
 			"사용자 음성 전사가 실패했습니다. callSessionId={}, eventId={}, itemId={}",
 			callSessionId,
 			eventId,
 			itemId
 		);
+		failClosed(itemId, "PROVIDER_TRANSCRIPTION_FAILED");
 	}
 
-	private void markProcessed(String itemId) {
-		reservations.remove(itemId);
-		processedItemIds.add(itemId);
+	private void failClosed(String itemId, String failureCode) {
+		integrityFailure = true;
+		try {
+			if (StringUtils.hasText(itemId)) {
+				callTranscriptService.failItem(callSessionId, itemId, failureCode);
+			} else {
+				callTranscriptService.failSession(callSessionId, failureCode);
+			}
+		} catch (RuntimeException exception) {
+			LOGGER.error(
+				"전사 fail-closed 상태를 저장하지 못했습니다. callSessionId={}, errorType={}",
+				callSessionId,
+				exception.getClass().getSimpleName()
+			);
+		}
 	}
 
 	private SpeakerType speakerFromRole(String role) {
@@ -213,11 +218,5 @@ final class SidebandTranscriptHandler {
 			return null;
 		}
 		return value.textValue();
-	}
-
-	private record TranscriptReservation(
-		SpeakerType speaker,
-		int sequenceNumber
-	) {
 	}
 }

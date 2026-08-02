@@ -2,7 +2,6 @@ package com.ssafy.s15p11b104.domain.call.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
-import static org.mockito.Mockito.when;
 
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -11,11 +10,13 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.s15p11b104.domain.call.repository.GroupMemberCallRepository;
@@ -23,6 +24,7 @@ import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
 @Transactional
+@Import(AiCallPromptContextProviderIntegrationTest.FixedClockConfiguration.class)
 class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -38,14 +40,6 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 
 	@Autowired
 	private AiCallPromptContextProvider promptContextProvider;
-
-	@MockitoBean
-	private Clock applicationClock;
-
-	@BeforeEach
-	void setUpClock() {
-		when(applicationClock.withZone(KST)).thenReturn(Clock.fixed(FIXED_NOW, KST));
-	}
 
 	@Test
 	void loadsOnlyPostsInsideKstDateBoundary() {
@@ -267,11 +261,13 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 				care_receiver_member_id,
 				persona_id,
 				status,
-				ended_at
+				ended_at,
+				transcript_integrity_status,
+				transcript_finalized_at
 			)
-			values (?, ?, 1, cast(? as call_status), ?)
+			values (?, ?, 1, cast(? as call_status), ?, 'COMPLETE', ?)
 			returning id
-			""", Long.class, groupId, careReceiverId, status, endedTimestamp);
+			""", Long.class, groupId, careReceiverId, status, endedTimestamp, endedTimestamp);
 		jdbcTemplate.update("""
 			insert into call_reports (
 				call_session_id,
@@ -285,5 +281,15 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 
 	private GroupMember loadMember(Long memberId) {
 		return groupMemberRepository.findById(memberId).orElseThrow();
+	}
+
+	@TestConfiguration(proxyBeanMethods = false)
+	static class FixedClockConfiguration {
+
+		@Bean
+		@Primary
+		Clock fixedClock() {
+			return Clock.fixed(FIXED_NOW, KST);
+		}
 	}
 }

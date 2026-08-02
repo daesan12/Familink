@@ -9,6 +9,14 @@ app:
     lease-duration: 90s
     fixed-delay-ms: 3600000
     initial-delay-ms: 3600000
+  transcript-recovery:
+    fixed-delay-ms: 3600000
+    initial-delay-ms: 3600000
+    cleanup-delay-ms: 3600000
+    cleanup-initial-delay-ms: 3600000
+  call-report-generation:
+    recovery-delay-ms: 3600000
+    recovery-initial-delay-ms: 3600000
   auth:
     secret: test-only-access-token-signing-secret-value
   storage:

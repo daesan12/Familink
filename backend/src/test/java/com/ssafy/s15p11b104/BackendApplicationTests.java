@@ -65,9 +65,45 @@ class BackendApplicationTests extends IntegrationTest {
 		assertThat(tableNames).containsExactlyInAnyOrder(
 			"users", "family_groups", "group_members", "group_join_requests", "member_aliases",
 			"member_interests", "posts", "post_media", "comments", "post_reactions", "post_analyses",
-			"calendar_events", "event_participants", "call_sessions", "call_transcripts", "call_reports",
-			"daily_reports", "daily_report_generation_claims", "carnations", "notifications",
+			"calendar_events", "event_participants", "call_sessions", "call_transcript_events",
+			"call_transcripts", "call_report_generation_requests", "call_reports", "daily_reports",
+			"daily_report_generation_claims", "carnations", "notifications",
 			"notification_settings", "device_tokens");
+	}
+
+	@Test
+	void transcriptIntegritySchemaMatchesContract() {
+		Map<String, Object> integrityColumn = jdbcTemplate.queryForMap(
+			"SELECT udt_name, is_nullable FROM information_schema.columns "
+				+ "WHERE table_schema = 'public' AND table_name = 'call_sessions' "
+				+ "AND column_name = 'transcript_integrity_status'");
+		Map<String, Object> eventStatusColumn = jdbcTemplate.queryForMap(
+			"SELECT udt_name, is_nullable FROM information_schema.columns "
+				+ "WHERE table_schema = 'public' AND table_name = 'call_transcript_events' "
+				+ "AND column_name = 'status'");
+		String triggerDefinition = jdbcTemplate.queryForObject(
+			"SELECT pg_get_triggerdef(oid) FROM pg_trigger "
+				+ "WHERE tgname = 'trg_call_reports_transcript_integrity'",
+			String.class);
+		String retryIndexDefinition = jdbcTemplate.queryForObject(
+			"SELECT indexdef FROM pg_indexes "
+				+ "WHERE schemaname = 'public' AND indexname = 'idx_call_transcript_events_retry'",
+			String.class);
+
+		assertThat(integrityColumn)
+			.containsEntry("udt_name", "transcript_integrity_status")
+			.containsEntry("is_nullable", "NO");
+		assertThat(eventStatusColumn)
+			.containsEntry("udt_name", "transcript_ingest_status")
+			.containsEntry("is_nullable", "NO");
+		assertThat(triggerDefinition)
+			.contains("BEFORE INSERT OR UPDATE")
+			.contains("enforce_call_report_transcript_integrity()");
+		assertThat(retryIndexDefinition)
+			.contains("status")
+			.contains("next_attempt_at")
+			.contains("claim_expires_at")
+			.contains("WHERE (status = 'READY'::transcript_ingest_status)");
 	}
 
 	@Test

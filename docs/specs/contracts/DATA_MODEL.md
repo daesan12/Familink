@@ -14,7 +14,7 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 
 | 테이블 | 실행·쓰기 경계 |
 |---|---|
-| `users`, `family_groups`, `group_members`, `group_join_requests`, `member_aliases`, `member_interests`, `posts`, `post_media`, `comments`, `post_reactions`, `post_analyses`, `calendar_events`, `event_participants`, `call_sessions`, `call_transcripts`, `call_reports`, `daily_reports`, `daily_report_generation_claims`, `carnations`, `notifications`, `notification_settings`, `device_tokens` | Spring Boot가 공개 API, 내부 AI 오케스트레이션과 모든 DB 읽기·쓰기를 소유한다. |
+| `users`, `family_groups`, `group_members`, `group_join_requests`, `member_aliases`, `member_interests`, `posts`, `post_media`, `comments`, `post_reactions`, `post_analyses`, `calendar_events`, `event_participants`, `call_sessions`, `call_transcript_events`, `call_transcripts`, `call_report_generation_requests`, `call_reports`, `daily_reports`, `daily_report_generation_claims`, `carnations`, `notifications`, `notification_settings`, `device_tokens` | Spring Boot가 공개 API, 내부 AI 오케스트레이션과 모든 DB 읽기·쓰기를 소유한다. |
 
 - Spring Boot 단일 백엔드가 DB 읽기·쓰기를 담당한다.
 - `persona_id`는 Spring Boot가 관리하는 고정 페르소나 번호(1~6)이며 DB
@@ -209,8 +209,11 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - PK: `id BIGINT`
 - FK: `group_id -> family_groups.id`,
   `care_receiver_member_id -> group_members.id`
-- 컬럼: `persona_id BIGINT`, `status CALL_STATUS`, `created_at` NOT NULL;
-  `started_at NULL`, `ended_at NULL`, `lease_expires_at TIMESTAMPTZ NULL`
+- 컬럼: `persona_id BIGINT`, `status CALL_STATUS`,
+  `transcript_integrity_status TRANSCRIPT_INTEGRITY_STATUS`,
+  `transcript_revision BIGINT`, `created_at` NOT NULL; `started_at NULL`,
+  `ended_at NULL`, `lease_expires_at TIMESTAMPTZ NULL`,
+  `transcript_finalized_at TIMESTAMPTZ NULL`
 - 시간 의미:
   - `created_at`: Spring Boot가 통화 시작 요청을 접수한 시각
   - `started_at`: WebRTC 연결 성공 결과를 받은 시각
@@ -220,6 +223,34 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
     상태에서는 `NULL`이다.
 - stale 복구: lease가 없거나 만료된 활성 행은 잠금 후 `CONNECTING ->
   FAILED`, `IN_PROGRESS -> INCOMPLETE`로 원자 전환하고 `ended_at`을 기록한다.
+- 전사 무결성은 통화 상태와 분리한다. 신규 세션은 `COLLECTING`, 전사 원장의
+  모든 항목이 반영되고 drain이 끝난 세션만 `COMPLETE`, 누락·불일치·최종
+	실패가 있는 세션은 `RECONCILIATION_REQUIRED`다. 최초 `RESERVED`, 새
+	`READY` payload·이상 상태, `APPLIED`처럼 입력 또는 저장 완결성이 실제로
+	바뀌는 트랜잭션마다 `transcript_revision`을 증가시킨다. 정상 drain이면
+	`transcript_finalized_at`을 기록하고 미해결 원장이 모두 `APPLIED`가 된 뒤
+	`COMPLETE`로 승격한다. drain 실패 시 finalization 시각은 `NULL`로 유지한다.
+
+### `call_transcript_events`
+
+- PK: `id BIGINT`
+- FK·삭제: `call_session_id -> call_sessions.id ON DELETE CASCADE`
+- 컬럼: `openai_item_id VARCHAR(100)`, `speaker SPEAKER_TYPE`, `sequence INT`,
+  `status TRANSCRIPT_INGEST_STATUS`, `attempt_count INT`, `content TEXT NULL`,
+  `content_hash VARCHAR(64)`, `next_attempt_at TIMESTAMPTZ NULL`,
+  `claim_token UUID NULL`, `claim_expires_at TIMESTAMPTZ NULL`,
+  `failure_code VARCHAR(80) NULL`, `created_at`, `updated_at`, `ready_at NULL`,
+  `applied_at NULL`
+- Unique: `(call_session_id, openai_item_id)`, `(call_session_id, sequence)`
+- 상태: 유효 item을 먼저 `RESERVED`, 완료 payload·해시를 별도 커밋하면
+  `READY`, 전사 반영을 마치면 `APPLIED`, provider 실패·불일치·최대 시도
+  초과는 `FAILED`다. 동일 item의 화자·순번·해시가 같을 때만 no-op이다.
+- materialization은 세션 행 뒤 원장 행 순서로 잠그고, live handler와 복구
+  작업이 같은 경로를 사용한다. 복구 claim은 `FOR UPDATE SKIP LOCKED`, batch
+  20, 최대 3회와 1분·2분 backoff를 사용한다.
+- `APPLIED` 또는 최대 시도 초과 시 `content`를 즉시 지우고 해시와 진단
+  메타데이터만 남긴다. 24시간이 지난 non-APPLIED payload cleanup은 매시간
+  batch 100으로 실행한다. 이 payload는 공개 API·로그에 노출하지 않는다.
 
 ### `call_transcripts`
 
@@ -228,10 +259,11 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - 컬럼: `speaker SPEAKER_TYPE`, `content TEXT`, `sequence INT`,
   `created_at` NOT NULL; `openai_item_id VARCHAR(100) NULL`
 - Unique: `(call_session_id, sequence)`
+- Unique: `(call_session_id, openai_item_id)` where `openai_item_id IS NOT NULL`
 - Index: `(call_session_id, sequence)`
 - 사용자와 AI의 전사 완료 이벤트를 발화 단위로 저장한다. 실시간 `delta`는
   자막에 쓸 수 있지만 영구 저장 기준이 아니다.
-- `UNIQUE(openai_item_id)`는 검토 가능한 선택지일 뿐 현행 확정 제약이 아니다.
+- item ID Unique는 세션 범위이며 전역 Unique가 아니다.
 
 ### `call_reports`
 
@@ -240,6 +272,25 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - 컬럼: `summary VARCHAR(100)`, `emotion_category EMOTION_CATEGORY`,
   `emotion_subcategory VARCHAR(50)`, `created_at` NOT NULL;
   `guardian_message VARCHAR(100) NULL`
+- DB 쓰기 gate: 참조 세션의 전사 무결성이 `COMPLETE`,
+  `transcript_finalized_at IS NOT NULL`이고 미해결 전사 원장이 없을 때만
+  insert/update를 허용한다. 애플리케이션 target·결과 저장 검사와 별도로
+  강제해 롤링 배포 중 이전 버전의 우회를 막는다.
+
+### `call_report_generation_requests`
+
+- PK·FK·삭제: `call_session_id -> call_sessions.id ON DELETE CASCADE`
+- 컬럼: `status CALL_REPORT_GENERATION_STATUS`, `input_revision BIGINT`,
+  `claim_token UUID NULL`, `claim_expires_at TIMESTAMPTZ NULL`,
+  `last_failure_code VARCHAR(50) NULL`, `last_failed_at TIMESTAMPTZ NULL`,
+  `created_at`, `updated_at`
+- 세션마다 한 행만 존재한다. finalization 트랜잭션이 무결성 `COMPLETE`
+  세션에만 없는 행을 `PENDING`으로 만들며 기존 `PENDING`은 유지하고
+  `GEMINI_FAILED`·`DONE`은 되돌리지 않는다.
+- worker는 90초 `CLAIMED` 소유권과 입력 revision을 획득하고 외부 호출 뒤
+  같은 token·revision과 최신 무결성을 재검사한다. 성공은 `DONE`, 명시적
+  Gemini 실패는 `GEMINI_FAILED`다. 1분 주기 batch 20 복구는 `PENDING`과
+  만료 `CLAIMED`만 다시 접수한다.
 
 ### `daily_reports`
 
@@ -353,6 +404,9 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 | `ANALYSIS_STATUS` | `PENDING`, `SUCCESS`, `FAILED` |
 | `NOTIFICATION_TYPE` | `NEW_POST`, `POST_ACTIVITY`, `EVENT_CHANGED`, `EVENT_REMINDER`, `CALL_REPORT`, `DAILY_REPORT`, `GROUP_JOIN_REQUEST` |
 | `CALL_STATUS` | `CONNECTING`, `IN_PROGRESS`, `COMPLETED`, `INCOMPLETE`, `CANCELLED`, `FAILED` |
+| `TRANSCRIPT_INTEGRITY_STATUS` | `COLLECTING`, `COMPLETE`, `RECONCILIATION_REQUIRED` |
+| `TRANSCRIPT_INGEST_STATUS` | `RESERVED`, `READY`, `APPLIED`, `FAILED` |
+| `CALL_REPORT_GENERATION_STATUS` | `PENDING`, `CLAIMED`, `GEMINI_FAILED`, `DONE` |
 | `SPEAKER_TYPE` | `USER`, `ASSISTANT` |
 | `EMOTION_CATEGORY` | `ANGER`, `SADNESS`, `ANXIETY`, `HURT`, `EMBARRASSMENT`, `JOY`, `NEUTRAL` |
 
@@ -369,7 +423,8 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   `calendar_events`, `call_sessions`, `daily_reports`, `carnations`,
   `group_join_requests`, `group_members`, `family_groups` 순서로 명시적으로
   삭제한다. `post_media`, `comments`, `post_reactions`, `post_analyses`,
-  `event_participants`, `call_transcripts`, `call_reports`,
+  `event_participants`, `call_transcript_events`, `call_transcripts`,
+  `call_report_generation_requests`, `call_reports`,
   `daily_report_generation_claims`는 기존 FK의
   `ON DELETE CASCADE`로 정리한다. `notifications`의 그룹 및 관련 대상 FK는
   기존 `ON DELETE SET NULL`을 유지하고 알림 스냅샷은 보존한다. 그 밖의
@@ -385,5 +440,4 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 
 ## 미결정·충돌
 
-- `openai_item_id`에 Unique를 둘지는 검토 중이다.
 - 통화 전사 보존 기간과 삭제 시점은 확정되지 않았다.
