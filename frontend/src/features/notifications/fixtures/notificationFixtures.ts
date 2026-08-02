@@ -6,11 +6,14 @@ import type {
 
 export const DEVELOPMENT_NOTIFICATIONS: readonly AppNotification[] = [
   {
+    actorName: '수호',
     avatarText: '수',
     body: '가족 그룹에 참여하고 싶어 해요.',
     createdAtLabel: '방금',
+    groupId: 'development-guardian-group',
     id: 'group-request-suho',
     isRead: false,
+    relatedJoinRequestId: 'join-request-suho',
     requestKind: 'groupJoin',
     title: '수호님의 그룹 승인 요청',
     type: 'GROUP_JOIN_REQUEST',

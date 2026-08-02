@@ -198,6 +198,7 @@ function parseNotification(value: unknown): AppNotification | null {
   }
 
   return {
+    ...(actor === null || actor.name === null ? {} : {actorName: actor.name}),
     avatarText: actor === null ? '알' : avatarText(actor.name),
     body,
     createdAt,

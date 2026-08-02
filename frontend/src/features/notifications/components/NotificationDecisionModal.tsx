@@ -3,17 +3,22 @@ import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
 import {COLORS, RADII} from '../../../design/tokens';
 
 interface NotificationDecisionModalProps {
+  applicantName: string | null;
   mode: 'approve' | 'reject' | null;
   onClose: () => void;
   onSelectRole: (role: 'guardian' | 'careReceiver') => void;
+  submitting?: boolean;
 }
 
 export function NotificationDecisionModal({
+  applicantName,
   mode,
   onClose,
   onSelectRole,
+  submitting = false,
 }: NotificationDecisionModalProps) {
   const isApprove = mode === 'approve';
+  const displayName = applicantName ?? '신청자';
 
   return (
     <Modal
@@ -35,16 +40,18 @@ export function NotificationDecisionModal({
           {isApprove ? (
             <>
               <Text style={styles.message}>
-                수호님이 우리 가족에 참여했습니다.{'\n'}
+                {displayName}님이 우리 가족에 참여했습니다.{'\n'}
                 가족의 역할을 정해주세요
               </Text>
-              <Text style={styles.roleTitle}>[손수호]님의 역할</Text>
+              <Text style={styles.roleTitle}>[{displayName}]님의 역할</Text>
               <View style={styles.roleActions}>
                 <RoleButton
+                  disabled={submitting}
                   label="보호자"
                   onPress={() => onSelectRole('guardian')}
                 />
                 <RoleButton
+                  disabled={submitting}
                   label="피보호자"
                   onPress={() => onSelectRole('careReceiver')}
                 />
@@ -52,7 +59,7 @@ export function NotificationDecisionModal({
             </>
           ) : (
             <Text style={styles.message}>
-              수호님의 그룹 참여 신청이 거절되었습니다.
+              {displayName}님의 그룹 참여 신청이 거절되었습니다.
             </Text>
           )}
         </Pressable>
@@ -61,14 +68,24 @@ export function NotificationDecisionModal({
   );
 }
 
-function RoleButton({label, onPress}: {label: string; onPress: () => void}) {
+function RoleButton({
+  disabled,
+  label,
+  onPress,
+}: {
+  disabled: boolean;
+  label: string;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       accessibilityRole="button"
+      disabled={disabled}
       onPress={onPress}
       style={({pressed}) => [
         styles.roleButton,
         pressed && styles.roleButtonPressed,
+        disabled && styles.roleButtonDisabled,
       ]}
     >
       <Text style={styles.roleButtonText}>{label}</Text>
@@ -115,6 +132,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 40,
     paddingHorizontal: 20,
+  },
+  roleButtonDisabled: {
+    opacity: 0.5,
   },
   roleButtonPressed: {
     opacity: 0.72,

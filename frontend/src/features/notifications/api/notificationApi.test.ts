@@ -87,10 +87,12 @@ test('알림 목록 응답을 화면 모델로 변환하고 페이지 파라미�
   );
   const gateway = createNotificationGateway({client});
 
-  await expect(gateway.loadPage(2, 10)).resolves.toMatchObject({
+  const page = await gateway.loadPage(2, 10);
+  expect(page).toMatchObject({
     hasNext: true,
     notifications: [
       expect.objectContaining({
+        actorName: '홍유라',
         avatarText: '홍유',
         groupId: '3',
         id: '12',
@@ -98,9 +100,17 @@ test('알림 목록 응답을 화면 모델로 변환하고 페이지 파라미�
         postId: '15',
       }),
       expect.objectContaining({avatarText: '알', id: '13', isRead: true}),
-      expect.objectContaining({id: '14', requestKind: 'groupJoin'}),
+      expect.objectContaining({
+        actorName: '수호',
+        groupId: '3',
+        id: '14',
+        relatedJoinRequestId: '21',
+        requestKind: 'groupJoin',
+      }),
     ],
   });
+  // 행위자가 삭제된 알림에는 actorName을 만들지 않는다.
+  expect(page.notifications[1].actorName).toBeUndefined();
   expect(client.get).toHaveBeenCalledWith('/notifications?page=2&size=10');
 });
 

@@ -15,7 +15,11 @@ import type {GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
 import {SubScreenHeader} from '../components/SubScreenHeader';
 import {useJoinRequests} from '../hooks/useJoinRequests';
-import {roleLabel} from '../joinRequestModel';
+import {
+  isJoinRequestAlreadyProcessed,
+  joinRequestDecisionErrorMessage,
+  roleLabel,
+} from '../joinRequestModel';
 import {avatarInitial} from '../rankingModel';
 import type {
   JoinRequestProcessor,
@@ -64,10 +68,12 @@ export function JoinApprovalScreen({
       // 연동 전 단계라 로컬 목록에서 즉시 제거해 처리 결과를 반영한다.
       joinRequests.remove(request.joinRequestId);
       return true;
-    } catch {
-      setProcessError(
-        '가입 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.',
-      );
+    } catch (error) {
+      setProcessError(joinRequestDecisionErrorMessage(error));
+      // 이미 처리된 요청은 재시도할 수 없으므로 목록에서도 정리한다.
+      if (isJoinRequestAlreadyProcessed(error)) {
+        joinRequests.remove(request.joinRequestId);
+      }
       return false;
     } finally {
       setProcessingId(null);
@@ -79,10 +85,17 @@ export function JoinApprovalScreen({
   };
 
   const handleSelectRole = async (role: GroupRole) => {
-    if (!approving) {
+    if (!approving || processingId !== null) {
       return;
     }
-    if (await applyDecision(approving, role)) {
+    // 실패해도 "참여했습니다" 팝업이 남지 않도록 항상 닫고, 오류는 화면 문구로 안내한다.
+    await applyDecision(approving, role);
+    setApproving(null);
+  };
+
+  const handleCloseRoleModal = () => {
+    // 처리 중 닫으면 진행 상황을 오인할 수 있으므로 완료 후에만 닫는다.
+    if (processingId === null) {
       setApproving(null);
     }
   };
@@ -181,9 +194,10 @@ export function JoinApprovalScreen({
       )}
 
       <RoleSelectModal
+        processing={processingId !== null}
         request={approving}
         onSelect={handleSelectRole}
-        onClose={() => setApproving(null)}
+        onClose={handleCloseRoleModal}
       />
     </View>
   );
@@ -191,10 +205,12 @@ export function JoinApprovalScreen({
 
 // H-5p 역할 선택 모달. 승인한 신청자의 그룹 역할(보호자/피보호자)을 정한다.
 function RoleSelectModal({
+  processing,
   request,
   onSelect,
   onClose,
 }: {
+  processing: boolean;
   request: JoinRequest | null;
   onSelect: (role: GroupRole) => void;
   onClose: () => void;
@@ -233,9 +249,10 @@ function RoleSelectModal({
                 <Pressable
                   accessibilityLabel={`${roleLabel(role)}로 지정`}
                   accessibilityRole="button"
+                  disabled={processing}
                   key={role}
                   onPress={() => onSelect(role)}
-                  style={styles.roleButton}
+                  style={[styles.roleButton, processing && styles.roleButtonDisabled]}
                 >
                   <Text style={styles.roleButtonText}>{roleLabel(role)}</Text>
                 </Pressable>
@@ -382,6 +399,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 44,
     paddingHorizontal: 24,
+  },
+  roleButtonDisabled: {
+    opacity: 0.5,
   },
   roleButtonRow: {
     flexDirection: 'row',

@@ -3,8 +3,16 @@ import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
 
-import type {AppScreenProps} from '../../../app-shell';
+import type {AppScreenProps, GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {
+  processJoinRequest as processJoinRequestApi,
+  type JoinRequestProcessor,
+} from '../../group-info/api/groupMembershipApi';
+import {
+  isJoinRequestAlreadyProcessed,
+  joinRequestDecisionErrorMessage,
+} from '../../group-info/joinRequestModel';
 import {NotificationDecisionModal} from '../components/NotificationDecisionModal';
 import {NotificationItem} from '../components/NotificationItem';
 import {DEVELOPMENT_NOTIFICATIONS} from '../fixtures/notificationFixtures';
@@ -14,6 +22,8 @@ import type {AppNotification, NotificationGateway} from '../types';
 export interface NotificationsScreenProps extends AppScreenProps {
   gateway?: NotificationGateway;
   initialNotifications?: readonly AppNotification[];
+  // 가입 요청 승인·거절 커맨드 주입(테스트용). 없으면 API-GROUPS-009를 호출한다.
+  processJoinRequest?: JoinRequestProcessor;
 }
 
 const NO_READ_IDS: readonly string[] = [];
@@ -27,6 +37,7 @@ export function NotificationsScreen({
   onNotificationRead,
   onUnreadCountChange,
   onOpenPost,
+  processJoinRequest,
   readNotificationIds = NO_READ_IDS,
 }: NotificationsScreenProps) {
   const contextGateway = useNotificationGateway();
@@ -59,13 +70,13 @@ export function NotificationsScreen({
   const generationRef = useRef(0);
   const readNotificationIdsRef = useRef(readNotificationIds);
   const [decision, setDecision] = useState<{
+    applicantName: string | null;
     id: string;
     mode: 'approve' | 'reject';
   } | null>(null);
-  const [decisionReadFailedId, setDecisionReadFailedId] = useState<string | null>(
-    null,
-  );
-  const decisionGenerationRef = useRef(0);
+  const [processingDecisionId, setProcessingDecisionId] = useState<
+    string | null
+  >(null);
   const unreadCount = useMemo(
     () => notifications.filter(notification => !notification.isRead).length,
     [notifications],
@@ -95,32 +106,34 @@ export function NotificationsScreen({
     setPage(0);
     setHasNext(false);
     setNotifications([]);
+    // 사용자·게이트웨이 전환 시 이전 세대의 badge 값이 남지 않게 초기화한다.
+    setServerUnreadCount(null);
 
-    Promise.all([
+    // 목록과 badge를 독립 처리해 unread-count 한 건의 실패가 목록까지 지우지 않게 한다.
+    void Promise.allSettled([
       resolvedGateway.loadPage(0),
       resolvedGateway.getUnreadCount(),
-    ])
-      .then(([result, count]) => {
-        if (disposed || generationRef.current !== generation) {
-          return;
-        }
+    ]).then(([pageResult, countResult]) => {
+      if (disposed || generationRef.current !== generation) {
+        return;
+      }
+      if (pageResult.status === 'fulfilled') {
         setNotifications(
-          applyReadIds(result.notifications, readNotificationIdsRef.current),
+          applyReadIds(
+            pageResult.value.notifications,
+            readNotificationIdsRef.current,
+          ),
         );
-        setHasNext(result.hasNext);
-        setServerUnreadCount(count);
-      })
-      .catch(error => {
-        if (disposed || generationRef.current !== generation) {
-          return;
-        }
-        setErrorMessage(toNotificationErrorMessage(error));
-      })
-      .finally(() => {
-        if (!disposed && generationRef.current === generation) {
-          setIsLoading(false);
-        }
-      });
+        setHasNext(pageResult.value.hasNext);
+      } else {
+        setErrorMessage(toNotificationErrorMessage(pageResult.reason));
+      }
+      // badge 실패 시 serverUnreadCount는 null로 남아 목록 기준 개수로 대체된다.
+      if (countResult.status === 'fulfilled') {
+        setServerUnreadCount(countResult.value);
+      }
+      setIsLoading(false);
+    });
 
     return () => {
       disposed = true;
@@ -131,11 +144,7 @@ export function NotificationsScreen({
     usesInjectedNotifications,
   ]);
 
-  const markAsRead = (
-    notificationId: string,
-    onSuccess?: () => void,
-    onFailure?: () => void,
-  ) => {
+  const markAsRead = (notificationId: string) => {
     const target = notifications.find(notification => notification.id === notificationId);
     if (target === undefined || target.isRead) {
       return;
@@ -156,7 +165,6 @@ export function NotificationsScreen({
         .markRead(notificationId)
         .then(() => {
           onNotificationRead?.(notificationId);
-          onSuccess?.();
         })
         .catch(error => {
           setNotifications(current => {
@@ -172,7 +180,6 @@ export function NotificationsScreen({
           setServerUnreadCount(current =>
             current === null ? null : current + 1,
           );
-          onFailure?.();
           setErrorMessage(toNotificationErrorMessage(error));
         });
     } else {
@@ -187,42 +194,113 @@ export function NotificationsScreen({
     }
   };
 
+  const usesRemoteDecisions =
+    resolvedGateway !== null && !usesInjectedNotifications;
+  const resolvedProcessJoinRequest =
+    processJoinRequest ?? processJoinRequestApi;
+
+  const removeDecidedNotification = (target: AppNotification) => {
+    setNotifications(current =>
+      current.filter(notification => notification.id !== target.id),
+    );
+    if (!target.isRead) {
+      setServerUnreadCount(current =>
+        current === null ? null : Math.max(0, current - 1),
+      );
+    }
+    // 가입 요청은 이미 서버에서 처리됐으므로 읽음 동기화 실패는 목록 제거를 되돌리지 않는다.
+    if (usesRemoteDecisions && !target.isRead) {
+      void resolvedGateway
+        .markRead(target.id)
+        .then(() => onNotificationRead?.(target.id))
+        .catch(() => undefined);
+    } else if (!usesRemoteDecisions) {
+      onNotificationRead?.(target.id);
+    }
+  };
+
+  // API-GROUPS-009 처리에 성공한 뒤에만 알림을 정리한다. 실패하면 알림을 유지해 재시도하게 한다.
+  const applyDecision = async (
+    target: AppNotification,
+    role?: GroupRole,
+  ): Promise<boolean> => {
+    if (!usesRemoteDecisions) {
+      removeDecidedNotification(target);
+      return true;
+    }
+    if (
+      target.groupId === undefined ||
+      target.relatedJoinRequestId === undefined
+    ) {
+      setErrorMessage(
+        '가입 요청 정보를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+      return false;
+    }
+
+    setProcessingDecisionId(target.id);
+    setErrorMessage(null);
+    try {
+      await resolvedProcessJoinRequest(target.groupId, {
+        assignedRole: role,
+        decision: role ? 'APPROVE' : 'REJECT',
+        joinRequestId: target.relatedJoinRequestId,
+      });
+    } catch (error) {
+      if (isJoinRequestAlreadyProcessed(error)) {
+        removeDecidedNotification(target);
+      }
+      setErrorMessage(joinRequestDecisionErrorMessage(error));
+      return false;
+    } finally {
+      setProcessingDecisionId(null);
+    }
+    removeDecidedNotification(target);
+    return true;
+  };
+
   const handleDecision = (
     notificationId: string,
     mode: 'approve' | 'reject',
   ) => {
-    const decisionGeneration = ++decisionGenerationRef.current;
-    setDecisionReadFailedId(null);
-    if (mode === 'reject') {
-      if (resolvedGateway !== null && !usesInjectedNotifications) {
-        markAsRead(notificationId, () => {
-          setNotifications(current =>
-            current.filter(notification => notification.id !== notificationId),
-          );
-        });
-      } else {
-        setNotifications(current =>
-          current.filter(notification => notification.id !== notificationId),
-        );
-      }
-    } else {
-      markAsRead(notificationId, undefined, () =>
-        decisionGenerationRef.current === decisionGeneration
-          ? setDecisionReadFailedId(notificationId)
-          : undefined,
-      );
+    const target = notifications.find(
+      notification => notification.id === notificationId,
+    );
+    if (target === undefined || processingDecisionId !== null) {
+      return;
     }
-    setDecision({id: notificationId, mode});
+    const applicantName = target.actorName ?? null;
+    if (mode === 'approve') {
+      // 승인은 역할 선택 후에 처리하므로 팝업만 연다.
+      setDecision({applicantName, id: notificationId, mode});
+      return;
+    }
+    void applyDecision(target).then(succeeded => {
+      if (succeeded) {
+        setDecision({applicantName, id: notificationId, mode});
+      }
+    });
   };
 
-  const handleDecisionComplete = () => {
-    if (decision && decisionReadFailedId !== decision.id) {
-      setNotifications(current =>
-        current.filter(notification => notification.id !== decision.id),
-      );
+  const handleSelectRole = (role: GroupRole) => {
+    if (decision === null || processingDecisionId !== null) {
+      return;
     }
-    setDecision(null);
-    setDecisionReadFailedId(null);
+    const target = notifications.find(
+      notification => notification.id === decision.id,
+    );
+    if (target === undefined) {
+      setDecision(null);
+      return;
+    }
+    // 실패해도 팝업은 닫고 오류 문구를 보여준다. 알림이 남아 있어 재시도할 수 있다.
+    void applyDecision(target, role).then(() => setDecision(null));
+  };
+
+  const handleCloseDecision = () => {
+    if (processingDecisionId === null) {
+      setDecision(null);
+    }
   };
 
   const handleReadAll = () => {
@@ -323,6 +401,7 @@ export function NotificationsScreen({
         onEndReachedThreshold={0.4}
         renderItem={({item}) => (
           <NotificationItem
+            decisionDisabled={processingDecisionId !== null}
             notification={item}
             onApprove={id => handleDecision(id, 'approve')}
             onPress={handleNotificationPress}
@@ -337,9 +416,11 @@ export function NotificationsScreen({
         </Text>
       ) : null}
       <NotificationDecisionModal
+        applicantName={decision?.applicantName ?? null}
         mode={decision?.mode ?? null}
-        onClose={() => setDecision(null)}
-        onSelectRole={handleDecisionComplete}
+        onClose={handleCloseDecision}
+        onSelectRole={handleSelectRole}
+        submitting={processingDecisionId !== null}
       />
     </View>
   );
