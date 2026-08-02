@@ -2,6 +2,7 @@ import React from 'react';
 import {Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
+import {ApiError} from '../../../shared/api';
 import type {JoinRequest, JoinRequestDecisionInput} from '../types';
 import {JoinApprovalScreen} from './JoinApprovalScreen';
 
@@ -136,6 +137,46 @@ test('승인하면 역할 선택 모달을 열고, 역할을 고르면 카드가
   expect(decisions).toEqual([
     {joinRequestId: 'jr-jong', decision: 'APPROVE', assignedRole: 'guardian'},
   ]);
+});
+
+test('피보호자 중복 409는 원인 문구를 보여주고 팝업을 닫되 카드는 유지한다', async () => {
+  const renderer = await renderScreen(REQUESTS, async () => {
+    throw new ApiError({
+      code: 'CARE_RECEIVER_ALREADY_ACTIVE_IN_OTHER_GROUP',
+      kind: 'server',
+      message: 'conflict',
+      status: 409,
+    });
+  });
+
+  await press(renderer, '이종철 승인');
+  await press(renderer, '피보호자로 지정');
+
+  // 실패해도 "참여했습니다" 역할 팝업이 남지 않는다.
+  expect(hasText(renderer, '가족의 역할을 정해주세요')).toBe(false);
+  expect(hasText(renderer, '이종철')).toBe(true);
+  expect(
+    hasText(
+      renderer,
+      '신청자가 이미 다른 그룹의 피보호자예요. 보호자 역할로만 승인할 수 있어요.',
+    ),
+  ).toBe(true);
+});
+
+test('이미 처리된 요청 409는 문구를 보여주고 카드를 정리한다', async () => {
+  const renderer = await renderScreen(REQUESTS, async () => {
+    throw new ApiError({
+      code: 'JOIN_REQUEST_ALREADY_PROCESSED',
+      kind: 'server',
+      message: 'conflict',
+      status: 409,
+    });
+  });
+
+  await press(renderer, '손수호 거절');
+
+  expect(hasText(renderer, '손수호')).toBe(false);
+  expect(hasText(renderer, '이미 처리된 가입 요청이에요.')).toBe(true);
 });
 
 test('요청이 없으면 안내 문구를 보여준다', async () => {
