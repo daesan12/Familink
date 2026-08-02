@@ -2392,7 +2392,7 @@ test("인증 무효화 중 빠른 재로그인은 이전 토큰 해제 후 새 �
   );
 });
 
-test("재시도 가능한 복원 오류에서는 인증 화면을 선택하지 않는다", async () => {
+test("재시도 가능한 복원 오류에서는 인증 화면 대신 재시도 화면을 보여준다", async () => {
   const authSession = createAuthSessionCoordinator({
     error: new Error("network"),
     status: "retryableError",
@@ -2405,7 +2405,130 @@ test("재시도 가능한 복원 오류에서는 인증 화면을 선택하지 �
   await resolveAuthRestore(authSession);
   mountedRenderers.push(renderer!);
 
-  expect(renderer!.toJSON()).toBeNull();
+  // 백지가 아니라 오류 안내와 재시도 버튼을 보여준다.
+  expect(renderer!.toJSON()).not.toBeNull();
+  expect(
+    renderer!.root.findByProps({ children: "연결에 문제가 있어요" })
+  ).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({ accessibilityLabel: "다시 시도" })
+  ).toBeTruthy();
+  // 인증·비로그인 화면은 선택하지 않고 세션도 지우지 않는다.
+  expect(
+    renderer!.root.findAllByProps({ accessibilityLabel: "로그인 시작" })
+  ).toHaveLength(0);
+  expect(authSession.clearLocalSession).not.toHaveBeenCalled();
+});
+
+test("재시도 진행 중에는 백지 대신 오류 화면을 유지하고 버튼을 잠근다", async () => {
+  const authSession = createAuthSessionCoordinator({
+    error: new Error("network"),
+    status: "retryableError",
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(<App authSession={authSession} />);
+  });
+  await resolveAuthRestore(authSession);
+  mountedRenderers.push(renderer!);
+
+  // 두 번째 복원은 확정되지 않은 채 진행 중으로 둔다.
+  let resolveSecondRestore: ((result: AuthRestoreResult) => void) | undefined;
+  authSession.restore.mockReturnValueOnce(
+    new Promise<AuthRestoreResult>((resolve) => {
+      resolveSecondRestore = resolve;
+    })
+  );
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "다시 시도" })
+      .props.onPress();
+  });
+
+  // 복원이 진행되는 동안에도 오류 화면이 유지되고 버튼은 로딩으로 잠긴다.
+  expect(renderer!.toJSON()).not.toBeNull();
+  expect(
+    renderer!.root.findByProps({ children: "연결에 문제가 있어요" })
+  ).toBeTruthy();
+  const retryButton = renderer!.root.findByProps({
+    accessibilityLabel: "다시 시도",
+  });
+  expect(retryButton.props.accessibilityState.busy).toBe(true);
+
+  // 재시도도 실패하면 오류 화면이 남고 버튼이 다시 풀린다.
+  await TestRenderer.act(async () => {
+    resolveSecondRestore?.({ error: new Error("still down"), status: "retryableError" });
+    await flushAsyncWork();
+  });
+  expect(
+    renderer!.root.findByProps({ children: "연결에 문제가 있어요" })
+  ).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({ accessibilityLabel: "다시 시도" }).props
+      .accessibilityState.busy
+  ).toBe(false);
+});
+
+test("복원 자체가 예외로 실패해도 재시도 화면으로 전환한다", async () => {
+  const authSession = createAuthSessionCoordinator();
+  authSession.restore.mockRejectedValueOnce(new Error("unexpected"));
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(<App authSession={authSession} />);
+    await flushAsyncWork();
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(
+    renderer!.root.findByProps({ children: "연결에 문제가 있어요" })
+  ).toBeTruthy();
+  expect(authSession.clearLocalSession).not.toHaveBeenCalled();
+});
+
+test("복원 재시도가 성공하면 기존 흐름대로 인증 상태에 진입한다", async () => {
+  const authSession = createAuthSessionCoordinator({
+    error: new Error("network"),
+    status: "retryableError",
+  });
+  const groupGateway = createGroupGateway();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <App
+        authSession={authSession}
+        groupGateway={groupGateway}
+        notificationGateway={createNotificationGateway()}
+        deviceTokenProvider={createDeviceTokenProvider()}
+      />
+    );
+  });
+  await resolveAuthRestore(authSession);
+  mountedRenderers.push(renderer!);
+
+  // 재시도는 백엔드 복구를 가정해 인증 성공을 반환한다.
+  authSession.restore.mockResolvedValueOnce({
+    status: "authenticated",
+    user: { id: 7, name: "복원 사용자" },
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "다시 시도" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  expect(authSession.restore).toHaveBeenCalledTimes(2);
+  // 그룹이 없는 복원 사용자는 A-10 환영 화면으로 진입한다.
+  expect(
+    renderer!.root.findByProps({
+      children: "복원 사용자 님,\n안녕하세요",
+    })
+  ).toBeTruthy();
 });
 
 test("authInvalidated 신호가 오면 사용자 상태를 비우고 A-1로 전환한다", async () => {
