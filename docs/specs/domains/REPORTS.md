@@ -36,6 +36,20 @@
 16. 건별 리포트는 있으나 생성된 일간 리포트가 아직 하나도 없으면 일간 리포트 준비 상태를 표시한다.
 17. 일간 리포트의 `guardianMessageSummary` 또는 건별 리포트의 `guardianMessage`가 `null`이면 제목·배경·여백을 포함한 전달 메시지 영역 전체를 표시하지 않는다.
 18. 리포트 달력 API는 요청 월의 `reportDates[]`와 함께 해당 피보호자의 전체 일일 리포트 중 가장 최신 `report_date`인 `latestReportDate`를 반환한다. 일일 리포트가 한 건도 없으면 `latestReportDate`는 `null`이다.
+19. 모든 Gemini 호출에는 설정 가능한 30초 총 제한시간을 적용한다. Gemini
+    네트워크 호출은 DB 트랜잭션 밖에서 수행하며, 건별·일일 리포트와 게시글
+    분석은 최대 동시 실행 2개·대기열 20개의 공용 bounded executor를 사용한다.
+20. 일일 리포트는 Gemini 호출 전에 `care_receiver_member_id + report_date`
+    기준 영속 claim을 획득한다. claim lease는 90초이며 만료 claim은 1분마다
+    정리해 새 실행이 다시 claim할 수 있게 한다. 기존
+    `(care_receiver_member_id, report_date)` Unique는 성공 결과의 중복 저장을
+    계속 막는다. claim에는 입력 건별 리포트의 개수와 최대 ID를 저장하고
+    완료 시 다시 확인한다. 호출 중 입력이 추가됐다면 오래된 결과를 저장하지
+    않는다. claim 소유 실행만 token·기존 입력 버전을 조건으로 claim을 최신
+    입력 버전과 새 lease로 원자 갱신한 뒤 다시 생성한다. 다른 실행은 활성
+    claim의 입력 버전을 덮어쓰지 않는다. 이는 실패 자동 재시도가 아니라
+    닫힌 리포트 구간의 입력 일관성 보정이다. 같은 키에 동시에 하나의 Gemini
+    호출만 허용한다.
 
 건별 감정 대분류 enum은 `ANGER`, `SADNESS`, `ANXIETY`, `HURT`, `EMBARRASSMENT`, `JOY`, `NEUTRAL`이다. 한국어 표시명과 이미지 매핑은 미결정이다.
 
@@ -43,7 +57,9 @@
 
 - 해당 리포트 구간에 통화가 없으면 그 기준일의 일일 리포트를 만들지 않는다. 이전에 생성된 일일 리포트가 있으면 조회 화면 상단에 가장 최신 일일 리포트를 유지하고 당일 건별 목록만 빈 상태로 표시한다. 생성된 일일 리포트가 전혀 없을 때만 전체 리포트 빈 상태를 표시한다.
 - 건별 리포트가 아직 준비되지 않았으면 [API 계약](../contracts/API.md)의 준비 전 오류를 사용한다.
-- Gemini 호출이 실패하면 성공 리포트를 저장하지 않는다. 재시도·복구 정책은 미결정이다.
+- Gemini 호출이 실패하거나 30초 총 제한시간을 넘으면 성공 리포트를 저장하지
+  않는다. 이번 계약은 건별·일일 리포트의 자동 재시도를 추가하지 않으며,
+  만료 claim 정리는 새 실행의 single-flight 복구만 허용한다.
 
 ## 구현 규칙
 
@@ -55,7 +71,8 @@
   - `API-REPORTS-003` `GET /call-sessions/{callSessionId}/report`
   - 요청·응답·명시 오류의 상세는 [API 계약](../contracts/API.md)을 따른다.
 - 데이터:
-  - 관련 엔티티는 `call_reports`, `daily_reports`, `call_sessions`, `call_transcripts`다.
+  - 관련 엔티티는 `call_reports`, `daily_reports`,
+    `daily_report_generation_claims`, `call_sessions`, `call_transcripts`다.
   - 모든 읽기·쓰기는 Spring Boot가 소유한다.
   - 동일 통화 건별 리포트와 동일 피보호자·기준일 일일 리포트의 중복 생성을 DB 제약과 멱등 처리로 방지한다.
 - 알림:
@@ -66,6 +83,11 @@
   - 실행 규칙은 `Asia/Seoul` 매일 22시다.
   - `report_date=D`는 `[D-1 22:00, D 22:00)` 구간의 기준일이며, 종료 시각 조건은 UTC `Instant`로 변환해 조회한다.
   - 서버·로그·API·DB timestamp는 UTC를 사용한다.
+- AI 실행:
+  - 대상·claim·입력 조회와 결과 저장은 짧은 DB 트랜잭션으로 나누고 Gemini
+    호출 중에는 DB 트랜잭션을 유지하지 않는다.
+  - 공용 AI executor의 대기열이 가득 차면 무기한 기다리지 않는다. 건별·일일
+    리포트에는 이 티켓에서 새로운 자동 재시도 API나 관리 화면을 추가하지 않는다.
 
 ## 인수 조건
 
@@ -118,9 +140,26 @@
 - When: 보호자가 리포트 탭을 조회한다.
 - Then: `API-REPORTS-001.latestReportDate`로 전체 최신 날짜를 확인하고 해당 날짜의 일일 리포트를 상단에 표시한다.
 
+### AC-009
+
+- Given: 동일 피보호자·기준일의 일일 리포트 생성 요청이 동시에 실행된다.
+- When: 각 실행이 Gemini 호출 전에 영속 claim을 시도한다.
+- Then: 하나의 실행만 90초 lease를 획득해 Gemini를 호출하고, 성공 결과는
+  기존 Unique로 한 번만 저장된다. 호출 중 입력 건별 리포트가 추가되면 오래된
+  결과를 버리고 같은 claim에서 최신 입력으로 생성한 결과만 저장한다.
+
+### AC-010
+
+- Given: Gemini가 응답하지 않거나 공용 AI executor가 포화됐다.
+- When: 건별·일일 리포트 생성을 실행한다.
+- Then: 실행 중인 Gemini 호출은 30초 안에 실패하고 실행 자원을 반환한다.
+  executor가 포화된 새 작업은 Gemini 호출과 DB claim 전에 즉시 거부·기록하며,
+  대기열은 20개를 넘겨 무기한 증가하지 않는다.
+
 ## 미결정 사항
 
 - 감정 소분류의 허용 목록·중립값·한국어 표시명·이미지 매핑.
 - `INCOMPLETE` 통화의 전사 충분 여부 판단 기준.
-- Gemini 실패 시 재시도 횟수·백오프와 서버 재시작 후 누락 리포트 복구 정책.
+- 건별·일일 리포트의 자동 재시도 횟수·backoff와 서버 재시작 후 누락
+  리포트를 다시 생성하는 정책.
 - 스케줄러 실행 시점 이후 저장된 건별 리포트를 과거 `report_date`에 반영·복구하는 정책.

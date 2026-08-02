@@ -15,7 +15,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 현재 유효한 기능 명세 | 6 | 6 | 없음 |
 | IA 화면 | 70 | 70 | 없음 |
 | Notion 활성 API 명세 | 59 | 59 | 없음 |
-| 최신 확정 ERD 현행 테이블 | 21 | 21 | 없음 |
+| 최신 확정 ERD 현행 테이블 | 22 | 22 | 없음 |
 | 확정 기술·AI 설계 결정 | 7 | 7 | 기술 결정 3건·현행 AI 설계 4건 |
 
 회원가입과 로그인은 로그인 ID와 비밀번호를 사용한다. 이메일·소셜 인증과
@@ -235,7 +235,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-USERS-002 내 프로필 수정 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·일부 확정 | 프로필 이미지 업로드·유지·삭제·교체 규칙 확정 |
 | 활성 API | API-USERS-003 회원 탈퇴 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md), [알림](./domains/NOTIFICATIONS.md) | 반영·일부 확정 | 모든 기기 토큰을 탈퇴 트랜잭션에서 비활성화 |
 
-## 최신 확정 ERD 현행 테이블 21개
+## 최신 확정 ERD 현행 테이블 22개
 
 | 원본 종류 | ID·이름 | 반영 문서 | 상태 | 비고 |
 |---|---|---|---|---|
@@ -256,6 +256,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | ERD | `call_transcripts` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영 | Spring Boot 쓰기 |
 | ERD | `call_reports` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring Boot 쓰기 |
 | ERD | `daily_reports` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring Boot 쓰기 |
+| ERD | `daily_report_generation_claims` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영·확정 | 일일 리포트 90초 single-flight claim |
 | ERD | `carnations` | [데이터](./contracts/DATA_MODEL.md), [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영 |  |
 | ERD | `notifications` | [데이터](./contracts/DATA_MODEL.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 앱 내부 알림; 일정 시작 Unique와 비일정 사건용 `source_event_key` 부분 Unique 적용 |
 | ERD | `notification_settings` | [데이터](./contracts/DATA_MODEL.md), [알림](./domains/NOTIFICATIONS.md) | 반영 | 푸시 허용 설정 |

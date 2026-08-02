@@ -66,7 +66,8 @@ class BackendApplicationTests extends IntegrationTest {
 			"users", "family_groups", "group_members", "group_join_requests", "member_aliases",
 			"member_interests", "posts", "post_media", "comments", "post_reactions", "post_analyses",
 			"calendar_events", "event_participants", "call_sessions", "call_transcripts", "call_reports",
-			"daily_reports", "carnations", "notifications", "notification_settings", "device_tokens");
+			"daily_reports", "daily_report_generation_claims", "carnations", "notifications",
+			"notification_settings", "device_tokens");
 	}
 
 	@Test

@@ -2,7 +2,7 @@ package com.ssafy.s15p11b104.domain.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -162,7 +162,7 @@ class DailyReportGenerationIntegrationTest extends IntegrationTest {
 			fixture.memberId(),
 			REPORT_DATE
 		)).isEqualTo(1);
-		verify(analyzer, atLeastOnce()).analyze(any());
+		verify(analyzer, times(1)).analyze(any());
 	}
 
 	private void runAfter(CountDownLatch start) {

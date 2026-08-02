@@ -4,7 +4,7 @@
 > 기준: 2026-07-31 최신 확정 ERD와 승인된 도메인 이벤트 알림 계약 기준·관계·테이블·제약 문서
 > 데이터베이스: PostgreSQL
 
-이 문서는 현재 사용하는 21개 테이블과 컬럼·Enum·제약의 로컬 계약이다.
+이 문서는 현재 사용하는 22개 테이블과 컬럼·Enum·제약의 로컬 계약이다.
 모든 시각 컬럼은 별도 언급이 없으면
 `TIMESTAMPTZ`이고 UTC 절대 시각으로 저장한다. API timestamp와 서버 로그도
 UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 매일 22시 리포트
@@ -14,7 +14,7 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 
 | 테이블 | 실행·쓰기 경계 |
 |---|---|
-| `users`, `family_groups`, `group_members`, `group_join_requests`, `member_aliases`, `member_interests`, `posts`, `post_media`, `comments`, `post_reactions`, `post_analyses`, `calendar_events`, `event_participants`, `call_sessions`, `call_transcripts`, `call_reports`, `daily_reports`, `carnations`, `notifications`, `notification_settings`, `device_tokens` | Spring Boot가 공개 API, 내부 AI 오케스트레이션과 모든 DB 읽기·쓰기를 소유한다. |
+| `users`, `family_groups`, `group_members`, `group_join_requests`, `member_aliases`, `member_interests`, `posts`, `post_media`, `comments`, `post_reactions`, `post_analyses`, `calendar_events`, `event_participants`, `call_sessions`, `call_transcripts`, `call_reports`, `daily_reports`, `daily_report_generation_claims`, `carnations`, `notifications`, `notification_settings`, `device_tokens` | Spring Boot가 공개 API, 내부 AI 오케스트레이션과 모든 DB 읽기·쓰기를 소유한다. |
 
 - Spring Boot 단일 백엔드가 DB 읽기·쓰기를 담당한다.
 - `persona_id`는 Spring Boot가 관리하는 고정 페르소나 번호(1~6)이며 DB
@@ -146,11 +146,22 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - PK: `id BIGINT`
 - FK·Unique: `post_id -> posts.id`
 - 컬럼: `status ANALYSIS_STATUS` NOT NULL,
-  `summary VARCHAR(500) NULL`, `analyzed_at NULL`, `created_at` NOT NULL
+  `summary VARCHAR(500) NULL`, `analyzed_at NULL`,
+  `attempt_count INTEGER` NOT NULL DEFAULT `0`, `next_attempt_at TIMESTAMPTZ NULL`,
+  `last_failure_code VARCHAR(50) NULL`, `last_failed_at TIMESTAMPTZ NULL`,
+  `input_updated_at TIMESTAMPTZ NULL`, `claim_token UUID NULL`,
+  `claim_expires_at TIMESTAMPTZ NULL`,
+  `created_at` NOT NULL
 - 상태는 `PENDING`, `SUCCESS`, `FAILED`다.
 - `PENDING`: `summary=NULL`, `analyzed_at=NULL`
 - `SUCCESS`: 요약과 완료 시각을 저장한다.
-- `FAILED`: `summary=NULL`, `analyzed_at=NULL`
+- `FAILED`: `summary=NULL`, `analyzed_at=NULL`. 재시도 가능한 실패는
+  `next_attempt_at`을 가지며, 영구 실패 또는 총 3회 도달 시 `NULL`이다.
+- claim을 획득할 때 `attempt_count`를 증가시키고 90초 뒤의
+  `claim_expires_at`, 대상 게시글의 `input_updated_at`, 임의 `claim_token`을
+  저장한다. 완료·실패 저장은 같은 token과 게시글 버전을 가진 실행만
+  허용하고 claim 필드를 비운다.
+- 마지막 실패 분류와 시각은 `last_failure_code`, `last_failed_at`에 보존한다.
 - 재분석할 때 새 행을 추가하지 않고 게시글의 기존 한 행을 `PENDING`으로
   갱신한다.
 - 게시글을 하드 삭제하면 미디어·댓글·반응·분석도 함께 정리한다.
@@ -243,6 +254,22 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   구간의 기준일이다. 구간 시작은 포함하고 종료는 제외하며, 종료 시각
   조건은 UTC `Instant`로 변환해 `call_sessions.ended_at`을 조회한다.
 - Unique: `(care_receiver_member_id, report_date)`
+
+### `daily_report_generation_claims`
+
+- PK: `id BIGINT`
+- FK·삭제: `care_receiver_member_id -> group_members.id ON DELETE CASCADE`
+- 컬럼: `report_date DATE`, `claim_token UUID`, `claim_expires_at TIMESTAMPTZ`,
+  `input_report_count INTEGER`, `input_latest_report_id BIGINT`, `created_at` NOT NULL
+- Unique: `(care_receiver_member_id, report_date)`
+- Gemini 호출 전에 90초 lease와 입력 건별 리포트의 개수·최대 ID를 저장하고,
+  성공 리포트를 저장할 때 실행이 들고 있는 token·입력 개수·최대 ID가 claim
+  행과 현재 입력에 모두 일치해야 한다. 현재 입력이 달라지면 오래된 결과를
+  저장하지 않는다. claim 소유 실행만 기존 token·입력 버전을 조건으로 행의
+  입력 버전·lease를 최신 값으로 원자 갱신하고 다시 생성하며, 다른 실행은
+  활성 claim을 변경하지 않는다.
+  만료 claim은 1분 주기 정리 후 새 실행이 다시 획득할 수 있으며, 이 테이블
+  자체는 성공 리포트나 자동 재시도 이력이 아니다.
 
 ## 활동·알림
 
@@ -342,7 +369,8 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   `calendar_events`, `call_sessions`, `daily_reports`, `carnations`,
   `group_join_requests`, `group_members`, `family_groups` 순서로 명시적으로
   삭제한다. `post_media`, `comments`, `post_reactions`, `post_analyses`,
-  `event_participants`, `call_transcripts`, `call_reports`는 기존 FK의
+  `event_participants`, `call_transcripts`, `call_reports`,
+  `daily_report_generation_claims`는 기존 FK의
   `ON DELETE CASCADE`로 정리한다. `notifications`의 그룹 및 관련 대상 FK는
   기존 `ON DELETE SET NULL`을 유지하고 알림 스냅샷은 보존한다. 그 밖의
   `family_groups`·`group_members` 참조 FK는 기존 `NO ACTION`을 유지하며,

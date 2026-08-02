@@ -38,6 +38,7 @@ import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.global.ai.execution.AiTaskExecutor;
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
 import jakarta.persistence.EntityManager;
@@ -87,8 +88,15 @@ class PostAnalysisPipelineIntegrationTest extends IntegrationTest {
 	@MockitoBean
 	private S3Client s3Client;
 
+	@MockitoBean
+	private AiTaskExecutor aiTaskExecutor;
+
 	@BeforeEach
 	void setUp() {
+		when(aiTaskExecutor.submit(any())).thenAnswer(invocation -> {
+			invocation.<Runnable>getArgument(0).run();
+			return true;
+		});
 		postAnalysisRepository.deleteAll();
 		postMediaRepository.deleteAll();
 		postRepository.deleteAll();

@@ -37,6 +37,9 @@ management:
       show-details: never
 
 app:
+  ai-execution:
+    max-concurrency: ${AI_EXECUTOR_MAX_CONCURRENCY:2}
+    queue-capacity: ${AI_EXECUTOR_QUEUE_CAPACITY:20}
   auth:
     secret: ${JWT_SECRET}
   push:
@@ -69,6 +72,7 @@ openai:
     request-timeout: ${OPENAI_REALTIME_REQUEST_TIMEOUT:20s}
 
 gemini:
+  request-timeout-ms: ${GEMINI_REQUEST_TIMEOUT_MS:30000}
   analysis:
     api-key: ${GMS_API_KEY:}
     base-url: ${GMS_API_BASE_URL:https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com}
