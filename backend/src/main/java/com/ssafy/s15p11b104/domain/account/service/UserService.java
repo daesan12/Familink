@@ -73,6 +73,12 @@ public class UserService {
 	 * {@code save}가 아닌 {@code saveAndFlush}를 사용한다. 커밋 시점까지 flush를 미루면 제약 위반이
 	 * 이 메서드 밖에서 발생해 계약에 없는 오류로 응답한다.
 	 *
+	 * <p>탈퇴와 같은 계정 행 잠금을 사용해 두 요청을 직렬화한다. 잠그지 않으면 이 메서드가 활성
+	 * 계정을 읽은 뒤 탈퇴가 커밋될 수 있고, 그 뒤 flush되는 엔티티는 이미 낡은 상태다. 이 프로젝트는
+	 * {@code @Version}과 {@code @DynamicUpdate}를 쓰지 않아 모든 컬럼을 담은 UPDATE가 나가므로,
+	 * 낡은 엔티티의 flush는 {@code withdrawn_at}을 다시 비우고 익명화된 개인정보를 되살린다.
+	 * 잠금 조회에 활성 조건이 포함되어 있어 탈퇴가 먼저 커밋되면 여기서 인증 오류로 끝난다.
+	 *
 	 * @param userId  인증된 사용자 ID
 	 * @param request 수정 요청
 	 * @return 수정 결과
@@ -80,7 +86,7 @@ public class UserService {
 	 */
 	@Transactional
 	public ProfileUpdateResponse updateMyProfile(Long userId, ProfileUpdateRequest request) {
-		User user = getActiveUser(userId);
+		User user = getActiveUserForUpdate(userId);
 
 		String newLoginId = request.loginId();
 		if (newLoginId != null && !newLoginId.equals(user.getLoginId())
