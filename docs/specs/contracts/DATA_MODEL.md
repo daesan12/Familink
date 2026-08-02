@@ -199,11 +199,16 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - FK: `group_id -> family_groups.id`,
   `care_receiver_member_id -> group_members.id`
 - 컬럼: `persona_id BIGINT`, `status CALL_STATUS`, `created_at` NOT NULL;
-  `started_at NULL`, `ended_at NULL`
+  `started_at NULL`, `ended_at NULL`, `lease_expires_at TIMESTAMPTZ NULL`
 - 시간 의미:
   - `created_at`: Spring Boot가 통화 시작 요청을 접수한 시각
   - `started_at`: WebRTC 연결 성공 결과를 받은 시각
   - `ended_at`: 종료·취소·실패 처리를 완료한 시각
+  - `lease_expires_at`: `CONNECTING`·`IN_PROGRESS` 세션의 활성 lease 만료
+    시각. 살아 있는 Sideband 세션은 30초마다 90초 lease로 갱신하며 종결
+    상태에서는 `NULL`이다.
+- stale 복구: lease가 없거나 만료된 활성 행은 잠금 후 `CONNECTING ->
+  FAILED`, `IN_PROGRESS -> INCOMPLETE`로 원자 전환하고 `ended_at`을 기록한다.
 
 ### `call_transcripts`
 

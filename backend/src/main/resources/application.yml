@@ -53,6 +53,10 @@ app:
   event-reminder:
     fixed-delay-ms: 60000
     initial-delay-ms: 60000
+  ai-call-lease:
+    lease-duration: 90s
+    fixed-delay-ms: 30000
+    initial-delay-ms: 30000
   push:
     enabled: ${PUSH_ENABLED:false}
   media:

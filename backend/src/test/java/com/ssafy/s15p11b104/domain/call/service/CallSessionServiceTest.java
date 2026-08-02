@@ -1,5 +1,7 @@
 package com.ssafy.s15p11b104.domain.call.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -8,11 +10,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,8 +30,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.entity.UserGender;
-import com.ssafy.s15p11b104.domain.call.dto.CreateCallSessionRequest;
+import com.ssafy.s15p11b104.domain.call.dto.CallConnectionResultRequest;
 import com.ssafy.s15p11b104.domain.call.dto.CallTerminationType;
+import com.ssafy.s15p11b104.domain.call.dto.ConnectionResult;
+import com.ssafy.s15p11b104.domain.call.dto.CreateCallSessionRequest;
 import com.ssafy.s15p11b104.domain.call.entity.CallSession;
 import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
 import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationDispatcher;
@@ -42,6 +49,8 @@ class CallSessionServiceTest {
 	private static final long CALL_SESSION_ID = 1L;
 	private static final long CARE_RECEIVER_MEMBER_ID = 2L;
 	private static final String OPEN_AI_CALL_ID = "call_123";
+	private static final Instant NOW = Instant.parse("2026-08-02T03:00:00Z");
+	private static final Instant LEASE_EXPIRES_AT = NOW.plusSeconds(90);
 
 	@Mock
 	private CallActorResolver callActorResolver;
@@ -69,6 +78,9 @@ class CallSessionServiceTest {
 
 	@Mock
 	private CallReportGenerationDispatcher callReportGenerationDispatcher;
+
+	@Mock
+	private CallSessionLeaseService callSessionLeaseService;
 
 	@Mock
 	private TransactionTemplate transactionTemplate;
@@ -99,14 +111,15 @@ class CallSessionServiceTest {
 			realtimeGateway,
 			sidebandSessionManager,
 			callReportGenerationDispatcher,
-			transactionTemplate
+			callSessionLeaseService,
+			transactionTemplate,
+			Clock.fixed(NOW, ZoneOffset.UTC)
 		);
 		when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
 			TransactionCallback<?> callback = invocation.getArgument(0);
 			return callback.doInTransaction(null);
 		});
 		when(callActorResolver.resolve()).thenReturn(new CallActor(CARE_RECEIVER_MEMBER_ID));
-		when(callSession.getId()).thenReturn(CALL_SESSION_ID);
 	}
 
 	@Test
@@ -134,15 +147,19 @@ class CallSessionServiceTest {
 		when(careReceiver.getGroup()).thenReturn(familyGroup);
 		when(careReceiver.getUser()).thenReturn(user);
 		when(user.getGender()).thenReturn(UserGender.FEMALE);
+		when(callSession.getId()).thenReturn(CALL_SESSION_ID);
 		when(callSessionRepository.save(any(CallSession.class))).thenReturn(callSession);
 		when(promptContextProvider.load(careReceiver))
 			.thenReturn(new AiCallSessionContext(promptContext, references));
 		when(promptComposer.compose(persona, UserGender.FEMALE, promptContext)).thenReturn("instructions");
 		when(realtimeGateway.createCall(anyString(), eq(persona), eq("instructions"), eq(CARE_RECEIVER_MEMBER_ID)))
 			.thenReturn(new OpenAiCall(OPEN_AI_CALL_ID, "v=0\r\ns=openai\r\n"));
+		when(sidebandSessionManager.activeSessionIds()).thenReturn(Set.of());
+		when(callSessionLeaseService.expiresAt(NOW)).thenReturn(LEASE_EXPIRES_AT);
 
 		callSessionService.create(new CreateCallSessionRequest(1L, "v=0\r\ns=browser\r\n"));
 
+		verify(callSessionLeaseService).renewAndRecoverForMember(Set.of(), CARE_RECEIVER_MEMBER_ID, NOW);
 		verify(sidebandSessionManager).connect(
 			eq(CALL_SESSION_ID),
 			eq(OPEN_AI_CALL_ID),
@@ -153,7 +170,7 @@ class CallSessionServiceTest {
 
 	@Test
 	void endsCallByUserRequest() {
-		stubOwnedSession();
+		stubOwnedSessionForEnd();
 		when(callSession.getStatus()).thenReturn(CallStatus.IN_PROGRESS, CallStatus.COMPLETED);
 
 		callSessionService.end(CALL_SESSION_ID, CallTerminationType.USER_REQUESTED);
@@ -169,7 +186,7 @@ class CallSessionServiceTest {
 
 	@Test
 	void marksConnectionLostAsUnexpectedDisconnect() {
-		stubOwnedSession();
+		stubOwnedSessionForEnd();
 		when(callSession.getStatus()).thenReturn(CallStatus.IN_PROGRESS, CallStatus.INCOMPLETE);
 
 		callSessionService.end(CALL_SESSION_ID, CallTerminationType.CONNECTION_LOST);
@@ -182,7 +199,7 @@ class CallSessionServiceTest {
 
 	@Test
 	void doesNotDispatchReportForDuplicateCompletedEnd() {
-		stubOwnedSession();
+		stubOwnedSessionForEnd();
 		when(callSession.getStatus()).thenReturn(CallStatus.COMPLETED, CallStatus.COMPLETED);
 
 		callSessionService.end(CALL_SESSION_ID, CallTerminationType.USER_REQUESTED);
@@ -190,9 +207,50 @@ class CallSessionServiceTest {
 		verify(callReportGenerationDispatcher, never()).dispatch(any());
 	}
 
+	@Test
+	void rejectsLateConnectedResultAfterRecoveringExpiredSessionAndClosesCall() {
+		stubOwnedSession();
+		when(callSessionLeaseService.recoverIfExpired(callSession, NOW)).thenReturn(true);
+
+		assertThatThrownBy(
+			() -> callSessionService.recordConnectionResult(
+				CALL_SESSION_ID,
+				new CallConnectionResultRequest(ConnectionResult.CONNECTED, null)
+			)
+		)
+			.isInstanceOfSatisfying(
+				CallApiException.class,
+				exception -> assertThat(exception.getCode()).isEqualTo("INVALID_CALL_STATUS")
+			);
+
+		verify(callSessionLeaseService).recoverIfExpired(callSession, NOW);
+		verify(callSession, never()).markConnected(any(Instant.class));
+		verify(sidebandSessionManager).prepareClose(CALL_SESSION_ID);
+		verify(realtimeGateway).hangUp(OPEN_AI_CALL_ID);
+		verify(sidebandSessionManager).finishClose(CALL_SESSION_ID);
+	}
+
+	@Test
+	void preservesRecoveredIncompleteStatusForLateUserEnd() {
+		stubOwnedSessionForEnd();
+		when(callSessionLeaseService.recoverIfExpired(callSession, NOW)).thenReturn(true);
+		when(callSession.getStatus()).thenReturn(CallStatus.INCOMPLETE, CallStatus.INCOMPLETE);
+
+		callSessionService.end(CALL_SESSION_ID, CallTerminationType.USER_REQUESTED);
+
+		verify(callSessionLeaseService).recoverIfExpired(callSession, NOW);
+		verify(callSession).endByUser(NOW);
+		verify(callReportGenerationDispatcher, never()).dispatch(any());
+	}
+
 	private void stubOwnedSession() {
 		when(callSessionRepository.findForUpdate(CALL_SESSION_ID, CARE_RECEIVER_MEMBER_ID))
 			.thenReturn(Optional.of(callSession));
 		when(sidebandSessionManager.prepareClose(CALL_SESSION_ID)).thenReturn(OPEN_AI_CALL_ID);
+	}
+
+	private void stubOwnedSessionForEnd() {
+		stubOwnedSession();
+		when(callSession.getId()).thenReturn(CALL_SESSION_ID);
 	}
 }

@@ -88,6 +88,40 @@ class CallSessionTest {
 			.isInstanceOf(IllegalStateException.class);
 	}
 
+	@Test
+	void renewsLeaseForActiveSessionAndClearsItWhenTerminated() {
+		CallSession session = createSession();
+		Instant leaseExpiresAt = Instant.parse("2026-07-28T01:01:30Z");
+
+		session.renewLease(leaseExpiresAt);
+
+		assertThat(session.getLeaseExpiresAt()).isEqualTo(leaseExpiresAt);
+
+		session.markUnexpectedDisconnect(Instant.parse("2026-07-28T01:01:00Z"));
+
+		assertThat(session.getStatus()).isEqualTo(CallStatus.FAILED);
+		assertThat(session.getLeaseExpiresAt()).isNull();
+		assertThatThrownBy(() -> session.renewLease(leaseExpiresAt.plusSeconds(30)))
+			.isInstanceOf(IllegalStateException.class);
+	}
+
+	@Test
+	void treatsMissingAndBoundaryLeaseAsExpiredOnlyWhileActive() {
+		CallSession session = createSession();
+		Instant now = Instant.parse("2026-08-02T03:00:00Z");
+
+		assertThat(session.isLeaseExpiredAt(now)).isTrue();
+
+		session.renewLease(now);
+		assertThat(session.isLeaseExpiredAt(now)).isTrue();
+
+		session.renewLease(now.plusSeconds(1));
+		assertThat(session.isLeaseExpiredAt(now)).isFalse();
+
+		session.markUnexpectedDisconnect(now);
+		assertThat(session.isLeaseExpiredAt(now)).isFalse();
+	}
+
 	private CallSession createSession() {
 		FamilyGroup group = new FamilyGroup("가족", "ABC123");
 		User user = new User("care-user", "password", "수호", LocalDate.of(1952, 4, 18), UserGender.MALE);

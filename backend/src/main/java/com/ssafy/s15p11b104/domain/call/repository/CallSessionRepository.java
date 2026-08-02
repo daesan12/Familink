@@ -4,9 +4,11 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -19,6 +21,47 @@ import jakarta.persistence.LockModeType;
 public interface CallSessionRepository extends JpaRepository<CallSession, Long> {
 
 	boolean existsByCareReceiverMemberIdAndStatusIn(Long careReceiverMemberId, Collection<CallStatus> statuses);
+
+	@Modifying
+	@Query("""
+		update CallSession session
+		set session.leaseExpiresAt = :leaseExpiresAt
+		where session.id in :sessionIds
+			and session.status in :activeStatuses
+		""")
+	int renewActiveLeases(
+		@Param("sessionIds") Set<Long> sessionIds,
+		@Param("activeStatuses") Collection<CallStatus> activeStatuses,
+		@Param("leaseExpiresAt") Instant leaseExpiresAt
+	);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+		select session
+		from CallSession session
+		where session.status in :activeStatuses
+			and (session.leaseExpiresAt is null or session.leaseExpiresAt <= :now)
+		order by session.id
+		""")
+	List<CallSession> findExpiredForUpdate(
+		@Param("activeStatuses") Collection<CallStatus> activeStatuses,
+		@Param("now") Instant now
+	);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+		select session
+		from CallSession session
+		where session.careReceiverMember.id = :careReceiverMemberId
+			and session.status in :activeStatuses
+			and (session.leaseExpiresAt is null or session.leaseExpiresAt <= :now)
+		order by session.id
+		""")
+	List<CallSession> findExpiredForMemberForUpdate(
+		@Param("careReceiverMemberId") Long careReceiverMemberId,
+		@Param("activeStatuses") Collection<CallStatus> activeStatuses,
+		@Param("now") Instant now
+	);
 
 	Optional<CallSession> findByIdAndCareReceiverMemberId(Long id, Long careReceiverMemberId);
 

@@ -8,6 +8,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
@@ -99,6 +100,10 @@ public class SidebandSessionManager {
 		}
 		managedSocket.close();
 		return managedSocket.callId();
+	}
+
+	public Set<Long> activeSessionIds() {
+		return Set.copyOf(sessions.keySet());
 	}
 
 	public String prepareClose(Long sessionId) {

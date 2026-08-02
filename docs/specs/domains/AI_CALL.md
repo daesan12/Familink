@@ -63,8 +63,13 @@
     겹치면 먼저 확정된 종결 상태와 최초 `endedAt`을 보존하고, 이후 요청에도
     같은 `202` 성공을 반환한다. 마지막 전사 정리와 리포트 생성은 한 번만
     접수하며 중복 종료로 세션·리포트를 중복 생성하지 않는다.
-16. 녹음 원본은 저장하지 않는다. 보호자에게 전체 통화 전문·원본 음성을 노출하지 않고 건별 요약과 보호자 전달 메시지만 제공한다.
-17. Spring Boot는 Sideband의 발화 완료 이벤트를 기준으로 사용자와 AI
+16. 활성 통화 세션에는 90초 lease를 부여하고, 살아 있는 Sideband 세션을
+    소유한 백엔드 인스턴스가 30초마다 자신의 세션 lease를 갱신한다. lease가
+    만료된 `CONNECTING`은 `FAILED`, 만료된 `IN_PROGRESS`는 `INCOMPLETE`로
+    원자 전환하고 `ended_at`을 기록한다. 이 복구는 애플리케이션 시작 시,
+    주기 작업과 같은 피보호자의 새 통화 생성 직전에 수행한다.
+17. 녹음 원본은 저장하지 않는다. 보호자에게 전체 통화 전문·원본 음성을 노출하지 않고 건별 요약과 보호자 전달 메시지만 제공한다.
+18. Spring Boot는 Sideband의 발화 완료 이벤트를 기준으로 사용자와 AI
     전사를 `call_transcripts`에 순서대로 저장하고, 통화 종료 상태에 따라
     Gemini로 건별 리포트를 생성해 `call_reports`에 저장한다.
 
@@ -112,6 +117,10 @@
 - 개발용 `AICALL` fixture의 민지·준호 별칭은 각각 `딸`·`손자`로 두어
   실제 이름과 호칭을 분리한다.
 - 상태와 전이: 위 확정 전이만 사용한다. `CANCELLED`는 연결 전 사용자 종료, `FAILED`는 연결 실패 또는 연결 전 비정상 단절, `INCOMPLETE`는 연결 후 비정상 단절을 구분한다.
+- 활성 세션 lease: `CONNECTING`·`IN_PROGRESS`는 `lease_expires_at`을
+  가지며, 90초 lease를 30초마다 갱신한다. 각 백엔드 인스턴스는 자신이
+  소유한 Sideband 세션만 갱신하고, 만료된 행만 비관적 잠금 후 복구한다.
+  종결 상태에서는 lease를 `NULL`로 만든다.
 - API:
   - 처리 주체: Spring Boot 단일 백엔드
   - Method와 Path: `API-CALLS-001`~`API-CALLS-003`의 Method·Path·요청·결과는 [`../contracts/API.md`](../contracts/API.md)를 참조한다. 확인된 세션 생성 경로는 `POST /call-sessions`다.
@@ -126,12 +135,16 @@
     연결 결과 상태는 `409 INVALID_CALL_STATUS`, Realtime 연결·SDP 교환
     실패는 생성에서 `502 AI_CONNECTION_FAILED`를 사용한다.
   - 중복 종료는 오류나 `409`가 아니며 같은 `202` 성공을 반환한다.
+  - 만료된 lease는 새 통화 생성 전에 위 상태 규칙으로 복구하며 활성 통화로
+    보지 않는다. 아직 유효한 `CONNECTING`·`IN_PROGRESS`가 있을 때만
+    `409 ACTIVE_CALL_EXISTS`를 반환한다.
 - 데이터:
   - 관련 엔티티: `call_sessions`, `call_transcripts`, `call_reports`
   - 읽기·쓰기 소유자: Spring Boot가 세션·transcript·AI 결과를 직접
     기록한다. 테이블 제약은
     [`../contracts/DATA_MODEL.md`](../contracts/DATA_MODEL.md)를 따른다.
-  - 주요 제약조건: 원본 음성·전체 전문을 보호자 조회 데이터로 만들지 않는다. `call_sessions`에는 상세 disconnect reason 컬럼을 두지 않는다.
+  - 주요 제약조건: 원본 음성·전체 전문을 보호자 조회 데이터로 만들지 않는다. `call_sessions`에는 상세 disconnect reason 컬럼을 두지 않으며,
+    활성 상태 수명 관리를 위한 nullable `lease_expires_at`만 추가한다.
 - 화면:
   - 진입점: 피보호자 하단 `AI 전화` 탭, IA `F-1`~`F-3`
   - 사용자에게 표시할 결과: 페르소나 예시, 연결·통화 상태, 실시간 자막, 통화 제어, 종료 결과. 건별 감정과 전체 전문은 표시하지 않는다.
@@ -174,6 +187,16 @@
   판정한다.
 - Then: API 계약의 기존 오류 코드로 응답하고, 중복 종료는 최초 상태와
   시각을 보존한 같은 `202` 성공으로 처리한다.
+
+### AC-006
+
+- Given: 이전 백엔드 프로세스가 종료되어 `CONNECTING` 또는 `IN_PROGRESS`
+  세션의 lease가 만료되었다.
+- When: 애플리케이션 시작·주기 복구 또는 같은 피보호자의 새 통화 생성이
+  수행된다.
+- Then: `CONNECTING`은 `FAILED`, `IN_PROGRESS`는 `INCOMPLETE`로 한 번만
+  전환되고 종료 시각이 기록되며, 해당 stale 세션 때문에 새 통화가
+  `ACTIVE_CALL_EXISTS`로 차단되지 않는다.
 
 ## 미결정 사항
 

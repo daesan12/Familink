@@ -186,7 +186,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-CALENDAR-003 일정 등록 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
 | 활성 API | API-CALENDAR-004 일정 수정 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
 | 활성 API | API-CALENDAR-005 일정 삭제 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
-| 활성 API | API-CALLS-001 AI 통화 세션 생성 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 성공 문구·요청 검증·활성 통화·AI 연결 실패 매핑 |
+| 활성 API | API-CALLS-001 AI 통화 세션 생성 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 성공 문구·요청 검증·유효 lease 활성 통화·stale 복구·AI 연결 실패 매핑 |
 | 활성 API | API-CALLS-002 WebRTC 연결 결과 전달 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 성공 문구·세션 존재·상태 오류 매핑 |
 | 활성 API | API-CALLS-003 통화 종료 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영·확정 | 성공 문구·중복 종료 멱등·단일 후처리 |
 | 활성 API | API-CARNATION-001 그룹 잔디·주간 랭킹 조회 | [API](./contracts/API.md), [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영·확정 | KST 월~일, `startDate`·`endDate` 둘 다 지정 또는 생략 |
@@ -252,7 +252,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | ERD | `post_analyses` | [데이터](./contracts/DATA_MODEL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot 쓰기 |
 | ERD | `calendar_events` | [데이터](./contracts/DATA_MODEL.md), [일정](./domains/CALENDAR.md) | 반영 |  |
 | ERD | `event_participants` | [데이터](./contracts/DATA_MODEL.md), [일정](./domains/CALENDAR.md) | 반영 |  |
-| ERD | `call_sessions` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영 | Spring Boot 쓰기 |
+| ERD | `call_sessions` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영 | Spring Boot 쓰기·`lease_expires_at`·stale 활성 세션 복구 |
 | ERD | `call_transcripts` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영 | Spring Boot 쓰기 |
 | ERD | `call_reports` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring Boot 쓰기 |
 | ERD | `daily_reports` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring Boot 쓰기 |

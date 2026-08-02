@@ -44,6 +44,9 @@ public class CallSession extends CreatedAtEntity {
 	@Column(name = "ended_at")
 	private Instant endedAt;
 
+	@Column(name = "lease_expires_at")
+	private Instant leaseExpiresAt;
+
 	protected CallSession() {
 	}
 
@@ -78,6 +81,21 @@ public class CallSession extends CreatedAtEntity {
 		return endedAt;
 	}
 
+	public Instant getLeaseExpiresAt() {
+		return leaseExpiresAt;
+	}
+
+	public void renewLease(Instant expiresAt) {
+		if (!isActive()) {
+			throw new IllegalStateException("종결된 통화 세션의 lease는 갱신할 수 없습니다.");
+		}
+		leaseExpiresAt = expiresAt;
+	}
+
+	public boolean isLeaseExpiredAt(Instant now) {
+		return isActive() && (leaseExpiresAt == null || !leaseExpiresAt.isAfter(now));
+	}
+
 	public void markConnected(Instant connectedAt) {
 		requireStatus(CallStatus.CONNECTING);
 		status = CallStatus.IN_PROGRESS;
@@ -88,6 +106,7 @@ public class CallSession extends CreatedAtEntity {
 		requireStatus(CallStatus.CONNECTING);
 		status = CallStatus.FAILED;
 		endedAt = failedAt;
+		leaseExpiresAt = null;
 	}
 
 	public void endByUser(Instant endedAt) {
@@ -101,6 +120,7 @@ public class CallSession extends CreatedAtEntity {
 			throw new IllegalStateException("현재 통화 상태에서는 종료할 수 없습니다.");
 		}
 		this.endedAt = endedAt;
+		leaseExpiresAt = null;
 	}
 
 	public void markUnexpectedDisconnect(Instant disconnectedAt) {
@@ -112,6 +132,11 @@ public class CallSession extends CreatedAtEntity {
 			return;
 		}
 		endedAt = disconnectedAt;
+		leaseExpiresAt = null;
+	}
+
+	private boolean isActive() {
+		return status == CallStatus.CONNECTING || status == CallStatus.IN_PROGRESS;
 	}
 
 	private boolean isTerminal() {

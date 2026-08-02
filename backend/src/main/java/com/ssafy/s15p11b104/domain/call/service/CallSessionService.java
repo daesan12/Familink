@@ -1,5 +1,6 @@
 package com.ssafy.s15p11b104.domain.call.service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.Map;
@@ -41,7 +42,9 @@ public class CallSessionService {
 	private final OpenAiRealtimeGateway realtimeGateway;
 	private final SidebandSessionManager sidebandSessionManager;
 	private final CallReportGenerationDispatcher callReportGenerationDispatcher;
+	private final CallSessionLeaseService callSessionLeaseService;
 	private final TransactionTemplate transactionTemplate;
+	private final Clock clock;
 
 	public CallSessionService(
 		CallActorResolver callActorResolver,
@@ -53,7 +56,9 @@ public class CallSessionService {
 		OpenAiRealtimeGateway realtimeGateway,
 		SidebandSessionManager sidebandSessionManager,
 		CallReportGenerationDispatcher callReportGenerationDispatcher,
-		TransactionTemplate transactionTemplate
+		CallSessionLeaseService callSessionLeaseService,
+		TransactionTemplate transactionTemplate,
+		Clock clock
 	) {
 		this.callActorResolver = callActorResolver;
 		this.groupMemberRepository = groupMemberRepository;
@@ -64,7 +69,9 @@ public class CallSessionService {
 		this.realtimeGateway = realtimeGateway;
 		this.sidebandSessionManager = sidebandSessionManager;
 		this.callReportGenerationDispatcher = callReportGenerationDispatcher;
+		this.callSessionLeaseService = callSessionLeaseService;
 		this.transactionTemplate = transactionTemplate;
+		this.clock = clock;
 	}
 
 	public CreateCallSessionResponse create(CreateCallSessionRequest request) {
@@ -104,11 +111,20 @@ public class CallSessionService {
 	) {
 		validateConnectionResult(request);
 		CallActor actor = callActorResolver.resolve();
-		Objects.requireNonNull(transactionTemplate.execute(status -> {
+		Instant now = clock.instant();
+		boolean accepted = Objects.requireNonNull(transactionTemplate.execute(status -> {
 			CallSession session = findOwnedSessionForUpdate(callSessionId, actor);
-			applyConnectionResult(session, request.result());
-			return session.getId();
+			if (callSessionLeaseService.recoverIfExpired(session, now)) {
+				return request.result() == ConnectionResult.FAILED
+					&& session.getStatus() == CallStatus.FAILED;
+			}
+			applyConnectionResult(session, request.result(), now);
+			return true;
 		}));
+		if (!accepted) {
+			hangUp(callSessionId);
+			throw CallApiException.invalidCallStatus();
+		}
 
 		if (request.result() == ConnectionResult.FAILED) {
 			hangUp(callSessionId);
@@ -118,11 +134,13 @@ public class CallSessionService {
 
 	public CallSessionIdResponse end(Long callSessionId, CallTerminationType terminationType) {
 		CallActor actor = callActorResolver.resolve();
+		Instant now = clock.instant();
 		TerminationResult result = Objects.requireNonNull(transactionTemplate.execute(status -> {
 			CallSession session = findOwnedSessionForUpdate(callSessionId, actor);
+			callSessionLeaseService.recoverIfExpired(session, now);
 			CallStatus previousStatus = session.getStatus();
 			try {
-				applyTermination(session, terminationType);
+				applyTermination(session, terminationType, now);
 			} catch (IllegalStateException exception) {
 				throw CallApiException.invalidCallStatus();
 			}
@@ -137,12 +155,12 @@ public class CallSessionService {
 		return new CallSessionIdResponse(result.callSessionId());
 	}
 
-	private void applyTermination(CallSession session, CallTerminationType terminationType) {
+	private void applyTermination(CallSession session, CallTerminationType terminationType, Instant now) {
 		if (terminationType == CallTerminationType.CONNECTION_LOST) {
-			session.markUnexpectedDisconnect(Instant.now());
+			session.markUnexpectedDisconnect(now);
 			return;
 		}
-		session.endByUser(Instant.now());
+		session.endByUser(now);
 	}
 
 	private PreparedCall prepareCall(CallActor actor, PersonaDefinition persona) {
@@ -151,16 +169,24 @@ public class CallSessionService {
 		if (careReceiver.getRole() != GroupRole.CARE_RECEIVER) {
 			throw CallApiException.forbidden("AI 전화는 피보호자만 사용할 수 있습니다.");
 		}
+		Instant now = clock.instant();
+		callSessionLeaseService.renewAndRecoverForMember(
+			sidebandSessionManager.activeSessionIds(),
+			careReceiver.getId(),
+			now
+		);
 		if (callSessionRepository.existsByCareReceiverMemberIdAndStatusIn(careReceiver.getId(), ACTIVE_STATUSES)) {
 			throw CallApiException.activeCallExists();
 		}
 
-		CallSession session = callSessionRepository.save(new CallSession(
+		CallSession session = new CallSession(
 			careReceiver.getGroup(),
 			careReceiver,
 			persona.id(),
 			CallStatus.CONNECTING
-		));
+		);
+		session.renewLease(callSessionLeaseService.expiresAt(now));
+		session = callSessionRepository.save(session);
 		AiCallSessionContext sessionContext = promptContextProvider.load(careReceiver);
 		String instructions = promptComposer.compose(
 			persona,
@@ -175,8 +201,9 @@ public class CallSessionService {
 			.orElseThrow(CallApiException::callSessionNotFound);
 	}
 
-	private void applyConnectionResult(CallSession session, ConnectionResult result) {
+	private void applyConnectionResult(CallSession session, ConnectionResult result, Instant now) {
 		if (result == ConnectionResult.CONNECTED && session.getStatus() == CallStatus.IN_PROGRESS) {
+			session.renewLease(callSessionLeaseService.expiresAt(now));
 			return;
 		}
 		if (result == ConnectionResult.FAILED && session.getStatus() == CallStatus.FAILED) {
@@ -185,9 +212,10 @@ public class CallSessionService {
 
 		try {
 			if (result == ConnectionResult.CONNECTED) {
-				session.markConnected(Instant.now());
+				session.markConnected(now);
+				session.renewLease(callSessionLeaseService.expiresAt(now));
 			} else {
-				session.markConnectionFailed(Instant.now());
+				session.markConnectionFailed(now);
 			}
 		} catch (IllegalStateException exception) {
 			throw CallApiException.invalidCallStatus();
@@ -197,7 +225,7 @@ public class CallSessionService {
 	private void handleUnexpectedDisconnect(long callSessionId) {
 		transactionTemplate.executeWithoutResult(status ->
 			callSessionRepository.findByIdForUpdate(callSessionId)
-				.ifPresent(session -> session.markUnexpectedDisconnect(Instant.now())));
+				.ifPresent(session -> session.markUnexpectedDisconnect(clock.instant())));
 	}
 
 	private void hangUp(Long callSessionId) {

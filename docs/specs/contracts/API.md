@@ -269,6 +269,9 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
   세션 상태는 `API-CALLS-002`에서 `409 INVALID_CALL_STATUS`다. OpenAI
   Realtime 연결 생성 또는 SDP 교환 실패는 `API-CALLS-001`에서
   `502 AI_CONNECTION_FAILED`다.
+- `API-CALLS-001`은 같은 피보호자의 만료된 통화 lease를 먼저 복구한다.
+  만료된 `CONNECTING`·`IN_PROGRESS`는 활성 통화로 보지 않으며, 아직 lease가
+  유효한 활성 세션이 있을 때만 `409 ACTIVE_CALL_EXISTS`를 반환한다.
 - `API-CALLS-003`의 중복 종료는 오류가 아니다. 최초 종결 상태와
   `endedAt`을 보존하고 후속 요청에도 같은 `202` 성공을 반환하며, 마지막
   전사 정리와 리포트 생성은 한 번만 접수한다. 중복 종료에는 `409`를
