@@ -149,11 +149,14 @@ public class CalendarEventService {
 
 	/**
 	 * 일정의 모든 편집 가능 필드와 참여자를 통째로 교체한다.
+	 *
+	 * <p>일정 행을 잠그고 시작해 같은 일정에 대한 동시 수정을 직렬화한다. 잠그지 않으면 참여자
+	 * 전체 교체가 서로 엇갈려 두 요청 목록의 합집합이 남는다.
 	 */
 	@Transactional
 	public CalendarEventUpdateResponse update(
 		Long eventId, CalendarEventUpdateRequest request, Long authenticatedUserId) {
-		CalendarEvent event = getEvent(eventId);
+		CalendarEvent event = getEventForUpdate(eventId);
 		GroupMember editor = requireEditor(event, authenticatedUserId);
 		List<Long> beforeParticipantMemberIds = eventParticipantRepository.findMemberIdsByEventId(eventId);
 		EventSchedule schedule = resolveSchedule(
@@ -185,10 +188,13 @@ public class CalendarEventService {
 
 	/**
 	 * 일정과 참여자를 하드 삭제한다.
+	 *
+	 * <p>수정과 같은 일정 행을 잠그고 시작해, 삭제와 동시 수정이 서로의 참여자 변경과 엇갈리지
+	 * 않게 한다.
 	 */
 	@Transactional
 	public void delete(Long eventId, Long authenticatedUserId) {
-		CalendarEvent event = getEvent(eventId);
+		CalendarEvent event = getEventForUpdate(eventId);
 		GroupMember editor = requireEditor(event, authenticatedUserId);
 		List<Long> beforeParticipantMemberIds = eventParticipantRepository.findMemberIdsByEventId(eventId);
 
@@ -213,6 +219,19 @@ public class CalendarEventService {
 	 */
 	private CalendarEvent getEvent(Long eventId) {
 		return calendarEventRepository.findById(eventId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+	}
+
+	/**
+	 * 수정·삭제 대상 일정을 잠그고 조회한다.
+	 *
+	 * <p>같은 일정을 동시에 수정하면 참여자 전체 교체가 서로 엇갈려 두 목록의 합집합이 남거나 한쪽
+	 * 목록이 사라지고, 겹치는 참여자는 유니크 제약 위반으로 계약에 없는 오류가 된다. 일정 행에서
+	 * 직렬화하면 나중 요청의 목록만 남는다. 조회 경로는 잠글 필요가 없어 {@link #getEvent(Long)}을
+	 * 그대로 쓴다.
+	 */
+	private CalendarEvent getEventForUpdate(Long eventId) {
+		return calendarEventRepository.findByIdForUpdate(eventId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
 	}
 
