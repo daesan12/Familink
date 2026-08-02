@@ -257,6 +257,7 @@ internal class AiCallRuntime(
           }
         } ?: return
 
+    val completion = synchronized(stateLock) { endCompletion }
     try {
       val token =
           dispatch.request.accessToken
@@ -270,9 +271,15 @@ internal class AiCallRuntime(
           callSessionId = dispatch.callSessionId,
           terminationType = dispatch.request.terminationType,
       )
-      synchronized(stateLock) { endCompletion?.complete(Unit) }
+      synchronized(stateLock) { completion?.complete(Unit) }
     } catch (exception: Throwable) {
-      synchronized(stateLock) { endCompletion?.completeExceptionally(exception) }
+      synchronized(stateLock) {
+        completion?.completeExceptionally(exception)
+        if (endCompletion === completion) {
+          endRequestSent = false
+          endCompletion = null
+        }
+      }
       throw exception
     }
   }

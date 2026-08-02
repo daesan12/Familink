@@ -7,6 +7,7 @@ internal enum class AiCallPhase {
   Selecting,
   Connecting,
   InProgress,
+  Ending,
   Completed,
   Cancelled,
   Failed,
@@ -17,11 +18,32 @@ internal data class AiCallBridgeContext(
     val groupId: String?,
 )
 
-internal enum class AiCallResult(val wireValue: String) {
-  Completed("COMPLETED"),
-  Cancelled("CANCELLED"),
-  Failed("FAILED"),
+internal enum class AiCallResult(
+    val wireValue: String,
+    val terminalPhase: AiCallPhase,
+) {
+  Completed("COMPLETED", AiCallPhase.Completed),
+  Cancelled("CANCELLED", AiCallPhase.Cancelled),
+  Failed("FAILED", AiCallPhase.Failed),
 }
+
+internal suspend fun awaitAiCallEndConfirmation(
+    initialPhase: AiCallPhase,
+    requestEnd: suspend () -> Unit,
+    onConfirmed: (AiCallResult) -> Unit,
+): AiCallResult {
+  val result =
+      when (initialPhase) {
+        AiCallPhase.Connecting -> AiCallResult.Cancelled
+        AiCallPhase.InProgress -> AiCallResult.Completed
+        else -> error("An AI call can only end from an active phase.")
+      }
+  requestEnd()
+  onConfirmed(result)
+  return result
+}
+
+internal fun isFailedCallSelectionAllowed(endRetryRequired: Boolean): Boolean = !endRetryRequired
 
 internal data class AiPersona(
     val id: Long,
@@ -80,6 +102,7 @@ internal val aiPersonas =
 internal data class AiCallUiState(
     val phase: AiCallPhase,
     val persona: AiPersona?,
+    val endRetryRequired: Boolean = false,
     val durationSeconds: Int = 0,
     val isMuted: Boolean = false,
     val isSpeakerOn: Boolean = true,
