@@ -2,6 +2,7 @@ package com.ssafy.s15p11b104.domain.file.service;
 
 import java.net.URI;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 import org.springframework.stereotype.Component;
 
@@ -12,6 +13,7 @@ public class S3ObjectKeyResolver {
 
 	private static final String POST_MEDIA_PREFIX = "post-media/";
 	private static final String LEGACY_POSTS_PREFIX = "posts/";
+	private static final String PROFILE_IMAGE_PREFIX = "profile-image/";
 
 	private final S3Properties properties;
 
@@ -20,6 +22,14 @@ public class S3ObjectKeyResolver {
 	}
 
 	public Optional<String> resolve(String mediaUrl) {
+		return resolve(mediaUrl, this::isPostMediaKey);
+	}
+
+	public Optional<String> resolveProfileImage(String mediaUrl) {
+		return resolve(mediaUrl, this::isProfileImageKey);
+	}
+
+	private Optional<String> resolve(String mediaUrl, Predicate<String> allowedKey) {
 		if (mediaUrl == null || mediaUrl.isBlank()) {
 			return Optional.empty();
 		}
@@ -40,7 +50,7 @@ public class S3ObjectKeyResolver {
 				}
 				key = key.substring(prefix.length());
 			}
-			return isPostMediaKey(key) ? Optional.of(key) : Optional.empty();
+			return allowedKey.test(key) ? Optional.of(key) : Optional.empty();
 		} catch (IllegalArgumentException exception) {
 			return Optional.empty();
 		}
@@ -69,5 +79,9 @@ public class S3ObjectKeyResolver {
 	private boolean isPostMediaKey(String key) {
 		return key.startsWith(POST_MEDIA_PREFIX) && key.length() > POST_MEDIA_PREFIX.length()
 			|| key.startsWith(LEGACY_POSTS_PREFIX) && key.length() > LEGACY_POSTS_PREFIX.length();
+	}
+
+	private boolean isProfileImageKey(String key) {
+		return key.startsWith(PROFILE_IMAGE_PREFIX) && key.length() > PROFILE_IMAGE_PREFIX.length();
 	}
 }
