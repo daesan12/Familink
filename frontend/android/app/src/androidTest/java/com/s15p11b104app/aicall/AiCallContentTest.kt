@@ -139,7 +139,12 @@ class AiCallContentTest {
       AiCallTheme {
         AiCallRoute(
             apiBaseUrl = null,
-            bridgeContext = AiCallBridgeContext("test-access-token", "group-1"),
+            accessTokenProvider =
+                object : AiCallAccessTokenProvider {
+                  override fun currentAccessToken(): String = "test-access-token"
+
+                  override suspend fun refreshAccessToken(): String = "test-access-token"
+                },
             onCallResult = {},
             onFullscreenChange = {},
         )

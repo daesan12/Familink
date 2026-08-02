@@ -79,7 +79,7 @@ import kotlinx.coroutines.isActive
 @Composable
 internal fun AiCallRoute(
     apiBaseUrl: String?,
-    bridgeContext: AiCallBridgeContext,
+    accessTokenProvider: AiCallAccessTokenProvider,
     onCallResult: (String) -> Unit,
     onFullscreenChange: (Boolean) -> Unit,
 ) {
@@ -100,13 +100,17 @@ internal fun AiCallRoute(
 
   val coroutineScope = rememberCoroutineScope()
   val context = LocalContext.current
-  val sessionClient = remember(apiBaseUrl) { apiBaseUrl?.let(::HttpAiCallSessionClient) }
+  val sessionClient =
+      remember(apiBaseUrl, accessTokenProvider) {
+        apiBaseUrl?.let { HttpAiCallSessionClient(it, accessTokenProvider) }
+      }
   val callRuntime =
       remember(sessionClient) {
         sessionClient?.let { client ->
           AiCallRuntime(
               context = context,
               sessionClient = client,
+              accessTokenProvider = accessTokenProvider,
               onCaptionUpdate = { update ->
                 if (update.completed) {
                   val completedCaption =
@@ -126,12 +130,11 @@ internal fun AiCallRoute(
        }
       }
 
-  val latestAccessToken = rememberUpdatedState(bridgeContext.accessToken)
   val latestCallJob = rememberUpdatedState(callJob)
   DisposableEffect(callRuntime) {
     onDispose {
       latestCallJob.value?.cancel()
-      callRuntime?.dispose(latestAccessToken.value)
+      callRuntime?.dispose()
     }
   }
 
@@ -164,7 +167,6 @@ internal fun AiCallRoute(
     phase = AiCallPhase.Failed
     runCatching {
       callRuntime?.end(
-          accessToken = bridgeContext.accessToken,
           terminationType = AiCallTerminationType.ConnectionLost,
       )
     }
@@ -190,7 +192,7 @@ internal fun AiCallRoute(
       callJob =
           coroutineScope.launch {
             try {
-              runtime.start(bridgeContext = bridgeContext, personaId = personaId)
+              runtime.start(personaId = personaId)
               phase = AiCallPhase.InProgress
             } catch (exception: CancellationException) {
               throw exception
@@ -254,7 +256,6 @@ internal fun AiCallRoute(
                   initialPhase = endingPhase,
                   requestEnd = {
                     callRuntime?.end(
-                        accessToken = bridgeContext.accessToken,
                         terminationType = AiCallTerminationType.UserRequested,
                     )
                   },

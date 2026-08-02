@@ -33,8 +33,19 @@ internal class AiCallViewManager :
     view.setGroupId(value)
   }
 
+  override fun completeAccessTokenRefresh(
+      view: AiCallView,
+      requestId: String,
+      accessToken: String,
+      errorCode: String,
+  ) {
+    view.completeAccessTokenRefresh(requestId, accessToken, errorCode)
+  }
+
   override fun getExportedCustomDirectEventTypeConstants(): Map<String, Any> =
       mapOf(
+          AiCallAccessTokenRefreshRequestEvent.EVENT_NAME to
+              mapOf("registrationName" to "onAccessTokenRefreshRequested"),
           AiCallFullscreenChangeEvent.EVENT_NAME to
               mapOf("registrationName" to "onFullscreenChange"),
           AiCallResultEvent.EVENT_NAME to
