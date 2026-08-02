@@ -36,6 +36,29 @@ export function isValidPassword(password: string): boolean {
   );
 }
 
+// 비밀번호 규칙 안내 문구. 화면과 위반 사유가 같은 기준(SIGNUP_LIMITS)을 쓰게 한 곳에 모은다.
+export const PASSWORD_RULE_MESSAGE = `영문과 숫자를 각각 1자 이상 포함해 ${SIGNUP_LIMITS.passwordMin} ~ ${SIGNUP_LIMITS.passwordMax}자로 입력해주세요.`;
+
+// 비밀번호 규칙 위반 이유를 입력 중 안내한다. 규칙을 지켰거나 아직 비어 있으면 null.
+export function getPasswordRuleViolation(password: string): string | null {
+  if (password.length === 0 || isValidPassword(password)) {
+    return null;
+  }
+  if (!ALPHANUMERIC_PATTERN.test(password)) {
+    return '비밀번호에는 영문과 숫자만 사용할 수 있어요.';
+  }
+  if (
+    password.length < SIGNUP_LIMITS.passwordMin ||
+    password.length > SIGNUP_LIMITS.passwordMax
+  ) {
+    return `비밀번호는 ${SIGNUP_LIMITS.passwordMin} ~ ${SIGNUP_LIMITS.passwordMax}자로 입력해주세요.`;
+  }
+  if (!LETTER_PATTERN.test(password)) {
+    return '영문을 1자 이상 포함해주세요.';
+  }
+  return '숫자를 1자 이상 포함해주세요.';
+}
+
 export function doPasswordsMatch(
   password: string,
   confirmation: string,

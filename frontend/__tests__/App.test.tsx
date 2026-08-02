@@ -326,12 +326,17 @@ test("회원가입 시작 화면을 표시하고 기존 회원가입으로 이�
   ).toBeTruthy();
 
   await TestRenderer.act(() => {
-    renderer.root.findByType(SignupFlowScreen).props.onComplete();
+    renderer.root.findByType(SignupFlowScreen).props.onComplete("CaseUser1");
   });
 
+  // 가입 완료 시 방금 만든 아이디를 채운 로그인 시트가 바로 열린다.
+  const loginSheet = renderer.root.findByType(LoginBottomSheet);
+  expect(loginSheet.props.visible).toBe(true);
+  expect(loginSheet.props.initialLoginId).toBe("CaseUser1");
   expect(
-    renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })
-  ).toBeTruthy();
+    renderer.root.findByProps({ accessibilityLabel: "로그인 아이디" }).props
+      .value
+  ).toBe("CaseUser1");
 });
 
 test("로그인 입력을 보존하고 비밀번호 표시 전환을 제공한다", async () => {

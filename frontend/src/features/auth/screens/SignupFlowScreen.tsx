@@ -37,9 +37,11 @@ import type {
 import {
   canSubmitSignup,
   doPasswordsMatch,
+  getPasswordRuleViolation,
   isValidLoginId,
   isValidName,
   isValidPassword,
+  PASSWORD_RULE_MESSAGE,
 } from '../validation';
 
 const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
@@ -83,8 +85,12 @@ const INITIAL_DRAFT: SignupDraft = {
 interface SignupFlowScreenProps {
   gateway?: SignupGateway;
   onCancel: () => void;
-  onComplete: () => void;
+  // 방금 가입한 로그인 ID를 전달해 로그인 화면에서 재입력을 줄인다.
+  onComplete: (loginId: string) => void;
 }
+
+// 생년월일 휠 첫 진입 기본값. 당해로 두면 고령 사용자가 수십 년을 스크롤해야 한다.
+const BIRTHDATE_PICKER_DEFAULT = '1960-01-01';
 
 export function SignupFlowScreen({
   gateway = signupGateway,
@@ -160,6 +166,13 @@ export function SignupFlowScreen({
 
   const handleCheckLoginId = async () => {
     if (!isValidLoginId(draft.loginId)) {
+      // 형식 미달 상태의 중복확인 탭이 무반응으로 보이지 않게 이유를 안내한다.
+      loginIdRequestIdRef.current += 1;
+      setLoginIdAvailability('idle');
+      setFieldErrors(current => ({
+        ...current,
+        loginId: FIELD_ERROR_MESSAGES.loginId,
+      }));
       return;
     }
     const checkedLoginId = draft.loginId;
@@ -358,11 +371,15 @@ export function SignupFlowScreen({
             />
           )}
           {step === 5 && (
-            <CompleteStep onBack={handleBack} onComplete={onComplete} />
+            <CompleteStep
+              onBack={handleBack}
+              onComplete={() => onComplete(draft.loginId)}
+            />
           )}
         </Animated.View>
       </KeyboardAvoidingView>
       <DatePickerSheet
+        initialValue={BIRTHDATE_PICKER_DEFAULT}
         onCancel={() => setDatePickerVisible(false)}
         onConfirm={value => {
           clearFieldError('birthDate');
@@ -506,10 +523,8 @@ function BasicInfoStep({
             <Pressable
               accessibilityLabel="아이디 중복 확인"
               accessibilityRole="button"
-              disabled={
-                !isValidLoginId(draft.loginId) ||
-                availability === 'checking'
-              }
+              // 형식 미달이어도 탭을 받아 이유를 안내한다. 확인 중에만 잠근다.
+              disabled={availability === 'checking'}
               hitSlop={6}
               onPress={onCheckLoginId}
               style={styles.duplicateButton}>
@@ -563,6 +578,8 @@ function PasswordStep({
   const canAttempt =
     isValidPassword(draft.password) &&
     draft.passwordConfirmation.length > 0;
+  // 입력 중 규칙 위반 이유를 바로 안내해 "다음" 비활성의 원인을 알 수 있게 한다.
+  const passwordViolation = getPasswordRuleViolation(draft.password);
 
   const visibilityButton = (
     <Pressable
@@ -597,7 +614,7 @@ function PasswordStep({
         <FormField
           accessibilityLabel="회원가입 비밀번호"
           autoCapitalize="none"
-          invalid={errorMessage !== undefined}
+          invalid={errorMessage !== undefined || passwordViolation !== null}
           label="비밀번호"
           maxLength={16}
           onChangeText={onChangePassword}
@@ -606,8 +623,12 @@ function PasswordStep({
           trailing={visibilityButton}
           value={draft.password}
         />
-        {errorMessage !== undefined && (
+        {errorMessage !== undefined ? (
           <ValidationMessage message={errorMessage} variant="error" />
+        ) : passwordViolation !== null ? (
+          <ValidationMessage message={passwordViolation} variant="error" />
+        ) : (
+          <Text style={styles.passwordRuleHint}>{PASSWORD_RULE_MESSAGE}</Text>
         )}
         <FormField
           accessibilityLabel="회원가입 비밀번호 확인"
@@ -957,6 +978,12 @@ const styles = StyleSheet.create({
   passwordFields: {
     gap: 10,
     marginTop: 20,
+  },
+  passwordRuleHint: {
+    color: AUTH_COLORS.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    paddingHorizontal: 4,
   },
   birthdateField: {
     gap: 8,

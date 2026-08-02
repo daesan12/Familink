@@ -2,6 +2,7 @@ import {
   canSubmitLogin,
   canSubmitSignup,
   doPasswordsMatch,
+  getPasswordRuleViolation,
   isBirthDateNotInFuture,
   isValidLoginId,
   isValidName,
@@ -35,6 +36,26 @@ describe('signup validation', () => {
   it('requires matching passwords', () => {
     expect(doPasswordsMatch('abcdefgh', 'abcdefgh')).toBe(true);
     expect(doPasswordsMatch('abcdefgh', 'abcdefgi')).toBe(false);
+  });
+
+  it('explains which password rule is violated', () => {
+    expect(getPasswordRuleViolation('')).toBeNull();
+    expect(getPasswordRuleViolation('abcd1234')).toBeNull();
+    expect(getPasswordRuleViolation('abcd123!')).toBe(
+      '비밀번호에는 영문과 숫자만 사용할 수 있어요.',
+    );
+    expect(getPasswordRuleViolation('a1')).toBe(
+      '비밀번호는 8 ~ 16자로 입력해주세요.',
+    );
+    expect(getPasswordRuleViolation('abcdefgh1234567890')).toBe(
+      '비밀번호는 8 ~ 16자로 입력해주세요.',
+    );
+    expect(getPasswordRuleViolation('12345678')).toBe(
+      '영문을 1자 이상 포함해주세요.',
+    );
+    expect(getPasswordRuleViolation('abcdefgh')).toBe(
+      '숫자를 1자 이상 포함해주세요.',
+    );
   });
 
   it('enables login for nonblank credentials without applying signup rules', () => {
