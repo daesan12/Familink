@@ -12,6 +12,7 @@ import {
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {
   formatWeekRange,
   getCurrentMonthRange,
@@ -120,6 +121,11 @@ export function MyPageScreen({
   const [profileRetryCount, setProfileRetryCount] = useState(0);
   const [subScreen, setSubScreen] = useState<SubScreen>(null);
   const [isMonthlyOpen, setIsMonthlyOpen] = useState(false);
+
+  useHardwareBack(() => {
+    setSubScreen(null);
+    return true;
+  }, subScreen !== null);
   const [weeklyRetryCount, setWeeklyRetryCount] = useState(0);
   const [monthlyRetryCount, setMonthlyRetryCount] = useState(0);
   const [weeklyState, setWeeklyState] = useState<WeeklyStampLoadState>({

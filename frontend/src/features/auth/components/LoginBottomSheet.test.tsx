@@ -1,5 +1,5 @@
 import React from 'react';
-import {AccessibilityInfo} from 'react-native';
+import {AccessibilityInfo, Keyboard, Modal} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import {LoginBottomSheet} from './LoginBottomSheet';
@@ -20,13 +20,13 @@ afterEach(() => {
   });
 });
 
-function render(initialLoginId?: string) {
+function render(initialLoginId?: string, onDismiss: () => void = jest.fn()) {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
       <LoginBottomSheet
         initialLoginId={initialLoginId}
-        onDismiss={jest.fn()}
+        onDismiss={onDismiss}
         onLogin={jest.fn()}
         visible
       />,
@@ -55,4 +55,26 @@ test('미리 채울 값이 없으면 빈 입력으로 시작한다', () => {
   const renderer = render();
 
   expect(fieldValue(renderer, '로그인 아이디')).toBe('');
+});
+
+test('키보드가 열려 있으면 시스템 Back 1회는 시트를 닫지 않고 키보드만 닫는다', () => {
+  const onDismiss = jest.fn();
+  const isVisible = jest
+    .spyOn(Keyboard, 'isVisible')
+    .mockReturnValue(true);
+  const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation();
+  const renderer = render(undefined, onDismiss);
+  const modal = renderer.root.findByType(Modal);
+
+  TestRenderer.act(() => modal.props.onRequestClose());
+
+  expect(dismiss).toHaveBeenCalledTimes(1);
+  expect(onDismiss).not.toHaveBeenCalled();
+
+  isVisible.mockReturnValue(false);
+  TestRenderer.act(() => modal.props.onRequestClose());
+
+  expect(onDismiss).toHaveBeenCalledTimes(1);
+  dismiss.mockRestore();
+  isVisible.mockRestore();
 });

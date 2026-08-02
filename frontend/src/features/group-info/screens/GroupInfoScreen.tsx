@@ -12,6 +12,7 @@ import {
 
 import type {AppScreenProps, GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {DeleteGroupModal} from '../components/DeleteGroupModal';
 import {
   GroupMenuSection,
@@ -186,6 +187,11 @@ export function GroupInfoScreen({
   );
   const [detailReloadCount, setDetailReloadCount] = useState(0);
   const detailRequestVersion = useRef(0);
+
+  useHardwareBack(() => {
+    setSubScreen(null);
+    return true;
+  }, subScreen !== null);
   const membersRequestVersion = useRef(0);
   const profileRequestVersion = useRef(0);
 

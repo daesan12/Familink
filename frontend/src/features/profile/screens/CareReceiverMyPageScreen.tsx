@@ -12,6 +12,7 @@ import {
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {
   getInterestErrorMessage,
   InterestSelectionScreen,
@@ -89,6 +90,11 @@ export function CareReceiverMyPageScreen({
     );
   const [profileRetryCount, setProfileRetryCount] = useState(0);
   const [subScreen, setSubScreen] = useState<SubScreen>(null);
+
+  useHardwareBack(() => {
+    setSubScreen(null);
+    return true;
+  }, subScreen !== null);
   const [interestLoadState, setInterestLoadState] =
     useState<InterestLoadState>(IDLE_INTEREST_LOAD_STATE);
   const interestRequestGenerationRef = useRef(0);

@@ -15,6 +15,7 @@ import {launchImageLibrary} from 'react-native-image-picker';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
 import {ApiError} from '../../../shared/api';
+import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {
   signupGateway,
   type SignupGateway,
@@ -147,6 +148,11 @@ export function SignupFlowScreen({
     }
     setStep(current => (current - 1) as SignupStep);
   };
+
+  useHardwareBack(() => {
+    handleBack();
+    return true;
+  });
 
   const goForward = (nextStep: SignupStep) => {
     setStep(nextStep);

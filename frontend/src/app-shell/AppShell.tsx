@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../design/tokens';
 import { useNotificationGateway } from '../features/notifications/NotificationGatewayContext';
+import { useHardwareBack } from '../shared/hooks/useHardwareBack';
 import { BottomTabBar } from './BottomTabBar';
 import { CurrentGroupSwitcher } from './CurrentGroupSwitcher';
 import { resolveAllowedRoute, resolveCurrentGroup } from './navigation';
@@ -77,6 +78,17 @@ export function AppShell({
   const resolvedRoute = currentRole
     ? resolveAllowedRoute(currentRole, activeRoute)
     : 'feed';
+  const canReturnToFeed =
+    resolvedRoute === 'archive' ||
+    resolvedRoute === 'notifications' ||
+    resolvedRoute === 'profile';
+
+  useHardwareBack(() => {
+    setIsScreenHeaderVisible(true);
+    setOpenPostId(null);
+    setActiveRoute('feed');
+    return true;
+  }, canReturnToFeed && !isScreenFullscreen);
 
   useEffect(() => {
     if (!currentRole) {

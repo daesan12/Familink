@@ -16,6 +16,7 @@ import {
 } from "react-native";
 
 import { COLORS, RADII } from "../../../design/tokens";
+import { useHardwareBack } from "../../../shared/hooks/useHardwareBack";
 import {
   createCalendarEventDraft,
   createCalendarEventDraftFromDetail,
@@ -75,6 +76,14 @@ export function CalendarEventFormScreen({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [participantsVisible, setParticipantsVisible] = useState(false);
+
+  useHardwareBack(() => {
+    if (saving) {
+      return true;
+    }
+    onCancel();
+    return true;
+  });
   const openPicker = (field: PickerField) => {
     const isDate = field.endsWith("Date");
     const dateKey = field.startsWith("start") ? draft.startDate : draft.endDate;
