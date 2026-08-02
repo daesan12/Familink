@@ -78,7 +78,7 @@ public class CommentService {
 		CommentCreateRequest request,
 		Long authenticatedUserId) {
 		Post post = getPost(postId);
-		GroupMember author = getActiveMember(post.getGroup().getId(), authenticatedUserId);
+		GroupMember author = getActiveMemberForWrite(post.getGroup().getId(), authenticatedUserId);
 		Comment comment = commentRepository.save(new Comment(post, author, request.content()));
 		eventPublisher.publishEvent(new DomainNotificationEvent.CommentCreated(comment.getId()));
 		return new CommentCreateResponse(
@@ -126,6 +126,18 @@ public class CommentService {
 
 	private GroupMember getActiveMember(Long groupId, Long authenticatedUserId) {
 		return groupMemberRepository.findActiveByGroupIdAndUserId(groupId, authenticatedUserId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+	}
+
+	/**
+	 * 댓글을 저장하기 전에 작성자의 활성 멤버십 행을 잠그고 찾는다.
+	 *
+	 * <p>잠그지 않으면 활성 구성원임을 읽은 뒤 그룹 나가기나 회원 탈퇴가 커밋되고, 그 다음 댓글이
+	 * 저장되어 이미 떠난 구성원 명의의 댓글이 남는다. 나가기가 먼저 커밋된 경우 이 조회가 빈 결과를
+	 * 돌려주므로 잠금 없는 검사와 같은 {@code 403}으로 끝난다.
+	 */
+	private GroupMember getActiveMemberForWrite(Long groupId, Long authenticatedUserId) {
+		return groupMemberRepository.findActiveForUpdateByGroupIdAndUserId(groupId, authenticatedUserId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
 	}
 
