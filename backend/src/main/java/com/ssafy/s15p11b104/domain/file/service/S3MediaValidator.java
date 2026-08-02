@@ -48,6 +48,15 @@ public class S3MediaValidator {
 
 	public void validate(MediaType mediaType, String mediaUrl) {
 		String key = keyResolver.resolve(mediaUrl).orElseThrow(this::invalidMedia);
+		validateObject(mediaType, key);
+	}
+
+	public void validateProfileImage(String profileImageUrl) {
+		String key = keyResolver.resolveProfileImage(profileImageUrl).orElseThrow(this::invalidMedia);
+		validateObject(MediaType.IMAGE, key);
+	}
+
+	private void validateObject(MediaType mediaType, String key) {
 		HeadObjectResponse metadata;
 		try {
 			metadata = s3Client.headObject(HeadObjectRequest.builder()

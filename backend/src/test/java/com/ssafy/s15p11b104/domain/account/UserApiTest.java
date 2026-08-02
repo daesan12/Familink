@@ -2,6 +2,10 @@ package com.ssafy.s15p11b104.domain.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -23,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -39,6 +44,9 @@ import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRepository
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
 import jakarta.persistence.EntityManager;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 /**
  * 본인 프로필 조회·수정과 회원 탈퇴 API를 검증한다.
@@ -52,6 +60,8 @@ class UserApiTest extends IntegrationTest {
 	private static final String PATH = "/users/me";
 	private static final String LOGIN_ID = "testuser";
 	private static final String PASSWORD = "password123";
+	private static final String PROFILE_IMAGE_URL = "https://cdn/profile-image/profile.png";
+	private static final String PROFILE_IMAGE_JSON = "\"" + PROFILE_IMAGE_URL + "\"";
 	private static final String SIGNUP_BODY = """
 		{
 		  "loginId": "testuser",
@@ -86,12 +96,16 @@ class UserApiTest extends IntegrationTest {
 	@Autowired
 	private TransactionTemplate transactionTemplate;
 
+	@MockitoBean
+	private S3Client s3Client;
+
 	@BeforeEach
 	void resetState() {
 		clearDatabase();
 		try (RedisConnection connection = redisTemplate.getRequiredConnectionFactory().getConnection()) {
 			connection.serverCommands().flushDb();
 		}
+		when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(validImageMetadata());
 	}
 
 	@Test
@@ -152,9 +166,9 @@ class UserApiTest extends IntegrationTest {
 					  "name": "김영하",
 					  "birthDate": "1960-04-21",
 					  "gender": "FEMALE",
-					  "profileImageUrl": "https://example.com/a.png"
+					  "profileImageUrl": "%s"
 					}
-					"""))
+					""".formatted(PROFILE_IMAGE_URL)))
 			.andExpect(status().isOk());
 
 		User saved = userRepository.findById(session.userId()).orElseThrow();
@@ -162,13 +176,64 @@ class UserApiTest extends IntegrationTest {
 		assertThat(saved.getName()).isEqualTo("김영하");
 		assertThat(saved.getBirthDate()).isEqualTo("1960-04-21");
 		assertThat(saved.getGender()).isEqualTo(UserGender.FEMALE);
-		assertThat(saved.getProfileImageUrl()).isEqualTo("https://example.com/a.png");
+		assertThat(saved.getProfileImageUrl()).isEqualTo(PROFILE_IMAGE_URL);
+	}
+
+	@Test
+	void updateRejectsExternalAndWrongPurposeProfileImageUrls() throws Exception {
+		Session session = signupAndLogin();
+		updateProfileImage(session, PROFILE_IMAGE_JSON);
+		clearInvocations(s3Client);
+
+		for (String invalidUrl : List.of(
+			"https://example.com/profile-image/external.png",
+			"https://cdn/post-media/post.png")) {
+			mockMvc.perform(authorized(patch(PATH), session)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{
+						  "name": "김영하",
+						  "profileImageUrl": "%s"
+						}
+						""".formatted(invalidUrl)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+		}
+
+		User unchanged = userRepository.findById(session.userId()).orElseThrow();
+		assertThat(unchanged.getName()).isEqualTo("이경호");
+		assertThat(unchanged.getProfileImageUrl()).isEqualTo(PROFILE_IMAGE_URL);
+		verifyNoInteractions(s3Client);
+	}
+
+	@Test
+	void updateRejectsProfileImageWhenObjectMetadataIsInvalid() throws Exception {
+		Session session = signupAndLogin();
+		updateProfileImage(session, PROFILE_IMAGE_JSON);
+		when(s3Client.headObject(any(HeadObjectRequest.class)))
+			.thenReturn(HeadObjectResponse.builder().contentLength(1024L).contentType("image/gif").build());
+
+		mockMvc.perform(authorized(patch(PATH), session)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "name": "김영하",
+					  "profileImageUrl": "https://cdn/profile-image/invalid.gif"
+					}
+					"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+		User unchanged = userRepository.findById(session.userId()).orElseThrow();
+		assertThat(unchanged.getName()).isEqualTo("이경호");
+		assertThat(unchanged.getProfileImageUrl()).isEqualTo(PROFILE_IMAGE_URL);
 	}
 
 	@Test
 	void updateKeepsProfileImageWhenFieldIsOmitted() throws Exception {
 		Session session = signupAndLogin();
-		updateProfileImage(session, "\"https://example.com/a.png\"");
+		updateProfileImage(session, PROFILE_IMAGE_JSON);
+		clearInvocations(s3Client);
 
 		mockMvc.perform(authorized(patch(PATH), session)
 				.contentType(MediaType.APPLICATION_JSON)
@@ -180,23 +245,26 @@ class UserApiTest extends IntegrationTest {
 			.andExpect(status().isOk());
 
 		assertThat(userRepository.findById(session.userId()).orElseThrow().getProfileImageUrl())
-			.isEqualTo("https://example.com/a.png");
+			.isEqualTo(PROFILE_IMAGE_URL);
+		verifyNoInteractions(s3Client);
 	}
 
 	@Test
 	void updateRemovesProfileImageWhenFieldIsExplicitNull() throws Exception {
 		Session session = signupAndLogin();
-		updateProfileImage(session, "\"https://example.com/a.png\"");
+		updateProfileImage(session, PROFILE_IMAGE_JSON);
+		clearInvocations(s3Client);
 
 		updateProfileImage(session, "null");
 
 		assertThat(userRepository.findById(session.userId()).orElseThrow().getProfileImageUrl()).isNull();
+		verifyNoInteractions(s3Client);
 	}
 
 	@Test
 	void updateKeepsProfileImageWhenBlankValueIsRejected() throws Exception {
 		Session session = signupAndLogin();
-		updateProfileImage(session, "\"https://example.com/a.png\"");
+		updateProfileImage(session, PROFILE_IMAGE_JSON);
 
 		mockMvc.perform(authorized(patch(PATH), session)
 				.contentType(MediaType.APPLICATION_JSON)
@@ -205,7 +273,7 @@ class UserApiTest extends IntegrationTest {
 			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
 		assertThat(userRepository.findById(session.userId()).orElseThrow().getProfileImageUrl())
-			.isEqualTo("https://example.com/a.png");
+			.isEqualTo(PROFILE_IMAGE_URL);
 	}
 
 	@Test
@@ -438,6 +506,13 @@ class UserApiTest extends IntegrationTest {
 	void withdrawalRequiresAuthentication() throws Exception {
 		mockMvc.perform(delete(PATH))
 			.andExpect(status().isUnauthorized());
+	}
+
+	private HeadObjectResponse validImageMetadata() {
+		return HeadObjectResponse.builder()
+			.contentLength(1024L)
+			.contentType("image/png")
+			.build();
 	}
 
 	private void updateProfileImage(Session session, String jsonValue) throws Exception {
