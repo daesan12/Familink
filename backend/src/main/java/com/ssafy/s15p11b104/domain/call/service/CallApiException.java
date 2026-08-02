@@ -21,6 +21,10 @@ public class CallApiException extends RuntimeException {
 		return new CallApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", message);
 	}
 
+	public static CallApiException forbidden(String message) {
+		return new CallApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", message);
+	}
+
 	public static CallApiException activeCallExists() {
 		return new CallApiException(HttpStatus.CONFLICT, "ACTIVE_CALL_EXISTS", "이미 진행 중인 AI 통화가 있습니다.");
 	}
