@@ -66,15 +66,26 @@ public class JoinRequestService {
 	 * 부분 유니크 인덱스에서 한쪽이 실패한다. 잠글 대상을 {@code group_join_requests}로 잡을 수
 	 * 없는 것은 아직 없는 행이 경쟁 대상이기 때문이며, 두 트랜잭션이 반드시 만나는 기존 행은
 	 * 신청자 계정뿐이다.
+	 *
+	 * <p>그룹 행도 잠가 삭제와 직렬화한다. 잠그지 않으면 그룹 삭제가 가입 요청을 지운 뒤 이 요청이
+	 * 같은 그룹에 새 행을 넣어, 삭제의 마지막 단계가 외래 키 제약에 걸리거나 사라진 그룹을 가리키는
+	 * 요청이 남는다. 초대 코드로 그룹을 찾는 첫 조회는 잠그지 않는다. 공통 잠금 순서가 계정 행을
+	 * 먼저 요구하므로 잠금은 계정 다음에 획득한다. 그 사이 그룹이 삭제되면 잠금 조회가 비어
+	 * 초대 코드 오류로 끝난다.
 	 */
 	@Transactional
 	public JoinRequestCreateResponse createByInviteCode(
 		Long authenticatedUserId,
 		JoinRequestCreateRequest request) {
-		FamilyGroup group = familyGroupRepository.findByInviteCode(normalizeInviteCode(request.inviteCode()))
+		Long groupId = familyGroupRepository.findByInviteCode(normalizeInviteCode(request.inviteCode()))
+			.map(FamilyGroup::getId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.INVITE_CODE_INVALID));
 		User applicant = userRepository.findActiveByIdForUpdate(authenticatedUserId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
+		familyGroupRepository.lockForGroupScopeChange(groupId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.INVITE_CODE_INVALID));
+		FamilyGroup group = familyGroupRepository.findById(groupId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.INVITE_CODE_INVALID));
 
 		if (groupMemberRepository.findActiveByGroupIdAndUserId(group.getId(), authenticatedUserId).isPresent()) {
 			throw new BusinessException(ErrorCode.ALREADY_GROUP_MEMBER);
@@ -130,6 +141,14 @@ public class JoinRequestService {
 			.toList());
 	}
 
+	/**
+	 * 관리자가 대기 중 가입 요청을 승인하거나 거절한다.
+	 *
+	 * <p>신청자 계정, 그룹, 가입 요청 순으로 잠근다. 그룹 행을 잠그는 것은 그룹 삭제와
+	 * 직렬화하기 위해서다. 잠그지 않으면 삭제가 활성 인원을 확인한 뒤 이 승인이 커밋되어, 삭제의
+	 * 일괄 삭제가 방금 승인된 구성원까지 지운다. 승인 200과 삭제 204가 모두 성공하는데 멤버십은
+	 * 사라지는 상태가 된다. 삭제가 먼저 커밋되면 잠금 뒤 가입 요청 조회가 비어 404로 끝난다.
+	 */
 	@Transactional
 	public JoinRequestDecisionResponse decide(
 		Long groupId,
@@ -140,6 +159,8 @@ public class JoinRequestService {
 
 		String decision = normalizeDecision(request.decision());
 		lockApplicantAccount(joinRequestId, groupId);
+		familyGroupRepository.lockForGroupScopeChange(groupId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.JOIN_REQUEST_NOT_FOUND));
 		GroupJoinRequest joinRequest = groupJoinRequestRepository
 			.findForUpdateByIdAndGroupId(joinRequestId, groupId)
 			.filter(candidate -> candidate.getApplicant().getWithdrawnAt() == null)
