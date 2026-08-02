@@ -161,6 +161,7 @@ interface AppProps {
 
 interface PendingDeviceTokenRegistration {
   deactivationRequested: boolean;
+  generation: number;
   promise: Promise<unknown>;
   sessionVersion: number;
   token: string;
@@ -615,23 +616,35 @@ export default function App({
         return;
       }
       const previousActiveToken = activeDeviceTokenRef.current;
-      const registrationPromise =
-        resolvedNotificationGateway.registerDeviceToken(token);
-      const pendingRegistration: PendingDeviceTokenRegistration = {
-        deactivationRequested: false,
-        promise: registrationPromise,
-        sessionVersion,
-        token,
-      };
+      const currentPendingRegistration =
+        pendingDeviceTokenRegistrationRef.current;
+      const pendingRegistration =
+        currentPendingRegistration !== null &&
+        !currentPendingRegistration.deactivationRequested &&
+        currentPendingRegistration.sessionVersion === sessionVersion &&
+        currentPendingRegistration.token === token
+          ? currentPendingRegistration
+          : {
+              deactivationRequested: false,
+              generation,
+              promise: resolvedNotificationGateway.registerDeviceToken(token),
+              sessionVersion,
+              token,
+            };
+      pendingRegistration.generation = generation;
       pendingDeviceTokenRegistrationRef.current = pendingRegistration;
       try {
-        await registrationPromise;
+        await pendingRegistration.promise;
       } finally {
         if (
-          pendingDeviceTokenRegistrationRef.current === pendingRegistration
+          pendingDeviceTokenRegistrationRef.current === pendingRegistration &&
+          pendingRegistration.generation === generation
         ) {
           pendingDeviceTokenRegistrationRef.current = null;
         }
+      }
+      if (pendingRegistration.generation !== generation) {
+        return;
       }
       if (
         generation === deviceTokenGenerationRef.current &&
@@ -646,7 +659,13 @@ export default function App({
         }
         return;
       }
-      if (!pendingRegistration.deactivationRequested) {
+      const tokenIsStillActiveOrRegistering =
+        activeDeviceTokenRef.current === token ||
+        pendingDeviceTokenRegistrationRef.current?.token === token;
+      if (
+        !pendingRegistration.deactivationRequested &&
+        !tokenIsStillActiveOrRegistering
+      ) {
         await resolvedNotificationGateway
           .deactivateDeviceToken(token)
           .catch(() => undefined);

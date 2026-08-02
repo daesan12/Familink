@@ -2297,6 +2297,60 @@ test("인증 상태의 토큰 갱신 이벤트는 새 토큰을 등록하고 이
   );
 });
 
+test("겹친 동일 토큰 등록을 한 요청으로 합쳐 최신 활성 토큰을 해제하지 않는다", async () => {
+  const notificationGateway = createNotificationGateway();
+  const deviceTokenProvider = createDeviceTokenProvider("granted", "same-token");
+  let refreshListener: ((token: string) => void) | undefined;
+  let resolveRegistration:
+    | ((value: Awaited<ReturnType<NotificationGateway["registerDeviceToken"]>>) => void)
+    | undefined;
+  deviceTokenProvider.subscribeTokenRefresh = jest.fn(listener => {
+    refreshListener = listener;
+    return jest.fn();
+  });
+  notificationGateway.registerDeviceToken.mockReturnValueOnce(
+    new Promise(resolve => {
+      resolveRegistration = resolve;
+    })
+  );
+  const { renderer } = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    createGroupGateway(),
+    notificationGateway,
+    deviceTokenProvider
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  expect(notificationGateway.registerDeviceToken).toHaveBeenCalledTimes(1);
+  expect(refreshListener).toBeDefined();
+  await TestRenderer.act(async () => {
+    refreshListener!("same-token");
+    await flushAsyncWork();
+  });
+  expect(notificationGateway.registerDeviceToken).toHaveBeenCalledTimes(1);
+
+  resolveRegistration?.({
+    active: true,
+    deviceType: "ANDROID",
+    id: "same-token",
+  });
+  await TestRenderer.act(async () => {
+    await flushAsyncWork();
+  });
+
+  expect(notificationGateway.deactivateDeviceToken).not.toHaveBeenCalledWith(
+    "same-token"
+  );
+});
+
 test("로그아웃 시작 후 도착한 토큰 갱신은 새 토큰을 등록하지 않는다", async () => {
   const authGateway = createAuthGateway();
   const notificationGateway = createNotificationGateway();
