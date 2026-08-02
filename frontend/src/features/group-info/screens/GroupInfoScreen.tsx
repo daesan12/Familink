@@ -30,6 +30,7 @@ import {
   resolveMemberDisplayName,
 } from '../groupInfoModel';
 import {getCurrentWeekRange, rankEntries} from '../rankingModel';
+import {roleLabel} from '../joinRequestModel';
 import {resolveManagerName} from '../groupManagementModel';
 import {getDevelopmentGroupInfo} from '../fixtures/groupInfoFixtures';
 import type {WeeklyRankingLoader} from '../api/rankingApi';
@@ -452,23 +453,12 @@ export function GroupInfoScreen({
     setAliasDraft('');
   };
 
-  const handleSelectRole = (member: GroupMember, role: GroupRole) => {
-    // 이미 같은 역할이면 아무 변화가 없으므로 안내 없이 무시한다.
-    if (member.role === role) {
-      return;
-    }
-    if (!canManageRoles) {
-      Alert.alert(
-        '역할 변경 권한이 없어요',
-        '역할은 그룹 관리자(방장)만 변경할 수 있어요.',
-      );
-      return;
-    }
+  const handleCancelEditAlias = () => {
+    setEditingMemberId(null);
+    setAliasDraft('');
+  };
 
-    if (updatingRoleMemberId !== null) {
-      return;
-    }
-
+  const applyRoleSelection = (member: GroupMember, role: GroupRole) => {
     if (onUpdateMemberRole !== undefined) {
       setUpdatingRoleMemberId(member.memberId);
       onUpdateMemberRole(currentGroup.id, member.memberId, role)
@@ -488,6 +478,34 @@ export function GroupInfoScreen({
     }
 
     setMembers(current => applyRoleChange(current, member.memberId, role));
+  };
+
+  const handleSelectRole = (member: GroupMember, role: GroupRole) => {
+    // 이미 같은 역할이면 아무 변화가 없으므로 안내 없이 무시한다.
+    if (member.role === role) {
+      return;
+    }
+    if (!canManageRoles) {
+      Alert.alert(
+        '역할 변경 권한이 없어요',
+        '역할은 그룹 관리자(방장)만 변경할 수 있어요.',
+      );
+      return;
+    }
+
+    if (updatingRoleMemberId !== null) {
+      return;
+    }
+
+    // 오터치 한 번으로 구성원 역할이 바뀌지 않도록 확인 후에만 변경한다.
+    Alert.alert(
+      '역할을 변경할까요?',
+      `${resolveMemberDisplayName(member)}님의 역할을 ${roleLabel(role)}로 변경합니다.`,
+      [
+        {style: 'cancel', text: '취소'},
+        {onPress: () => applyRoleSelection(member, role), text: '변경'},
+      ],
+    );
   };
 
   // 새 관리자로 위임한다. API 성공 후 로컬 목록의 관리자 표시를 옮기고 복귀한다.
@@ -804,6 +822,7 @@ export function GroupInfoScreen({
                     setProfileMemberId(member.memberId);
                     setProfileReloadCount(count => count + 1);
                   }}
+                  onCancelEditAlias={handleCancelEditAlias}
                   onSaveAlias={() => handleSaveAlias(member.memberId)}
                   onSelectRole={role => handleSelectRole(member, role)}
                   onStartEditAlias={() => handleStartEditAlias(member)}

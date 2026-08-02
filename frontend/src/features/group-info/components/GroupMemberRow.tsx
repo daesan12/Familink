@@ -20,6 +20,8 @@ interface GroupMemberRowProps {
   onStartEditAlias: () => void;
   onChangeAliasDraft: (value: string) => void;
   onSaveAlias: () => void;
+  // 저장하지 않고 편집 모드를 빠져나간다. 편집 중 숨긴 역할 토글을 복구하는 유일한 탈출구다.
+  onCancelEditAlias: () => void;
   onSelectRole: (role: GroupRole) => void;
   onOpenProfile: () => void;
 }
@@ -29,6 +31,7 @@ export function GroupMemberRow({
   aliasDraft,
   isEditing,
   member,
+  onCancelEditAlias,
   onChangeAliasDraft,
   onOpenProfile,
   onSaveAlias,
@@ -76,6 +79,14 @@ export function GroupMemberRow({
             >
               <Text style={styles.saveButtonText}>저장</Text>
             </Pressable>
+            <Pressable
+              accessibilityLabel={`${member.name} 호칭 편집 취소`}
+              accessibilityRole="button"
+              onPress={onCancelEditAlias}
+              style={styles.cancelButton}
+            >
+              <Text style={styles.cancelButtonText}>취소</Text>
+            </Pressable>
           </View>
         ) : (
           <View style={styles.nameLine}>
@@ -106,11 +117,14 @@ export function GroupMemberRow({
         ) : null}
       </View>
 
-      <RoleToggle
-        memberName={member.name}
-        onSelect={onSelectRole}
-        role={member.role}
-      />
+      {/* 편집 모드에서는 저장 버튼이 토글에 가려 오터치로 역할이 바뀌지 않도록 토글을 숨긴다. */}
+      {isEditing ? null : (
+        <RoleToggle
+          memberName={member.name}
+          onSelect={onSelectRole}
+          role={member.role}
+        />
+      )}
     </View>
   );
 }
@@ -131,6 +145,21 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
     height: 44,
     width: 44,
+  },
+  cancelButton: {
+    alignItems: 'center',
+    borderColor: COLORS.divider,
+    borderCurve: 'continuous',
+    borderRadius: RADII.small,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 30,
+    paddingHorizontal: 10,
+  },
+  cancelButtonText: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontWeight: '700',
   },
   counter: {
     color: COLORS.textSubtle,
