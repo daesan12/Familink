@@ -1,8 +1,11 @@
 package com.ssafy.s15p11b104.domain.file.service;
 
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ssafy.s15p11b104.domain.file.dto.FileUploadRequest;
 import com.ssafy.s15p11b104.domain.file.dto.PresignedUrlRequest;
 import com.ssafy.s15p11b104.domain.file.dto.PresignedUrlResponse;
 
@@ -19,10 +22,9 @@ public class FileUploadService {
 
 	@Transactional(readOnly = true)
 	public PresignedUrlResponse issue(PresignedUrlRequest request, Long authenticatedUserId) {
-		String purpose = request.purpose().trim();
-		request.files().forEach(file -> mediaUploadPolicy.validatePresignedRequest(purpose, file));
-		return new PresignedUrlResponse(request.files().stream()
-			.map(file -> uploadProvider.issue(purpose, file))
+		List<FileUploadRequest> files = mediaUploadPolicy.validate(request.purpose(), request.files());
+		return new PresignedUrlResponse(files.stream()
+			.map(file -> uploadProvider.issue(request.purpose(), file))
 			.toList());
 	}
 }
