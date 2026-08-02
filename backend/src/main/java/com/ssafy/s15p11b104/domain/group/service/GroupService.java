@@ -98,6 +98,11 @@ public class GroupService {
 	 * 가로지르므로, 잠그지 않으면 그룹 생성과 다른 그룹의 피보호자 지정이 양쪽 사전 검사를 통과한
 	 * 뒤 {@code uq_user_active_care_receiver}에서 한쪽이 실패한다. 피보호자를 지정하는 모든 경로가
 	 * 같은 계정 행을 먼저 잠그므로 그 위반 자체가 생기지 않는다.
+	 *
+	 * <p>같은 잠금이 회원 탈퇴와의 경쟁도 막는다. 잠그지 않으면 활성 여부를 확인한 뒤 탈퇴가
+	 * 커밋되어도 새 관리자 멤버십이 삽입되어, 다시 인증할 수 없는 탈퇴자가 유일 관리자인 그룹이
+	 * 남는다. 그런 그룹은 관리자 API가 모두 막혀 삭제도 위임도 할 수 없다. 잠금 조회에 활성 조건이
+	 * 포함되어 있어 탈퇴가 먼저 커밋되면 여기서 인증 오류로 끝난다.
 	 */
 	@Transactional
 	public GroupCreateResponse create(Long authenticatedUserId, GroupCreateRequest request) {
