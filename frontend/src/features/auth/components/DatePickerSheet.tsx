@@ -27,6 +27,8 @@ interface DateParts {
 interface DatePickerSheetProps {
   visible: boolean;
   value: string;
+  // value가 비어 있을 때 휠이 시작할 기본 날짜. 없으면 오늘로 시작한다.
+  initialValue?: string;
   onCancel: () => void;
   onConfirm: (value: string) => void;
 }
@@ -131,10 +133,11 @@ function daysInMonth(year: number, month: number): number {
 export function DatePickerSheet({
   visible,
   value,
+  initialValue,
   onCancel,
   onConfirm,
 }: DatePickerSheetProps) {
-  const initial = parseDate(value);
+  const initial = parseDate(value || initialValue || '');
   const [selected, setSelected] = useState<DateParts>(initial);
   const [reduceMotion, setReduceMotion] = useState(false);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -167,7 +170,7 @@ export function DatePickerSheet({
   useEffect(() => {
     if (visible) {
       dismissingRef.current = false;
-      setSelected(parseDate(value));
+      setSelected(parseDate(value || initialValue || ''));
       backdropOpacity.setValue(0);
       translateY.setValue(reduceMotion ? 0 : 360);
       Animated.parallel([
@@ -185,7 +188,7 @@ export function DatePickerSheet({
         }),
       ]).start();
     }
-  }, [backdropOpacity, reduceMotion, translateY, value, visible]);
+  }, [backdropOpacity, initialValue, reduceMotion, translateY, value, visible]);
 
   const updatePart = (part: keyof DateParts, nextValue: number) => {
     setSelected(current => {

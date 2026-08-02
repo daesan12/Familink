@@ -64,7 +64,10 @@ function createGateway(): jest.Mocked<SignupGateway> {
   };
 }
 
-function render(gateway = createGateway()): {
+function render(
+  gateway = createGateway(),
+  onComplete: (loginId: string) => void = jest.fn(),
+): {
   gateway: jest.Mocked<SignupGateway>;
   renderer: TestRenderer.ReactTestRenderer;
 } {
@@ -74,7 +77,7 @@ function render(gateway = createGateway()): {
       <SignupFlowScreen
         gateway={gateway}
         onCancel={jest.fn()}
-        onComplete={jest.fn()}
+        onComplete={onComplete}
       />,
     );
   });
@@ -155,6 +158,62 @@ function deferred<T>(): {
     resolve: value => resolvePromise?.(value),
   };
 }
+
+test('형식 미달 아이디로 중복확인을 누르면 형식 안내를 표시한다', async () => {
+  const {gateway, renderer} = render();
+
+  change(renderer, '회원가입 아이디', 'abc');
+  await pressAsync(renderer, '아이디 중복 확인');
+
+  // API를 호출하지 않고 무반응 대신 형식 오류를 안내한다.
+  expect(gateway.checkLoginIdAvailability).not.toHaveBeenCalled();
+  expect(
+    hasText(renderer, '아이디는 영문·숫자 5 ~ 15자로 입력해주세요.'),
+  ).toBe(true);
+});
+
+test('비밀번호 규칙을 안내하고 입력 중 위반 이유를 표시한다', async () => {
+  const {renderer} = render();
+
+  await advanceToPassword(renderer);
+
+  // 입력 전에도 규칙을 안내한다.
+  expect(
+    hasText(
+      renderer,
+      '영문과 숫자를 각각 1자 이상 포함해 8 ~ 16자로 입력해주세요.',
+    ),
+  ).toBe(true);
+
+  change(renderer, '회원가입 비밀번호', '12345678');
+  expect(hasText(renderer, '영문을 1자 이상 포함해주세요.')).toBe(true);
+
+  change(renderer, '회원가입 비밀번호', 'abcdefgh');
+  expect(hasText(renderer, '숫자를 1자 이상 포함해주세요.')).toBe(true);
+
+  change(renderer, '회원가입 비밀번호', 'a1');
+  expect(hasText(renderer, '비밀번호는 8 ~ 16자로 입력해주세요.')).toBe(true);
+
+  // 규칙을 지키면 안내가 기본 문구로 돌아간다.
+  change(renderer, '회원가입 비밀번호', 'password123');
+  expect(
+    hasText(
+      renderer,
+      '영문과 숫자를 각각 1자 이상 포함해 8 ~ 16자로 입력해주세요.',
+    ),
+  ).toBe(true);
+});
+
+test('완료 버튼은 방금 가입한 로그인 ID를 전달한다', async () => {
+  const onComplete = jest.fn();
+  const {renderer} = render(createGateway(), onComplete);
+
+  await advanceToGender(renderer);
+  await pressAsync(renderer, '다음');
+  press(renderer, '완료');
+
+  expect(onComplete).toHaveBeenCalledWith('CaseUser1');
+});
 
 test('로그인 ID 중복 확인 결과를 화면에 표시한다', async () => {
   const {gateway, renderer} = render();
