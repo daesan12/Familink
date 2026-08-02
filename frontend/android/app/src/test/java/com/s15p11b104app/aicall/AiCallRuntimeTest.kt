@@ -1,7 +1,9 @@
 package com.s15p11b104app.aicall
 
 import android.content.ContextWrapper
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -24,6 +26,7 @@ class AiCallRuntimeTest {
         AiCallRuntime(
             context = ContextWrapper(null),
             sessionClient = client,
+            accessTokenProvider = RecordingAccessTokenProvider(),
             onCaptionUpdate = {},
             onConnectionLost = {},
         )
@@ -32,13 +35,49 @@ class AiCallRuntimeTest {
     val exception =
         assertThrows(IllegalStateException::class.java) {
           runBlocking {
-            runtime.end("access-token", AiCallTerminationType.UserRequested)
+            runtime.end(AiCallTerminationType.UserRequested)
           }
         }
 
     assertEquals("temporary failure", exception.message)
-    runtime.end("access-token", AiCallTerminationType.UserRequested)
+    runtime.end(AiCallTerminationType.UserRequested)
     assertEquals(2, client.endCallCount)
+    assertEquals(listOf("access-token-1", "access-token-2"), client.endTokens)
+  }
+
+  @Test
+  fun `dispose falls back to the current token when the bridge is detached`() = runBlocking {
+    val endCompleted = CompletableDeferred<Unit>()
+    val client =
+        RecordingSessionClient(
+            endResults = ArrayDeque(listOf(Result.success(42L))),
+            onEnd = { endCompleted.complete(Unit) },
+        )
+    val runtime =
+        AiCallRuntime(
+            context = ContextWrapper(null),
+            sessionClient = client,
+            accessTokenProvider =
+                object : AiCallAccessTokenProvider {
+                  override fun currentAccessToken(): String = "current-access-token"
+
+                  override suspend fun refreshAccessToken(): String {
+                    throw AiCallApiException(
+                        errorCode = "AUTH_REFRESH_CANCELLED",
+                        message = "The bridge was detached.",
+                    )
+                  }
+                },
+            onCaptionUpdate = {},
+            onConnectionLost = {},
+        )
+    setCallSessionId(runtime, 42L)
+
+    runtime.dispose()
+    withTimeout(1_000) { endCompleted.await() }
+
+    assertEquals(1, client.endCallCount)
+    assertEquals(listOf("current-access-token"), client.endTokens)
   }
 
   private fun setCallSessionId(runtime: AiCallRuntime, callSessionId: Long) {
@@ -50,10 +89,12 @@ class AiCallRuntimeTest {
 
   private class RecordingSessionClient(
       private val endResults: ArrayDeque<Result<Long>>,
+      private val onEnd: () -> Unit = {},
   ) : AiCallSessionClient {
 
     var endCallCount = 0
       private set
+    val endTokens = mutableListOf<String>()
 
     override suspend fun createCallSession(
         accessToken: String,
@@ -74,7 +115,19 @@ class AiCallRuntimeTest {
         terminationType: AiCallTerminationType,
     ): Long {
       endCallCount += 1
-      return endResults.removeFirst().getOrThrow()
+      endTokens += accessToken
+      return endResults.removeFirst().getOrThrow().also { onEnd() }
+    }
+  }
+
+  private class RecordingAccessTokenProvider : AiCallAccessTokenProvider {
+    private var refreshCount = 0
+
+    override fun currentAccessToken(): String? = null
+
+    override suspend fun refreshAccessToken(): String {
+      refreshCount += 1
+      return "access-token-$refreshCount"
     }
   }
 }

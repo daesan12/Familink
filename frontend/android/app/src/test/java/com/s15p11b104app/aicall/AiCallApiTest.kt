@@ -27,7 +27,12 @@ class AiCallApiTest {
               )
             }
             .build()
-    val api = HttpAiCallSessionClient("https://api.example.com", client)
+    val api =
+        HttpAiCallSessionClient(
+            "https://api.example.com",
+            RecordingAccessTokenProvider("token-123"),
+            client,
+        )
 
     val created = api.createCallSession("token-123", 4, "v=0\r\n")
 
@@ -52,7 +57,12 @@ class AiCallApiTest {
               response(chain, "{\"call_session_id\":42}")
             }
             .build()
-    val api = HttpAiCallSessionClient("https://api.example.com", client)
+    val api =
+        HttpAiCallSessionClient(
+            "https://api.example.com",
+            RecordingAccessTokenProvider("token-123"),
+            client,
+        )
 
     val exception =
         assertThrows(AiCallApiException::class.java) {
@@ -85,7 +95,12 @@ class AiCallApiTest {
                   .build()
             }
             .build()
-    val api = HttpAiCallSessionClient("https://api.example.com", client)
+    val api =
+        HttpAiCallSessionClient(
+            "https://api.example.com",
+            RecordingAccessTokenProvider("token-123"),
+            client,
+        )
 
     val exception =
         assertThrows(AiCallApiException::class.java) {
@@ -93,6 +108,128 @@ class AiCallApiTest {
         }
     assertEquals(409, exception.statusCode)
     assertEquals("ACTIVE_CALL_EXISTS", exception.errorCode)
+  }
+
+  @Test
+  fun `unauthorized response refreshes once and retries with the new token`() = runBlocking {
+    val seenTokens = mutableListOf<String?>()
+    val client =
+        OkHttpClient.Builder()
+            .addInterceptor { chain ->
+              val token = chain.request().header("Authorization")
+              seenTokens += token
+              if (token == "Bearer new-access") {
+                response(chain, "{\"call_session_id\":42}")
+              } else {
+                response(
+                    chain,
+                    "{\"code\":\"UNAUTHORIZED\",\"message\":\"expired\"}",
+                    code = 401,
+                )
+              }
+            }
+            .build()
+    val tokenProvider = RecordingAccessTokenProvider("old-access", "new-access")
+    val api = HttpAiCallSessionClient("https://api.example.com", tokenProvider, client)
+
+    val callSessionId =
+        api.reportConnectionResult(
+            accessToken = "old-access",
+            callSessionId = 42,
+            result = AiCallConnectionResult.Connected,
+        )
+
+    assertEquals(42L, callSessionId)
+    assertEquals(listOf("Bearer old-access", "Bearer new-access"), seenTokens)
+    assertEquals(1, tokenProvider.refreshCount)
+  }
+
+  @Test
+  fun `a second unauthorized response is not retried again`() = runBlocking {
+    var requestCount = 0
+    val client =
+        OkHttpClient.Builder()
+            .addInterceptor { chain ->
+              requestCount += 1
+              response(
+                  chain,
+                  "{\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"expired\"}}",
+                  code = 401,
+              )
+            }
+            .build()
+    val tokenProvider = RecordingAccessTokenProvider("old-access", "new-access")
+    val api = HttpAiCallSessionClient("https://api.example.com", tokenProvider, client)
+
+    val exception =
+        assertThrows(AiCallApiException::class.java) {
+          runBlocking { api.createCallSession("old-access", 1, "v=0") }
+        }
+
+    assertEquals("UNAUTHORIZED", exception.errorCode)
+    assertEquals(2, requestCount)
+    assertEquals(1, tokenProvider.refreshCount)
+  }
+
+  @Test
+  fun `forbidden response does not refresh or retry`() = runBlocking {
+    var requestCount = 0
+    val client =
+        OkHttpClient.Builder()
+            .addInterceptor { chain ->
+              requestCount += 1
+              response(
+                  chain,
+                  "{\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"forbidden\"}}",
+                  code = 403,
+              )
+            }
+            .build()
+    val tokenProvider = RecordingAccessTokenProvider("old-access", "new-access")
+    val api = HttpAiCallSessionClient("https://api.example.com", tokenProvider, client)
+
+    val exception =
+        assertThrows(AiCallApiException::class.java) {
+          runBlocking { api.createCallSession("old-access", 1, "v=0") }
+        }
+
+    assertEquals("FORBIDDEN", exception.errorCode)
+    assertEquals(1, requestCount)
+    assertEquals(0, tokenProvider.refreshCount)
+  }
+
+  @Test
+  fun `late unauthorized response reuses an already refreshed token`() = runBlocking {
+    val seenTokens = mutableListOf<String?>()
+    val client =
+        OkHttpClient.Builder()
+            .addInterceptor { chain ->
+              val token = chain.request().header("Authorization")
+              seenTokens += token
+              if (token == "Bearer new-access") {
+                response(chain, "{\"call_session_id\":42}")
+              } else {
+                response(
+                    chain,
+                    "{\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"expired\"}}",
+                    code = 401,
+                )
+              }
+            }
+            .build()
+    val tokenProvider = RecordingAccessTokenProvider("new-access", "unused-access")
+    val api = HttpAiCallSessionClient("https://api.example.com", tokenProvider, client)
+
+    val callSessionId =
+        api.reportConnectionResult(
+            accessToken = "old-access",
+            callSessionId = 42,
+            result = AiCallConnectionResult.Connected,
+        )
+
+    assertEquals(42L, callSessionId)
+    assertEquals(listOf("Bearer old-access", "Bearer new-access"), seenTokens)
+    assertEquals(0, tokenProvider.refreshCount)
   }
 
   private fun response(
@@ -112,5 +249,23 @@ class AiCallApiTest {
     val buffer = Buffer()
     request.body?.writeTo(buffer)
     return buffer.readUtf8()
+  }
+
+  private class RecordingAccessTokenProvider(
+      initialAccessToken: String?,
+      private val refreshedAccessToken: String = initialAccessToken.orEmpty(),
+  ) : AiCallAccessTokenProvider {
+
+    private var accessToken = initialAccessToken
+    var refreshCount = 0
+      private set
+
+    override fun currentAccessToken(): String? = accessToken
+
+    override suspend fun refreshAccessToken(): String {
+      refreshCount += 1
+      accessToken = refreshedAccessToken
+      return refreshedAccessToken
+    }
   }
 }

@@ -13,11 +13,6 @@ internal enum class AiCallPhase {
   Failed,
 }
 
-internal data class AiCallBridgeContext(
-    val accessToken: String?,
-    val groupId: String?,
-)
-
 internal enum class AiCallResult(
     val wireValue: String,
     val terminalPhase: AiCallPhase,

@@ -17,13 +17,14 @@ import kotlin.coroutines.cancellation.CancellationException
 internal class AiCallRuntime(
     private val context: Context,
     private val sessionClient: AiCallSessionClient,
+    private val accessTokenProvider: AiCallAccessTokenProvider,
     private val onCaptionUpdate: (AiCallCaptionUpdate) -> Unit,
     private val onConnectionLost: () -> Unit,
 ) {
 
   private data class EndRequest(
-      val accessToken: String?,
       val terminationType: AiCallTerminationType,
+      val allowCurrentTokenFallback: Boolean,
   )
 
   private data class EndDispatch(
@@ -43,23 +44,13 @@ internal class AiCallRuntime(
   var callSessionId: Long? = null
     private set
 
-  suspend fun start(
-      bridgeContext: AiCallBridgeContext,
-      personaId: Long,
-  ) {
+  suspend fun start(personaId: Long) {
     if (disposed.get()) {
       throw AiCallApiException(
           errorCode = "CALL_RUNTIME_DISPOSED",
           message = "The AI call view is no longer available.",
       )
     }
-    val accessToken =
-        bridgeContext.accessToken?.takeIf { it.isNotBlank() }
-            ?: throw AiCallApiException(
-                statusCode = 401,
-                errorCode = "UNAUTHORIZED",
-                message = "An access token is required to start an AI call.",
-            )
     val currentJob = currentCoroutineContext()[Job]
     synchronized(stateLock) {
       if (startJob != null) {
@@ -75,6 +66,19 @@ internal class AiCallRuntime(
       endRequestSent = false
       endCompletion = null
     }
+
+    val accessToken =
+        try {
+          accessTokenProvider.refreshAccessToken()
+        } catch (exception: Throwable) {
+          synchronized(stateLock) {
+            if (startJob === currentJob) {
+              startJob = null
+            }
+          }
+          completePendingEndWithoutServerSession()
+          throw exception
+        }
 
     val session =
         try {
@@ -169,11 +173,15 @@ internal class AiCallRuntime(
     }
   }
 
-  suspend fun end(
-      accessToken: String?,
+  suspend fun end(terminationType: AiCallTerminationType) {
+    requestEnd(terminationType, allowCurrentTokenFallback = false)
+  }
+
+  private suspend fun requestEnd(
       terminationType: AiCallTerminationType,
+      allowCurrentTokenFallback: Boolean,
   ) {
-    val request = EndRequest(accessToken?.takeIf { it.isNotBlank() }, terminationType)
+    val request = EndRequest(terminationType, allowCurrentTokenFallback)
     val completion: CompletableDeferred<Unit>
     val activeStartJob: Job?
     val existingSessionId: Long?
@@ -202,14 +210,17 @@ internal class AiCallRuntime(
     }
   }
 
-  fun dispose(accessToken: String?) {
+  fun dispose() {
     if (!disposed.compareAndSet(false, true)) {
       close()
       return
     }
     disposalScope.launch {
       try {
-        end(accessToken, AiCallTerminationType.UserRequested)
+        requestEnd(
+            AiCallTerminationType.UserRequested,
+            allowCurrentTokenFallback = true,
+        )
       } catch (_: Throwable) {
         close()
       } finally {
@@ -260,12 +271,15 @@ internal class AiCallRuntime(
     val completion = synchronized(stateLock) { endCompletion }
     try {
       val token =
-          dispatch.request.accessToken
-              ?: throw AiCallApiException(
-                  statusCode = 401,
-                  errorCode = "UNAUTHORIZED",
-                  message = "An access token is required to end an AI call.",
-              )
+          try {
+            accessTokenProvider.refreshAccessToken()
+          } catch (exception: Throwable) {
+            if (!dispatch.request.allowCurrentTokenFallback) {
+              throw exception
+            }
+            accessTokenProvider.currentAccessToken()?.takeIf { it.isNotBlank() }
+                ?: throw exception
+          }
       sessionClient.endCallSession(
           accessToken = token,
           callSessionId = dispatch.callSessionId,
