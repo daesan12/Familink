@@ -52,6 +52,46 @@ test('가입 승인 대기 요청이 있으면 대기 카드를 표시한다', a
   );
 });
 
+test('그룹이 없는 사용자의 빈 상태는 참가 안내 문구를 표시한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupOnboardingScreen
+        onBack={jest.fn()}
+        onCreateGroup={jest.fn()}
+        onJoinByCode={jest.fn()}
+        pendingRequests={[]}
+      />,
+    );
+  });
+
+  expect(JSON.stringify(renderer!.toJSON())).toContain(
+    '아직 참가한 그룹이 없어요',
+  );
+});
+
+test('그룹 보유 사용자의 빈 상태는 모순 없는 대기 문구를 표시한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupOnboardingScreen
+        hasJoinedGroups
+        onBack={jest.fn()}
+        onCreateGroup={jest.fn()}
+        onJoinByCode={jest.fn()}
+        pendingRequests={[]}
+      />,
+    );
+  });
+
+  const rendered = JSON.stringify(renderer!.toJSON());
+  // 그룹 전환에서 진입한 사용자는 이미 그룹이 있으므로(F-20) 문구가 모순되지 않아야 한다.
+  expect(rendered).not.toContain('아직 참가한 그룹이 없어요');
+  expect(rendered).toContain('대기 중인 참여 요청이 없어요');
+});
+
 test('새 그룹 이름과 역할을 입력해 생성 요청을 전달한다', async () => {
   const onCreateGroup = jest.fn();
   let renderer: TestRenderer.ReactTestRenderer;
