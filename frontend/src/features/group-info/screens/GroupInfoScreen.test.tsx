@@ -72,7 +72,10 @@ afterEach(() => {
   });
 });
 
-function renderScreen(currentMemberId = 'm-manager') {
+function renderScreen(
+  currentMemberId = 'm-manager',
+  extraProps: Partial<React.ComponentProps<typeof GroupInfoScreen>> = {},
+) {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
@@ -82,6 +85,7 @@ function renderScreen(currentMemberId = 'm-manager') {
         initialMembers={MEMBERS}
         pendingJoinCount={2}
         rankingLoader={PENDING_RANKING_LOADER}
+        {...extraProps}
       />,
     );
   });
@@ -105,6 +109,20 @@ function press(
   const target = renderer.root.findByProps({accessibilityLabel});
   TestRenderer.act(() => {
     target.props.onPress();
+  });
+}
+
+// 마지막 Alert의 버튼 중 지정한 문구의 onPress를 실행한다(역할 변경 확인 팝업용).
+function confirmLastAlert(alertSpy: jest.SpyInstance, buttonText: string) {
+  expect(alertSpy).toHaveBeenCalled();
+  const lastCall = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
+  const buttons = lastCall[2] as {onPress?: () => void; text: string}[];
+  const button = buttons.find(item => item.text === buttonText);
+  if (button === undefined) {
+    throw new Error(`Alert에 "${buttonText}" 버튼이 없습니다.`);
+  }
+  TestRenderer.act(() => {
+    button.onPress?.();
   });
 }
 
@@ -316,13 +334,97 @@ test('연필을 누르면 호칭을 인라인으로 편집하고 저장한다', 
   expect(renderer.root.findAllByType(TextInput)).toHaveLength(0);
 });
 
-test('방장은 역할 토글로 구성원 역할을 바꿀 수 있다', () => {
+test('방장은 역할 토글로 확인 후 구성원 역할을 바꿀 수 있다', () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const renderer = renderScreen('m-manager');
 
-  // 손수호를 피보호자로 바꾸면 인원 수 문구가 갱신된다.
+  // 손수호를 피보호자로 바꾸려면 먼저 확인 팝업이 떠야 한다.
   press(renderer, '손수호 피보호자');
 
+  // 화면에 보이는 표시 이름(호칭 우선)으로 확인을 요청한다.
+  expect(alertSpy).toHaveBeenCalledWith(
+    '역할을 변경할까요?',
+    '아빠님의 역할을 피보호자로 변경합니다.',
+    expect.any(Array),
+  );
+  // 확인 전에는 역할이 그대로다.
+  expect(hasText(renderer, '피보호자 1명, 보호자 2명')).toBe(true);
+
+  confirmLastAlert(alertSpy, '변경');
+
   expect(hasText(renderer, '피보호자 2명, 보호자 1명')).toBe(true);
+});
+
+test('역할 변경 확인 팝업에서 취소하면 역할이 유지된다', () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const renderer = renderScreen('m-manager');
+
+  press(renderer, '손수호 피보호자');
+  confirmLastAlert(alertSpy, '취소');
+
+  expect(hasText(renderer, '피보호자 1명, 보호자 2명')).toBe(true);
+});
+
+test('호칭 편집 모드에서는 역할 토글이 표시되지 않는다', () => {
+  const renderer = renderScreen();
+
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '손수호 피보호자'}).length,
+  ).toBeGreaterThan(0);
+
+  press(renderer, '손수호 호칭 수정');
+
+  // 편집 중인 행의 토글만 사라지고 다른 행은 유지된다.
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '손수호 피보호자'}),
+  ).toHaveLength(0);
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '이경호 피보호자'}).length,
+  ).toBeGreaterThan(0);
+});
+
+test('호칭 편집을 취소하면 저장 없이 편집이 닫히고 역할 토글이 돌아온다', () => {
+  const renderer = renderScreen();
+
+  press(renderer, '손수호 호칭 수정');
+  const input = renderer.root.findByProps({
+    accessibilityLabel: '손수호 호칭 입력',
+  });
+  TestRenderer.act(() => {
+    input.props.onChangeText('바꾸다 만 호칭');
+  });
+
+  press(renderer, '손수호 호칭 편집 취소');
+
+  // 초안은 버려지고 기존 호칭이 유지된다.
+  expect(renderer.root.findAllByType(TextInput)).toHaveLength(0);
+  expect(hasText(renderer, '아빠')).toBe(true);
+  expect(hasText(renderer, '바꾸다 만 호칭')).toBe(false);
+  // 숨겼던 역할 토글이 복구된다.
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '손수호 피보호자'}).length,
+  ).toBeGreaterThan(0);
+});
+
+test('역할 변경 API가 실패하면 오류 팝업을 띄우고 역할을 유지한다', async () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const updateMemberRole = jest.fn().mockRejectedValue(new Error('forbidden'));
+  const renderer = renderScreen('m-manager', {
+    onUpdateMemberRole: updateMemberRole,
+  });
+
+  press(renderer, '손수호 피보호자');
+  confirmLastAlert(alertSpy, '변경');
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+  });
+
+  expect(updateMemberRole).toHaveBeenCalled();
+  expect(alertSpy).toHaveBeenCalledWith(
+    '역할을 변경하지 못했습니다',
+    '관리자 권한과 구성원 상태를 확인한 뒤 다시 시도해 주세요.',
+  );
+  expect(hasText(renderer, '피보호자 1명, 보호자 2명')).toBe(true);
 });
 
 test('방장이 아니면 역할 토글 시 안내 팝업을 띄우고 역할을 바꾸지 않는다', () => {
@@ -874,7 +976,9 @@ test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공
   expect(membersLoader).toHaveBeenCalledWith('group-1');
   expect(hasText(renderer!, '엄마')).toBe(true);
 
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   press(renderer!, '엄마 피보호자');
+  confirmLastAlert(alertSpy, '변경');
   await TestRenderer.act(async () => {
     await Promise.resolve();
   });
