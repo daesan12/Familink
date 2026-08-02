@@ -14,6 +14,7 @@ import {
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import type {
   FeedLoader,
   FeedPageLoader,
@@ -395,6 +396,13 @@ export function FeedScreen({
   );
 
   const closeReactionPicker = () => setOpenReactionPicker(null);
+
+  useHardwareBack(() => {
+    closeReactionPicker();
+    setMenuPostId(null);
+    setSelectedPostId(null);
+    return true;
+  }, selectedPostId !== null && composer === null);
 
   const handleToggleReactionPicker = (
     postId: string,

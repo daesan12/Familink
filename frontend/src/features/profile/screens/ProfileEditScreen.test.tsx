@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert, Image, Text} from 'react-native';
+import {Alert, BackHandler, Image, Text} from 'react-native';
 import {launchImageLibrary} from 'react-native-image-picker';
 import TestRenderer from 'react-test-renderer';
 
@@ -68,6 +68,43 @@ function render(
   mountedRenderers.push(renderer!);
   return renderer!;
 }
+
+test('저장 중 시스템 Back은 화면을 닫지 않고 소비한다', async () => {
+  let hardwareBackHandler: (() => boolean) | undefined;
+  const addEventListener = jest
+    .spyOn(BackHandler, 'addEventListener')
+    .mockImplementation((_event, handler) => {
+      hardwareBackHandler = () => handler({} as never) === true;
+      return {remove: jest.fn()};
+    });
+  let resolveSave!: () => void;
+  const savePromise = new Promise<void>(resolve => {
+    resolveSave = resolve;
+  });
+  const onBack = jest.fn();
+  const renderer = render(jest.fn(() => savePromise), onBack);
+
+  try {
+    TestRenderer.act(() => {
+      renderer.root
+        .findByProps({accessibilityLabel: '프로필 저장'})
+        .props.onPress();
+    });
+
+    TestRenderer.act(() => {
+      expect(hardwareBackHandler?.()).toBe(true);
+    });
+    expect(onBack).not.toHaveBeenCalled();
+
+    await TestRenderer.act(async () => {
+      resolveSave();
+      await savePromise;
+    });
+    expect(onBack).toHaveBeenCalledTimes(1);
+  } finally {
+    addEventListener.mockRestore();
+  }
+});
 
 test('shows the manager transfer guidance when withdrawal is rejected', async () => {
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);

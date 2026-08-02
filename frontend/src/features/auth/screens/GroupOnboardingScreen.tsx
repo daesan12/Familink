@@ -3,6 +3,7 @@ import {useState} from 'react';
 import {Animated, Image, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
+import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {AnimatedPressable} from '../components/AnimatedPressable';
 import {
   CreateGroupSheet,
@@ -56,6 +57,11 @@ export function GroupOnboardingScreen({
   const entranceStyle = useScreenEntrance('group-onboarding');
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   const [joinGroupVisible, setJoinGroupVisible] = useState(false);
+
+  useHardwareBack(() => {
+    onBack();
+    return true;
+  });
   const visibleRequests = pendingRequests.filter(
     request => request.status !== 'REJECTED',
   );

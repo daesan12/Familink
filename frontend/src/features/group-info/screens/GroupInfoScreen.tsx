@@ -12,6 +12,7 @@ import {
 
 import type {AppScreenProps, GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {DeleteGroupModal} from '../components/DeleteGroupModal';
 import {
   GroupMenuSection,
@@ -186,6 +187,11 @@ export function GroupInfoScreen({
   );
   const [detailReloadCount, setDetailReloadCount] = useState(0);
   const detailRequestVersion = useRef(0);
+
+  useHardwareBack(() => {
+    setSubScreen(null);
+    return true;
+  }, subScreen !== null);
   const membersRequestVersion = useRef(0);
   const profileRequestVersion = useRef(0);
   // 마지막으로 조회를 마친 그룹. 같은 그룹의 재조회는 기존 데이터를 유지한 채 갱신한다.

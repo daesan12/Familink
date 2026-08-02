@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
+import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {AnimatedPressable} from '../components/AnimatedPressable';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 
@@ -92,6 +93,14 @@ export function InterestSelectionScreen({
   const [savedVisible, setSavedVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useHardwareBack(() => {
+    if (saving) {
+      return true;
+    }
+    onBack();
+    return true;
+  });
   const hasLocalChangesRef = useRef(false);
   const savingRef = useRef(false);
   const displayedInterests = [...PRESET_INTERESTS, ...customInterests];

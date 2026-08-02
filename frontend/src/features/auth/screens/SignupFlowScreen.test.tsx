@@ -1,4 +1,5 @@
 import React from 'react';
+import {BackHandler} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import {ApiError} from '../../../shared/api';
@@ -67,6 +68,7 @@ function createGateway(): jest.Mocked<SignupGateway> {
 function render(
   gateway = createGateway(),
   onComplete: (loginId: string) => void = jest.fn(),
+  onCancel: () => void = jest.fn(),
 ): {
   gateway: jest.Mocked<SignupGateway>;
   renderer: TestRenderer.ReactTestRenderer;
@@ -76,7 +78,7 @@ function render(
     renderer = TestRenderer.create(
       <SignupFlowScreen
         gateway={gateway}
-        onCancel={jest.fn()}
+        onCancel={onCancel}
         onComplete={onComplete}
       />,
     );
@@ -84,6 +86,34 @@ function render(
   mountedRenderers.push(renderer!);
   return {gateway, renderer: renderer!};
 }
+
+test('시스템 Back은 회원가입 이전 단계를 먼저 닫고 첫 단계에서만 흐름을 종료한다', async () => {
+  const onCancel = jest.fn();
+  let hardwareBackHandler: (() => boolean) | undefined;
+  const remove = jest.fn();
+  const addEventListener = jest
+    .spyOn(BackHandler, 'addEventListener')
+    .mockImplementation((_event, handler) => {
+      hardwareBackHandler = () => handler({} as never) === true;
+      return {remove};
+    });
+  const {renderer} = render(createGateway(), jest.fn(), onCancel);
+  await advanceToPassword(renderer);
+
+  TestRenderer.act(() => {
+    expect(hardwareBackHandler?.()).toBe(true);
+  });
+
+  expect(hasText(renderer, '기본 정보를\n입력해주세요')).toBe(true);
+  expect(onCancel).not.toHaveBeenCalled();
+
+  TestRenderer.act(() => {
+    expect(hardwareBackHandler?.()).toBe(true);
+  });
+
+  expect(onCancel).toHaveBeenCalledTimes(1);
+  addEventListener.mockRestore();
+});
 
 function change(
   renderer: TestRenderer.ReactTestRenderer,

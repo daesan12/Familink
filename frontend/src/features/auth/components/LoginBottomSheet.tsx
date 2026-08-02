@@ -4,6 +4,7 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -126,6 +127,14 @@ export function LoginBottomSheet({
     onDismiss();
   };
 
+  const handleRequestClose = () => {
+    if (Keyboard.isVisible()) {
+      Keyboard.dismiss();
+      return;
+    }
+    handleDismiss();
+  };
+
   const handleSubmit = async () => {
     if (submittingRef.current) {
       return;
@@ -162,7 +171,7 @@ export function LoginBottomSheet({
   return (
     <Modal
       animationType="none"
-      onRequestClose={handleDismiss}
+      onRequestClose={handleRequestClose}
       statusBarTranslucent
       transparent
       visible={visible}>
