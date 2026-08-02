@@ -1,7 +1,9 @@
 import React from "react";
-import { Alert, Text } from "react-native";
+import { Alert, Modal, Text } from "react-native";
 import TestRenderer from "react-test-renderer";
 
+import { CalendarEventDetailModal } from "../components/CalendarEventDetailModal";
+import { CalendarEventsSheet } from "../components/CalendarEventsSheet";
 import type { CalendarGateway } from "../types";
 import { CalendarScreen } from "./CalendarScreen";
 
@@ -257,6 +259,74 @@ test("상세에서 기존 값으로 수정한 뒤 확인 후 일정을 삭제한
       accessibilityLabel: "홍박사 정형외과, 15:00 - 16:00",
     })
   ).toHaveLength(0);
+  // 삭제 성공 시 상세만 닫고 선택 날짜 목록으로 복귀한다(UI 스펙 규칙 9).
+  expect(detailVisible(renderer)).toBe(false);
+  expect(sheetVisible(renderer)).toBe(true);
+});
+
+function sheetVisible(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findByType(CalendarEventsSheet).props.visible;
+}
+
+function detailVisible(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findByType(CalendarEventDetailModal).props.visible;
+}
+
+test("상세를 여닫는 동안 팝업은 한 번에 하나만 표시된다", async () => {
+  const gateway = createGateway();
+  const { renderer } = await renderCalendar(gateway);
+
+  await openEventDetail(renderer);
+
+  // 상세가 열리면 시트는 닫혀 native 팝업이 겹겹이 쌓이지 않는다(F-16).
+  expect(detailVisible(renderer)).toBe(true);
+  expect(sheetVisible(renderer)).toBe(false);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByType(CalendarEventDetailModal)
+      .props.onClose();
+  });
+
+  // 상세를 닫으면 선택 날짜 목록으로 복귀한다.
+  expect(detailVisible(renderer)).toBe(false);
+  expect(sheetVisible(renderer)).toBe(true);
+});
+
+test("일정 수정 저장 후에는 상세 팝업 없이 시트만 열린다", async () => {
+  const gateway = createGateway();
+  const { renderer } = await renderCalendar(gateway);
+
+  await openEventDetail(renderer);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "일정 수정" })
+      .props.onPress();
+  });
+
+  // 편집 화면이 열리는 동안 시트·상세 팝업은 마운트를 유지한 채 모두 닫힌다.
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "일정 제목" })
+  ).toBeTruthy();
+  const modals = renderer.root.findAllByType(Modal);
+  expect(modals.length).toBeGreaterThanOrEqual(2);
+  expect(modals.every((modal) => modal.props.visible === false)).toBe(true);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "일정 저장" })
+      .props.onPress();
+    await Promise.resolve();
+  });
+
+  // 저장 직후 상세는 닫힌 채 시트만 열린다(F-16 재현 시점).
+  expect(detailVisible(renderer)).toBe(false);
+  expect(sheetVisible(renderer)).toBe(true);
+  const visibleModals = renderer.root
+    .findAllByType(Modal)
+    .filter((modal) => modal.props.visible === true);
+  expect(visibleModals).toHaveLength(1);
 });
 
 test("상단 추가 요청은 선택 날짜의 시간 설정이 꺼진 새 폼을 연다", async () => {
