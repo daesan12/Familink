@@ -162,15 +162,34 @@ public class GroupService {
 		return new GroupUpdateResponse(group.getId(), group.getName(), group.getUpdatedAt());
 	}
 
+	/**
+	 * 관리자가 혼자 남은 그룹을 그룹 범위 데이터와 함께 하드 삭제한다.
+	 *
+	 * <p>그룹 행을 잠근 뒤에 권한과 활성 인원, 확인 이름을 다시 읽어 검증한다. 잠그지 않고 확인하면
+	 * 확인과 일괄 삭제 사이에 가입 승인이 커밋되어, 삭제가 방금 승인된 구성원까지 지운다. 승인
+	 * 200과 삭제 204가 모두 성공하는데 멤버십은 사라지는 write-skew다. 가입 요청 생성·결정도 같은
+	 * 그룹 행을 잠그므로 잠금을 얻은 뒤의 조회가 최종 상태다.
+	 *
+	 * <p>잠금 전에 권한을 한 번 확인하는 것은 그룹과 무관한 요청이 남의 그룹 행을 잡고 대기시키지
+	 * 않게 하기 위해서다. 이 사전 검사는 조기 거부일 뿐이고, 실제 판정은 잠금 뒤 재확인이 담당한다.
+	 */
 	@Transactional
 	public void delete(Long groupId, Long authenticatedUserId, GroupDeleteRequest request) {
-		GroupMember requester = getActiveManager(groupId, authenticatedUserId);
+		getActiveManager(groupId, authenticatedUserId);
+		familyGroupRepository.lockForGroupScopeChange(groupId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+		FamilyGroup group = familyGroupRepository.findById(groupId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
 
 		List<GroupMember> activeMembers = groupMemberRepository.findAllActiveByGroupId(groupId);
+		GroupMember requester = findRequester(activeMembers, authenticatedUserId);
+		if (!requester.isManager()) {
+			throw new BusinessException(ErrorCode.FORBIDDEN);
+		}
 		if (activeMembers.size() > 1) {
 			throw new BusinessException(ErrorCode.GROUP_HAS_ACTIVE_MEMBERS);
 		}
-		if (!requester.getGroup().getName().equals(request.confirmationName().trim())) {
+		if (!group.getName().equals(request.confirmationName().trim())) {
 			throw new BusinessException(ErrorCode.GROUP_NAME_MISMATCH);
 		}
 
@@ -205,9 +224,19 @@ public class GroupService {
 	 *
 	 * <p>posts·calendar_events·call_sessions의 자식 테이블과 notifications의 관련 컬럼은
 	 * 스키마의 ON DELETE CASCADE·SET NULL로 함께 정리된다.
+	 *
+	 * <p>외래 키 때문에 자식부터 지워야 하지만, 그 순서는 공통 잠금 순서
+	 * {@code group_members → 자식 행}과 반대다. 구성원 행을 먼저 잠가 순서를 맞춘다. 잠그지 않으면
+	 * 구성원 행을 잡고 그 자식을 바꾸는 경로, 예를 들어 관심사 전체 교체와 서로 반대 순서로 대기해
+	 * 교착이 생긴다. 여기서도 {@code FOR NO KEY UPDATE}를 써서 그룹을 참조하는 쓰기의 외래 키
+	 * 검사를 막지 않는다.
 	 */
 	private void deleteGroupData(Long groupId) {
 		entityManager.flush();
+		entityManager.createNativeQuery(
+				"SELECT id FROM group_members WHERE group_id = :groupId ORDER BY id FOR NO KEY UPDATE")
+			.setParameter("groupId", groupId)
+			.getResultList();
 		List<String> statements = List.of(
 			"DELETE FROM member_interests WHERE care_receiver_member_id IN "
 				+ "(SELECT id FROM group_members WHERE group_id = :groupId)",

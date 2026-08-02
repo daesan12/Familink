@@ -3,14 +3,37 @@ package com.ssafy.s15p11b104.domain.calendar.repository;
 import java.time.LocalDate;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 import com.ssafy.s15p11b104.domain.calendar.entity.CalendarEvent;
 
 public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Long> {
+
+	/**
+	 * 수정·삭제를 위해 일정 행을 잠그고 찾는다.
+	 *
+	 * <p>일정 수정은 참여자를 전부 지우고 요청 목록을 다시 넣는 전체 교체다. 잠그지 않으면 두 수정이
+	 * 각자 삭제한 뒤 각자 삽입해 두 목록의 합집합이 남거나 한쪽 목록이 사라지고, 겹치는 참여자는
+	 * {@code uq_event_participants_event_member} 위반으로 실패한다. 이 행에서 직렬화하면 나중 요청의
+	 * 목록만 남아 전체 교체 의미가 지켜진다.
+	 *
+	 * <p>연관 엔티티는 함께 조회하지 않는다. PostgreSQL은 조인한 테이블의 행까지 잠그므로 함께
+	 * 조회하면 공통 잠금 순서 {@code users → family_groups → group_members → 자식 행}을 거스른다.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+		select event
+		from CalendarEvent event
+		where event.id = :eventId
+		""")
+	Optional<CalendarEvent> findByIdForUpdate(@Param("eventId") Long eventId);
 
 	/**
 	 * 그룹 일정 중 조회 구간과 하루라도 겹치는 일정을 시작 날짜 순으로 반환한다.
