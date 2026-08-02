@@ -1,0 +1,82 @@
+{
+  "skill_name": "spec-change-recorder",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "FN-010에는 연결 실패 시 보고서를 만들지 않는다고 되어 있는데 현재 FastAPI 코드는 실패한 세션에도 보고서를 저장합니다. 이 차이를 처리해 주세요.",
+      "expected_output": "IMPLEMENTATION_GAP으로 분류하고 스펙 변경 제안은 만들지 않으며, 코드를 공식 스펙에 맞춰야 한다고 보고한다.",
+      "files": [],
+      "expectations": [
+        "공식 스펙을 수정하지 않는다.",
+        "pending 변경 제안을 만들지 않는다.",
+        "IMPLEMENTATION_GAP으로 분류한다."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "작업 중 사용자 결정으로 FN-014의 사진 표시가 고정 분할에서 가로 넘기기로 바뀌었습니다. 관련 스펙 차이를 기록해 주세요.",
+      "expected_output": "SPEC_CHANGE로 분류하고 중복을 확인한 뒤 템플릿에 맞는 pending 변경 제안을 작성하며 공식 스펙은 수정하지 않는다.",
+      "files": [],
+      "expectations": [
+        "pending과 applied에서 중복 제안을 먼저 확인한다.",
+        "pending 제안만 생성하거나 보강한다.",
+        "공식 스펙을 수정하지 않는다."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "모바일은 API 응답의 guardianMessages를 배열로 기대하지만 보고서 스펙과 DB 계약에는 guardian_message 단일 문자열로 적혀 있습니다. 어느 쪽으로 구현할까요?",
+      "expected_output": "SHARED_CONTRACT_CHANGE로 분류하고 차단 변경 제안을 작성한 뒤 승인 전 계약 의존 구현을 중단하도록 보고한다.",
+      "files": [],
+      "expectations": [
+        "공용 계약 충돌을 차단 변경으로 표시한다.",
+        "어느 쪽이 정답인지 추측하지 않는다.",
+        "승인 전 계약 의존 구현을 진행하지 않는다."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "domains/AI_CALL.md에는 통화 종료가 POST /call-sessions/{id}/end로 되어 있지만 contracts/API.md에는 PATCH로 적혀 있습니다. 구현 전에 처리해 주세요.",
+      "expected_output": "API 계약 충돌을 SHARED_CONTRACT_CHANGE로 분류하고 차단 변경 제안을 작성하며 어느 Method도 임의 선택하지 않는다.",
+      "files": [],
+      "expectations": [
+        "INDEX에서 AI_CALL을 찾고 관련 도메인과 API 계약만 읽는다.",
+        "Method를 임의 선택하지 않는다.",
+        "차단 변경 pending 제안을 작성한다."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Notion 연결이 안 됩니다. 로컬 공식 스펙에는 일정 시작 1시간 전 알림이라고 적혀 있습니다. 이 기능을 구현할 기준을 알려 주세요.",
+      "expected_output": "Notion 접근 없이 로컬 공식 스펙을 구현 기준으로 사용하고, 스펙 변경 제안을 만들지 않는다.",
+      "files": [],
+      "expectations": [
+        "로컬 공식 스펙을 기준으로 판정한다.",
+        "Notion 접근을 구현 전제조건으로 만들지 않는다.",
+        "변경 제안을 만들지 않는다."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "팀 승인은 아직 없지만 알림 기본값을 전부 OFF로 바꾸고 공식 스펙에도 바로 반영해 주세요.",
+      "expected_output": "승인되지 않은 변경을 공식 스펙에 반영하지 않고 SPEC_CHANGE 제안만 pending에 기록하거나 기존 제안을 보강한다.",
+      "files": [],
+      "expectations": [
+        "공식 스펙을 수정하지 않는다.",
+        "알림 기본값을 확정하지 않는다.",
+        "pending 제안만 생성하거나 보강한다."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "새 기능명이 INDEX에 없습니다. 어느 스펙과 충돌하는지 확인해서 변경 제안을 기록해 주세요.",
+      "expected_output": "INDEX 다음에 COVERAGE를 제한적으로 확인하고 관련 매핑을 찾은 뒤, 매핑 자체가 없으면 SPEC_GAP_OR_CONFLICT로 분류한다.",
+      "files": [],
+      "expectations": [
+        "INDEX에 없을 때만 COVERAGE를 확인한다.",
+        "전체 스펙을 무차별적으로 읽지 않는다.",
+        "매핑이 없으면 추측하지 않고 스펙 공백으로 분류한다."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME:s15p11b104}}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:8}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:30000}
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+
+server:
+  forward-headers-strategy: framework
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+app:
+  ai-execution:
+    max-concurrency: ${AI_EXECUTOR_MAX_CONCURRENCY:2}
+    queue-capacity: ${AI_EXECUTOR_QUEUE_CAPACITY:20}
+  transcript-recovery:
+    fixed-delay-ms: ${TRANSCRIPT_RECOVERY_DELAY_MS:60000}
+    initial-delay-ms: ${TRANSCRIPT_RECOVERY_INITIAL_DELAY_MS:60000}
+    cleanup-delay-ms: ${TRANSCRIPT_CLEANUP_DELAY_MS:3600000}
+    cleanup-initial-delay-ms: ${TRANSCRIPT_CLEANUP_INITIAL_DELAY_MS:3600000}
+  call-report-generation:
+    recovery-delay-ms: ${CALL_REPORT_RECOVERY_DELAY_MS:60000}
+    recovery-initial-delay-ms: ${CALL_REPORT_RECOVERY_INITIAL_DELAY_MS:60000}
+  auth:
+    secret: ${JWT_SECRET}
+  push:
+    enabled: ${PUSH_ENABLED:true}
+  storage:
+    s3:
+      bucket: ${S3_BUCKET}
+      region: ${AWS_REGION:ap-northeast-2}
+      endpoint: ${S3_ENDPOINT:}
+      presigned-url-duration: ${S3_PRESIGNED_URL_DURATION:10m}
+      download-url-duration: ${S3_DOWNLOAD_URL_DURATION:30m}
+      allowed-hosts: ${S3_ALLOWED_HOSTS:}
+  media:
+    image-max-size-bytes: ${MEDIA_IMAGE_MAX_SIZE_BYTES:10485760}
+    video-max-size-bytes: ${MEDIA_VIDEO_MAX_SIZE_BYTES:104857600}
+    video-max-duration-seconds: ${MEDIA_VIDEO_MAX_DURATION_SECONDS:60}
+    allowed-image-types: ${MEDIA_ALLOWED_IMAGE_TYPES:image/jpeg,image/png,image/webp}
+    allowed-video-types: ${MEDIA_ALLOWED_VIDEO_TYPES:video/mp4}
+    ffprobe-path: ${FFPROBE_PATH:ffprobe}
+
+openai:
+  realtime:
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_REALTIME_MODEL:gpt-realtime-2}
+    transcription-model: ${OPENAI_REALTIME_TRANSCRIPTION_MODEL:gpt-transcribe}
+    transcription-language: ${OPENAI_REALTIME_TRANSCRIPTION_LANGUAGE:ko}
+    base-url: ${OPENAI_REALTIME_BASE_URL:https://api.openai.com}
+    sideband-url: ${OPENAI_REALTIME_SIDEBAND_URL:wss://api.openai.com/v1/realtime}
+    connect-timeout: ${OPENAI_REALTIME_CONNECT_TIMEOUT:5s}
+    request-timeout: ${OPENAI_REALTIME_REQUEST_TIMEOUT:20s}
+
+gemini:
+  request-timeout-ms: ${GEMINI_REQUEST_TIMEOUT_MS:30000}
+  analysis:
+    api-key: ${GMS_API_KEY:}
+    base-url: ${GMS_API_BASE_URL:https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com}
+    text-model: ${GEMINI_TEXT_MODEL:gemini-2.5-flash-lite}
+    multimodal-model: ${GEMINI_MULTIMODAL_MODEL:gemini-3.5-flash}
+  call-report:
+    model: ${GEMINI_CALL_REPORT_MODEL:gemini-3.5-flash}
+  daily-report:
+    model: ${GEMINI_DAILY_REPORT_MODEL:gemini-3.5-flash}

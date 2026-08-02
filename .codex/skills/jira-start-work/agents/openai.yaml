@@ -1,0 +1,4 @@
+interface:
+  display_name: "Jira 작업 착수 준비"
+  short_description: "필수 Jira 필드와 브랜치를 검증하고 진행 중으로 전환"
+  default_prompt: "Use $jira-start-work to read the local Jira and Git conventions, show my unfinished assigned Jira tickets, let me choose one, validate the Story-versus-prefixed-Task title rule without renaming the issue, allow an existing legacy subtask but create no new subtask, verify one assignee, due date, and allowed Story Points, run a read-only Git safety preflight before Jira mutation, strip any Jira domain marker when deriving the branch slug, prepare its convention branch, move it to In Progress, and stop before implementation."

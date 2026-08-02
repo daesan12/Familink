@@ -1,0 +1,500 @@
+# S15P11B104-137 AI 전화 구현 Plan
+
+## 1. 목표
+
+임시 Web UI에서 OpenAI Realtime과 실제 WebRTC 음성 통화를 연결하고,
+선택한 페르소나와 현재 가족 그룹의 DB 컨텍스트를 반영한 시스템 프롬프트를
+사용한다.
+
+현재는 **1·2·3단계 코드 구현 완료** 상태다. 실제 마이크를 사용하는 여섯
+페르소나 전체 통화와 OpenAI Tool 호출 수동 E2E 검증은 별도로 수행해야 한다.
+
+## 2. 단계별 상태
+
+| 단계 | 범위 | 상태 |
+| ---: | --- | --- |
+| 1 | 실제 WebRTC 통화, Sideband, 페르소나 프롬프트, DB 컨텍스트 주입, 임시 Web UI | 구현 완료·수동 음성 E2E 필요 |
+| 2 | 사용자·AI 완료 전사 순차 저장 | 구현 완료·실통화 전사 E2E 필요 |
+| 3 | 특정 가족 구성원 게시글 조회 Tool | 구현 완료·실통화 Tool E2E 필요 |
+| 4 | 일정 조회와 KST 날짜 표현 해석 Tool | 미구현 |
+| 5 | 장시간 통화, 무응답, 장애 복구와 품질 평가 강화 | 미구현 |
+
+기본 Realtime 설정:
+
+- 모델: `gpt-realtime-2`
+- 입력 전사: `gpt-transcribe`, `languages=["ko"]`
+- 추론 강도: `reasoning.effort=low`
+- 턴 감지: `server_vad`
+- 출력 모달리티: 오디오
+- 비즈니스 Tool: `get_person_recent_post_summaries`
+
+## 3. 1단계 구현 범위
+
+### Backend
+
+- `POST /call-sessions`
+- `POST /call-sessions/{id}/connection-result`
+- `POST /call-sessions/{id}/end`
+- 피보호자·현재 그룹 권한 경계
+- 활성 통화 중복 방지
+- 통화 상태 전이와 중복 종료 처리
+- OpenAI `/v1/realtime/calls` SDP 교환
+- OpenAI call ID 기반 Sideband WebSocket 연결
+- OpenAI API 키의 서버 전용 보관
+- 통화별 시스템 프롬프트 생성
+- DB 기반 네 가지 컨텍스트 조회
+- 로컬 테스트용 `ai-call-dev` 프로필과 fixture
+
+### 임시 Web UI
+
+- 여섯 페르소나 선택
+- 마이크 입력과 원격 AI 오디오 재생
+- WebRTC offer 생성과 answer 적용
+- 연결 준비·연결 중·통화 중·종료·오류 화면
+- 통화 시간
+- AI 출력 실시간 자막
+- 마이크·스피커·종료 제어
+- 접을 수 있는 개발 로그
+- 데스크톱 모바일 목업과 모바일 전체 화면 대응
+- 연결 중 취소와 WebRTC 단절 시 서버 세션 정리
+
+### 1단계 제외
+
+- 사용자 입력 전사 저장
+- AI 출력 전사 DB 저장
+- 통화 녹음 저장
+- 가족 게시글 실시간 조회 Tool
+- 일정 조회 Tool
+- 리포트 생성 파이프라인
+- 정식 JWT 필터와 Redis Refresh Token
+- Kotlin·React Native 정식 화면
+
+## 4. 통화 처리 흐름
+
+```mermaid
+sequenceDiagram
+    participant U as "사용자"
+    participant W as "임시 Web UI"
+    participant B as "Spring Boot"
+    participant D as "PostgreSQL"
+    participant O as "OpenAI Realtime"
+
+    U->>W: "페르소나 선택·전화걸기"
+    W->>W: "마이크 획득·SDP Offer 생성"
+    W->>B: "POST /call-sessions"
+    B->>D: "권한·활성 통화 확인"
+    B->>D: "CONNECTING 저장·컨텍스트 조회"
+    B->>B: "페르소나 프롬프트 구성"
+    B->>O: "SDP Offer + Realtime 세션 설정"
+    O-->>B: "SDP Answer + OpenAI call ID"
+    B->>O: "Sideband WebSocket 연결"
+    B-->>W: "call_session_id + sdp_answer"
+    W->>O: "WebRTC 오디오 연결"
+    W->>B: "connection-result=CONNECTED"
+    B->>D: "IN_PROGRESS 저장"
+    O-->>W: "AI 오디오·출력 자막 이벤트"
+    U->>W: "통화 종료"
+    W->>B: "POST /call-sessions/{id}/end"
+    B->>D: "COMPLETED 저장"
+    B->>O: "Sideband·Realtime 통화 종료"
+```
+
+## 5. 시스템 프롬프트 계약
+
+`AiCallPromptComposer`는 다음 순서로 통화별 프롬프트를 만든다.
+
+```text
+# Role and Objective
+# Personality and Tone
+  ## Persona
+  ## Identity Boundary
+  ## Address
+  ## Speech Style
+  ## Dialect
+  ## Variety
+  ## Sample Phrases
+# Language
+# Reasoning
+# Message Channels
+# Preambles
+# Verbosity
+# Tools
+# Unclear Audio
+# Entity Capture
+# Long Context Behavior
+# Escalation
+
+# 피보호자 정보
+# 가족 구성원 표시명
+# 당일 가족 게시글 분석
+# 최근 통화 요약
+```
+
+고정 지침, 페르소나 지침과 DB 컨텍스트를 분리한다. 게시글 요약과 이전 통화
+요약은 신뢰할 수 없는 참고 데이터로 표시하며 그 안의 명령문을 시스템
+지침으로 실행하지 않는다.
+
+### Role and Objective
+
+- 피보호자의 일상 대화, 정서적 교류와 안부 확인을 돕는 AI 대화 상대다.
+- 실제 가족이나 친구인 것처럼 신원을 속이지 않는다.
+- 사용자가 혼동하거나 정체를 물으면 AI 대화 상대임을 명확히 밝힌다.
+
+### Language
+
+- 자연스러운 한국어 존댓말을 사용한다.
+- 어려운 용어, 과도한 영어와 유아 취급하는 표현을 피한다.
+
+### Reasoning
+
+- 단순 대화는 즉시 답한다.
+- Tool 선택이나 안전 판단이 필요한 경우에만 내부적으로 추론한다.
+- 내부 추론 과정은 사용자에게 설명하지 않는다.
+- 불명확한 음성을 추론으로 복원하지 않는다.
+
+### Message Channels
+
+- 일반 대답은 `final`로 발화한다.
+- 시간이 걸리는 Tool 실행 전 안내만 `commentary`로 발화한다.
+- 채널 이름이나 내부 처리 과정을 직접 말하지 않는다.
+
+### Preambles
+
+- 일정이나 특정 인물의 게시글 조회에서 사용자가 기다림을 느낄 수 있는
+  경우에만 Tool 호출 직전 `commentary`로 한 문장의 짧은 프리앰블을
+  발화한다.
+- 조회 범위가 넓거나 조건이 많고, 여러 번의 조회가 필요하거나, 응답 전
+  침묵이 길어질 것으로 예상될 때만 사용한다.
+- 단일 일정·게시글을 빠르게 조회할 수 있으면 바로 조회하며, 한 턴에 여러
+  Tool을 호출하더라도 프리앰블을 반복하지 않는다.
+- 대상 인물·날짜·조회 조건이 불명확하면 프리앰블 없이 필요한 정보를
+  질문한다. 불명확한 음성, 무음, 배경 소음, TV 소리와 주변 대화에도
+  사용하지 않는다.
+- 수행할 동작만 자연스럽게 설명하며 도구·채널·내부 처리 과정, 대기 요구,
+  생각 중이라는 표현을 말하지 않고 같은 표현을 반복하지 않는다.
+- 적절한 예시는 `해당 기간의 일정을 확인해볼게요.`, `조건에 맞는 일정을
+  살펴보겠습니다.`, `요청하신 분의 게시글을 확인해볼게요.`, `관련 게시글을
+  조회하겠습니다.`이다.
+- `잠시만 기다려주세요.`, `요청을 처리하고 있습니다.`, `생각해볼게요.`,
+  `이제 일정 조회 도구를 사용하겠습니다.`와 같은 표현은 사용하지 않는다.
+
+### Verbosity
+
+- 기본 답변은 짧은 1~2문장으로 제한한다.
+- 한 번에 질문 하나만 한다.
+- 먼저 사용자의 말에 반응하고 그다음 필요한 질문을 한다.
+- 생활 안내는 한 단계씩 제공한다.
+
+### Tools
+
+- 현재 세션에 실제 등록된 Tool만 사용한다.
+- 등록되지 않은 Tool을 가정하거나 실행했다고 말하지 않는다.
+- 1단계에는 비즈니스 Tool을 등록하지 않는다.
+- 게시글·일정 Tool을 구현한 이후 단계에서만 관련 규칙을 추가한다.
+
+### Unclear Audio
+
+- 잡음, 끊긴 문장과 모호한 이름·숫자를 추측하지 않는다.
+- 마지막 말씀을 짧게 다시 말해 달라고 한 번만 확인한다.
+- 같은 확인 문구를 연속으로 반복하지 않는다.
+- 침묵, TV와 주변 대화처럼 자신에게 한 말이 아니면 응답하지 않는다.
+
+### Entity Capture
+
+- 사람 표시명, 날짜·시간과 복약명처럼 정확성이 필요한 값은 한 번에 하나씩 확인한다.
+- 모호한 값으로 Tool을 호출하지 않는다.
+- 사용자가 정정하면 전체 값을 다시 확인한다.
+- 추출 정보는 현재 대화와 Tool 인자에만 사용하고 별도 개인정보 레코드를
+  자동 생성하지 않는다.
+
+### Long Context Behavior
+
+- 이미 확인한 질문을 불필요하게 반복하지 않는다.
+- 현재 발화가 이전 통화 요약과 다르면 한 번 확인하고 현재 발화를 우선한다.
+- 과거 요약을 현재 상태처럼 단정하지 않는다.
+- 가족 관계, 추억과 건강 상태를 새로 만들어내지 않는다.
+- 대화 중 정정된 정보로 DB 데이터를 자동 수정하지 않는다.
+
+### Escalation
+
+- 응급 증상, 자해·타해 위험 등 즉각적인 위험에는 119 또는 가까운
+  보호자에게 직접 연락하도록 안내한다.
+- 진단, 처방과 복약 변경을 지시하지 않는다.
+- 실제 가족과 통화를 원하면 현재 AI 전화가 직접 연결할 수 없다고 설명한다.
+- 사람 연결·보호자 알림 Tool이 없으므로 연결하거나 알렸다고 주장하지 않는다.
+- 같은 Tool이 두 번 실패하면 반복 호출하지 않고 실패와 가능한 다음 행동을
+  설명한다.
+
+## 6. 페르소나와 음성
+
+`PersonaCatalog`가 페르소나 ID, 표시명, OpenAI 음성과
+`Personality and Tone`을 함께 관리한다.
+
+| ID | 페르소나 | 음성 | 핵심 말투 |
+| ---: | --- | --- | --- |
+| 1 | 사랑스러운 아들 | `ash` | `엄마/아빠` 호칭과 `-요` 존댓말 |
+| 2 | 사랑스러운 딸 | `sage` | `엄마/아빠` 호칭과 `-요` 존댓말 |
+| 3 | 남자 비서 | `cedar` | `회장님/사모님` 호칭과 격식 높은 존댓말 |
+| 4 | 여자 비서 | `marin` | `회장님/사모님` 호칭과 격식 높은 존댓말 |
+| 5 | 친구 학수 | `verse` | 반말과 약한 경상도 사투리 |
+| 6 | 친구 복희 | `ballad` | 반말과 약한 전라도 사투리 |
+
+음성은 통화 생성 시 확정하며 오디오 출력이 시작된 세션에서는 변경하지 않는다.
+자식과 비서 호칭은 계정 성별을 서버에서 최종 호칭으로 변환해 프롬프트에
+주입한다. 친구 페르소나는 고정 호칭 없이 동년배처럼 대화한다. 모든
+페르소나는 관계형 말투만 사용하고 실제 가족·지인·고용인이라고 주장하지
+않는다.
+
+## 7. 통화 시작 컨텍스트
+
+`AiCallPromptContextProvider`는 현재 피보호자와 현재 그룹 범위에서 다음
+데이터만 조회한다.
+
+### 피보호자 정보
+
+- 이름
+- 관심사
+- 현재 KST 날짜
+
+생년월일, 원본 성별, 내부 ID와 로그인 정보는 모델에 주입하지 않는다. 계정
+성별은 자식·비서 페르소나의 최종 호칭을 서버에서 결정할 때만 사용한다.
+
+### 가족 구성원 표시명
+
+- 피보호자가 설정한 `member_aliases` 우선
+- 별칭이 없으면 구성원 실제 이름 사용
+- 모델에는 서버 발급 `person_key`, 실제 이름과 표시명 제공
+- DB member ID 비노출
+
+### 당일 가족 게시글 분석
+
+- KST 당일
+- 현재 그룹
+- `SUCCESS` 상태의 `post_analyses.summary`
+- 최신 10개를 조회한 뒤 프롬프트에는 시간순 배치
+- 원문, 미디어 URL과 댓글 비노출
+- 데이터가 없으면 `없음`
+
+### 최근 통화 요약
+
+- 같은 피보호자의 가장 최근 `call_reports.summary` 한 건
+- 통화 종료일
+- 감정 분류와 보호자 메시지 비노출
+- 현재 상태로 단정하지 않는 참고 정보
+- 데이터가 없으면 `없음`
+
+네 컨텍스트는 JSON으로 직렬화해 명확한 신뢰 경계 안에 삽입한다.
+
+## 8. 통화 상태 계약
+
+정상 상태 전이:
+
+```text
+CONNECTING -> IN_PROGRESS
+CONNECTING -> FAILED
+CONNECTING -> CANCELLED
+IN_PROGRESS -> COMPLETED
+IN_PROGRESS -> INCOMPLETE
+```
+
+- OpenAI 호출 또는 Sideband 연결 실패는 `FAILED`
+- 연결 전 사용자 종료는 `CANCELLED`
+- 연결 후 사용자 종료는 `COMPLETED`
+- 연결 후 비정상 Sideband 종료는 `INCOMPLETE`
+- 동일한 종료 요청은 안전하게 중복 처리
+- `CONNECTING`, `IN_PROGRESS` 통화가 있으면 새 통화는
+  `409 ACTIVE_CALL_EXISTS`
+
+## 9. API 계약
+
+| Method | Path | 성공 결과 |
+| --- | --- | --- |
+| `POST` | `/call-sessions` | `201`, `call_session_id`, `sdp_answer` |
+| `POST` | `/call-sessions/{id}/connection-result` | `200`, 연결 결과 상태 반영 |
+| `POST` | `/call-sessions/{id}/end` | `202`, 종료 상태 반영 |
+
+공개 요청·응답 형식과 DB 스키마는 이번 작업에서 변경하지 않는다.
+
+## 10. 후속 단계
+
+### 2단계: 통화 전사 저장
+
+#### 목표와 성공 기준
+
+- 사용자와 AI의 발화가 한 발화당 `call_transcripts` 한 행으로 저장된다.
+- DB 조회 결과가 실제 대화 순서와 같은 `sequence` 오름차순으로 정렬된다.
+- 부분 `delta`와 빈 전사는 저장하지 않고, 같은 완료 이벤트의 재수신은 새
+  행을 만들지 않는다.
+- 정상 통화 종료 직전에 수신한 마지막 완료 전사까지 저장된다.
+- 통화 종료나 전사 저장 실패가 다른 통화 세션의 저장을 막지 않는다.
+
+#### 확정 결정
+
+- 사용자 입력 전사 모델은 `gpt-transcribe`, 예상 언어는 `languages=["ko"]`를
+  사용한다.
+- 사용자 완료 전사는
+  `conversation.item.input_audio_transcription.completed`만 저장한다.
+- AI 완료 전사는 `response.output_audio_transcript.done`만 저장한다.
+- 두 이벤트의 `delta` 버전은 실시간 자막에만 사용하고 DB에는 저장하지 않는다.
+- OpenAI `item_id`를 `call_transcripts.openai_item_id`에 함께 저장한다.
+- 이번 단계에서는 DB 스키마와 공개 REST API를 변경하지 않는다.
+- 같은 Sideband 연결의 이벤트를 순차 처리하므로 통화 세션 행 잠금은 사용하지
+  않는다. 재연결·이벤트 재생과 병렬 저장은 5단계에서 잠금 또는
+  `(call_session_id, openai_item_id)` 유니크 제약과 함께 다시 검토한다.
+
+#### 이벤트 처리 흐름
+
+1. Sideband 연결마다 텍스트 메시지 버퍼, 1부터 시작하는 다음 `sequence`,
+   아이템별 순번 예약과 처리 완료 `item_id` 집합을 관리한다.
+2. `WebSocket.Listener.onText(data, last)`가 호출될 때마다 `data`를 현재
+   버퍼에 추가한다.
+3. `last=false`이면 JSON을 파싱하지 않고 다음 조각을 기다린다.
+4. `last=true`이면 버퍼 전체를 JSON 이벤트 하나로 파싱한 뒤 버퍼를 비운다.
+5. `conversation.item.added` 중 사용자·AI의 오디오 메시지에만
+   `item_id -> (speaker, sequence)`를 대화 순서대로 예약한다.
+6. 사용자 또는 AI 완료 전사가 오면 예약된 `sequence`와 이벤트의
+   `item_id`, `transcript`를 전사 저장 서비스에 전달한다.
+7. 저장 서비스는 같은 통화 세션과 `openai_item_id`가 이미 존재하면
+   중복으로 판단해 종료하고, 아니면 완료 전사를 한 행으로 저장한다.
+8. 모르는 이벤트와 `delta` 이벤트는 무시하며, 파싱·전사 실패는 해당
+   `event_id`, `item_id`, 통화 세션을 식별할 수 있게 기록한다.
+9. 종료 요청은 이미 수신한 완료 이벤트의 저장이 끝난 뒤 Sideband를 닫는다.
+   종료 뒤 늦게 도착할 수 있는 미완료 `delta`는 저장 대상으로 보지 않는다.
+
+입력 전사는 응답 생성과 비동기로 완료될 수 있으므로 완료 이벤트의 도착
+시각으로 `sequence`를 만들지 않는다. `conversation.item.added`에서 예약한
+대화 순서를 사용해 사용자와 AI 전사의 저장 완료 시점이 바뀌어도 순서를
+유지한다.
+
+#### 구현 단위
+
+1. Realtime 세션 입력 오디오 설정에
+   `transcription.model=gpt-transcribe`, `languages=["ko"]`를 추가한다.
+2. `SidebandSessionManager.ManagedSocket`에 메시지 재조립과 이벤트 분기,
+   아이템별 순번 예약 상태를 추가한다.
+3. Sideband와 DB 저장을 분리하는 전사 저장 서비스를 추가하고 트랜잭션
+   경계를 이 서비스에 둔다.
+4. `CallTranscript`가 생성 시 `openaiItemId`를 필수 입력으로 받게 한다.
+5. `CallTranscriptRepository`에 동일 통화 세션과 OpenAI 아이템 ID의
+   존재 여부 조회를 추가한다.
+6. Sideband 종료 시 연결별 버퍼와 인메모리 순번 상태를 함께 정리한다.
+
+#### 테스트 계획
+
+- `onText` 한 번에 완전한 JSON이 오면 이벤트를 한 번 처리한다.
+- JSON 하나가 `last=false, false, true`로 나뉘어도 한 번만 처리한다.
+- 서로 다른 JSON 메시지를 하나로 합치지 않는다.
+- 사용자 완료 이벤트는 `USER`, AI 완료 이벤트는 `ASSISTANT`로 저장한다.
+- 사용자 전사 완료가 AI 이벤트보다 늦게 와도 `conversation.item.added`
+  기준 순서가 유지된다.
+- 사용자·AI `delta`, 알 수 없는 이벤트와 빈 전사는 저장하지 않는다.
+- 같은 `item_id` 완료 이벤트를 두 번 받아도 한 행만 저장한다.
+- 두 통화 세션의 순번과 중복 처리 상태가 서로 섞이지 않는다.
+- 저장 실패가 발생해도 WebSocket 이벤트 수신 루프가 비정상 종료되지 않는다.
+- 통화 종료 직전에 받은 완료 이벤트가 저장된 뒤 Sideband 상태가 정리된다.
+- 실제 OpenAI E2E에서 `gpt-transcribe` 세션 설정 수락, 한국어 사용자 전사와
+  AI 전사 저장, `sequence` 순서를 확인한다.
+
+#### 이번 단계의 제외 범위
+
+- 전사 `delta`의 DB 저장
+- 부분 자막 조회용 공개 API
+- Sideband 재연결 후 이벤트 재생
+- AI 발화 중단 시 실제 재생된 구간만 남기는 정밀 보정
+- `(call_session_id, openai_item_id)` DB 유니크 제약 추가
+- 통화 세션 행 잠금을 이용한 병렬 저장
+
+### 3단계: 가족 게시글 조회 Tool
+
+- `get_person_recent_post_summaries(person_key)` 등록
+- 프롬프트용 인물 정보와 서버 전용 `person_key → groupMemberId` 매핑을 같은 가족 조회에서 생성
+- 통화 시작 시 발급하고 Sideband 연결에 보관한 `person_key`만 허용
+- 현재 그룹에서 선택된 특정 활성 구성원의 분석 완료 게시글만 조회
+- 작성일과 게시글 ID 내림차순으로 최신 최대 5건 반환
+- 모델에 DB member ID 비노출
+- 존재하지 않거나 모호한 표시명 재확인
+- Tool 호출 실패를 전사 처리와 Sideband 수신 루프에서 격리
+
+### 4단계: 일정 조회 Tool
+
+- `get_calendar_events_by_date(date_expression)` 등록
+- KST 기준 오늘·내일·모레 해석
+- 이번 주와 다음 주 요일 해석
+- 현재 그룹 일정만 조회
+- 날짜가 모호하면 도구 호출 전 재확인
+
+### 5단계: 장시간 통화와 품질 강화
+
+- `wait_for_user` 무응답 처리
+- Sideband 재연결·타임아웃 정책
+- 장시간 대화 맥락 압축
+- 일시적인 WebRTC `disconnected` 복구 유예
+- 도구 재시도와 장애 안내 정책
+- 한국어 음성·자막·VAD 평가 시나리오
+- 의료·안전·실제 가족 연결 요청 평가
+
+## 11. 검증 상태
+
+### 완료
+
+- [x] 6개 `persona_id`와 음성·프롬프트 매핑
+- [x] 네 컨텍스트 블록과 `없음` 처리
+- [x] 프롬프트 데이터 신뢰 경계
+- [x] OpenAI Realtime multipart SDP 교환
+- [x] Sideband 연결·종료 관리
+- [x] 통화 상태 Entity 전이 테스트
+- [x] OpenAI Gateway 성공·오류 테스트
+- [x] 임시 Web UI 반응형·페르소나 선택 확인
+- [x] 연결 취소·단절 시 세션 정리
+- [x] Sideband 텍스트 분할 재조립과 완료 전사 이벤트 처리 테스트
+- [x] 전사 순번·중복 방지 PostgreSQL 통합 테스트
+- [x] `gpt-transcribe`, `languages=["ko"]` 세션 설정 테스트
+- [x] 프롬프트 인물 정보와 서버 전용 `person_key → groupMemberId` 매핑 일관성 테스트
+- [x] Realtime 게시글 Tool 스키마와 Sideband 분할·중복·다중 호출 처리 테스트
+- [x] 특정 구성원의 `SUCCESS` 게시글 최신 5건 PostgreSQL 통합 테스트
+- [x] 전체 Gradle 빌드와 테스트
+- [x] 리뷰 에이전트 전체 변경 검토
+
+### 추가 검증 필요
+
+- [x] 여섯 페르소나 실제 양방향 음성 통화 수동 E2E
+- [x] `AiCallPromptContextProvider`의 KST 날짜 경계 통합 테스트
+- [x] `SUCCESS` 게시글과 타 그룹 데이터 격리 통합 테스트
+- [x] 가장 최근 `call_reports` 한 건 선택 통합 테스트
+- [x] API 동시 요청 기반 활성 통화 중복 방지 통합 테스트
+- [ ] 실제 OpenAI Sideband 장애·제한 시간 E2E
+- [x] 실제 OpenAI의 한국어 사용자·AI 완료 전사 순차 저장 E2E
+- [ ] 실제 OpenAI의 특정 가족 게시글 조회와 중복 표시명 재확인 E2E
+
+실제 통화 실행 절차는 [AI_CALL_README.md](./AI_CALL_README.md)를 따른다.
+
+## 12. 스펙과 변경 제안
+
+공식 구현 기준:
+
+- [AI_CALL 스펙](./docs/specs/domains/AI_CALL.md)
+- [API 계약](./docs/specs/contracts/API.md)
+- [데이터 계약](./docs/specs/contracts/DATA_MODEL.md)
+
+최근 통화 요약의 통화 시작 시 초기 주입은 기존 공식 스펙에 없던 동작이므로
+다음 변경 제안에 기록했다.
+
+- [CHG-S15P11B104-137-ai-call-recent-summary-context](./docs/spec-changes/pending/CHG-S15P11B104-137-ai-call-recent-summary-context.md)
+
+변경 제안 승인 전에는 `docs/specs/`의 공식 스펙에 직접 반영하지 않는다.
+
+## 13. 주요 구현 위치
+
+| 역할 | 경로 |
+| --- | --- |
+| 통화 오케스트레이션 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/CallSessionService.java` |
+| Realtime SDP 교환 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/OpenAiRealtimeGateway.java` |
+| Sideband 관리 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/SidebandSessionManager.java` |
+| Sideband Tool 처리 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/SidebandToolHandler.java` |
+| 가족 게시글 조회 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/AiCallPostToolService.java` |
+| 페르소나 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/PersonaCatalog.java` |
+| 프롬프트 구성 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/AiCallPromptComposer.java` |
+| DB 컨텍스트 | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/service/AiCallPromptContextProvider.java` |
+| REST API | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/controller/CallSessionController.java` |
+| 임시 Web UI | `backend/src/main/resources/static/ai-call/` |
+| 로컬 fixture | `backend/src/main/java/com/ssafy/s15p11b104/domain/call/config/AiCallDevDataInitializer.java` |

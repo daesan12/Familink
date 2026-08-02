@@ -1,0 +1,75 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadWritePostMediaObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::s15p11b104-media-580779787807-ap-northeast-2-an/post-media/*"
+    },
+    {
+      "Sid": "ReadProductionParameters",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParametersByPath"
+      ],
+      "Resource": "arn:aws:ssm:ap-northeast-2:<AWS_ACCOUNT_ID>:parameter/familink/prod/*"
+    },
+    {
+      "Sid": "AuthenticateToEcr",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "PullFamilinkBackendImages",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+      ],
+      "Resource": "arn:aws:ecr:ap-northeast-2:<AWS_ACCOUNT_ID>:repository/familink-backend"
+    },
+    {
+      "Sid": "DecryptProductionParameters",
+      "Effect": "Allow",
+      "Action": "kms:Decrypt",
+      "Resource": "<SSM_KMS_KEY_ARN>"
+    },
+    {
+      "Sid": "PublishProductionMetrics",
+      "Effect": "Allow",
+      "Action": "cloudwatch:PutMetricData",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "cloudwatch:namespace": [
+            "Familink/EC2",
+            "Familink/Health"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "DescribeProductionLogStreams",
+      "Effect": "Allow",
+      "Action": "logs:DescribeLogStreams",
+      "Resource": "arn:aws:logs:ap-northeast-2:<AWS_ACCOUNT_ID>:log-group:/familink/prod/*"
+    },
+    {
+      "Sid": "WriteProductionLogStreams",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:ap-northeast-2:<AWS_ACCOUNT_ID>:log-group:/familink/prod/*:log-stream:*"
+    }
+  ]
+}

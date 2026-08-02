@@ -1,0 +1,4 @@
+interface:
+  display_name: "KDT 회고 자동 포착"
+  short_description: "개발의 원인·해결·검증·재사용 교훈을 개인 회고 후보로 기록"
+  default_prompt: "Use $kdt-retrospective-capture to identify the worker safely and capture only developer-useful retrospective evidence: the signal, impact, meaningful hypotheses, verified cause or decision constraint, solution, validation, and a reusable next-action rule. Redact secrets, deduplicate by lesson, and write only to the gitignored personal daily note."

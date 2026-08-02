@@ -1,0 +1,184 @@
+package com.ssafy.s15p11b104.domain.report.service;
+
+import java.time.DateTimeException;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.ssafy.s15p11b104.domain.call.entity.CallReport;
+import com.ssafy.s15p11b104.domain.call.entity.CallSession;
+import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
+import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
+import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
+import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
+import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
+import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.report.dto.CallReportResponse;
+import com.ssafy.s15p11b104.domain.report.dto.DailyCallItemResponse;
+import com.ssafy.s15p11b104.domain.report.dto.DailyReportResponse;
+import com.ssafy.s15p11b104.domain.report.dto.DailyReportSummaryResponse;
+import com.ssafy.s15p11b104.domain.report.dto.ReportCalendarResponse;
+import com.ssafy.s15p11b104.domain.report.entity.DailyReport;
+import com.ssafy.s15p11b104.domain.report.repository.DailyReportRepository;
+import com.ssafy.s15p11b104.global.exception.BusinessException;
+import com.ssafy.s15p11b104.global.exception.ErrorCode;
+
+/**
+ * 보호자가 피보호자의 통화 리포트를 조회하는 기능을 담당한다.
+ *
+ * <p>{@code API-REPORTS-001}~{@code 003}을 구현한다. 세 계약 모두 같은 그룹의 활성 보호자만 허용하고
+ * 404를 두지 않으므로, 존재하지 않는 그룹·구성원·통화도 {@code FORBIDDEN}으로 응답해 리소스 존재
+ * 여부를 노출하지 않는다. 유일한 404는 통화에는 접근할 수 있으나 건별 리포트가 아직 없는
+ * {@code CALL_REPORT_NOT_READY}다.
+ */
+@Service
+public class ReportQueryService {
+
+	private final DailyReportRepository dailyReportRepository;
+	private final CallSessionRepository callSessionRepository;
+	private final CallReportCallRepository callReportRepository;
+	private final GroupMemberRepository groupMemberRepository;
+
+	public ReportQueryService(
+		DailyReportRepository dailyReportRepository,
+		CallSessionRepository callSessionRepository,
+		CallReportCallRepository callReportRepository,
+		GroupMemberRepository groupMemberRepository) {
+		this.dailyReportRepository = dailyReportRepository;
+		this.callSessionRepository = callSessionRepository;
+		this.callReportRepository = callReportRepository;
+		this.groupMemberRepository = groupMemberRepository;
+	}
+
+	/**
+	 * 한 달 중 일일 리포트가 있는 날짜를 반환한다.
+	 */
+	@Transactional(readOnly = true)
+	public ReportCalendarResponse getCalendar(
+		Long groupId, Long memberId, int year, int month, Long authenticatedUserId) {
+		YearMonth yearMonth = resolveYearMonth(year, month);
+		requireGuardianAccessToCareReceiver(groupId, memberId, authenticatedUserId);
+
+		return new ReportCalendarResponse(
+			yearMonth.toString(),
+			dailyReportRepository.findReportDatesInRange(
+				memberId, yearMonth.atDay(1), yearMonth.atEndOfMonth()),
+			dailyReportRepository.findLatestReportDate(memberId).orElse(null));
+	}
+
+	/**
+	 * 기준일의 일일 리포트와 그 구간에 종료된 통화 목록을 반환한다.
+	 *
+	 * <p>구간에 통화가 없어 일일 리포트를 만들지 않았으면 오류가 아니라 {@code dailyReport}가 비어
+	 * 있는 빈 상태로 응답한다.
+	 */
+	@Transactional(readOnly = true)
+	public DailyReportResponse getDailyReport(
+		Long groupId, Long memberId, LocalDate reportDate, Long authenticatedUserId) {
+		requireGuardianAccessToCareReceiver(groupId, memberId, authenticatedUserId);
+
+		DailyReportSummaryResponse dailyReport = dailyReportRepository
+			.findByCareReceiverMemberIdAndReportDate(memberId, reportDate)
+			.map(this::toSummary)
+			.orElse(null);
+
+		return new DailyReportResponse(reportDate, dailyReport, findCalls(memberId, reportDate));
+	}
+
+	/**
+	 * 한 통화의 건별 리포트를 반환한다.
+	 */
+	@Transactional(readOnly = true)
+	public CallReportResponse getCallReport(Long callSessionId, Long authenticatedUserId) {
+		CallSession session = callSessionRepository.findById(callSessionId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+		requireGuardianAccessToCareReceiver(
+			session.getGroup().getId(),
+			session.getCareReceiverMember().getId(),
+			authenticatedUserId);
+
+		CallReport report = callReportRepository.findByCallSessionId(callSessionId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.CALL_REPORT_NOT_READY));
+
+		return new CallReportResponse(
+			callSessionId,
+			report.getSummary(),
+			report.getGuardianMessage(),
+			report.getCreatedAt());
+	}
+
+	/**
+	 * 기준일 구간에 정상 종료된 통화 목록을 리포트 열람 가능 여부와 함께 만든다.
+	 *
+	 * <p>리포트가 생기는 통화만 보여주기 위해 정상 종료된 통화로 제한한다. 리포트 존재 여부는 통화마다
+	 * 묻지 않고 한 번에 조회해 판정한다.
+	 */
+	private List<DailyCallItemResponse> findCalls(Long memberId, LocalDate reportDate) {
+		DailyReportWindow window = DailyReportWindow.forReportDate(reportDate);
+		List<CallSession> sessions = callSessionRepository.findByCareReceiverMemberAndStatusInEndedAtRange(
+			memberId, CallStatus.COMPLETED, window.startInclusive(), window.endExclusive());
+		if (sessions.isEmpty()) {
+			return List.of();
+		}
+
+		Set<Long> sessionIdsWithReport = new HashSet<>(callReportRepository.findCallSessionIdsIn(
+			sessions.stream().map(CallSession::getId).toList()));
+
+		return sessions.stream()
+			.map(session -> new DailyCallItemResponse(
+				session.getId(),
+				session.getStartedAt(),
+				sessionIdsWithReport.contains(session.getId())))
+			.toList();
+	}
+
+	private DailyReportSummaryResponse toSummary(DailyReport report) {
+		return new DailyReportSummaryResponse(
+			report.getId(),
+			report.getSummary(),
+			report.getEmotionCategory(),
+			report.getEmotionSubcategory(),
+			report.getGuardianMessage());
+	}
+
+	/**
+	 * 요청자가 그룹의 활성 보호자이고 대상이 같은 그룹의 활성 피보호자인지 확인한다.
+	 *
+	 * <p>AI 리포트는 보호자만 조회하므로 피보호자 본인도 자기 리포트를 볼 수 없다. 계약에 404가 없어
+	 * 존재하지 않는 대상과 권한 없는 대상을 구분하지 않는다.
+	 */
+	private void requireGuardianAccessToCareReceiver(
+		Long groupId, Long memberId, Long authenticatedUserId) {
+		GroupMember requester = groupMemberRepository
+			.findActiveByGroupIdAndUserId(groupId, authenticatedUserId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+		if (requester.getRole() != GroupRole.GUARDIAN) {
+			throw new BusinessException(ErrorCode.FORBIDDEN);
+		}
+
+		GroupMember target = groupMemberRepository
+			.findActiveByGroupIdAndMemberId(groupId, memberId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+		if (target.getRole() != GroupRole.CARE_RECEIVER) {
+			throw new BusinessException(ErrorCode.FORBIDDEN);
+		}
+	}
+
+	/**
+	 * 달력 조회의 연·월을 검증한다.
+	 *
+	 * <p>범위를 벗어난 월은 본문 값의 문제이므로 계약이 정한 {@code INVALID_REQUEST}로 거부한다.
+	 */
+	private YearMonth resolveYearMonth(int year, int month) {
+		try {
+			return YearMonth.of(year, month);
+		} catch (DateTimeException exception) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST);
+		}
+	}
+}

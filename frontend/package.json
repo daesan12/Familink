@@ -1,0 +1,62 @@
+{
+  "name": "S15P11B104App",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android --no-packager --active-arch-only",
+    "android:dev": "node scripts/start-android-dev.mjs",
+    "check:structure": "node scripts/check-structure.mjs",
+    "lint": "eslint .",
+    "start": "react-native start",
+    "test": "jest",
+    "test:android-dev": "node --test scripts/start-android-dev.test.mjs",
+    "test:app-shell": "node --test src/app-shell/navigation.test.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^3.1.0",
+    "@react-native-clipboard/clipboard": "^1.16.3",
+    "@react-native-community/datetimepicker": "^9.1.0",
+    "@react-native-vector-icons/material-design-icons": "^12.3.0",
+    "axios": "^1.19.0",
+    "lucide-react-native": "^1.27.0",
+    "react": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-config": "^1.6.1",
+    "react-native-image-picker": "^8.2.1",
+    "react-native-keychain": "^10.0.0",
+    "react-native-safe-area-context": "^5.5.2",
+    "react-native-svg": "^15.15.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "20.1.0",
+    "@react-native-community/cli-platform-android": "20.1.0",
+    "@react-native/babel-preset": "0.86.2",
+    "@react-native/eslint-config": "0.86.2",
+    "@react-native/jest-preset": "0.86.2",
+    "@react-native/metro-config": "0.86.2",
+    "@react-native/typescript-config": "0.86.2",
+    "@types/jest": "^29.5.13",
+    "@types/react": "^19.2.0",
+    "@types/react-test-renderer": "^19.1.0",
+    "eslint": "^8.19.0",
+    "jest": "^29.6.3",
+    "prettier": "2.8.8",
+    "react-test-renderer": "19.2.3",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=22.11.0"
+  },
+  "codegenConfig": {
+    "name": "AiCallSpec",
+    "type": "components",
+    "jsSrcsDir": "src/features/ai-call/native",
+    "android": {
+      "javaPackageName": "com.s15p11b104app.aicall"
+    }
+  }
+}

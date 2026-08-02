@@ -1,0 +1,131 @@
+name: familink-production
+
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-familink-backend:local}
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_HOST: ${DB_HOST:?DB_HOST is required}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-s15p11b104}
+      DB_USERNAME: ${DB_USERNAME:?DB_USERNAME is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      PUSH_ENABLED: ${PUSH_ENABLED:-true}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-service-account.json
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_ALLOWED_HOSTS: ${S3_ALLOWED_HOSTS:-}
+      S3_PRESIGNED_URL_DURATION: ${S3_PRESIGNED_URL_DURATION:-10m}
+      S3_DOWNLOAD_URL_DURATION: ${S3_DOWNLOAD_URL_DURATION:-30m}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_REALTIME_MODEL: ${OPENAI_REALTIME_MODEL:-gpt-realtime-2}
+      OPENAI_REALTIME_TRANSCRIPTION_MODEL: ${OPENAI_REALTIME_TRANSCRIPTION_MODEL:-gpt-transcribe}
+      OPENAI_REALTIME_TRANSCRIPTION_LANGUAGE: ${OPENAI_REALTIME_TRANSCRIPTION_LANGUAGE:-ko}
+      OPENAI_REALTIME_BASE_URL: ${OPENAI_REALTIME_BASE_URL:-https://api.openai.com}
+      OPENAI_REALTIME_SIDEBAND_URL: ${OPENAI_REALTIME_SIDEBAND_URL:-wss://api.openai.com/v1/realtime}
+      GMS_API_KEY: ${GMS_API_KEY:-}
+      GMS_API_BASE_URL: ${GMS_API_BASE_URL:-https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com}
+      GEMINI_TEXT_MODEL: ${GEMINI_TEXT_MODEL:-gemini-2.5-flash-lite}
+      GEMINI_MULTIMODAL_MODEL: ${GEMINI_MULTIMODAL_MODEL:-gemini-3.5-flash}
+      GEMINI_CALL_REPORT_MODEL: ${GEMINI_CALL_REPORT_MODEL:-gemini-3.5-flash}
+      GEMINI_DAILY_REPORT_MODEL: ${GEMINI_DAILY_REPORT_MODEL:-gemini-3.5-flash}
+      MEDIA_IMAGE_MAX_SIZE_BYTES: ${MEDIA_IMAGE_MAX_SIZE_BYTES:-10485760}
+      MEDIA_VIDEO_MAX_SIZE_BYTES: ${MEDIA_VIDEO_MAX_SIZE_BYTES:-104857600}
+      MEDIA_VIDEO_MAX_DURATION_SECONDS: ${MEDIA_VIDEO_MAX_DURATION_SECONDS:-60}
+      MEDIA_ALLOWED_IMAGE_TYPES: ${MEDIA_ALLOWED_IMAGE_TYPES:-image/jpeg,image/png,image/webp}
+      MEDIA_ALLOWED_VIDEO_TYPES: ${MEDIA_ALLOWED_VIDEO_TYPES:-video/mp4}
+      FFPROBE_PATH: ${FFPROBE_PATH:-ffprobe}
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-8}
+      DB_POOL_MIN_IDLE: ${DB_POOL_MIN_IDLE:-2}
+      DB_POOL_CONNECTION_TIMEOUT_MS: ${DB_POOL_CONNECTION_TIMEOUT_MS:-30000}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms512m -Xmx1280m -XX:MaxMetaspaceSize=256m -XX:+UseG1GC}
+    volumes:
+      - ${FIREBASE_CREDENTIALS_FILE:-/dev/null}:/run/secrets/firebase-service-account.json:ro
+    expose:
+      - "8080"
+    mem_limit: 2g
+    cpus: 1.5
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:-ap-northeast-2}
+        awslogs-group: ${CLOUDWATCH_BACKEND_LOG_GROUP:-/familink/prod/backend}
+        awslogs-stream: ${CLOUDWATCH_BACKEND_LOG_STREAM:-backend}
+        awslogs-create-group: "false"
+
+  redis:
+    image: redis:7.4-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - --maxmemory
+      - 384mb
+      - --maxmemory-policy
+      - noeviction
+    expose:
+      - "6379"
+    volumes:
+      - redis-prod-data:/data
+    mem_limit: 512m
+    cpus: 0.5
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certbot/www:/var/www/certbot:ro
+      - ./nginx/certbot/conf:/etc/letsencrypt:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 128m
+    cpus: 0.25
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1/nginx-health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:-ap-northeast-2}
+        awslogs-group: ${CLOUDWATCH_NGINX_LOG_GROUP:-/familink/prod/nginx}
+        awslogs-stream: ${CLOUDWATCH_NGINX_LOG_STREAM:-nginx}
+        awslogs-create-group: "false"
+
+volumes:
+  redis-prod-data:

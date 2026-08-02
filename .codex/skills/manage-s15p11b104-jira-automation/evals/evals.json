@@ -1,0 +1,119 @@
+{
+  "skill_name": "manage-s15p11b104-jira-automation",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "매일 오전 9시에 기한이 지난 미완료 작업을 담당자에게 Slack DM으로 알려주는 Jira 자동화 생성해줘.",
+      "expected_output": "The skill reads the Jira convention and project context, checks for an equivalent rule, creates the narrow scheduled project-scoped automation, saves and reopens it, and does not manually trigger a notification.",
+      "files": [],
+      "expectations": [
+        "docs/team-rules/jira-convention.md is read before Automation mutation.",
+        "An equivalent existing rule is searched before creation.",
+        "The schedule uses 09:00 Asia/Seoul and project-scoped overdue JQL.",
+        "The notification targets each issue's actual assignee.",
+        "The saved rule is reopened and verified as enabled.",
+        "The rule is not manually run and no test Slack message is sent."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "새 작업이 생기면 담당자별 하위 작업을 자동으로 만드는 Jira 자동화 생성해줘.",
+      "expected_output": "The skill identifies that new subtasks are prohibited, makes no Jira Automation mutation, and asks one compact question to confirm independently completable standard issues and their Epic or issue-link relationship.",
+      "files": [],
+      "expectations": [
+        "The live Jira convention's new-subtask prohibition is cited as the blocker.",
+        "No rule is created, saved, enabled, or manually run.",
+        "The request is not silently converted to another issue type.",
+        "One compact clarification asks for the standard-ticket relationship or independently completable scopes."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "기존 '하위 작업 템플릿 생성' 자동화의 설명 문구만 바꿔줘.",
+      "expected_output": "The skill inspects the existing rule, detects its prohibited subtask-creation action, and stops without preserving or editing the enabled policy-violating rule unless migration or disabling is separately authorized.",
+      "files": [],
+      "expectations": [
+        "The full existing rule is inspected before editing.",
+        "The prohibited subtask-creation action is reported even though the requested delta is wording-only.",
+        "No text, enabled state, trigger, or action is mutated without migration or disabling authorization.",
+        "The response asks only for the policy-resolution decision."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "주간 Jira 요약 자동화의 프롬프트에서 링크만 제거해줘. 직접 실행하거나 Slack으로 테스트 메시지는 보내지 마.",
+      "expected_output": "The skill updates only the requested prompt constraint, preserves schedule, destination, actions, and enabled state, reopens the rule for verification, and performs no live run or notification.",
+      "files": [],
+      "expectations": [
+        "The summary prompt reference is loaded.",
+        "Only the link-formatting requirement is changed.",
+        "Schedule, destination, other prompt constraints, actions, and enabled state are preserved.",
+        "The saved rule is reopened and verified.",
+        "No manual run or Slack notification occurs."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "매주 월요일 오전 9시에 미완료 작업을 조회하는 Jira 자동화를 비활성 초안으로 만들어줘.",
+      "expected_output": "The skill creates the requested rule as a disabled draft, reopens it, and verifies the disabled state without enabling or running it.",
+      "files": [],
+      "expectations": [
+        "The explicit disabled-draft request is preserved.",
+        "The rule is saved and verified as disabled.",
+        "The common completion checks do not require it to be enabled.",
+        "The rule is not manually run."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "새 사용자 가치 스토리가 생성되면 FE·BE·AI 구현 티켓을 자동으로 나누는 Jira 자동화 생성해줘. 각 담당자, 기한, Story Points는 규칙 입력값으로 제공돼.",
+      "expected_output": "The skill preserves one domain-neutral Story and creates three prefixed standard Tasks with required fields and relationships instead of cloning Stories or creating subtasks.",
+      "files": [],
+      "expectations": [
+        "The Automation rule never creates a subtask.",
+        "The trigger Story remains one domain-neutral user-value issue and is not cloned by area.",
+        "The created issues are `[FE]`, `[BE]`, and `[AI]` Tasks with exactly one assignee, due date, and allowed Story Points each.",
+        "Each created Task is connected to the same Epic and `Relates` to the Story; `Blocks` is used only for configured sequencing.",
+        "Every created Task has a non-empty purpose, concrete work, and observable completion criteria.",
+        "The saved rule is reopened and verified without a manual run."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "FE와 BE가 함께 쓰는 API 계약 생성 기반 작업을 만드는 Jira 자동화를 생성해줘. 담당자는 이종철, 기한은 트리거일로부터 7일 뒤, Story Points는 2로 설정하고 단일 영역 작업에는 적용하지 마.",
+      "expected_output": "The skill creates a standard `[COMMON]` Task only for the shared FE/BE foundation and does not generalize the prefix to single-domain or standalone work.",
+      "files": [],
+      "expectations": [
+        "The created issue is a standard Task, never a subtask.",
+        "`[COMMON]` is used because the result is shared by at least FE and BE.",
+        "The rule scope prevents the action from applying to single-domain or standalone work.",
+        "One assignee, due date, allowed Story Points, and applicable relationships are configured before enabling.",
+        "The created Task has a non-empty purpose, concrete work, and observable completion criteria.",
+        "The saved rule is reopened and not manually run."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "중간발표 자료 정리 작업을 자동 생성하는 Jira 자동화를 만들어줘. 담당자는 나, 기한은 2026-08-10, Story Points는 2이고 다른 티켓과의 관계는 필요 없어.",
+      "expected_output": "The skill creates an unprefixed standalone Task action with no forced relationship and a complete description.",
+      "files": [],
+      "expectations": [
+        "No `[FE]`, `[BE]`, `[AI]`, or `[COMMON]` prefix is invented.",
+        "No Epic or issue link is forced because the standalone work has no requested relationship.",
+        "The issue action configures one assignee, due date, allowed Story Points, purpose, concrete work, and observable completion criteria.",
+        "The saved rule is reopened and not manually run."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "같은 사용자 가치를 `[FE]`, `[BE]`, `[AI]` 스토리로 복제하는 Jira 자동화를 만들어줘.",
+      "expected_output": "The skill makes no Automation mutation and asks one compact correction question about one shared Story plus prefixed Tasks.",
+      "files": [],
+      "expectations": [
+        "Ownership-only Story cloning is identified as a policy conflict.",
+        "No rule is created, saved, or enabled before the issue-role correction is confirmed.",
+        "The skill does not silently convert Stories to Tasks or strip prefixes."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Jira 티켓 생성"
+  short_description: "담당자·기한·Story Points가 있는 일반 Jira 티켓 생성"
+  default_prompt: "Use $jira-create-ticket to read docs/team-rules/jira-convention.md, turn my request into convention-compliant S15P11B104 issues, keep one domain-neutral shared Story, split technical execution into `[FE]`, `[BE]`, `[AI]`, or `[COMMON]` Tasks when applicable, give every issue exactly one assignee, an explicit due date, and allowed Story Points, never create a new subtask, generate evidence-supported completion criteria, create Epic or issue relationships only when applicable or requested through Atlassian Rovo, and re-fetch every saved field."

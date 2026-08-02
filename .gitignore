@@ -1,0 +1,52 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Agent tooling
+# .claude/skills 는 .codex/skills 로 연결된 로컬 정션이므로 커밋하지 않는다.
+# 스킬 원본은 .codex/skills 하나만 추적한다. 생성 방법은 CLAUDE.md 참고.
+/.claude/skills/
+.claude/settings.local.json
+
+# CodeGraph 인덱스는 각자 로컬에서 생성한다. DB, 로그, PID는 커밋하지 않는다.
+.codegraph/
+
+# IDE and OS
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Local evidence and temporary files
+.evidence/
+tmp/
+
+# Local KDT retrospective drafts
+/kdt-retrospectives/
+
+# Python
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+*.py[cod]
+
+# Node
+**/node_modules/
+
+# Gradle and Android
+**/.gradle/
+**/build/
+**/local.properties
+**/.android/
+**/.cxx/
+**/.kotlin/
+*.log
+
+# Android release signing
+# release keystore와 서명값은 커밋하지 않는다. debug.keystore는 공개된 개발용 키라 추적을 유지한다.
+frontend/android/keystore.properties
+*.jks
+*.keystore
+!frontend/android/app/debug.keystore
