@@ -2,6 +2,7 @@ import React from "react";
 import TestRenderer from "react-test-renderer";
 
 import type { ReportGateway } from "../types";
+import { REPORT_PAGE_REQUEST_CONCURRENCY } from "../hooks/useReportPages";
 import { ReportScreen } from "./ReportScreen";
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
@@ -16,6 +17,14 @@ const target = {
   displayName: "김말순",
   memberId: "12",
 };
+const renderedScreens = new Set<TestRenderer.ReactTestRenderer>();
+
+afterEach(() => {
+  TestRenderer.act(() => {
+    renderedScreens.forEach((renderer) => renderer.unmount());
+  });
+  renderedScreens.clear();
+});
 
 function createGateway(): jest.Mocked<ReportGateway> {
   return {
@@ -29,10 +38,7 @@ function createGateway(): jest.Mocked<ReportGateway> {
   };
 }
 
-async function renderWithGateway(
-  gateway: ReportGateway,
-  targets = [target]
-) {
+async function renderWithGateway(gateway: ReportGateway, targets = [target]) {
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(async () => {
@@ -47,6 +53,7 @@ async function renderWithGateway(
     );
   });
 
+  renderedScreens.add(renderer!);
   return renderer!;
 }
 
@@ -62,11 +69,13 @@ test("일간 조회 실패를 통화 없음과 구분하고 다시 시도할 수
     });
   const renderer = await renderWithGateway(gateway);
 
-  expect(JSON.stringify(renderer.toJSON())).toContain("리포트 조회에 실패했어요");
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "리포트 조회에 실패했어요"
+  );
 
   await TestRenderer.act(async () => {
     renderer.root
-      .findByProps({ accessibilityRole: "button" })
+      .findByProps({ accessibilityLabel: "김말순 님 리포트 다시 시도" })
       .props.onPress();
   });
 
@@ -177,12 +186,7 @@ test("당일 리포트가 없으면 이전 달을 포함한 최신 일간 리포
 
   const renderer = await renderWithGateway(gateway);
 
-  expect(gateway.getReportDates).toHaveBeenCalledWith(
-    "group-1",
-    "12",
-    2026,
-    7
-  );
+  expect(gateway.getReportDates).toHaveBeenCalledWith("group-1", "12", 2026, 7);
   expect(gateway.getDailyReport).toHaveBeenNthCalledWith(
     2,
     "group-1",
@@ -274,15 +278,12 @@ test("캘린더 방향 버튼으로 월을 이동하면 이동한 월의 생성 
   });
 
   await TestRenderer.act(async () => {
-    renderer.root.findByProps({ accessibilityLabel: "다음 달" }).props.onPress();
+    renderer.root
+      .findByProps({ accessibilityLabel: "다음 달" })
+      .props.onPress();
   });
 
-  expect(gateway.getReportDates).toHaveBeenCalledWith(
-    "group-1",
-    "12",
-    2026,
-    8
-  );
+  expect(gateway.getReportDates).toHaveBeenCalledWith("group-1", "12", 2026, 8);
   expect(JSON.stringify(renderer.toJSON())).toContain("2026년 8월");
 });
 
@@ -333,7 +334,9 @@ test("월을 이동하면 API 응답 전에도 날짜표를 즉시 표시하고 
   ).length;
 
   TestRenderer.act(() => {
-    renderer.root.findByProps({ accessibilityLabel: "다음 달" }).props.onPress();
+    renderer.root
+      .findByProps({ accessibilityLabel: "다음 달" })
+      .props.onPress();
   });
 
   expect(JSON.stringify(renderer.toJSON())).toContain("2026년 8월");
@@ -361,13 +364,18 @@ test("월을 이동하면 API 응답 전에도 날짜표를 즉시 표시하고 
   ).toBeTruthy();
 
   TestRenderer.act(() => {
-    renderer.root.findByProps({ accessibilityLabel: "이전 달" }).props.onPress();
-    renderer.root.findByProps({ accessibilityLabel: "다음 달" }).props.onPress();
+    renderer.root
+      .findByProps({ accessibilityLabel: "이전 달" })
+      .props.onPress();
+    renderer.root
+      .findByProps({ accessibilityLabel: "다음 달" })
+      .props.onPress();
   });
 
-  const julyRequestCountAfterNavigation = gateway.getReportDates.mock.calls.filter(
-    ([, , year, month]) => year === 2026 && month === 7
-  ).length;
+  const julyRequestCountAfterNavigation =
+    gateway.getReportDates.mock.calls.filter(
+      ([, , year, month]) => year === 2026 && month === 7
+    ).length;
   const augustRequests = gateway.getReportDates.mock.calls.filter(
     ([, , year, month]) => year === 2026 && month === 8
   );
@@ -399,11 +407,7 @@ test("어르신별 캘린더 날짜를 분리하고 화면 로딩 때 받은 현
     async (_groupId, memberId, year, month) => ({
       latestReportDate: memberId === "11" ? "2026-07-10" : "2026-07-20",
       reportDates:
-        month !== 7
-          ? []
-          : memberId === "11"
-            ? ["2026-07-10"]
-            : ["2026-07-20"],
+        month !== 7 ? [] : memberId === "11" ? ["2026-07-10"] : ["2026-07-20"],
       yearMonth: `${year}-${String(month).padStart(2, "0")}`,
     })
   );
@@ -449,4 +453,112 @@ test("어르신별 캘린더 날짜를 분리하고 화면 로딩 때 받은 현
     })
   ).toBeTruthy();
   expect(currentMonthRequestCount()).toBe(2);
+});
+
+test("한 피보호자 조회 실패에도 성공한 페이지를 유지하고 실패한 대상만 다시 시도한다", async () => {
+  const gateway = createGateway();
+  const targets = [
+    { displayName: "김수호", memberId: "11" },
+    { displayName: "이말순", memberId: "12" },
+    { displayName: "박정자", memberId: "13" },
+    { displayName: "최복희", memberId: "14" },
+  ];
+  let failedTargetAttempts = 0;
+  gateway.getDailyReport.mockImplementation(
+    async (_groupId, memberId, date) => {
+      if (memberId === "14" && failedTargetAttempts++ === 0) {
+        throw new Error("network");
+      }
+
+      return {
+        calls: [],
+        dailyReport: {
+          emotionCategory: "NEUTRAL",
+          emotionSubcategory: "평온",
+          guardianMessageSummary: null,
+          id: `daily-${memberId}`,
+          summary: `${memberId}번 피보호자 리포트`,
+        },
+        date,
+        status: "ready",
+      };
+    }
+  );
+  const renderer = await renderWithGateway(gateway, targets);
+
+  const failedTree = JSON.stringify(renderer.toJSON());
+  expect(failedTree).toContain("11번 피보호자 리포트");
+  expect(failedTree).toContain("12번 피보호자 리포트");
+  expect(failedTree).toContain("13번 피보호자 리포트");
+  expect(failedTree).toContain("최복희 님의 리포트 조회에 실패했어요");
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "최복희 님 리포트 다시 시도" })
+      .props.onPress();
+  });
+
+  targets.forEach(({ memberId }) => {
+    expect(
+      gateway.getDailyReport.mock.calls.filter(
+        ([, requestedMemberId]) => requestedMemberId === memberId
+      )
+    ).toHaveLength(memberId === "14" ? 2 : 1);
+  });
+  const recoveredTree = JSON.stringify(renderer.toJSON());
+  expect(recoveredTree).toContain("11번 피보호자 리포트");
+  expect(recoveredTree).toContain("12번 피보호자 리포트");
+  expect(recoveredTree).toContain("13번 피보호자 리포트");
+  expect(recoveredTree).toContain("14번 피보호자 리포트");
+});
+
+test("리포트 초기 조회의 동시 요청 수를 chunk 상한으로 제한한다", async () => {
+  const gateway = createGateway();
+  const targets = Array.from({ length: 7 }, (_, index) => ({
+    displayName: `피보호자 ${index + 1}`,
+    memberId: String(index + 1),
+  }));
+  let activeRequests = 0;
+  let maxActiveRequests = 0;
+  const trackRequest = async <T,>(value: T): Promise<T> => {
+    activeRequests += 1;
+    maxActiveRequests = Math.max(maxActiveRequests, activeRequests);
+    await new Promise<void>((resolve) => setTimeout(() => resolve(), 1));
+    activeRequests -= 1;
+    return value;
+  };
+  gateway.getDailyReport.mockImplementation(async (_groupId, _memberId, date) =>
+    trackRequest({
+      calls: [],
+      dailyReport: null,
+      date,
+      status: "noCalls" as const,
+    })
+  );
+  gateway.getReportDates.mockImplementation(
+    async (_groupId, _memberId, year, month) =>
+      trackRequest({
+        latestReportDate: null,
+        reportDates: [],
+        yearMonth: `${year}-${String(month).padStart(2, "0")}`,
+      })
+  );
+
+  await renderWithGateway(gateway, targets);
+  for (
+    let attempt = 0;
+    attempt < 100 && gateway.getReportDates.mock.calls.length < targets.length;
+    attempt += 1
+  ) {
+    await TestRenderer.act(async () => {
+      await new Promise<void>((resolve) => setTimeout(() => resolve(), 10));
+    });
+  }
+
+  expect(gateway.getDailyReport).toHaveBeenCalledTimes(targets.length);
+  expect(gateway.getReportDates).toHaveBeenCalledTimes(targets.length);
+  expect(maxActiveRequests).toBeGreaterThan(1);
+  expect(maxActiveRequests).toBeLessThanOrEqual(
+    REPORT_PAGE_REQUEST_CONCURRENCY
+  );
 });
