@@ -35,12 +35,13 @@ import {
 import {GUARDIAN_PROFILE} from '../fixtures/profileFixtures';
 import {
   mergeUserProfile,
-  toApiProfileUpdate,
+  toChangedApiProfileUpdate,
 } from '../profileModel';
 import type {ProfileGateway} from '../api/profileApi';
 import type {GuardianProfile, ProfileImageChange} from '../types';
 import {ProfileEditScreen} from './ProfileEditScreen';
 import {ProfileGuideScreen} from './ProfileGuideScreen';
+import {ProfileLoadStateScreen} from './ProfileLoadStateScreen';
 
 export interface MyPageScreenProps extends AppScreenProps {
   // 초기 프로필 주입(테스트·연동용). 없으면 mock 프로필을 사용한다.
@@ -50,6 +51,11 @@ export interface MyPageScreenProps extends AppScreenProps {
 }
 
 type SubScreen = 'edit' | 'guide' | 'notificationSettings' | null;
+
+type ProfileLoadState =
+  | {status: 'loading'}
+  | {status: 'ready'}
+  | {message: string; status: 'error'};
 
 type WeeklyStampLoadState =
   | {status: 'loading'}
@@ -76,19 +82,42 @@ const CARNATION_ERROR_MESSAGE =
   '카네이션 기록을 불러오지 못했어요. 다시 시도해 주세요.';
 const MEMBER_CONFIGURATION_MESSAGE =
   '현재 그룹의 구성원 정보를 확인할 수 없어 카네이션을 불러올 수 없습니다.';
+const PROFILE_LOAD_ERROR_MESSAGE =
+  '네트워크 연결을 확인하고 다시 시도해 주세요.';
+const EMPTY_GUARDIAN_PROFILE: GuardianProfile = {
+  age: 0,
+  birthDate: '',
+  gender: 'male',
+  hasCrown: false,
+  joinedAt: '',
+  loginId: '',
+  name: '',
+  weeklyRank: 0,
+};
 
 // I-1 보호자 마이페이지. 주간 조회와 월간 조회는 각각 요청 세대를 보관해
 // 그룹·구성원·선택 월이 바뀐 뒤 늦게 도착한 응답을 화면에 반영하지 않는다.
 export function MyPageScreen({
   currentGroup,
   initialProfile,
+  onCloseProfile,
   onFullscreenChange,
   onRequestLogout,
   onRequestWithdrawal,
   profileGateway,
   carnationGateway,
 }: MyPageScreenProps) {
-  const [profile, setProfile] = useState(initialProfile ?? GUARDIAN_PROFILE);
+  const hasLocalProfile = initialProfile !== undefined || __DEV__;
+  const [profile, setProfile] = useState(
+    initialProfile ?? (__DEV__ ? GUARDIAN_PROFILE : EMPTY_GUARDIAN_PROFILE),
+  );
+  const [profileLoadState, setProfileLoadState] =
+    useState<ProfileLoadState>(
+      profileGateway === undefined && hasLocalProfile
+        ? {status: 'ready'}
+        : {status: 'loading'},
+    );
+  const [profileRetryCount, setProfileRetryCount] = useState(0);
   const [subScreen, setSubScreen] = useState<SubScreen>(null);
   const [isMonthlyOpen, setIsMonthlyOpen] = useState(false);
   const [weeklyRetryCount, setWeeklyRetryCount] = useState(0);
@@ -123,30 +152,38 @@ export function MyPageScreen({
 
   useEffect(() => {
     if (profileGateway === undefined) {
+      setProfileLoadState(
+        hasLocalProfile
+          ? {status: 'ready'}
+          : {message: PROFILE_LOAD_ERROR_MESSAGE, status: 'error'},
+      );
       return;
     }
 
     let disposed = false;
+    setProfileLoadState({status: 'loading'});
     profileGateway
       .loadCurrentProfile()
       .then(remote => {
         if (!disposed) {
           setProfile(current => mergeUserProfile(current, remote));
+          setProfileLoadState({status: 'ready'});
         }
       })
       .catch(() => {
         if (!disposed) {
-          Alert.alert(
-            '프로필 정보를 불러오지 못했어요.',
-            '네트워크 연결을 확인하고 다시 시도해 주세요.',
-          );
+          setSubScreen(null);
+          setProfileLoadState({
+            message: PROFILE_LOAD_ERROR_MESSAGE,
+            status: 'error',
+          });
         }
       });
 
     return () => {
       disposed = true;
     };
-  }, [profileGateway]);
+  }, [hasLocalProfile, profileGateway, profileRetryCount]);
 
   useEffect(() => {
     const requestGeneration = ++weeklyRequestGenerationRef.current;
@@ -335,9 +372,14 @@ export function MyPageScreen({
         : imageChange.type === 'remove'
           ? null
           : undefined;
-    await profileGateway.updateCurrentProfile(
-      toApiProfileUpdate(nextProfile, profileImageUrl),
+    const update = toChangedApiProfileUpdate(
+      profile,
+      nextProfile,
+      profileImageUrl,
     );
+    if (Object.keys(update).length > 0) {
+      await profileGateway.updateCurrentProfile(update);
+    }
     setProfile({
       ...nextProfile,
       profileImageUrl:
@@ -354,6 +396,20 @@ export function MyPageScreen({
     }
     Alert.alert('로그아웃', '후속 작업에서 연결될 기능입니다.');
   };
+
+  if (profileLoadState.status === 'loading') {
+    return <ProfileLoadStateScreen onBack={onCloseProfile} />;
+  }
+
+  if (profileLoadState.status === 'error') {
+    return (
+      <ProfileLoadStateScreen
+        errorMessage={profileLoadState.message}
+        onBack={onCloseProfile}
+        onRetry={() => setProfileRetryCount(count => count + 1)}
+      />
+    );
+  }
 
   if (subScreen === 'edit') {
     return (

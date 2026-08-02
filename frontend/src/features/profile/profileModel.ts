@@ -1,4 +1,4 @@
-import type {UserProfile} from './api/profileApi';
+import type {ProfileUpdateInput, UserProfile} from './api/profileApi';
 import type {Gender, ProfileImageAsset} from './types';
 
 export const PROFILE_IMAGE_LIMITS = {
@@ -150,6 +150,44 @@ export function toApiProfileUpdate(
   if (profileImageUrl !== undefined) {
     input.profileImageUrl = profileImageUrl;
   }
+  return input;
+}
+
+export function toChangedApiProfileUpdate(
+  current: {
+    birthDate: string;
+    gender: Gender;
+    name: string;
+  },
+  next: {
+    birthDate: string;
+    gender: Gender;
+    name: string;
+  },
+  profileImageUrl?: string | null,
+): ProfileUpdateInput {
+  const input: ProfileUpdateInput = {};
+
+  if (next.name !== current.name) {
+    input.name = next.name;
+  }
+  if (next.gender !== current.gender) {
+    input.gender = next.gender === 'male' ? 'MALE' : 'FEMALE';
+  }
+  if (next.birthDate !== current.birthDate) {
+    const parsedBirthDate = parseDisplayDate(next.birthDate);
+    if (parsedBirthDate !== null) {
+      input.birthDate = toIsoDate(
+        parsedBirthDate.year,
+        parsedBirthDate.month,
+        parsedBirthDate.day,
+      );
+    }
+  }
+  if (profileImageUrl !== undefined) {
+    input.profileImageUrl = profileImageUrl;
+  }
+
   return input;
 }
 

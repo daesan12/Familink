@@ -10,6 +10,7 @@ import {
   parsePickedProfileImage,
   shiftMonth,
   toApiProfileUpdate,
+  toChangedApiProfileUpdate,
   toIsoDate,
 } from './profileModel';
 
@@ -75,6 +76,32 @@ test('프로필 이미지 변경이 없으면 PATCH에서 이미지 필드를 �
     'profileImageUrl',
     'https://cdn.example.com/profile.jpg',
   );
+});
+
+test('프로필 PATCH에는 사용자가 바꾼 필드만 포함한다', () => {
+  const current = {
+    birthDate: '1995.03.17',
+    gender: 'male' as const,
+    name: '기존 이름',
+  };
+
+  expect(
+    toChangedApiProfileUpdate(current, {
+      ...current,
+      name: '변경 이름',
+    }),
+  ).toEqual({name: '변경 이름'});
+  expect(
+    toChangedApiProfileUpdate(
+      current,
+      {...current, birthDate: '1996.04.18', gender: 'female'},
+      null,
+    ),
+  ).toEqual({
+    birthDate: '1996-04-18',
+    gender: 'FEMALE',
+    profileImageUrl: null,
+  });
 });
 
 test('calculates profile age using the Asia/Seoul business date', () => {
