@@ -188,6 +188,9 @@ export function GroupInfoScreen({
   const detailRequestVersion = useRef(0);
   const membersRequestVersion = useRef(0);
   const profileRequestVersion = useRef(0);
+  // 마지막으로 조회를 마친 그룹. 같은 그룹의 재조회는 기존 데이터를 유지한 채 갱신한다.
+  const lastLoadedMembersGroupId = useRef<string | null>(null);
+  const lastLoadedDetailGroupId = useRef<string | null>(null);
 
   // 하위 전체화면에 들어가면 하단 탭을 숨긴다(피드 상세·컴포저와 같은 방식).
   useEffect(() => {
@@ -206,13 +209,18 @@ export function GroupInfoScreen({
     let isActive = true;
     const requestVersion = membersRequestVersion.current + 1;
     membersRequestVersion.current = requestVersion;
-    setMembers(EMPTY_MEMBERS);
-    setMembersLoadState('loading');
+    // 같은 그룹의 재조회는 기존 목록을 보여준 채 갱신한다. 빈 목록 구간이 생기면
+    // 인원 수·관리 메뉴 분기가 잘못된 값으로 동작할 수 있다.
+    if (lastLoadedMembersGroupId.current !== currentGroup.id) {
+      setMembers(EMPTY_MEMBERS);
+      setMembersLoadState('loading');
+    }
     setMembersLoadError(null);
 
     membersLoader(currentGroup.id)
       .then(nextMembers => {
         if (isActive && membersRequestVersion.current === requestVersion) {
+          lastLoadedMembersGroupId.current = currentGroup.id;
           setMembers(nextMembers);
           setMembersLoadState('idle');
         }
@@ -340,10 +348,14 @@ export function GroupInfoScreen({
     let isActive = true;
     const requestVersion = detailRequestVersion.current + 1;
     detailRequestVersion.current = requestVersion;
-    setGroupDetail(null);
+    // 같은 그룹의 재조회는 기존 상세를 유지한 채 갱신한다.
+    if (lastLoadedDetailGroupId.current !== currentGroup.id) {
+      setGroupDetail(null);
+    }
     groupDetailLoader(currentGroup.id)
       .then(detail => {
         if (isActive && detailRequestVersion.current === requestVersion) {
+          lastLoadedDetailGroupId.current = currentGroup.id;
           setGroupDetail(detail);
         }
       })
@@ -500,6 +512,22 @@ export function GroupInfoScreen({
         {onPress: () => applyRoleSelection(member, role), text: '변경'},
       ],
     );
+  };
+
+  // 멤버십이 바뀔 수 있는 하위 화면. 복귀 시 구성원 목록·그룹 상세를 다시 조회해
+  // 승인·위임·내보내기 등 화면 밖에서 생긴 변경이 목록·인원 수·후보에 반영되게 한다.
+  const membershipSubScreens: readonly SubScreen[] = [
+    'joinApproval',
+    'changeManager',
+    'removeMember',
+  ];
+
+  const closeSubScreen = () => {
+    if (subScreen !== null && membershipSubScreens.includes(subScreen)) {
+      setMembersReloadCount(count => count + 1);
+      setDetailReloadCount(count => count + 1);
+    }
+    setSubScreen(null);
   };
 
   // 새 관리자로 위임한다. API 성공 후 로컬 목록의 관리자 표시를 옮기고 복귀한다.
@@ -686,7 +714,7 @@ export function GroupInfoScreen({
       <ChangeManagerScreen
         currentMemberId={viewerMemberId}
         members={members}
-        onBack={() => setSubScreen(null)}
+        onBack={closeSubScreen}
         onChangeManager={handleChangeManager}
       />
     );
@@ -697,7 +725,7 @@ export function GroupInfoScreen({
       <RemoveMemberScreen
         currentMemberId={viewerMemberId}
         members={members}
-        onBack={() => setSubScreen(null)}
+        onBack={closeSubScreen}
         onRemoveMember={handleRemoveMember}
       />
     );
@@ -710,7 +738,7 @@ export function GroupInfoScreen({
         isViewerManager={canManageRoles}
         managerName={resolveManagerName(members)}
         memberCount={resolvedMemberCount}
-        onBack={() => setSubScreen(null)}
+        onBack={closeSubScreen}
         onGoToChangeManager={() => setSubScreen('changeManager')}
         onLeaveGroup={handleLeaveGroup}
       />
@@ -721,7 +749,7 @@ export function GroupInfoScreen({
     return (
       <RenameGroupScreen
         currentName={resolvedGroupName}
-        onBack={() => setSubScreen(null)}
+        onBack={closeSubScreen}
         onRenameGroup={handleRenameGroup}
       />
     );
@@ -732,7 +760,7 @@ export function GroupInfoScreen({
       <GroupCodeScreen
         groupId={currentGroup.id}
         loader={inviteCodeLoader}
-        onBack={() => setSubScreen(null)}
+        onBack={closeSubScreen}
       />
     );
   }
@@ -742,7 +770,7 @@ export function GroupInfoScreen({
       <JoinApprovalScreen
         groupId={currentGroup.id}
         loader={joinRequestsLoader}
-        onBack={() => setSubScreen(null)}
+        onBack={closeSubScreen}
         onProcess={onProcessJoinRequest}
       />
     );

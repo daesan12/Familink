@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -67,6 +67,10 @@ export function AppShell({
     readonly string[]
   >([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  // 활성 탭을 다시 누르면 증가한다. 화면을 재마운트해 최신 데이터를 다시 조회하게 한다.
+  const [screenRefreshNonce, setScreenRefreshNonce] = useState(0);
+  // 직전 라우트. 알림 화면 복귀 시 배지 재조회를 건너뛰는 판단에 쓴다.
+  const previousRouteRef = useRef<AppRoute | null>(null);
   const [isRestoringGroup, setIsRestoringGroup] = useState(
     Boolean(groupStore && !initialGroupId)
   );
@@ -89,8 +93,17 @@ export function AppShell({
   }, [currentRole]);
 
   useEffect(() => {
+    const previousRoute = previousRouteRef.current;
+    previousRouteRef.current = resolvedRoute;
     if (notificationGateway === null) {
       setUnreadNotificationCount(0);
+      return;
+    }
+
+    // 배지는 피드 헤더에서만 표시하므로 피드 진입·재탭 시에만 다시 조회한다.
+    // 알림 화면에서 복귀할 때는 화면이 보고한 값을 유지한다(읽음 반영 전 값으로
+    // 되돌아가는 경쟁 방지 — 읽음 API가 아직 커밋되기 전일 수 있다).
+    if (resolvedRoute !== 'feed' || previousRoute === 'notifications') {
       return;
     }
 
@@ -107,7 +120,7 @@ export function AppShell({
     return () => {
       disposed = true;
     };
-  }, [currentUserId, notificationGateway]);
+  }, [currentUserId, notificationGateway, resolvedRoute, screenRefreshNonce]);
 
   useEffect(() => {
     if (initialGroupId || !groupStore) {
@@ -353,6 +366,7 @@ export function AppShell({
       <View style={styles.content}>
         {Screen ? (
           <Screen
+            key={`${resolvedRoute}:${screenRefreshNonce}`}
             apiBaseUrl={apiBaseUrl}
             authSession={authSession}
             accessToken={accessToken}
@@ -396,6 +410,15 @@ export function AppShell({
           onSelect={route => {
             setIsScreenHeaderVisible(true);
             setOpenPostId(null);
+            // 같은 화면의 탭을 다시 누르면 재마운트해 최신 데이터를 다시 조회한다.
+            // 아카이브처럼 탭과 화면이 다른 상태에서는 일반 이동으로 처리한다.
+            if (route === resolvedRoute) {
+              // AI 전화는 재마운트하면 네이티브 통화 선택 상태를 잃으므로 제외한다.
+              if (route !== 'aiCall') {
+                setScreenRefreshNonce(nonce => nonce + 1);
+              }
+              return;
+            }
             setActiveRoute(route);
           }}
           role={currentGroup.role}
