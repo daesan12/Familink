@@ -31,19 +31,140 @@ internal data class AiCallCaptionUpdate(
 
 internal class AiCallConnectionException(message: String) : IOException(message)
 
+internal interface AiCallMediaSession {
+  suspend fun createOffer(): String
+
+  suspend fun setRemoteAnswer(sdpAnswer: String)
+
+  suspend fun awaitConnected(timeoutMillis: Long = 20_000L)
+
+  fun setMicrophoneEnabled(enabled: Boolean)
+
+  fun setSpeakerEnabled(enabled: Boolean)
+
+  fun close()
+}
+
+internal class AiCallConnectionStateController(
+    private val handler: Handler,
+    private val disconnectGracePeriodMillis: Long = DISCONNECT_GRACE_PERIOD_MILLIS,
+    private val onConnectionLost: () -> Unit,
+) {
+
+  private val stateLock = Any()
+  private var hasConnected = false
+  private var isClosed = false
+  private var isConnectionLostNotified = false
+  private var pendingDisconnect: Runnable? = null
+
+  private val connectionLostDispatch =
+      Runnable {
+        val shouldNotify = synchronized(stateLock) { !isClosed && isConnectionLostNotified }
+        if (shouldNotify) {
+          onConnectionLost()
+        }
+      }
+
+  fun onConnected() {
+    val pending =
+        synchronized(stateLock) {
+          if (isClosed) {
+            return
+          }
+          hasConnected = true
+          pendingDisconnect.also { pendingDisconnect = null }
+        }
+    pending?.let(handler::removeCallbacks)
+  }
+
+  fun onDisconnected() {
+    val pending =
+        synchronized(stateLock) {
+          if (isClosed || !hasConnected || isConnectionLostNotified || pendingDisconnect != null) {
+            return
+          }
+          object : Runnable {
+            override fun run() {
+              onDisconnectGraceExpired(this)
+            }
+          }.also { pendingDisconnect = it }
+        }
+    handler.postDelayed(pending, disconnectGracePeriodMillis)
+  }
+
+  fun onTerminalFailure() {
+    val pending =
+        synchronized(stateLock) {
+          pendingDisconnect.also { pendingDisconnect = null }
+        }
+    pending?.let(handler::removeCallbacks)
+    notifyConnectionLostIfNeeded()
+  }
+
+  fun close() {
+    val pending =
+        synchronized(stateLock) {
+          if (isClosed) {
+            return
+          }
+          isClosed = true
+          pendingDisconnect.also { pendingDisconnect = null }
+        }
+    pending?.let(handler::removeCallbacks)
+    handler.removeCallbacks(connectionLostDispatch)
+  }
+
+  private fun onDisconnectGraceExpired(task: Runnable) {
+    val shouldNotify =
+        synchronized(stateLock) {
+          if (pendingDisconnect !== task) {
+            false
+          } else {
+            pendingDisconnect = null
+            true
+          }
+        }
+    if (shouldNotify) {
+      notifyConnectionLostIfNeeded()
+    }
+  }
+
+  private fun notifyConnectionLostIfNeeded() {
+    val shouldDispatch =
+        synchronized(stateLock) {
+          if (isClosed || !hasConnected || isConnectionLostNotified) {
+            false
+          } else {
+            isConnectionLostNotified = true
+            true
+          }
+        }
+    if (shouldDispatch) {
+      handler.post(connectionLostDispatch)
+    }
+  }
+
+  companion object {
+    internal const val DISCONNECT_GRACE_PERIOD_MILLIS = 5_000L
+  }
+}
+
 internal class AiCallWebRtcSession(
     context: Context,
     private val onCaptionUpdate: (AiCallCaptionUpdate) -> Unit,
     private val onConnectionLost: () -> Unit,
-) {
+) : AiCallMediaSession {
 
   private val appContext = context.applicationContext
   private val mainHandler = Handler(Looper.getMainLooper())
   private val connectionReady = CompletableDeferred<Unit>()
   private val iceGatheringReady = CompletableDeferred<Unit>()
-  private val connectionLostNotified = AtomicBoolean(false)
   private val closed = AtomicBoolean(false)
-  private var hasConnected = false
+  private val connectionStateController =
+      AiCallConnectionStateController(
+          handler = mainHandler,
+          onConnectionLost = onConnectionLost,
+      )
   private var audioManager: AudioManager? = null
   private var previousAudioMode: Int? = null
   private var previousSpeakerphoneOn: Boolean? = null
@@ -55,6 +176,15 @@ internal class AiCallWebRtcSession(
   private var dataChannel: DataChannel? = null
 
   init {
+    try {
+      initialize()
+    } catch (exception: Throwable) {
+      close()
+      throw exception
+    }
+  }
+
+  private fun initialize() {
     PeerConnectionFactory.initialize(
         PeerConnectionFactory.InitializationOptions.builder(appContext)
             .createInitializationOptions()
@@ -90,7 +220,7 @@ internal class AiCallWebRtcSession(
         ?: error("WebRTC data channel was not created")
   }
 
-  suspend fun createOffer(): String {
+  override suspend fun createOffer(): String {
     val connection = peerConnection ?: error("WebRTC peer connection is unavailable")
     val offer =
         awaitSessionDescription { observer ->
@@ -101,7 +231,7 @@ internal class AiCallWebRtcSession(
     return connection.localDescription?.description ?: offer.description
   }
 
-  suspend fun setRemoteAnswer(sdpAnswer: String) {
+  override suspend fun setRemoteAnswer(sdpAnswer: String) {
     val connection = peerConnection ?: error("WebRTC peer connection is unavailable")
     if (sdpAnswer.isBlank()) {
       throw AiCallConnectionException("The server returned an empty SDP answer.")
@@ -114,7 +244,7 @@ internal class AiCallWebRtcSession(
     }
   }
 
-  suspend fun awaitConnected(timeoutMillis: Long = CONNECTION_TIMEOUT_MILLIS) {
+  override suspend fun awaitConnected(timeoutMillis: Long) {
     try {
       withTimeout(timeoutMillis) { connectionReady.await() }
     } catch (exception: kotlinx.coroutines.TimeoutCancellationException) {
@@ -122,18 +252,19 @@ internal class AiCallWebRtcSession(
     }
   }
 
-  fun setMicrophoneEnabled(enabled: Boolean) {
+  override fun setMicrophoneEnabled(enabled: Boolean) {
     audioTrack?.setEnabled(enabled)
   }
 
-  fun setSpeakerEnabled(enabled: Boolean) {
+  override fun setSpeakerEnabled(enabled: Boolean) {
     audioManager?.isSpeakerphoneOn = enabled
   }
 
-  fun close() {
+  override fun close() {
     if (!closed.compareAndSet(false, true)) {
       return
     }
+    connectionStateController.close()
     if (!connectionReady.isCompleted) {
       connectionReady.completeExceptionally(AiCallConnectionException("WebRTC call closed."))
     }
@@ -166,10 +297,12 @@ internal class AiCallWebRtcSession(
             PeerConnection.IceConnectionState.COMPLETED,
             -> markConnected()
 
-            PeerConnection.IceConnectionState.FAILED,
             PeerConnection.IceConnectionState.DISCONNECTED,
+            -> connectionStateController.onDisconnected()
+
+            PeerConnection.IceConnectionState.FAILED,
             PeerConnection.IceConnectionState.CLOSED,
-            -> notifyConnectionLostIfNeeded()
+            -> connectionStateController.onTerminalFailure()
 
             else -> Unit
           }
@@ -207,10 +340,12 @@ internal class AiCallWebRtcSession(
           when (newState) {
             PeerConnection.PeerConnectionState.CONNECTED -> markConnected()
 
-            PeerConnection.PeerConnectionState.FAILED,
             PeerConnection.PeerConnectionState.DISCONNECTED,
+            -> connectionStateController.onDisconnected()
+
+            PeerConnection.PeerConnectionState.FAILED,
             PeerConnection.PeerConnectionState.CLOSED,
-            -> notifyConnectionLostIfNeeded()
+            -> connectionStateController.onTerminalFailure()
 
             else -> Unit
           }
@@ -260,17 +395,10 @@ internal class AiCallWebRtcSession(
     if (closed.get()) {
       return
     }
-    hasConnected = true
+    connectionStateController.onConnected()
     if (!connectionReady.isCompleted) {
       connectionReady.complete(Unit)
     }
-  }
-
-  private fun notifyConnectionLostIfNeeded() {
-    if (closed.get() || !hasConnected || !connectionLostNotified.compareAndSet(false, true)) {
-      return
-    }
-    mainHandler.post(onConnectionLost)
   }
 
   private suspend fun awaitIceGatheringComplete() {
@@ -371,6 +499,5 @@ internal class AiCallWebRtcSession(
     private const val DATA_CHANNEL_LABEL = "oai-events"
     private const val DEFAULT_STUN_SERVER = "stun:stun.l.google.com:19302"
     private const val ICE_GATHERING_TIMEOUT_MILLIS = 10_000L
-    private const val CONNECTION_TIMEOUT_MILLIS = 20_000L
   }
 }
