@@ -12,8 +12,12 @@
 
 ## 확정된 동작
 
-1. 통화 종료 후 Spring Boot가 저장된 전사를 기반으로 `Gemini 3.5 Flash`를 호출해 건별 리포트를 비동기로 생성한다.
-2. `COMPLETED` 통화는 건별 리포트 생성 대상이다. `INCOMPLETE` 통화는 전사가 충분할 때만 생성하며, 충분함의 기준은 미결정이다. `CANCELLED`·`FAILED` 통화에는 생성하지 않는다.
+1. 통화 종료 후 Spring Boot가 finalization된 완전한 전사를 기반으로
+   `Gemini 3.5 Flash`를 호출해 건별 리포트를 비동기로 생성한다.
+2. `COMPLETED`이면서 전사 무결성이 `COMPLETE`이고 finalization된 통화만
+   현재 건별 리포트 생성 대상이다. `INCOMPLETE` 통화는 전사가 충분하고
+   무결성이 `COMPLETE`일 때만 대상이 될 수 있으며, 충분함의 기준이 미결정인
+   동안 자동 생성하지 않는다. `CANCELLED`·`FAILED` 통화에는 생성하지 않는다.
 3. 건별 리포트에는 최대 100자의 요약, 감정 대분류·소분류, nullable인 최대 100자의 `guardian_message`를 저장한다.
 4. 같은 통화의 건별 리포트가 이미 있으면 재생성하지 않는다.
 5. Spring Scheduler는 `Asia/Seoul` 기준 매일 22시에 해당 일일 리포트 기준 구간의 건별 리포트를 조회한다.
@@ -50,6 +54,23 @@
     claim의 입력 버전을 덮어쓰지 않는다. 이는 실패 자동 재시도가 아니라
     닫힌 리포트 구간의 입력 일관성 보정이다. 같은 키에 동시에 하나의 Gemini
     호출만 허용한다.
+21. 건별 리포트는 finalization 트랜잭션에서 생성된 durable generation
+    request를 사용한다. 상태는 `PENDING`, `CLAIMED`, `GEMINI_FAILED`,
+    `DONE`이며 세션마다 하나만 존재한다. queue 거부는 `PENDING`을 유지하고,
+    worker는 90초 single-flight claim 뒤에만 Gemini를 호출한다.
+22. 1분 주기 복구 작업은 batch 20으로 `PENDING`과 만료 `CLAIMED`만 다시
+    접수한다. 명시적인 Gemini 실패인 `GEMINI_FAILED`와 성공한 `DONE`은
+    `PENDING`으로 되돌리지 않는다. claim owner가 결과 기록 전에 종료된 경우의
+    외부 호출은 at-least-once일 수 있지만, 유효 claim token과
+    `call_reports.call_session_id` Unique로 저장 결과는 한 건만 허용한다.
+23. target claim과 결과 저장은 모두 세션 잠금 뒤 generation request 잠금
+    순서를 사용한다. 호출 전후에 call status, 전사 무결성 `COMPLETE`,
+    `transcript_finalized_at`, 미해결 전사 원장 없음과 입력
+    `transcript_revision`을 재검사한다. 하나라도 달라지면 Gemini 결과를 버리고
+    리포트·알림을 저장하지 않는다.
+24. `call_reports` DB 쓰기 자체도 같은 무결성·finalization·미해결 원장 조건을
+    강제한다. 따라서 롤링 배포 중 새 컬럼을 읽지 않는 이전 버전 인스턴스도
+    부분 전사로 리포트를 저장할 수 없다.
 
 건별 감정 대분류 enum은 `ANGER`, `SADNESS`, `ANXIETY`, `HURT`, `EMBARRASSMENT`, `JOY`, `NEUTRAL`이다. 한국어 표시명과 이미지 매핑은 미결정이다.
 
@@ -58,8 +79,10 @@
 - 해당 리포트 구간에 통화가 없으면 그 기준일의 일일 리포트를 만들지 않는다. 이전에 생성된 일일 리포트가 있으면 조회 화면 상단에 가장 최신 일일 리포트를 유지하고 당일 건별 목록만 빈 상태로 표시한다. 생성된 일일 리포트가 전혀 없을 때만 전체 리포트 빈 상태를 표시한다.
 - 건별 리포트가 아직 준비되지 않았으면 [API 계약](../contracts/API.md)의 준비 전 오류를 사용한다.
 - Gemini 호출이 실패하거나 30초 총 제한시간을 넘으면 성공 리포트를 저장하지
-  않는다. 이번 계약은 건별·일일 리포트의 자동 재시도를 추가하지 않으며,
-  만료 claim 정리는 새 실행의 single-flight 복구만 허용한다.
+  않는다. 건별 요청은 `GEMINI_FAILED`로 확정하고 자동 재시도하지 않는다.
+  `PENDING`·만료 `CLAIMED` 복구는 Gemini 실패 재시도가 아니라 실행 접수·
+  소유권 유실 복구이며, 일일 리포트의 만료 claim 정리도 기존 single-flight
+  복구만 허용한다.
 
 ## 구현 규칙
 
@@ -72,7 +95,8 @@
   - 요청·응답·명시 오류의 상세는 [API 계약](../contracts/API.md)을 따른다.
 - 데이터:
   - 관련 엔티티는 `call_reports`, `daily_reports`,
-    `daily_report_generation_claims`, `call_sessions`, `call_transcripts`다.
+    `daily_report_generation_claims`, `call_report_generation_requests`,
+    `call_sessions`, `call_transcript_events`, `call_transcripts`다.
   - 모든 읽기·쓰기는 Spring Boot가 소유한다.
   - 동일 통화 건별 리포트와 동일 피보호자·기준일 일일 리포트의 중복 생성을 DB 제약과 멱등 처리로 방지한다.
 - 알림:
@@ -87,7 +111,7 @@
   - 대상·claim·입력 조회와 결과 저장은 짧은 DB 트랜잭션으로 나누고 Gemini
     호출 중에는 DB 트랜잭션을 유지하지 않는다.
   - 공용 AI executor의 대기열이 가득 차면 무기한 기다리지 않는다. 건별·일일
-    리포트에는 이 티켓에서 새로운 자동 재시도 API나 관리 화면을 추가하지 않는다.
+    리포트에는 이 티켓에서 새로운 수동 재시도 API나 관리 화면을 추가하지 않는다.
 
 ## 인수 조건
 
@@ -155,6 +179,22 @@
 - Then: 실행 중인 Gemini 호출은 30초 안에 실패하고 실행 자원을 반환한다.
   executor가 포화된 새 작업은 Gemini 호출과 DB claim 전에 즉시 거부·기록하며,
   대기열은 20개를 넘겨 무기한 증가하지 않는다.
+
+### AC-011
+
+- Given: 전사 원장에 `RESERVED`·`READY`·`FAILED` 항목이 있거나 전사 무결성이
+  `COMPLETE`가 아닌 종료 통화다.
+- When: 건별 리포트 target 선택 또는 결과 저장이 실행된다.
+- Then: Gemini 호출 또는 `call_reports` 저장이 수행되지 않으며 부분 전사
+  리포트와 알림이 생성되지 않는다.
+
+### AC-012
+
+- Given: 건별 리포트 generation request가 `PENDING`이거나 claim owner 종료로
+  90초가 지난 `CLAIMED`다.
+- When: 1분 주기 복구 작업이 최대 20건을 다시 접수한다.
+- Then: 최신 전사 revision의 유효 claim만 결과를 저장하고, 동시·지연 실행이
+  있더라도 건별 리포트와 생성 알림은 각각 한 번만 저장된다.
 
 ## 미결정 사항
 

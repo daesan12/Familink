@@ -197,15 +197,17 @@ class DailyReportGenerationIntegrationTest extends IntegrationTest {
 	private Long insertSession(Fixture fixture, CallStatus status, Instant endedAt) {
 		return jdbcTemplate.queryForObject("""
 			INSERT INTO call_sessions (
-				group_id, care_receiver_member_id, persona_id, status, started_at, ended_at
+				group_id, care_receiver_member_id, persona_id, status, started_at, ended_at,
+				transcript_integrity_status, transcript_finalized_at
 			)
-			VALUES (?, ?, 1, CAST(? AS call_status), ?, ?)
+			VALUES (?, ?, 1, CAST(? AS call_status), ?, ?, 'COMPLETE', ?)
 			RETURNING id
 			""", Long.class,
 			fixture.groupId(),
 			fixture.memberId(),
 			status.name(),
 			Timestamp.from(endedAt.minusSeconds(60)),
+			Timestamp.from(endedAt),
 			Timestamp.from(endedAt));
 	}
 

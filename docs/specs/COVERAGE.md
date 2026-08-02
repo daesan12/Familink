@@ -45,10 +45,10 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-014 피보호자 관심사 입력 및 대화 반영 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 태그 목록은 미결정 |
 | 요구사항 | REQ-015 가족 게시글 기반 AI 대화 | [피드](./domains/FEED_AND_MEDIA.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 텍스트 모델·품질 기준·대체 모델은 미결정 유지 |
 | 요구사항 | REQ-016 장기 개인화 대화 기억 | [AI 통화](./domains/AI_CALL.md) | 반영·미결정 유지 | MVP 제외, 확장 정책 미결정 |
-| 요구사항 | REQ-017 통화 건별 요약 리포트 | [리포트](./domains/REPORTS.md) | 반영·확정 |  |
+| 요구사항 | REQ-017 통화 건별 요약 리포트 | [리포트](./domains/REPORTS.md) | 반영·확정 | 전사 무결성 finalization gate·durable generation request |
 | 요구사항 | REQ-018 22시 일일 리포트 생성 | [리포트](./domains/REPORTS.md) | 반영·확정 | Spring Scheduler `Asia/Seoul` 22시, UTC 저장; `report_date=D`는 `[D-1 22:00, D 22:00)` 구간 |
 | 요구사항 | REQ-019 피보호자별 리포트 조회 | [리포트](./domains/REPORTS.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 | 전체 최신 `latestReportDate`, 좌우 넘김, 피보호자 수만큼 위치 표시 전용 인디케이터, 구성원 필터 없음 |
-| 요구사항 | REQ-020 통화 녹음 원본 미저장 및 전체 전문 미제공 | [공통](./COMMON.md), [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영·확정 |  |
+| 요구사항 | REQ-020 통화 녹음 원본 미저장 및 전체 전문 미제공 | [공통](./COMMON.md), [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영·확정 | 전사 원장 payload도 API·로그 비노출 |
 | 요구사항 | REQ-021 가족 피드 게시글 관리 | [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 |  |
 | 요구사항 | REQ-022 게시글 미디어 구성 제한 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
 | 요구사항 | REQ-023 게시글 반응·댓글·게시 알림 | [피드](./domains/FEED_AND_MEDIA.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 새 게시글은 작성자를 제외한 그룹 활성 구성원, 댓글·반응은 본인 행동을 제외한 게시글 작성자에게 알림; 대댓글·댓글 반응 없음 |
@@ -85,7 +85,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 |---|---|---|---|---|
 | 기능 명세 | FN-009 게시글 AI 분석 및 저장 | [피드](./domains/FEED_AND_MEDIA.md), [API](./contracts/API.md), [데이터](./contracts/DATA_MODEL.md) | 반영·확정 | Spring Scheduler·내부 서비스로 수행 |
 | 기능 명세 | FN-010 AI 통화 세션 생성 | [AI 통화](./domains/AI_CALL.md), [API](./contracts/API.md) | 반영·확정 | Kotlin이 Spring Boot API 호출 |
-| 기능 명세 | FN-011 건별 통화 리포트 생성 및 저장 | [리포트](./domains/REPORTS.md), [API](./contracts/API.md) | 반영·상위 결정 적용 | Spring Boot가 생성·저장 |
+| 기능 명세 | FN-011 건별 통화 리포트 생성 및 저장 | [리포트](./domains/REPORTS.md), [API](./contracts/API.md) | 반영·상위 결정 적용 | 무결성 COMPLETE·revision 재검증·single-flight 저장 |
 | 기능 명세 | FN-012 22시 일일 리포트 생성 및 저장 | [리포트](./domains/REPORTS.md), [API](./contracts/API.md) | 반영·상위 결정 적용 | Spring Scheduler `Asia/Seoul` 22시, UTC 저장 |
 | 기능 명세 | FN-013 특정 날짜 전체 일정 조회 Tool | [AI 통화](./domains/AI_CALL.md), [일정](./domains/CALENDAR.md) | 반영 | Tool 입력 `date_expression`; 서버가 `Asia/Seoul` 기준 날짜 해석·조회 |
 | 기능 명세 | FN-014 피드 다중 사진 가로 넘김 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영 |  |
@@ -235,7 +235,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-USERS-002 내 프로필 수정 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·일부 확정 | 프로필 이미지 업로드·유지·삭제·교체 규칙 확정 |
 | 활성 API | API-USERS-003 회원 탈퇴 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md), [알림](./domains/NOTIFICATIONS.md) | 반영·일부 확정 | 모든 기기 토큰을 탈퇴 트랜잭션에서 비활성화 |
 
-## 최신 확정 ERD 현행 테이블 22개
+## 최신 확정 ERD 현행 테이블 24개
 
 | 원본 종류 | ID·이름 | 반영 문서 | 상태 | 비고 |
 |---|---|---|---|---|
@@ -252,8 +252,10 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | ERD | `post_analyses` | [데이터](./contracts/DATA_MODEL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영 | Spring Boot 쓰기 |
 | ERD | `calendar_events` | [데이터](./contracts/DATA_MODEL.md), [일정](./domains/CALENDAR.md) | 반영 |  |
 | ERD | `event_participants` | [데이터](./contracts/DATA_MODEL.md), [일정](./domains/CALENDAR.md) | 반영 |  |
-| ERD | `call_sessions` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영 | Spring Boot 쓰기·`lease_expires_at`·stale 활성 세션 복구 |
-| ERD | `call_transcripts` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영 | Spring Boot 쓰기 |
+| ERD | `call_sessions` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | lease·전사 무결성·revision·finalization |
+| ERD | `call_transcript_events` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | RESERVED→READY→APPLIED/FAILED 영속 원장 |
+| ERD | `call_transcripts` | [데이터](./contracts/DATA_MODEL.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 세션별 item·sequence Unique |
+| ERD | `call_report_generation_requests` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영·확정 | PENDING·90초 claim·실행 유실 복구 |
 | ERD | `call_reports` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring Boot 쓰기 |
 | ERD | `daily_reports` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영 | Spring Boot 쓰기 |
 | ERD | `daily_report_generation_claims` | [데이터](./contracts/DATA_MODEL.md), [리포트](./domains/REPORTS.md) | 반영·확정 | 일일 리포트 90초 single-flight claim |

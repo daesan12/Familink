@@ -11,10 +11,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.LongConsumer;
+import java.util.function.BiConsumer;
 
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -55,7 +57,7 @@ public class SidebandSessionManager {
 		Long sessionId,
 		String callId,
 		Map<String, AiCallPersonReference> personReferences,
-		LongConsumer unexpectedDisconnectHandler
+		BiConsumer<Long, Boolean> unexpectedDisconnectHandler
 	) {
 		if (!StringUtils.hasText(properties.getApiKey())) {
 			throw new OpenAiRealtimeException("OPENAI_API_KEY가 설정되지 않았습니다.");
@@ -118,23 +120,25 @@ public class SidebandSessionManager {
 		return managedSocket.callId();
 	}
 
-	public void finishClose(Long sessionId) {
+	public boolean finishClose(Long sessionId) {
 		ManagedSocket managedSocket = sessions.remove(sessionId);
 		if (managedSocket == null) {
-			return;
+			return false;
 		}
-		managedSocket.awaitRemoteClose();
+		boolean drained = managedSocket.awaitRemoteClose();
+		boolean transcriptHealthy = !managedSocket.transcriptHandler.hasIntegrityFailure();
 		managedSocket.close();
+		return drained && transcriptHealthy;
 	}
 
 	private final class ManagedSocket implements WebSocket.Listener {
 
 		private final String callId;
-		private final LongConsumer unexpectedDisconnectHandler;
+		private final BiConsumer<Long, Boolean> unexpectedDisconnectHandler;
 		private final AtomicBoolean closedByServer = new AtomicBoolean();
 		private final AtomicBoolean closeExpected = new AtomicBoolean();
 		private final AtomicBoolean disconnected = new AtomicBoolean();
-		private final CompletableFuture<Void> remoteCloseSignal = new CompletableFuture<>();
+		private final CompletableFuture<Boolean> remoteCloseSignal = new CompletableFuture<>();
 		private final Long sessionId;
 		private final SidebandTranscriptHandler transcriptHandler;
 		private final SidebandToolHandler toolHandler;
@@ -144,7 +148,7 @@ public class SidebandSessionManager {
 			Long sessionId,
 			String callId,
 			Map<String, AiCallPersonReference> personReferences,
-			LongConsumer unexpectedDisconnectHandler
+			BiConsumer<Long, Boolean> unexpectedDisconnectHandler
 		) {
 			this.sessionId = sessionId;
 			this.callId = callId;
@@ -179,12 +183,15 @@ public class SidebandSessionManager {
 			closeExpected.set(true);
 		}
 
-		private void awaitRemoteClose() {
-			remoteCloseSignal.completeOnTimeout(
-				null,
-				FINAL_EVENT_DRAIN_TIMEOUT_SECONDS,
-				TimeUnit.SECONDS
-			).join();
+		private boolean awaitRemoteClose() {
+			try {
+				return remoteCloseSignal.get(FINAL_EVENT_DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+			} catch (InterruptedException exception) {
+				Thread.currentThread().interrupt();
+				return false;
+			} catch (ExecutionException | TimeoutException exception) {
+				return false;
+			}
 		}
 
 		private void close() {
@@ -222,7 +229,7 @@ public class SidebandSessionManager {
 			}
 			return sendStage.handle((socket, error) -> {
 				if (error != null) {
-					handleUnexpectedDisconnect();
+					handleDisconnect(false);
 				} else if (!closedByServer.get() && !disconnected.get()) {
 					webSocket.request(1);
 				}
@@ -238,26 +245,29 @@ public class SidebandSessionManager {
 
 		@Override
 		public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-			handleUnexpectedDisconnect();
+			handleDisconnect(statusCode == WebSocket.NORMAL_CLOSURE);
 			return null;
 		}
 
 		@Override
 		public void onError(WebSocket webSocket, Throwable error) {
-			handleUnexpectedDisconnect();
+			handleDisconnect(false);
 		}
 
-		private void handleUnexpectedDisconnect() {
+		private void handleDisconnect(boolean remoteCloseObserved) {
 			disconnected.set(true);
 			transcriptHandler.close();
 			toolHandler.close();
-			remoteCloseSignal.complete(null);
+			remoteCloseSignal.complete(remoteCloseObserved);
 			if (closedByServer.get() || closeExpected.get()) {
 				return;
 			}
 			Long currentSessionId = sessionId;
 			if (currentSessionId != null && sessions.remove(currentSessionId, this)) {
-				unexpectedDisconnectHandler.accept(currentSessionId);
+				unexpectedDisconnectHandler.accept(
+					currentSessionId,
+					remoteCloseObserved && !transcriptHandler.hasIntegrityFailure()
+				);
 			}
 		}
 	}

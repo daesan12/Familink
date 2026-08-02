@@ -61,6 +61,14 @@ app:
     lease-duration: 90s
     fixed-delay-ms: 30000
     initial-delay-ms: 30000
+  transcript-recovery:
+    fixed-delay-ms: 60000
+    initial-delay-ms: 60000
+    cleanup-delay-ms: 3600000
+    cleanup-initial-delay-ms: 3600000
+  call-report-generation:
+    recovery-delay-ms: 60000
+    recovery-initial-delay-ms: 60000
   push:
     enabled: ${PUSH_ENABLED:false}
   media:

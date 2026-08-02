@@ -1,7 +1,6 @@
 package com.ssafy.s15p11b104.domain.call.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -22,7 +21,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.s15p11b104.domain.call.dto.CallTerminationType;
 import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
-import com.ssafy.s15p11b104.domain.call.report.CallReportAnalysisException;
 import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationService;
 import com.ssafy.s15p11b104.global.ai.gemini.GeminiClient;
 import com.ssafy.s15p11b104.global.ai.gemini.GeminiGenerationRequest;
@@ -75,6 +73,7 @@ class CallReportGenerationIntegrationTest extends IntegrationTest {
 		Fixture fixture = insertFixture(CallStatus.IN_PROGRESS);
 		when(callActorResolver.resolve()).thenReturn(new CallActor(fixture.memberId()));
 		when(sidebandSessionManager.prepareClose(fixture.callSessionId())).thenReturn("call_report_test");
+		when(sidebandSessionManager.finishClose(fixture.callSessionId())).thenReturn(true);
 		when(geminiClient.generate(any())).thenReturn("""
 			{
 			  "summary":"시장에 다녀온 이야기와 가족에 대한 그리움을 나눴습니다.",
@@ -102,6 +101,26 @@ class CallReportGenerationIntegrationTest extends IntegrationTest {
 			String.class,
 			fixture.callSessionId()
 		)).isEqualTo("COMPLETED");
+		assertThat(jdbcTemplate.queryForMap(
+			"""
+				SELECT transcript_integrity_status::text AS integrity_status,
+					transcript_finalized_at IS NOT NULL AS finalized
+				FROM call_sessions
+				WHERE id = ?
+				""",
+			fixture.callSessionId()
+		)).containsEntry("integrity_status", "COMPLETE")
+			.containsEntry("finalized", true);
+		assertThat(jdbcTemplate.query(
+			"""
+				SELECT status::text
+				FROM call_transcript_events
+				WHERE call_session_id = ?
+				ORDER BY sequence
+				""",
+			(resultSet, rowNumber) -> resultSet.getString(1),
+			fixture.callSessionId()
+		)).containsExactly("APPLIED", "APPLIED");
 		assertThat(jdbcTemplate.query(
 			"""
 				SELECT speaker::text, content
@@ -120,6 +139,11 @@ class CallReportGenerationIntegrationTest extends IntegrationTest {
 			Integer.class,
 			fixture.callSessionId()
 		)).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject(
+			"SELECT status::text FROM call_report_generation_requests WHERE call_session_id = ?",
+			String.class,
+			fixture.callSessionId()
+		)).isEqualTo("DONE");
 		assertThat(jdbcTemplate.queryForMap(
 			"""
 				SELECT summary, emotion_category::text, emotion_subcategory, guardian_message
@@ -180,16 +204,27 @@ class CallReportGenerationIntegrationTest extends IntegrationTest {
 			1,
 			"failure-user-1"
 		);
+		assertThat(callTranscriptService.finalizeSession(fixture.callSessionId(), true)).isTrue();
 		when(geminiClient.generate(any())).thenThrow(new IllegalStateException("upstream test-secret"));
 
-		assertThatThrownBy(() -> callReportGenerationService.generate(fixture.callSessionId()))
-			.isInstanceOf(CallReportAnalysisException.class)
-			.hasMessageNotContaining("test-secret");
+		callReportGenerationService.generate(fixture.callSessionId());
+
 		assertThat(jdbcTemplate.queryForObject(
 			"SELECT COUNT(*) FROM call_reports WHERE call_session_id = ?",
 			Integer.class,
 			fixture.callSessionId()
 		)).isZero();
+		assertThat(jdbcTemplate.queryForMap(
+			"""
+				SELECT status::text AS status, last_failure_code,
+					last_failed_at IS NOT NULL AS failed_at_recorded
+				FROM call_report_generation_requests
+				WHERE call_session_id = ?
+				""",
+			fixture.callSessionId()
+		)).containsEntry("status", "GEMINI_FAILED")
+			.containsEntry("last_failure_code", "ANALYSIS_FAILED")
+			.containsEntry("failed_at_recorded", true);
 	}
 
 	private Fixture insertFixture(CallStatus status) {

@@ -484,6 +484,7 @@ class ReportApiTest extends IntegrationTest {
 		CallSession session = newSessionFor(careReceiverMemberId);
 		session.markConnected(endedAt.minusSeconds(300));
 		session.endByUser(endedAt);
+		session.finalizeTranscript(endedAt);
 		return saveSession(session);
 	}
 

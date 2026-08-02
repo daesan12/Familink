@@ -40,6 +40,14 @@ app:
   ai-execution:
     max-concurrency: ${AI_EXECUTOR_MAX_CONCURRENCY:2}
     queue-capacity: ${AI_EXECUTOR_QUEUE_CAPACITY:20}
+  transcript-recovery:
+    fixed-delay-ms: ${TRANSCRIPT_RECOVERY_DELAY_MS:60000}
+    initial-delay-ms: ${TRANSCRIPT_RECOVERY_INITIAL_DELAY_MS:60000}
+    cleanup-delay-ms: ${TRANSCRIPT_CLEANUP_DELAY_MS:3600000}
+    cleanup-initial-delay-ms: ${TRANSCRIPT_CLEANUP_INITIAL_DELAY_MS:3600000}
+  call-report-generation:
+    recovery-delay-ms: ${CALL_REPORT_RECOVERY_DELAY_MS:60000}
+    recovery-initial-delay-ms: ${CALL_REPORT_RECOVERY_INITIAL_DELAY_MS:60000}
   auth:
     secret: ${JWT_SECRET}
   push:

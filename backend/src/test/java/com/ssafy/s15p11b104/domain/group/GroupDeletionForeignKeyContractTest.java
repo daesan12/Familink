@@ -104,7 +104,9 @@ class GroupDeletionForeignKeyContractTest extends IntegrationTest {
 		foreignKey("post_reactions", "post_id", "posts", "CASCADE"),
 		foreignKey("post_analyses", "post_id", "posts", "CASCADE"),
 		foreignKey("event_participants", "event_id", "calendar_events", "CASCADE"),
+		foreignKey("call_transcript_events", "call_session_id", "call_sessions", "CASCADE"),
 		foreignKey("call_transcripts", "call_session_id", "call_sessions", "CASCADE"),
+		foreignKey("call_report_generation_requests", "call_session_id", "call_sessions", "CASCADE"),
 		foreignKey("call_reports", "call_session_id", "call_sessions", "CASCADE"),
 		foreignKey("notifications", "related_join_request_id", "group_join_requests", "SET NULL"),
 		foreignKey("notifications", "related_post_id", "posts", "SET NULL"),
@@ -255,9 +257,10 @@ class GroupDeletionForeignKeyContractTest extends IntegrationTest {
 		Long callSessionId = insertReturningId(
 			"""
 				INSERT INTO call_sessions (
-					group_id, care_receiver_member_id, persona_id, status
+					group_id, care_receiver_member_id, persona_id, status,
+					transcript_integrity_status, transcript_finalized_at
 				)
-				VALUES (?, ?, 1, 'COMPLETED')
+				VALUES (?, ?, 1, 'COMPLETED', 'COMPLETE', CURRENT_TIMESTAMP)
 				RETURNING id
 				""",
 			groupId,
@@ -268,6 +271,25 @@ class GroupDeletionForeignKeyContractTest extends IntegrationTest {
 					call_session_id, speaker, content, sequence
 				)
 				VALUES (?, 'USER', '안녕하세요', 1)
+			""",
+			callSessionId);
+		jdbcTemplate.update(
+			"""
+				INSERT INTO call_transcript_events (
+					call_session_id, openai_item_id, speaker, sequence, status,
+					content_hash, applied_at
+				)
+				VALUES (?, 'group-delete-item', 'USER', 1, 'APPLIED',
+					?, CURRENT_TIMESTAMP)
+				""",
+			callSessionId,
+			"0".repeat(64));
+		jdbcTemplate.update(
+			"""
+				INSERT INTO call_report_generation_requests (
+					call_session_id, status, input_revision
+				)
+				VALUES (?, 'DONE', 0)
 				""",
 			callSessionId);
 		Long callReportId = insertReturningId(
@@ -343,7 +365,9 @@ class GroupDeletionForeignKeyContractTest extends IntegrationTest {
 		assertThat(countRows("calendar_events")).isZero();
 		assertThat(countRows("event_participants")).isZero();
 		assertThat(countRows("call_sessions")).isZero();
+		assertThat(countRows("call_transcript_events")).isZero();
 		assertThat(countRows("call_transcripts")).isZero();
+		assertThat(countRows("call_report_generation_requests")).isZero();
 		assertThat(countRows("call_reports")).isZero();
 		assertThat(countRows("daily_reports")).isZero();
 		assertThat(countRows("daily_report_generation_claims")).isZero();

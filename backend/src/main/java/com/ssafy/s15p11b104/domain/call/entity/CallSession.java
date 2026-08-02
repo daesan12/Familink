@@ -47,6 +47,20 @@ public class CallSession extends CreatedAtEntity {
 	@Column(name = "lease_expires_at")
 	private Instant leaseExpiresAt;
 
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.NAMED_ENUM)
+	@Column(
+		name = "transcript_integrity_status",
+		nullable = false,
+		columnDefinition = "transcript_integrity_status")
+	private TranscriptIntegrityStatus transcriptIntegrityStatus;
+
+	@Column(name = "transcript_revision", nullable = false)
+	private long transcriptRevision;
+
+	@Column(name = "transcript_finalized_at")
+	private Instant transcriptFinalizedAt;
+
 	protected CallSession() {
 	}
 
@@ -55,6 +69,7 @@ public class CallSession extends CreatedAtEntity {
 		this.careReceiverMember = careReceiverMember;
 		this.personaId = personaId;
 		this.status = status;
+		this.transcriptIntegrityStatus = TranscriptIntegrityStatus.COLLECTING;
 	}
 
 	public FamilyGroup getGroup() {
@@ -83,6 +98,60 @@ public class CallSession extends CreatedAtEntity {
 
 	public Instant getLeaseExpiresAt() {
 		return leaseExpiresAt;
+	}
+
+	public TranscriptIntegrityStatus getTranscriptIntegrityStatus() {
+		return transcriptIntegrityStatus;
+	}
+
+	public long getTranscriptRevision() {
+		return transcriptRevision;
+	}
+
+	public Instant getTranscriptFinalizedAt() {
+		return transcriptFinalizedAt;
+	}
+
+	public boolean isTranscriptComplete() {
+		return transcriptIntegrityStatus == TranscriptIntegrityStatus.COMPLETE
+			&& transcriptFinalizedAt != null;
+	}
+
+	public boolean isTranscriptFinalized() {
+		return transcriptFinalizedAt != null;
+	}
+
+	public void recordTranscriptChange() {
+		transcriptRevision++;
+	}
+
+	public boolean finalizeTranscript(Instant finalizedAt) {
+		if (isTranscriptComplete()) {
+			return false;
+		}
+		transcriptIntegrityStatus = TranscriptIntegrityStatus.COMPLETE;
+		transcriptFinalizedAt = finalizedAt;
+		return true;
+	}
+
+	public boolean requireTranscriptReconciliation() {
+		if (transcriptIntegrityStatus != TranscriptIntegrityStatus.RECONCILIATION_REQUIRED
+			|| transcriptFinalizedAt != null) {
+			transcriptIntegrityStatus = TranscriptIntegrityStatus.RECONCILIATION_REQUIRED;
+			transcriptFinalizedAt = null;
+			return true;
+		}
+		return false;
+	}
+
+	public boolean requireTranscriptReconciliationAfterDrain(Instant finalizedAt) {
+		if (transcriptIntegrityStatus != TranscriptIntegrityStatus.RECONCILIATION_REQUIRED
+			|| transcriptFinalizedAt == null) {
+			transcriptIntegrityStatus = TranscriptIntegrityStatus.RECONCILIATION_REQUIRED;
+			transcriptFinalizedAt = finalizedAt;
+			return true;
+		}
+		return false;
 	}
 
 	public void renewLease(Instant expiresAt) {
