@@ -313,14 +313,57 @@ test('계약 필드로 회원가입하고 성공한 경우에만 완료 단계�
 
   await pressAsync(renderer, '다음');
 
-  expect(gateway.signup).toHaveBeenCalledWith({
-    birthDate: '1995-03-17',
-    gender: 'MALE',
-    loginId: 'CaseUser1',
-    name: '이경호',
-    password: 'password123',
-  });
+  expect(gateway.signup).toHaveBeenCalledWith(
+    {
+      birthDate: '1995-03-17',
+      gender: 'MALE',
+      loginId: 'CaseUser1',
+      name: '이경호',
+      password: 'password123',
+    },
+    expect.any(Object),
+  );
   expect(hasText(renderer, '회원가입이\n완료되었습니다!')).toBe(true);
+});
+
+test('회원가입 제출 중에는 뒤로가기를 잠그고 화면 종료 시 요청을 취소한다', async () => {
+  const submission = deferred<SignupResult>();
+  const gateway = createGateway();
+  gateway.signup.mockReset().mockReturnValueOnce(submission.promise);
+  const onCancel = jest.fn();
+  let hardwareBackHandler: (() => boolean) | undefined;
+  const addEventListener = jest
+    .spyOn(BackHandler, 'addEventListener')
+    .mockImplementation((_event, handler) => {
+      hardwareBackHandler = () => handler({} as never) === true;
+      return {remove: jest.fn()};
+    });
+  const {renderer} = render(gateway, jest.fn(), onCancel);
+  await advanceToGender(renderer);
+
+  press(renderer, '다음');
+  const signal = gateway.signup.mock.calls[0]?.[1];
+
+  TestRenderer.act(() => {
+    expect(hardwareBackHandler?.()).toBe(true);
+  });
+  expect(onCancel).not.toHaveBeenCalled();
+  expect(hasText(renderer, '성별을\n선택해주세요')).toBe(true);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '이전 단계'}).props
+      .accessibilityState.disabled,
+  ).toBe(true);
+
+  TestRenderer.act(() => {
+    renderer.unmount();
+  });
+  expect(signal?.aborted).toBe(true);
+
+  await TestRenderer.act(async () => {
+    submission.resolve(SIGNUP_RESULT);
+    await submission.promise;
+  });
+  addEventListener.mockRestore();
 });
 
 test('가입 시점의 로그인 ID 중복은 입력을 보존한 채 1단계로 돌려보낸다', async () => {

@@ -15,7 +15,10 @@ export interface CreateGroupInput {
 
 interface CreateGroupSheetProps {
   onDismiss: () => void;
-  onSubmit: (input: CreateGroupInput) => Promise<void> | void;
+  onSubmit: (
+    input: CreateGroupInput,
+    signal: AbortSignal,
+  ) => Promise<void> | void;
   visible: boolean;
 }
 
@@ -29,11 +32,16 @@ export function CreateGroupSheet({
   const [name, setName] = useState('');
   const [role, setRole] = useState<GroupRole>('guardian');
   const [submitting, setSubmitting] = useState(false);
+  const submitControllerRef = useRef<AbortController | null>(null);
+  const submitAttemptIdRef = useRef(0);
   const submittingRef = useRef(false);
   const normalizedName = name.trim();
 
   useEffect(() => {
     if (!visible) {
+      submitControllerRef.current?.abort();
+      submitControllerRef.current = null;
+      submitAttemptIdRef.current += 1;
       return;
     }
 
@@ -43,6 +51,20 @@ export function CreateGroupSheet({
     submittingRef.current = false;
   }, [visible]);
 
+  useEffect(
+    () => () => {
+      submitControllerRef.current?.abort();
+      submitAttemptIdRef.current += 1;
+    },
+    [],
+  );
+
+  const handleDismiss = () => {
+    if (!submittingRef.current) {
+      onDismiss();
+    }
+  };
+
   const handleSubmit = async () => {
     if (normalizedName.length === 0 || submittingRef.current) {
       return;
@@ -50,21 +72,43 @@ export function CreateGroupSheet({
 
     submittingRef.current = true;
     setSubmitting(true);
+    const controller = new AbortController();
+    submitControllerRef.current?.abort();
+    submitControllerRef.current = controller;
+    const attemptId = submitAttemptIdRef.current + 1;
+    submitAttemptIdRef.current = attemptId;
     try {
-      await onSubmit({name: normalizedName, role});
-      onDismiss();
-    } catch {
-      Alert.alert('그룹을 만들지 못했어요', '잠시 후 다시 시도해 주세요.');
-    } finally {
+      await onSubmit({name: normalizedName, role}, controller.signal);
+      if (
+        controller.signal.aborted ||
+        submitAttemptIdRef.current !== attemptId
+      ) {
+        return;
+      }
       submittingRef.current = false;
       setSubmitting(false);
+      onDismiss();
+    } catch {
+      if (
+        !controller.signal.aborted &&
+        submitAttemptIdRef.current === attemptId
+      ) {
+        Alert.alert('그룹을 만들지 못했어요', '잠시 후 다시 시도해 주세요.');
+      }
+    } finally {
+      if (submitAttemptIdRef.current === attemptId) {
+        submitControllerRef.current = null;
+        submittingRef.current = false;
+        setSubmitting(false);
+      }
     }
   };
 
   return (
     <GroupBottomSheet
       accessibilityLabel="새 그룹 만들기"
-      onDismiss={onDismiss}
+      dismissDisabled={submitting}
+      onDismiss={handleDismiss}
       visible={visible}>
       <Text style={styles.title}>새 그룹 만들기</Text>
 
@@ -75,6 +119,7 @@ export function CreateGroupSheet({
             accessibilityLabel="그룹 이름"
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!submitting}
             maxLength={GROUP_NAME_MAX_LENGTH}
             onChangeText={setName}
             placeholder="최대 10자까지 입력 가능합니다."
@@ -92,11 +137,13 @@ export function CreateGroupSheet({
             accessibilityRole="radiogroup"
             style={styles.segmentedControl}>
             <RoleOption
+              disabled={submitting}
               label="보호자"
               onPress={() => setRole('guardian')}
               selected={role === 'guardian'}
             />
             <RoleOption
+              disabled={submitting}
               label="피보호자"
               onPress={() => setRole('careReceiver')}
               selected={role === 'careReceiver'}
@@ -119,18 +166,25 @@ export function CreateGroupSheet({
 }
 
 interface RoleOptionProps {
+  disabled?: boolean;
   label: string;
   onPress: () => void;
   selected: boolean;
 }
 
-function RoleOption({label, onPress, selected}: RoleOptionProps) {
+function RoleOption({
+  disabled = false,
+  label,
+  onPress,
+  selected,
+}: RoleOptionProps) {
   return (
     <AnimatedPressable
       accessibilityLabel={label}
       accessibilityRole="radio"
-      accessibilityState={{checked: selected}}
+      accessibilityState={{checked: selected, disabled}}
       containerStyle={styles.roleOptionContainer}
+      disabled={disabled}
       onPress={onPress}
       style={[styles.roleOptionPressable, selected && styles.selectedRole]}>
       <View style={styles.roleOption}>

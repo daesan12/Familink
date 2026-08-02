@@ -140,11 +140,13 @@ interface AppProps {
   initialRootRoute?: RootRoute;
   initialShellRoute?: AppRoute;
   onCreateGroup?: (
-    input: CreateGroupInput
+    input: CreateGroupInput,
+    signal?: AbortSignal,
   ) => FamilyGroup | Promise<FamilyGroup>;
   onGroupChange?: (groupId: string) => void;
   onJoinGroup?: (
-    inviteCode: string
+    inviteCode: string,
+    signal?: AbortSignal,
   ) => PendingJoinRequest | Promise<PendingJoinRequest>;
   onCallResult?: (status: AiCallResultStatus) => void;
   onOpenActiveGroup?: (activeGroupId: string) => void;
@@ -1222,15 +1224,21 @@ export default function App({
     ]
   );
 
-  const handleCreateGroup = async (input: CreateGroupInput) => {
+  const handleCreateGroup = async (
+    input: CreateGroupInput,
+    signal: AbortSignal,
+  ) => {
     let createdGroup: FamilyGroup;
     let createdMemberId: string | null = null;
     if (onCreateGroup !== undefined) {
-      createdGroup = await onCreateGroup(input);
+      createdGroup = await onCreateGroup(input, signal);
     } else {
-      const created = await groupGateway.createGroup(input);
+      const created = await groupGateway.createGroup(input, signal);
       createdGroup = created.group;
       createdMemberId = created.managerMemberId;
+    }
+    if (signal.aborted) {
+      return;
     }
     const groupForState: FamilyGroupWithMemberId =
       createdMemberId === null
@@ -1252,9 +1260,15 @@ export default function App({
     setRoute("appShell");
   };
 
-  const handleJoinGroup = async (inviteCode: string) => {
+  const handleJoinGroup = async (
+    inviteCode: string,
+    signal: AbortSignal,
+  ) => {
     if (onJoinGroup !== undefined) {
-      const request = await onJoinGroup(inviteCode);
+      const request = await onJoinGroup(inviteCode, signal);
+      if (signal.aborted) {
+        return;
+      }
       setJoinRequests((current) => {
         const withoutDuplicate = current.filter((item) => item.id !== request.id);
         return [...withoutDuplicate, request];
@@ -1267,7 +1281,10 @@ export default function App({
       return;
     }
 
-    const submitted = await groupGateway.requestJoinByCode(inviteCode);
+    const submitted = await groupGateway.requestJoinByCode(inviteCode, signal);
+    if (signal.aborted) {
+      return;
+    }
     const request: PendingJoinRequest = {
       groupId: submitted.groupId,
       groupName: submitted.groupName,
@@ -1277,6 +1294,9 @@ export default function App({
 
     try {
       const snapshot = await groupGateway.loadGroups();
+      if (signal.aborted) {
+        return;
+      }
       const refreshedRequests = [...toPendingJoinRequests(snapshot.joinRequests)];
       if (!refreshedRequests.some((item) => item.id === request.id)) {
         refreshedRequests.push(request);
@@ -1285,6 +1305,9 @@ export default function App({
       return;
     } catch {
       // 가입 요청은 이미 생성됐으므로 목록 재조회 실패 시 제출 결과를 유지한다.
+      if (signal.aborted) {
+        return;
+      }
     }
 
     setJoinRequests((current) => {

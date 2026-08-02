@@ -67,13 +67,17 @@ export interface UpdatedFamilyGroup {
 }
 
 export interface FamilyGroupGateway {
-  createGroup(input: CreateFamilyGroupInput): Promise<CreatedFamilyGroup>;
+  createGroup(
+    input: CreateFamilyGroupInput,
+    signal?: AbortSignal,
+  ): Promise<CreatedFamilyGroup>;
   getGroupDetail(groupId: string): Promise<FamilyGroupDetail>;
   getInviteCode(groupId: string): Promise<GroupInviteCode>;
   loadGroups(): Promise<FamilyGroupListSnapshot>;
   renameGroup(groupId: string, name: string): Promise<UpdatedFamilyGroup>;
   requestJoinByCode?(
     inviteCode: string,
+    signal?: AbortSignal,
   ): Promise<GroupJoinRequestResult>;
 }
 
@@ -84,11 +88,16 @@ export async function loadGroups(): Promise<FamilyGroupListSnapshot> {
 
 export async function createGroup(
   input: CreateFamilyGroupInput,
+  signal?: AbortSignal,
 ): Promise<CreatedFamilyGroup> {
-  const response = await apiClient.post<ApiSuccess<unknown>>('/groups', {
+  const body = {
     myRole: toServerGroupRole(input.role),
     name: input.name,
-  });
+  };
+  const response =
+    signal === undefined
+      ? await apiClient.post<ApiSuccess<unknown>>('/groups', body)
+      : await apiClient.post<ApiSuccess<unknown>>('/groups', body, {signal});
   const result = parseApiEnvelope(
     response.data,
     response.status,
@@ -135,11 +144,20 @@ export async function getInviteCode(groupId: string): Promise<GroupInviteCode> {
 
 export async function requestJoinByCode(
   inviteCode: string,
+  signal?: AbortSignal,
 ): Promise<GroupJoinRequestResult> {
-  const response = await apiClient.post<ApiSuccess<unknown>>(
-    '/join-requests/by-code',
-    {inviteCode},
-  );
+  const body = {inviteCode};
+  const response =
+    signal === undefined
+      ? await apiClient.post<ApiSuccess<unknown>>(
+          '/join-requests/by-code',
+          body,
+        )
+      : await apiClient.post<ApiSuccess<unknown>>(
+          '/join-requests/by-code',
+          body,
+          {signal},
+        );
   return parseApiEnvelope(
     response.data,
     response.status,

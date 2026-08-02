@@ -25,7 +25,7 @@ export interface SignupResult {
 
 export interface SignupGateway {
   checkLoginIdAvailability(loginId: string): Promise<boolean>;
-  signup(input: SignupInput): Promise<SignupResult>;
+  signup(input: SignupInput, signal?: AbortSignal): Promise<SignupResult>;
 }
 
 export type SignupHttpClient = Pick<AxiosInstance, 'get' | 'post'>;
@@ -51,11 +51,13 @@ export function createSignupGateway(
       return payload.available;
     },
 
-    async signup(input) {
-      const response = await client.post<ApiSuccess<unknown>>(
-        '/auth/signup',
-        input,
-      );
+    async signup(input, signal) {
+      const response =
+        signal === undefined
+          ? await client.post<ApiSuccess<unknown>>('/auth/signup', input)
+          : await client.post<ApiSuccess<unknown>>('/auth/signup', input, {
+              signal,
+            });
       const payload =
         response.status === 201 && isApiSuccess(response.data)
           ? parseSignupResult(response.data.data)
