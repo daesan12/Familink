@@ -202,7 +202,7 @@ SELECT group_id, user_id, role, is_manager, left_at FROM group_members ORDER BY 
 | # | 등급 | Phase | 요약 | 상태 |
 |---|---|---|---|---|
 | F-1 | P1 | 사전 | 세션 복원 retryableError 시 백지 화면 (재시도 UI 부재) | [S15P11B104-224] 등록 |
-| F-2 | P1 | 사전 | AI 통화 운영 인증 경로 미구현 — UnavailableCallActorResolver 401 하드코딩 | [S15P11B104-214] 재오픈·구현 완료 |
+| F-2 | P1 | 사전 | AI 통화 운영 인증 경로 미구현 — UnavailableCallActorResolver 401 하드코딩 | [S15P11B104-214] develop 병합(`8ba72e4`)·백엔드 코드/테스트 검증 완료 (2026-08-02, 통합 QA 리포트 QA-032 후속 검증 참조). staging E2E 잔여 |
 | F-3 | Obs | 사전 | AI_CALL_README가 "임시 Web UI"라 기술하나 실제로는 Kotlin 모듈 완성 — 문서 최신성 | 미등록 |
 | F-4 | Obs | 사전 | 401 응답 봉투 이원화 (Security 공통 봉투 vs call 도메인 `{"error":{...}}`) | 미등록 |
 | F-5 | P3 | P1 | 형식 미달 아이디로 중복확인 탭 시 완전 무반응 — 오류·토스트 없어 버튼 고장으로 오인 | 미등록 |
