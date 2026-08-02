@@ -7,6 +7,7 @@ import type {
   PostComment,
 } from '../types';
 import {MAX_COMMENT_LENGTH} from '../types';
+import {PostActionsSheet} from '../components/PostActionsSheet';
 import {PostDetailScreen} from './PostDetailScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
@@ -43,6 +44,17 @@ const comments: readonly PostComment[] = [
     postId: post.id,
   },
 ];
+
+function deferred(): {promise: Promise<void>; resolve: () => void} {
+  let resolvePromise: (() => void) | undefined;
+  const promise = new Promise<void>(resolve => {
+    resolvePromise = resolve;
+  });
+  return {
+    promise,
+    resolve: () => resolvePromise?.(),
+  };
+}
 
 async function renderScreen(
   overrides: Partial<
@@ -171,8 +183,9 @@ test('댓글 입력을 50자로 제한하고 유효한 입력을 등록한 뒤 �
   });
   expect(enabledButton.props.accessibilityState.disabled).toBe(false);
 
-  TestRenderer.act(() => {
+  await TestRenderer.act(async () => {
     enabledButton.props.onPress();
+    await Promise.resolve();
   });
 
   expect(onCreateComment).toHaveBeenCalledWith({
@@ -187,6 +200,103 @@ test('댓글 입력을 50자로 제한하고 유효한 입력을 등록한 뒤 �
     renderer.root.findByProps({accessibilityLabel: '댓글 등록'}).props
       .accessibilityState.disabled,
   ).toBe(true);
+
+  await TestRenderer.act(() => {
+    renderer.unmount();
+  });
+});
+
+test('댓글 저장이 끝날 때까지 입력과 버튼을 잠가 연속 탭을 한 번만 처리한다', async () => {
+  const submission = deferred();
+  const onCreateComment = jest.fn(() => submission.promise);
+  const renderer = await renderScreen({onCreateComment});
+
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '댓글 입력'})
+      .props.onChangeText('한 번만 보내기');
+  });
+  const button = renderer.root.findByProps({accessibilityLabel: '댓글 등록'});
+
+  TestRenderer.act(() => {
+    button.props.onPress();
+    button.props.onPress();
+  });
+
+  expect(onCreateComment).toHaveBeenCalledTimes(1);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '댓글 입력'}).props.editable,
+  ).toBe(false);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '댓글 등록'}).props
+      .accessibilityState.disabled,
+  ).toBe(true);
+
+  await TestRenderer.act(async () => {
+    submission.resolve();
+    await submission.promise;
+  });
+
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '댓글 입력'}).props.value,
+  ).toBe('');
+
+  await TestRenderer.act(() => {
+    renderer.unmount();
+  });
+});
+
+test('댓글 수정 저장 중에도 입력과 버튼을 잠가 연속 탭을 한 번만 처리한다', async () => {
+  const submission = deferred();
+  const onUpdateComment = jest.fn(() => submission.promise);
+  const renderer = await renderScreen({onUpdateComment});
+
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({
+        accessibilityLabel: '다영님의 댓글 수정 및 삭제 메뉴',
+      })
+      .props.onPress();
+  });
+  TestRenderer.act(() => {
+    renderer.root.findByType(PostActionsSheet).props.onEdit();
+  });
+  TestRenderer.act(() => {
+    renderer.root.findByProps({accessibilityLabel: '댓글 수정 입력'}).props
+      .onChangeText('수정한 댓글');
+  });
+  const button = renderer.root.findByProps({
+    accessibilityLabel: '댓글 수정 완료',
+  });
+
+  TestRenderer.act(() => {
+    button.props.onPress();
+    button.props.onPress();
+  });
+
+  expect(onUpdateComment).toHaveBeenCalledTimes(1);
+  expect(onUpdateComment).toHaveBeenCalledWith({
+    body: '수정한 댓글',
+    commentId: 'comment-mine',
+    postId: post.id,
+  });
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '댓글 수정 입력'}).props
+      .editable,
+  ).toBe(false);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '댓글 수정 완료'}).props
+      .accessibilityState.disabled,
+  ).toBe(true);
+
+  await TestRenderer.act(async () => {
+    submission.resolve();
+    await submission.promise;
+  });
+
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '댓글 수정 입력'}),
+  ).toHaveLength(0);
 
   await TestRenderer.act(() => {
     renderer.unmount();

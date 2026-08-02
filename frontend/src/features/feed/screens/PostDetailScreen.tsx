@@ -45,7 +45,7 @@ interface PostDetailScreenProps {
   isCommentsLoading?: boolean;
   isReactionPickerOpen: boolean;
   onBack: () => void;
-  onCreateComment: (input: CreateCommentInput) => void;
+  onCreateComment: (input: CreateCommentInput) => Promise<void>;
   onDeleteComment: (input: DeleteCommentInput) => void;
   onLoadMoreComments?: () => void;
   onMenuPress: () => void;
@@ -56,7 +56,7 @@ interface PostDetailScreenProps {
     anchor: ReactionAnchor,
   ) => void;
   onRetryComments?: () => void;
-  onUpdateComment: (input: UpdateCommentInput) => void;
+  onUpdateComment: (input: UpdateCommentInput) => Promise<void>;
   post: FeedPost;
   reactions: readonly FeedReaction[];
   selectedReactionId: ReactionId | null;
@@ -90,7 +90,8 @@ export function PostDetailScreen({
   const [editingComment, setEditingComment] =
     useState<PostComment | null>(null);
   const [inputValue, setInputValue] = useState('');
-  const isSubmitting = useRef(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const trimmedInput = inputValue.trim();
   const isEditingUnchanged =
     editingComment !== null &&
@@ -99,32 +100,35 @@ export function PostDetailScreen({
     canInteract &&
     currentUser !== null &&
     trimmedInput.length > 0 &&
-    !isEditingUnchanged;
+    !isEditingUnchanged &&
+    !isSubmitting;
 
   const resetComposer = () => {
     setEditingComment(null);
     setInputValue('');
   };
 
-  const handleSubmit = () => {
-    if (!canSubmit || isSubmitting.current) {
+  const handleSubmit = async () => {
+    if (!canSubmit || submittingRef.current) {
       return;
     }
 
-    isSubmitting.current = true;
+    submittingRef.current = true;
+    setIsSubmitting(true);
     try {
       if (editingComment) {
-        onUpdateComment({
+        await onUpdateComment({
           body: trimmedInput,
           commentId: editingComment.id,
           postId: post.id,
         });
       } else {
-        onCreateComment({body: trimmedInput, postId: post.id});
+        await onCreateComment({body: trimmedInput, postId: post.id});
       }
       resetComposer();
     } finally {
-      isSubmitting.current = false;
+      submittingRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
@@ -340,10 +344,10 @@ export function PostDetailScreen({
               accessibilityLabel={
                 editingComment ? '댓글 수정 입력' : '댓글 입력'
               }
-              editable={!isSubmitting.current}
+              editable={!isSubmitting}
               maxLength={MAX_COMMENT_LENGTH}
               onChangeText={setInputValue}
-              onSubmitEditing={handleSubmit}
+              onSubmitEditing={() => void handleSubmit()}
               placeholder="댓글을 입력해 주세요"
               placeholderTextColor={COLORS.textSubtle}
               returnKeyType="send"
@@ -363,7 +367,7 @@ export function PostDetailScreen({
               accessibilityRole="button"
               accessibilityState={{disabled: !canSubmit}}
               disabled={!canSubmit}
-              onPress={handleSubmit}
+              onPress={() => void handleSubmit()}
               style={[
                 styles.sendButton,
                 canSubmit ? styles.sendButtonActive : styles.sendButtonDisabled,

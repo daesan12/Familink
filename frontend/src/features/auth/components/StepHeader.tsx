@@ -5,21 +5,32 @@ import {AUTH_COLORS} from '../theme';
 import type {SignupStep} from '../types';
 
 interface StepHeaderProps {
+  backDisabled?: boolean;
   step: SignupStep;
   title: string;
   onBack: () => void;
 }
 
-export function StepHeader({step, title, onBack}: StepHeaderProps) {
+export function StepHeader({
+  backDisabled = false,
+  step,
+  title,
+  onBack,
+}: StepHeaderProps) {
   return (
     <>
       <View style={styles.topRow}>
         <Pressable
           accessibilityLabel="이전 단계"
           accessibilityRole="button"
+          accessibilityState={{disabled: backDisabled}}
+          disabled={backDisabled}
           hitSlop={8}
           onPress={onBack}
-          style={styles.backButton}>
+          style={[
+            styles.backButton,
+            backDisabled && styles.backButtonDisabled,
+          ]}>
           <MaterialDesignIcons
             name="chevron-left"
             size={28}
@@ -55,6 +66,9 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     width: 40,
+  },
+  backButtonDisabled: {
+    opacity: 0.6,
   },
   progressTrack: {
     backgroundColor: AUTH_COLORS.track,

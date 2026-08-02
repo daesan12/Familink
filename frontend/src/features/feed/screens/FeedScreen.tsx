@@ -486,7 +486,9 @@ export function FeedScreen({
     feedScrollOffset.current = event.nativeEvent.contentOffset.y;
   };
 
-  const handleCreateComment = (input: CreateCommentInput) => {
+  const handleCreateComment = async (
+    input: CreateCommentInput,
+  ): Promise<void> => {
     if (!resolvedCurrentUser) {
       return;
     }
@@ -502,37 +504,37 @@ export function FeedScreen({
       return;
     }
 
-    void Promise.resolve()
-      .then(() => onCreateComment(input))
-      .then(result => {
-        if (result === undefined) {
-          return;
-        }
-        interactionsRef.current.replaceComment(
-          input.postId,
-          {
-            author: resolvedCurrentUser,
-            body: result.content,
-            createdAt: result.createdAt,
-            id: result.id,
-            postId: result.postId,
-            updatedAt: result.createdAt,
-          },
-          localCommentId,
-        );
-      })
-      .catch(error => {
-        interactionsRef.current.deleteComment(input.postId, localCommentId);
-        Alert.alert(
-          '댓글을 저장하지 못했습니다',
-          error instanceof Error
-            ? error.message
-            : '네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
-        );
-      });
+    try {
+      const result = await onCreateComment(input);
+      if (result === undefined) {
+        return;
+      }
+      interactionsRef.current.replaceComment(
+        input.postId,
+        {
+          author: resolvedCurrentUser,
+          body: result.content,
+          createdAt: result.createdAt,
+          id: result.id,
+          postId: result.postId,
+          updatedAt: result.createdAt,
+        },
+        localCommentId,
+      );
+    } catch (error) {
+      interactionsRef.current.deleteComment(input.postId, localCommentId);
+      Alert.alert(
+        '댓글을 저장하지 못했습니다',
+        error instanceof Error
+          ? error.message
+          : '네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
+      );
+    }
   };
 
-  const handleUpdateComment = (input: UpdateCommentInput) => {
+  const handleUpdateComment = async (
+    input: UpdateCommentInput,
+  ): Promise<void> => {
     const previousComment = interactions.commentsByPostId[input.postId]?.find(
       comment => comment.id === input.commentId,
     );
@@ -545,33 +547,31 @@ export function FeedScreen({
       return;
     }
 
-    void Promise.resolve()
-      .then(() => onUpdateComment(input))
-      .then(result => {
-        if (result === undefined) {
-          return;
-        }
-        interactionsRef.current.updateComment(
+    try {
+      const result = await onUpdateComment(input);
+      if (result === undefined) {
+        return;
+      }
+      interactionsRef.current.updateComment(
+        input.postId,
+        input.commentId,
+        result.content,
+        result.updatedAt,
+      );
+    } catch (error) {
+      if (previousComment !== undefined) {
+        interactionsRef.current.replaceComment(
           input.postId,
-          input.commentId,
-          result.content,
-          result.updatedAt,
+          previousComment,
         );
-      })
-      .catch(error => {
-        if (previousComment !== undefined) {
-          interactionsRef.current.replaceComment(
-            input.postId,
-            previousComment,
-          );
-        }
-        Alert.alert(
-          '댓글을 수정하지 못했습니다',
-          error instanceof Error
-            ? error.message
-            : '네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
-        );
-      });
+      }
+      Alert.alert(
+        '댓글을 수정하지 못했습니다',
+        error instanceof Error
+          ? error.message
+          : '네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
+      );
+    }
   };
 
   const handleDeleteComment = (input: DeleteCommentInput) => {

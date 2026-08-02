@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {
   StyleSheet,
   Text,
@@ -13,7 +13,10 @@ import {PrimaryButton} from './PrimaryButton';
 
 interface JoinGroupSheetProps {
   onDismiss: () => void;
-  onSubmit: (inviteCode: string) => Promise<void> | void;
+  onSubmit: (
+    inviteCode: string,
+    signal: AbortSignal,
+  ) => Promise<void> | void;
   visible: boolean;
 }
 
@@ -41,16 +44,37 @@ export function JoinGroupSheet({
   const [inviteCode, setInviteCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const submitControllerRef = useRef<AbortController | null>(null);
+  const submitAttemptIdRef = useRef(0);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (!visible) {
+      submitControllerRef.current?.abort();
+      submitControllerRef.current = null;
+      submitAttemptIdRef.current += 1;
       return;
     }
 
     setInviteCode('');
     setIsSubmitting(false);
     setSubmitError(null);
+    submittingRef.current = false;
   }, [visible]);
+
+  useEffect(
+    () => () => {
+      submitControllerRef.current?.abort();
+      submitAttemptIdRef.current += 1;
+    },
+    [],
+  );
+
+  const handleDismiss = () => {
+    if (!submittingRef.current) {
+      onDismiss();
+    }
+  };
 
   const handleChangeText = (value: string) => {
     setSubmitError(null);
@@ -65,28 +89,52 @@ export function JoinGroupSheet({
   const handleSubmit = async () => {
     if (
       inviteCode.length !== INVITE_CODE_LENGTH ||
-      isSubmitting
+      submittingRef.current
     ) {
       return;
     }
 
+    submittingRef.current = true;
     setIsSubmitting(true);
     setSubmitError(null);
+    const controller = new AbortController();
+    submitControllerRef.current?.abort();
+    submitControllerRef.current = controller;
+    const attemptId = submitAttemptIdRef.current + 1;
+    submitAttemptIdRef.current = attemptId;
 
     try {
-      await onSubmit(inviteCode);
+      await onSubmit(inviteCode, controller.signal);
+      if (
+        controller.signal.aborted ||
+        submitAttemptIdRef.current !== attemptId
+      ) {
+        return;
+      }
+      submittingRef.current = false;
+      setIsSubmitting(false);
       onDismiss();
     } catch (error) {
-      setSubmitError(joinRequestErrorMessage(error));
+      if (
+        !controller.signal.aborted &&
+        submitAttemptIdRef.current === attemptId
+      ) {
+        setSubmitError(joinRequestErrorMessage(error));
+      }
     } finally {
-      setIsSubmitting(false);
+      if (submitAttemptIdRef.current === attemptId) {
+        submitControllerRef.current = null;
+        submittingRef.current = false;
+        setIsSubmitting(false);
+      }
     }
   };
 
   return (
     <GroupBottomSheet
       accessibilityLabel="초대 코드로 참여"
-      onDismiss={onDismiss}
+      dismissDisabled={isSubmitting}
+      onDismiss={handleDismiss}
       visible={visible}>
       <Text style={styles.title}>초대 코드로 참여</Text>
       <Text style={styles.description}>
@@ -148,7 +196,9 @@ export function JoinGroupSheet({
 
       <View style={styles.submit}>
         <PrimaryButton
-          disabled={inviteCode.length !== INVITE_CODE_LENGTH}
+          disabled={
+            inviteCode.length !== INVITE_CODE_LENGTH || isSubmitting
+          }
           label="참여 요청 보내기"
           loading={isSubmitting}
           onPress={handleSubmit}

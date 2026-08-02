@@ -110,6 +110,8 @@ export function SignupFlowScreen({
   const isMountedRef = useRef(true);
   const loginIdRef = useRef(draft.loginId);
   const loginIdRequestIdRef = useRef(0);
+  const submitControllerRef = useRef<AbortController | null>(null);
+  const submitAttemptIdRef = useRef(0);
   const submittingRef = useRef(false);
   const screenEntranceStyle = useScreenEntrance(step);
 
@@ -118,6 +120,8 @@ export function SignupFlowScreen({
     return () => {
       isMountedRef.current = false;
       loginIdRequestIdRef.current += 1;
+      submitControllerRef.current?.abort();
+      submitAttemptIdRef.current += 1;
     };
   }, []);
 
@@ -142,6 +146,9 @@ export function SignupFlowScreen({
   };
 
   const handleBack = () => {
+    if (submittingRef.current) {
+      return;
+    }
     if (step === 1) {
       onCancel();
       return;
@@ -244,24 +251,46 @@ export function SignupFlowScreen({
     setFieldErrors({});
     setSubmissionError(null);
     setSubmitting(true);
+    const controller = new AbortController();
+    submitControllerRef.current?.abort();
+    submitControllerRef.current = controller;
+    const attemptId = submitAttemptIdRef.current + 1;
+    submitAttemptIdRef.current = attemptId;
     try {
-      await gateway.signup({
-        birthDate: draft.birthDate,
-        gender: draft.gender,
-        loginId: draft.loginId,
-        name: draft.name,
-        password: draft.password,
-      });
-      if (isMountedRef.current) {
+      await gateway.signup(
+        {
+          birthDate: draft.birthDate,
+          gender: draft.gender,
+          loginId: draft.loginId,
+          name: draft.name,
+          password: draft.password,
+        },
+        controller.signal,
+      );
+      if (
+        isMountedRef.current &&
+        !controller.signal.aborted &&
+        submitAttemptIdRef.current === attemptId
+      ) {
         goForward(5);
       }
     } catch (error) {
-      if (isMountedRef.current) {
+      if (
+        isMountedRef.current &&
+        !controller.signal.aborted &&
+        submitAttemptIdRef.current === attemptId
+      ) {
         applySignupFailure(error);
       }
     } finally {
-      submittingRef.current = false;
-      if (isMountedRef.current) {
+      if (submitAttemptIdRef.current === attemptId) {
+        submitControllerRef.current = null;
+        submittingRef.current = false;
+      }
+      if (
+        isMountedRef.current &&
+        submitAttemptIdRef.current === attemptId
+      ) {
         setSubmitting(false);
       }
     }
@@ -738,19 +767,21 @@ function GenderStep({
     <StepLayout
       button={
         <PrimaryButton
-          disabled={gender === null}
+          disabled={gender === null || loading}
           label="다음"
           loading={loading}
           onPress={onNext}
         />
       }>
       <StepHeader
+        backDisabled={loading}
         onBack={onBack}
         step={4}
         title={'성별을\n선택해주세요'}
       />
       <View style={styles.genderRow}>
         <GenderCard
+          disabled={loading}
           gender="MALE"
           image={MALE_ILLUSTRATION}
           label="남자"
@@ -758,6 +789,7 @@ function GenderStep({
           selected={gender === 'MALE'}
         />
         <GenderCard
+          disabled={loading}
           gender="FEMALE"
           image={FEMALE_ILLUSTRATION}
           label="여자"
@@ -773,6 +805,7 @@ function GenderStep({
 }
 
 interface GenderCardProps {
+  disabled?: boolean;
   gender: Gender;
   image: number;
   label: string;
@@ -781,6 +814,7 @@ interface GenderCardProps {
 }
 
 function GenderCard({
+  disabled = false,
   gender,
   image,
   label,
@@ -791,8 +825,9 @@ function GenderCard({
     <AnimatedPressable
       accessibilityLabel={`성별 ${label}`}
       accessibilityRole="radio"
-      accessibilityState={{selected}}
+      accessibilityState={{disabled, selected}}
       containerStyle={styles.genderCardWrapper}
+      disabled={disabled}
       onPress={() => onPress(gender)}>
       <View style={[styles.genderCard, selected && styles.selectedGenderCard]}>
         <Image resizeMode="contain" source={image} style={styles.genderImage} />

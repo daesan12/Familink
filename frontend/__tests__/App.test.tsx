@@ -747,10 +747,13 @@ test("새 그룹을 만들면 입력한 그룹으로 앱 셸에 진입한다", a
       .props.onPress();
   });
 
-  expect(onCreateGroup).toHaveBeenCalledWith({
-    name: "행복한 가족",
-    role: "guardian",
-  });
+  expect(onCreateGroup).toHaveBeenCalledWith(
+    {
+      name: "행복한 가족",
+      role: "guardian",
+    },
+    expect.any(Object)
+  );
   expect(renderer!.root.findByProps({ children: "행복한 가족" })).toBeTruthy();
   expect(
     renderer!.root.findByProps({ accessibilityRole: "tablist" })
@@ -1118,7 +1121,7 @@ test("초대 코드 참여 요청을 보내면 승인 대기 카드를 표시한
       .props.onPress();
   });
 
-  expect(onJoinGroup).toHaveBeenCalledWith("FA12BC");
+  expect(onJoinGroup).toHaveBeenCalledWith("FA12BC", expect.any(Object));
   expect(renderer!.root.findByProps({ children: "가족 소모임" })).toBeTruthy();
   expect(JSON.stringify(renderer!.toJSON())).toContain(
     "관리자 승인을 기다리고 있어요"
@@ -1173,9 +1176,76 @@ test("기본 그룹 게이트웨이로 초대 코드 가입 요청과 상태 재
       .props.onPress();
   });
 
-  expect(groupGateway.requestJoinByCode).toHaveBeenCalledWith("AB12C3");
+  expect(groupGateway.requestJoinByCode).toHaveBeenCalledWith(
+    "AB12C3",
+    expect.any(Object)
+  );
   expect(groupGateway.loadGroups).toHaveBeenCalled();
   expect(renderer!.root.findByProps({ children: "API 가족" })).toBeTruthy();
+});
+
+test("가입 요청 뒤 그룹 재조회 중 화면이 종료되면 늦은 결과를 읽지 않는다", async () => {
+  const groupGateway = createGroupGateway();
+  const reload = createDeferred<
+    Awaited<ReturnType<FamilyGroupGateway["loadGroups"]>>
+  >();
+  const requestJoinByCode = jest.fn().mockResolvedValue({
+    groupId: "group-join-api",
+    groupName: "API 가족",
+    joinRequestId: "request-api",
+    status: "PENDING_ADMIN",
+  });
+  groupGateway.requestJoinByCode = requestJoinByCode;
+  groupGateway.loadGroups.mockReturnValueOnce(reload.promise);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App initialRootRoute="groupOnboarding" groupGateway={groupGateway} />
+    );
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+      })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "6자리 초대 코드" })
+      .props.onChangeText("ab12c3");
+  });
+  let submitPromise!: Promise<void>;
+  TestRenderer.act(() => {
+    submitPromise = renderer!.root
+      .findByProps({ accessibilityLabel: "참여 요청 보내기" })
+      .props.onPress();
+  });
+  await TestRenderer.act(flushAsyncWork);
+
+  const signal = requestJoinByCode.mock.calls[0]?.[1];
+  expect(groupGateway.loadGroups).toHaveBeenCalledTimes(1);
+  expect(signal?.aborted).toBe(false);
+
+  await TestRenderer.act(() => {
+    renderer!.unmount();
+  });
+  expect(signal?.aborted).toBe(true);
+
+  let joinRequestsReadCount = 0;
+  await TestRenderer.act(async () => {
+    reload.resolve({
+      groups: [],
+      get joinRequests() {
+        joinRequestsReadCount += 1;
+        return [];
+      },
+    });
+    await submitPromise;
+  });
+
+  expect(joinRequestsReadCount).toBe(0);
 });
 
 test("초대 코드 참여 요청이 실패하면 입력창을 유지하고 대기 카드를 추가하지 않는다", async () => {

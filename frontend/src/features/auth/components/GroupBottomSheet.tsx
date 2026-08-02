@@ -18,6 +18,7 @@ import {AUTH_COLORS} from '../theme';
 interface GroupBottomSheetProps {
   accessibilityLabel: string;
   children: React.ReactNode;
+  dismissDisabled?: boolean;
   onDismiss: () => void;
   visible: boolean;
 }
@@ -25,6 +26,7 @@ interface GroupBottomSheetProps {
 export function GroupBottomSheet({
   accessibilityLabel,
   children,
+  dismissDisabled = false,
   onDismiss,
   visible,
 }: GroupBottomSheetProps) {
@@ -76,10 +78,16 @@ export function GroupBottomSheet({
     return null;
   }
 
+  const handleDismiss = () => {
+    if (!dismissDisabled) {
+      onDismiss();
+    }
+  };
+
   return (
     <Modal
       animationType="none"
-      onRequestClose={onDismiss}
+      onRequestClose={handleDismiss}
       presentationStyle="overFullScreen"
       statusBarTranslucent
       transparent
@@ -94,8 +102,9 @@ export function GroupBottomSheet({
         />
         <Pressable
           accessibilityElementsHidden
+          disabled={dismissDisabled}
           importantForAccessibility="no-hide-descendants"
-          onPress={onDismiss}
+          onPress={handleDismiss}
           style={StyleSheet.absoluteFill}
         />
         <KeyboardAvoidingView

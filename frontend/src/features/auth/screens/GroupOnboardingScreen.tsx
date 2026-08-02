@@ -40,8 +40,14 @@ interface GroupOnboardingScreenProps {
   // 그룹 전환에서 진입한 그룹 보유 사용자인지. 빈 상태 문구를 상황에 맞게 바꾼다.
   hasJoinedGroups?: boolean;
   onBack: () => void;
-  onCreateGroup: (input: CreateGroupInput) => void;
-  onJoinByCode: (inviteCode: string) => Promise<void> | void;
+  onCreateGroup: (
+    input: CreateGroupInput,
+    signal: AbortSignal,
+  ) => Promise<void> | void;
+  onJoinByCode: (
+    inviteCode: string,
+    signal: AbortSignal,
+  ) => Promise<void> | void;
   onOpenApprovedGroup?: (request: ApprovedJoinRequest) => void;
   pendingRequests: readonly PendingJoinRequest[];
 }
