@@ -10,11 +10,13 @@ import {
   authSessionManager,
   type AuthSessionUser,
   type LoginSessionInput,
+  type SaveSessionOptions,
 } from '../session';
 import type {
   AuthenticatedUser,
   AuthGateway,
   LoginCredentials,
+  LoginRequestOptions,
 } from '../types';
 import {
   isAuthTokenPairResponse,
@@ -31,6 +33,7 @@ export interface AuthGatewaySession {
   saveSession(
     input: LoginSessionInput,
     receivedAt?: number,
+    options?: SaveSessionOptions,
   ): Promise<void>;
 }
 
@@ -41,18 +44,34 @@ export function createAuthGateway(
 ): AuthGateway {
   return {
     getAccessToken: () => session.getAccessToken(),
-    async login(credentials: LoginCredentials): Promise<AuthenticatedUser> {
-      const response = await client.post<ApiSuccess<unknown>>(
-        '/auth/login',
-        credentials,
-      );
+    async login(
+      credentials: LoginCredentials,
+      options?: LoginRequestOptions,
+    ): Promise<AuthenticatedUser> {
+      const response =
+        options?.signal === undefined
+          ? await client.post<ApiSuccess<unknown>>(
+              '/auth/login',
+              credentials,
+            )
+          : await client.post<ApiSuccess<unknown>>(
+              '/auth/login',
+              credentials,
+              {signal: options.signal},
+            );
       const payload = isApiSuccess(response.data) ? response.data.data : null;
 
       if (!isLoginResponse(payload)) {
         throw createInvalidResponseError(response.status);
       }
 
-      await session.saveSession(payload, now());
+      assertLoginRequestActive(options?.signal);
+      if (options === undefined) {
+        await session.saveSession(payload, now());
+      } else {
+        await session.saveSession(payload, now(), options);
+      }
+      assertLoginRequestActive(options?.signal);
 
       return {
         activeGroupId: null,
@@ -78,6 +97,16 @@ export function createAuthGateway(
 }
 
 export const apiAuthGateway = createAuthGateway();
+
+function assertLoginRequestActive(signal: AbortSignal | undefined): void {
+  if (signal?.aborted !== true) {
+    return;
+  }
+
+  const error = new Error('로그인 요청이 취소되었습니다.');
+  error.name = 'AbortError';
+  throw error;
+}
 
 function isLoginResponse(value: unknown): value is LoginResponse {
   if (!isRecord(value) || !isAuthTokenPairResponse(value)) {

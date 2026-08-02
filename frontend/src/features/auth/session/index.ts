@@ -15,6 +15,7 @@ export {
   type AuthRestoreResult,
   type AuthSessionCoordinator,
   type LoginSessionInput,
+  type SaveSessionOptions,
 } from './authSessionManager';
 export {
   AUTH_SESSION_SERVICE,
