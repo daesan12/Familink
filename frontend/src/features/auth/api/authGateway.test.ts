@@ -77,6 +77,59 @@ describe('apiAuthGateway', () => {
     );
   });
 
+  it('passes the abort signal and skips storage for a cancelled login', async () => {
+    const {client, post} = createClient();
+    const session = createSession();
+    const controller = new AbortController();
+    post.mockImplementationOnce(async () => {
+      controller.abort();
+      return {
+        data: {
+          data: LOGIN_DATA,
+          message: '로그인 성공',
+          success: true,
+        },
+        status: 200,
+      };
+    });
+    const gateway = createAuthGateway(client, session, () => NOW);
+
+    await expect(
+      gateway.login(CREDENTIALS, {signal: controller.signal}),
+    ).rejects.toMatchObject({name: 'AbortError'});
+
+    expect(post).toHaveBeenCalledWith('/auth/login', CREDENTIALS, {
+      signal: controller.signal,
+    });
+    expect(session.saveSession).not.toHaveBeenCalled();
+  });
+
+  it('does not return an authenticated user when cancellation follows storage', async () => {
+    const {client, post} = createClient();
+    const session = createSession();
+    const controller = new AbortController();
+    post.mockResolvedValueOnce({
+      data: {
+        data: LOGIN_DATA,
+        message: '로그인 성공',
+        success: true,
+      },
+      status: 200,
+    });
+    session.saveSession.mockImplementationOnce(async () => {
+      controller.abort();
+    });
+    const gateway = createAuthGateway(client, session, () => NOW);
+
+    await expect(
+      gateway.login(CREDENTIALS, {signal: controller.signal}),
+    ).rejects.toMatchObject({name: 'AbortError'});
+
+    expect(session.saveSession).toHaveBeenCalledWith(LOGIN_DATA, NOW, {
+      signal: controller.signal,
+    });
+  });
+
   it('does not authenticate when the login session cannot be stored', async () => {
     const {client, post} = createClient();
     const session = createSession();

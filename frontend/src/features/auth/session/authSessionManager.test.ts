@@ -213,6 +213,124 @@ describe('AuthSessionManager', () => {
     expect(manager.getAccessToken()).toBeNull();
   });
 
+  it('clears a login record when its request is aborted during persistence', async () => {
+    const store = createStore(null);
+    const controller = new AbortController();
+    let resolveWrite!: () => void;
+    let markWriteStarted!: () => void;
+    const writeStarted = new Promise<void>(resolve => {
+      markWriteStarted = resolve;
+    });
+    store.write.mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          resolveWrite = resolve;
+          markWriteStarted();
+        }),
+    );
+    const manager = new AuthSessionManager(store, jest.fn(), () => NOW);
+    const login: LoginSessionInput = {...ROTATED_TOKENS, user: USER};
+
+    const saving = manager.saveSession(login, NOW, {
+      signal: controller.signal,
+    });
+    await writeStarted;
+    controller.abort();
+    resolveWrite();
+
+    await expect(saving).rejects.toMatchObject({
+      name: 'AuthSessionCancelledError',
+    });
+    expect(store.clear).toHaveBeenCalledTimes(1);
+    expect(manager.getAccessToken()).toBeNull();
+  });
+
+  it('clears a login record when its request is aborted after persistence', async () => {
+    const store = createStore(null);
+    const controller = new AbortController();
+    let markCleared!: () => void;
+    const cleared = new Promise<void>(resolve => {
+      markCleared = resolve;
+    });
+    store.clear.mockImplementationOnce(async () => {
+      markCleared();
+    });
+    const manager = new AuthSessionManager(store, jest.fn(), () => NOW);
+    const login: LoginSessionInput = {...ROTATED_TOKENS, user: USER};
+
+    await manager.saveSession(login, NOW, {signal: controller.signal});
+    expect(manager.getAccessToken()).toBe('new-access');
+
+    controller.abort();
+    await cleared;
+
+    expect(store.clear).toHaveBeenCalledTimes(1);
+    expect(manager.getAccessToken()).toBeNull();
+  });
+
+  it('keeps the newest login record when an older save is aborted', async () => {
+    const store = createStore(null);
+    const controller = new AbortController();
+    let persisted: AuthSessionRecord | null = null;
+    let resolveFirstWrite!: () => void;
+    let markFirstWriteStarted!: () => void;
+    const firstWriteStarted = new Promise<void>(resolve => {
+      markFirstWriteStarted = resolve;
+    });
+    store.write
+      .mockImplementationOnce(
+        record =>
+          new Promise<void>(resolve => {
+            resolveFirstWrite = () => {
+              persisted = record;
+              resolve();
+            };
+            markFirstWriteStarted();
+          }),
+      )
+      .mockImplementationOnce(async record => {
+        persisted = record;
+      });
+    store.clear.mockImplementation(async () => {
+      persisted = null;
+    });
+    const manager = new AuthSessionManager(store, jest.fn(), () => NOW);
+    const firstLogin: LoginSessionInput = {
+      ...ROTATED_TOKENS,
+      accessToken: 'first-access',
+      refreshToken: 'first-refresh',
+      user: {id: 1, name: '이전 사용자'},
+    };
+    const latestLogin: LoginSessionInput = {
+      ...ROTATED_TOKENS,
+      accessToken: 'latest-access',
+      refreshToken: 'latest-refresh',
+      user: {id: 2, name: '최신 사용자'},
+    };
+
+    const firstSaving = manager.saveSession(firstLogin, NOW, {
+      signal: controller.signal,
+    });
+    await firstWriteStarted;
+    controller.abort();
+    const latestSaving = manager.saveSession(latestLogin, NOW + 1);
+    resolveFirstWrite();
+
+    await expect(firstSaving).rejects.toMatchObject({
+      name: 'AuthSessionCancelledError',
+    });
+    await expect(latestSaving).resolves.toBeUndefined();
+    expect(store.clear).not.toHaveBeenCalled();
+    expect(persisted).toEqual(
+      expect.objectContaining({
+        accessToken: 'latest-access',
+        refreshToken: 'latest-refresh',
+        user: latestLogin.user,
+      }),
+    );
+    expect(manager.getAccessToken()).toBe('latest-access');
+  });
+
   it('stores login token expiry from the response receive time', async () => {
     const store = createStore(null);
     const manager = new AuthSessionManager(store, jest.fn(), () => NOW);

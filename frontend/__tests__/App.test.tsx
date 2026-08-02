@@ -1,11 +1,12 @@
 import React from "react";
-import { AccessibilityInfo, Alert, Image } from "react-native";
+import { AccessibilityInfo, Alert, Image, Modal } from "react-native";
 import TestRenderer from "react-test-renderer";
 import { clearAllMockStorages } from "@react-native-async-storage/async-storage/jest";
 
 import App from "../App";
 import { AppShell } from "../src/app-shell";
 import { InvalidCredentialsError } from "../src/features/auth/api/mockAuthGateway";
+import { LoginBottomSheet } from "../src/features/auth/components/LoginBottomSheet";
 import {
   type AuthRestoreResult,
   type AuthSessionCoordinator,
@@ -140,6 +141,14 @@ async function flushAsyncWork(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
 }
 
 function createGroupGateway(): jest.Mocked<FamilyGroupGateway> {
@@ -428,6 +437,139 @@ test("네트워크 로그인 실패를 인증 정보 오류로 오인하지 않�
       children: "네트워크 연결을 확인해 주세요.",
     })
   ).toBeTruthy();
+});
+
+test("로그인 처리 중에는 중복 제출과 시트 닫기·입력 변경을 잠근다", async () => {
+  const authGateway = createAuthGateway();
+  const login = createDeferred<{
+    activeGroupId: null;
+    id: number;
+    name: string;
+  }>();
+  authGateway.login.mockReturnValueOnce(login.promise);
+  const { renderer } = await renderApp(authGateway);
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  const loginButton = renderer.root.findByProps({
+    accessibilityLabel: "로그인",
+  });
+  let loginPromise: Promise<void> | undefined;
+  TestRenderer.act(() => {
+    loginPromise = loginButton.props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+  });
+
+  expect(authGateway.login).toHaveBeenCalledTimes(1);
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "로그인 아이디" }).props
+      .editable
+  ).toBe(false);
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "로그인 비밀번호" }).props
+      .editable
+  ).toBe(false);
+
+  TestRenderer.act(() => {
+    loginButton.props.onPress();
+    renderer.root
+      .findByProps({ accessibilityLabel: "로그인 닫기" })
+      .props.onPress();
+    renderer.root.findByType(Modal).props.onRequestClose();
+  });
+
+  expect(authGateway.login).toHaveBeenCalledTimes(1);
+  expect(renderer.root.findByType(LoginBottomSheet).props.visible).toBe(true);
+
+  await TestRenderer.act(async () => {
+    login.resolve({ activeGroupId: null, id: 2, name: "김민지" });
+    await loginPromise;
+  });
+});
+
+test("겹친 로그인 응답은 최신 요청의 사용자만 화면에 적용한다", async () => {
+  const authGateway = createAuthGateway();
+  const firstLogin = createDeferred<{
+    activeGroupId: null;
+    id: number;
+    name: string;
+  }>();
+  const secondLogin = createDeferred<{
+    activeGroupId: null;
+    id: number;
+    name: string;
+  }>();
+  authGateway.login
+    .mockReturnValueOnce(firstLogin.promise)
+    .mockReturnValueOnce(secondLogin.promise);
+  const { renderer } = await renderApp(authGateway);
+  await openLogin(renderer);
+  const onLogin = renderer.root.findByType(LoginBottomSheet).props.onLogin;
+  let firstPromise: Promise<void> | undefined;
+  let secondPromise: Promise<void> | undefined;
+
+  TestRenderer.act(() => {
+    firstPromise = onLogin({ loginId: "first", password: "password1" });
+    secondPromise = onLogin({ loginId: "second", password: "password2" });
+  });
+
+  const firstSignal = authGateway.login.mock.calls[0]?.[1]?.signal;
+  const secondSignal = authGateway.login.mock.calls[1]?.[1]?.signal;
+  expect(firstSignal?.aborted).toBe(true);
+  expect(secondSignal?.aborted).toBe(false);
+
+  await TestRenderer.act(async () => {
+    secondLogin.resolve({ activeGroupId: null, id: 2, name: "최신 사용자" });
+    await secondPromise;
+  });
+  expect(
+    renderer.root.findByProps({ children: "최신 사용자 님,\n안녕하세요" })
+  ).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    firstLogin.resolve({ activeGroupId: null, id: 1, name: "이전 사용자" });
+    await firstPromise;
+  });
+  expect(
+    renderer.root.findAllByProps({ children: "이전 사용자 님,\n안녕하세요" })
+  ).toHaveLength(0);
+});
+
+test("닫힌 로그인 시트의 늦은 성공 응답을 무시한다", async () => {
+  const authGateway = createAuthGateway();
+  const login = createDeferred<{
+    activeGroupId: null;
+    id: number;
+    name: string;
+  }>();
+  authGateway.login.mockReturnValueOnce(login.promise);
+  const { renderer } = await renderApp(authGateway);
+  await openLogin(renderer);
+  const loginSheet = renderer.root.findByType(LoginBottomSheet);
+  let loginPromise: Promise<void> | undefined;
+
+  TestRenderer.act(() => {
+    loginPromise = loginSheet.props.onLogin({
+      loginId: "familink",
+      password: "familink123",
+    });
+    loginSheet.props.onDismiss();
+  });
+
+  expect(authGateway.login.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+  await TestRenderer.act(async () => {
+    login.resolve({ activeGroupId: null, id: 2, name: "늦은 사용자" });
+    await loginPromise;
+  });
+
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })
+  ).toBeTruthy();
+  expect(
+    renderer.root.findAllByProps({ children: "늦은 사용자 님,\n안녕하세요" })
+  ).toHaveLength(0);
 });
 
 test("로그인 후 A-10을 거쳐 B-3으로 이동하고 다시 돌아온다", async () => {

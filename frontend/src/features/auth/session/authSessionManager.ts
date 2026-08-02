@@ -17,6 +17,10 @@ export interface LoginSessionInput extends AuthTokenPairResponse {
   user: AuthSessionUser;
 }
 
+export interface SaveSessionOptions {
+  signal?: AbortSignal;
+}
+
 export interface AuthSessionCoordinator extends ApiAuthSession {
   clearLocalSession(): Promise<void>;
   restore(): Promise<AuthRestoreResult>;
@@ -69,19 +73,70 @@ export class AuthSessionManager
   async saveSession(
     input: LoginSessionInput,
     receivedAt = this.now(),
+    options?: SaveSessionOptions,
   ): Promise<void> {
     const generation = ++this.generation;
     this.invalidationHandled = false;
     const record = createRecord(input, input.user, receivedAt);
+    let writeMayPersist = false;
+    let cancellation: Promise<void> | null = null;
+
+    const cancel = () => {
+      if (this.generation !== generation) {
+        return;
+      }
+
+      const cancellationGeneration = ++this.generation;
+      if (!writeMayPersist) {
+        return;
+      }
+
+      this.currentSession = null;
+      cancellation = this.runPersistence(async () => {
+        if (this.generation !== cancellationGeneration) {
+          return;
+        }
+        await this.store.clear();
+      }).catch(error => {
+        const storageError = toStorageError(
+          '취소된 인증 세션을 안전하게 삭제하지 못했습니다.',
+          error,
+        );
+        this.invalidationHandled = true;
+        this.emitInvalidated(storageError);
+        throw storageError;
+      });
+      cancellation.catch(() => undefined);
+    };
+
+    options?.signal?.addEventListener('abort', cancel, {once: true});
+    if (options?.signal?.aborted === true) {
+      cancel();
+    }
 
     try {
-      await this.runPersistence(() => this.store.write(record));
-      if (this.generation !== generation) {
+      await this.runPersistence(() => {
+        if (
+          this.generation !== generation ||
+          options?.signal?.aborted === true
+        ) {
+          throw new AuthSessionCancelledError();
+        }
+        writeMayPersist = true;
+        return this.store.write(record);
+      });
+      if (
+        this.generation !== generation ||
+        options?.signal?.aborted === true
+      ) {
         throw new AuthSessionCancelledError();
       }
       this.currentSession = record;
     } catch (error) {
       if (error instanceof AuthSessionCancelledError) {
+        if (cancellation !== null) {
+          await cancellation;
+        }
         throw error;
       }
       const storageError = toStorageError(

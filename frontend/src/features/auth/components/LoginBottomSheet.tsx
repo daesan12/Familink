@@ -46,6 +46,7 @@ export function LoginBottomSheet({
   const [loginError, setLoginError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const submittingRef = useRef(false);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const sheetTranslateY = useRef(new Animated.Value(32)).current;
 
@@ -70,6 +71,14 @@ export function LoginBottomSheet({
     setPasswordVisible(false);
     setLoginError(null);
     setSubmitting(false);
+    submittingRef.current = false;
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
     backdropOpacity.setValue(0);
     sheetTranslateY.setValue(reduceMotion ? 0 : 32);
 
@@ -100,7 +109,18 @@ export function LoginBottomSheet({
     passwordTouched && credentials.password.trim().length === 0;
   const canLogin = canSubmitLogin(credentials);
 
+  const handleDismiss = () => {
+    if (submittingRef.current) {
+      return;
+    }
+    onDismiss();
+  };
+
   const handleSubmit = async () => {
+    if (submittingRef.current) {
+      return;
+    }
+
     setLoginIdTouched(true);
     setPasswordTouched(true);
 
@@ -108,6 +128,7 @@ export function LoginBottomSheet({
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     setLoginError(null);
     try {
@@ -119,6 +140,7 @@ export function LoginBottomSheet({
           : '로그인에 실패했습니다. 잠시 후 다시 시도해주세요.',
       );
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -130,7 +152,7 @@ export function LoginBottomSheet({
   return (
     <Modal
       animationType="none"
-      onRequestClose={onDismiss}
+      onRequestClose={handleDismiss}
       statusBarTranslucent
       transparent
       visible={visible}>
@@ -141,8 +163,9 @@ export function LoginBottomSheet({
         />
         <Pressable
           accessibilityElementsHidden
+          disabled={submitting}
           importantForAccessibility="no-hide-descendants"
-          onPress={onDismiss}
+          onPress={handleDismiss}
           style={StyleSheet.absoluteFill}
         />
         <KeyboardAvoidingView
@@ -162,8 +185,9 @@ export function LoginBottomSheet({
                 accessibilityLabel="로그인 닫기"
                 accessibilityRole="button"
                 containerStyle={styles.backButtonContainer}
+                disabled={submitting}
                 hitSlop={8}
-                onPress={onDismiss}>
+                onPress={handleDismiss}>
                 <View style={styles.backButton}>
                   <MaterialDesignIcons
                     color={AUTH_COLORS.background}
@@ -180,6 +204,7 @@ export function LoginBottomSheet({
                   autoComplete="username"
                   autoCorrect={false}
                   autoFocus
+                  editable={!submitting}
                   invalid={loginIdInvalid}
                   onBlur={() => setLoginIdTouched(true)}
                   onChangeText={value => {
@@ -204,6 +229,7 @@ export function LoginBottomSheet({
                   autoCapitalize="none"
                   autoComplete="current-password"
                   autoCorrect={false}
+                  editable={!submitting}
                   invalid={passwordInvalid}
                   onBlur={() => setPasswordTouched(true)}
                   onChangeText={value => {
@@ -226,6 +252,7 @@ export function LoginBottomSheet({
                       }
                       accessibilityRole="button"
                       containerStyle={styles.visibilityButton}
+                      disabled={submitting}
                       hitSlop={8}
                       onPress={() =>
                         setPasswordVisible(current => !current)

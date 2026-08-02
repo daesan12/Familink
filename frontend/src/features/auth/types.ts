@@ -23,6 +23,10 @@ export interface LoginCredentials {
   password: string;
 }
 
+export interface LoginRequestOptions {
+  signal?: AbortSignal;
+}
+
 export interface AuthenticatedUser {
   activeGroupId: string | null;
   id: number;
@@ -31,6 +35,9 @@ export interface AuthenticatedUser {
 
 export interface AuthGateway {
   getAccessToken?(): Promise<string | null> | string | null;
-  login(credentials: LoginCredentials): Promise<AuthenticatedUser>;
+  login(
+    credentials: LoginCredentials,
+    options?: LoginRequestOptions,
+  ): Promise<AuthenticatedUser>;
   logout(): Promise<void>;
 }

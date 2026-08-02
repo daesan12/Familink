@@ -527,6 +527,8 @@ export default function App({
     !shouldRestoreSession
   );
   const authInvalidationVersionRef = useRef(0);
+  const loginAttemptIdRef = useRef(0);
+  const loginAbortControllerRef = useRef<AbortController | null>(null);
   const interestSetupRequestRef = useRef(0);
   const deviceTokenGenerationRef = useRef(0);
   const activeDeviceTokenRef = useRef<string | null>(null);
@@ -539,7 +541,14 @@ export default function App({
   const withdrawalInFlightRef = useRef<Promise<void> | null>(null);
   const resolvedGroups = availableGroups;
 
+  const cancelLoginAttempt = useCallback(() => {
+    loginAttemptIdRef.current += 1;
+    loginAbortControllerRef.current?.abort();
+    loginAbortControllerRef.current = null;
+  }, []);
+
   const clearAuthenticationState = useCallback(() => {
+    cancelLoginAttempt();
     setUser(null);
     setActiveGroupId(null);
     setAvailableGroups([]);
@@ -552,7 +561,9 @@ export default function App({
     setGroupOnboardingReturnRoute("welcome");
     setLoginVisible(false);
     setRoute("welcome");
-  }, []);
+  }, [cancelLoginAttempt]);
+
+  useEffect(() => cancelLoginAttempt, [cancelLoginAttempt]);
 
   const registerCurrentDeviceToken = useCallback(
     async (refreshedToken?: string) => {
@@ -833,21 +844,55 @@ export default function App({
   ]);
 
   const handleLogin = async (credentials: LoginCredentials) => {
+    const previousController = loginAbortControllerRef.current;
+    const attemptId = ++loginAttemptIdRef.current;
+    const controller = new AbortController();
+    loginAbortControllerRef.current = controller;
+    previousController?.abort();
     const invalidationVersion = authInvalidationVersionRef.current;
-    const authenticatedUser = await authGateway.login(credentials);
-    if (authInvalidationVersionRef.current !== invalidationVersion) {
-      return;
+    const isCurrentAttempt = () =>
+      loginAttemptIdRef.current === attemptId &&
+      loginAbortControllerRef.current === controller &&
+      !controller.signal.aborted;
+
+    try {
+      const authenticatedUser = await authGateway.login(credentials, {
+        signal: controller.signal,
+      });
+      if (
+        !isCurrentAttempt() ||
+        authInvalidationVersionRef.current !== invalidationVersion
+      ) {
+        return;
+      }
+      authInvalidationVersionRef.current += 1;
+      const authenticatedSessionVersion = authInvalidationVersionRef.current;
+      deviceTokenLogoutRef.current = false;
+      suppressDeviceTokenDeactivationRef.current = false;
+      setLoginVisible(false);
+      await enterAuthenticatedState(
+        authenticatedUser,
+        () =>
+          isCurrentAttempt() &&
+          authInvalidationVersionRef.current === authenticatedSessionVersion
+      );
+      if (
+        !isCurrentAttempt() ||
+        authInvalidationVersionRef.current !== authenticatedSessionVersion
+      ) {
+        return;
+      }
+      void registerCurrentDeviceToken().catch(() => undefined);
+    } finally {
+      if (loginAbortControllerRef.current === controller) {
+        loginAbortControllerRef.current = null;
+      }
     }
-    authInvalidationVersionRef.current += 1;
-    const authenticatedSessionVersion = authInvalidationVersionRef.current;
-    deviceTokenLogoutRef.current = false;
-    suppressDeviceTokenDeactivationRef.current = false;
+  };
+
+  const handleLoginDismiss = () => {
+    cancelLoginAttempt();
     setLoginVisible(false);
-    await enterAuthenticatedState(
-      authenticatedUser,
-      () => authInvalidationVersionRef.current === authenticatedSessionVersion
-    );
-    void registerCurrentDeviceToken().catch(() => undefined);
   };
 
   const handleLogout = async () => {
@@ -1405,7 +1450,7 @@ export default function App({
                   onStartSignup={() => setRoute("signup")}
                 />
                 <LoginBottomSheet
-                  onDismiss={() => setLoginVisible(false)}
+                  onDismiss={handleLoginDismiss}
                   onLogin={handleLogin}
                   visible={loginVisible}
                 />
