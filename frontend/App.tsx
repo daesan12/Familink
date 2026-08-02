@@ -473,6 +473,8 @@ export default function App({
   const [groupOnboardingReturnRoute, setGroupOnboardingReturnRoute] =
     useState<Exclude<RootRoute, "groupOnboarding">>("welcome");
   const [loginVisible, setLoginVisible] = useState(false);
+  // 방금 가입한 로그인 ID. 가입 직후 여는 로그인 시트에 미리 채운다.
+  const [signupLoginId, setSignupLoginId] = useState("");
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [activeGroupId, setActiveGroupId] = useState(initialGroupId);
   const [availableGroups, setAvailableGroups] = useState<FamilyGroup[]>(() => [
@@ -560,6 +562,8 @@ export default function App({
     setJoinRequests([]);
     setGroupOnboardingReturnRoute("welcome");
     setLoginVisible(false);
+    // 로그아웃 후 다른 사용자가 직전 가입 계정 아이디를 보지 않게 미리 채움을 비운다.
+    setSignupLoginId("");
     setRoute("welcome");
   }, [cancelLoginAttempt]);
 
@@ -893,6 +897,8 @@ export default function App({
   const handleLoginDismiss = () => {
     cancelLoginAttempt();
     setLoginVisible(false);
+    // 미리 채움은 가입 직후 1회만 유지한다.
+    setSignupLoginId("");
   };
 
   const handleLogout = async () => {
@@ -1450,6 +1456,7 @@ export default function App({
                   onStartSignup={() => setRoute("signup")}
                 />
                 <LoginBottomSheet
+                  initialLoginId={signupLoginId}
                   onDismiss={handleLoginDismiss}
                   onLogin={handleLogin}
                   visible={loginVisible}
@@ -1459,7 +1466,12 @@ export default function App({
             {route === "signup" && (
               <SignupFlowScreen
                 onCancel={() => setRoute("welcome")}
-                onComplete={() => setRoute("welcome")}
+                onComplete={(loginId) => {
+                  // 방금 만든 계정을 다시 입력하지 않도록 아이디를 채운 로그인 시트를 바로 연다.
+                  setSignupLoginId(loginId);
+                  setRoute("welcome");
+                  setLoginVisible(true);
+                }}
               />
             )}
             {route === "appShell" && (

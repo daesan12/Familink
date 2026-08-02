@@ -28,16 +28,22 @@ const INITIAL_CREDENTIALS: LoginCredentials = {
 };
 
 interface LoginBottomSheetProps {
+  // 시트가 열릴 때 미리 채울 로그인 ID(예: 방금 가입한 계정).
+  initialLoginId?: string;
   onDismiss: () => void;
   onLogin: (credentials: LoginCredentials) => Promise<void>;
   visible: boolean;
 }
 
 export function LoginBottomSheet({
+  initialLoginId,
   onDismiss,
   onLogin,
   visible,
 }: LoginBottomSheetProps) {
+  // 아이디가 미리 채워져 있으면 다음 입력인 비밀번호로 포커스를 보낸다.
+  const hasPrefilledLoginId =
+    initialLoginId !== undefined && initialLoginId.length > 0;
   const [credentials, setCredentials] =
     useState<LoginCredentials>(INITIAL_CREDENTIALS);
   const [loginIdTouched, setLoginIdTouched] = useState(false);
@@ -65,14 +71,18 @@ export function LoginBottomSheet({
       return;
     }
 
-    setCredentials(INITIAL_CREDENTIALS);
+    setCredentials(
+      initialLoginId === undefined || initialLoginId.length === 0
+        ? INITIAL_CREDENTIALS
+        : {loginId: initialLoginId, password: ''},
+    );
     setLoginIdTouched(false);
     setPasswordTouched(false);
     setPasswordVisible(false);
     setLoginError(null);
     setSubmitting(false);
     submittingRef.current = false;
-  }, [visible]);
+  }, [initialLoginId, visible]);
 
   useEffect(() => {
     if (!visible) {
@@ -203,7 +213,7 @@ export function LoginBottomSheet({
                   autoCapitalize="none"
                   autoComplete="username"
                   autoCorrect={false}
-                  autoFocus
+                  autoFocus={!hasPrefilledLoginId}
                   editable={!submitting}
                   invalid={loginIdInvalid}
                   onBlur={() => setLoginIdTouched(true)}
@@ -229,6 +239,7 @@ export function LoginBottomSheet({
                   autoCapitalize="none"
                   autoComplete="current-password"
                   autoCorrect={false}
+                  autoFocus={hasPrefilledLoginId}
                   editable={!submitting}
                   invalid={passwordInvalid}
                   onBlur={() => setPasswordTouched(true)}
