@@ -32,6 +32,7 @@ public class SidebandSessionManager {
 	private final ObjectMapper objectMapper;
 	private final CallTranscriptService callTranscriptService;
 	private final AiCallPostToolService postToolService;
+	private final AiCallCalendarToolService calendarToolService;
 	private final Map<Long, ManagedSocket> sessions = new ConcurrentHashMap<>();
 
 	public SidebandSessionManager(
@@ -39,13 +40,15 @@ public class SidebandSessionManager {
 		OpenAiRealtimeProperties properties,
 		ObjectMapper objectMapper,
 		CallTranscriptService callTranscriptService,
-		AiCallPostToolService postToolService
+		AiCallPostToolService postToolService,
+		AiCallCalendarToolService calendarToolService
 	) {
 		this.httpClient = openAiSidebandHttpClient;
 		this.properties = properties;
 		this.objectMapper = objectMapper;
 		this.callTranscriptService = callTranscriptService;
 		this.postToolService = postToolService;
+		this.calendarToolService = calendarToolService;
 	}
 
 	public void connect(
@@ -155,7 +158,8 @@ public class SidebandSessionManager {
 				sessionId,
 				personReferences,
 				objectMapper,
-				postToolService
+				postToolService,
+				calendarToolService
 			);
 		}
 
