@@ -23,6 +23,26 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 		""")
 	Optional<GroupMember> findByIdForUpdate(@Param("memberId") Long memberId);
 
+	/**
+	 * 그룹·사용자 조합의 활성 멤버십을 잠그지 않고 찾는다.
+	 *
+	 * <p>직렬화가 필요한 호출자는 이 조회 대신
+	 * {@link #findActiveForUpdateByGroupIdAndUserId(Long, Long)}을 쓴다. 아래 설명은 이 조회를
+	 * 그대로 두어야 하는 특정 호출자에 대한 것이고, 다른 호출자에게 잠금을 금지하지 않는다.
+	 *
+	 * <p>같은 트랜잭션에서 알림을 저장하는 호출자, 즉 게시글·댓글·일정 생성은 잠그지 않는 편이
+	 * 안전하다. 알림 저장은 동기로 이루어지고 알림 행은 수신자와 행위자 두 방향으로 {@code users}를
+	 * 참조하므로, INSERT가 그 계정 행에 {@code FOR KEY SHARE}를 건다. 여기에 계정 행
+	 * {@code FOR UPDATE}를 더하면 같은 그룹의 두 작성 요청이 서로의 계정 행을 반대 순서로 요구해
+	 * 교착이 된다. 잠금 대상을 멤버십 행으로 좁혀도 마찬가지다. 작성은
+	 * {@code group_members → users}(행위자 FK) 순으로, 탈퇴는 {@code users → group_members} 순으로
+	 * 요구해 순환이 생긴다. 잠금이 없는 현재는 그 순환이 없다.
+	 *
+	 * <p>그래서 탈퇴 직전 경쟁 창에서 만들어진 게시글·댓글·일정은 그대로 남을 수 있다. 탈퇴는
+	 * 작성 기록과 과거 그룹 관계를 보존하므로 이는 계약 위반이 아니며, 복구할 수 없는 계정 부활이나
+	 * 고아 그룹과 성격이 다르다. 이 경로까지 직렬화하려면 알림 저장을 커밋 이후로 옮기는 선행
+	 * 변경이 필요하다.
+	 */
 	@Query("""
 		select member
 		from GroupMember member
