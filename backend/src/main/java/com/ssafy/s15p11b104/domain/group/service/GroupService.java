@@ -91,15 +91,23 @@ public class GroupService {
 		return new GroupListResponse(groups, joinRequests);
 	}
 
+	/**
+	 * 로그인한 사용자가 자신의 역할을 정해 그룹을 만들고 그 그룹의 관리자가 된다.
+	 *
+	 * <p>생성자 계정 행을 먼저 잠근 뒤 활성 피보호자 여부를 확인한다. 활성 피보호자 제약은 그룹을
+	 * 가로지르므로, 잠그지 않으면 그룹 생성과 다른 그룹의 피보호자 지정이 양쪽 사전 검사를 통과한
+	 * 뒤 {@code uq_user_active_care_receiver}에서 한쪽이 실패한다. 피보호자를 지정하는 모든 경로가
+	 * 같은 계정 행을 먼저 잠그므로 그 위반 자체가 생기지 않는다.
+	 */
 	@Transactional
 	public GroupCreateResponse create(Long authenticatedUserId, GroupCreateRequest request) {
 		String name = normalizeName(request.name());
+		User creator = userRepository.findActiveByIdForUpdate(authenticatedUserId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 		if (request.myRole() == GroupRole.CARE_RECEIVER && isActiveCareReceiver(authenticatedUserId)) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST);
 		}
 
-		User creator = userRepository.findByIdAndWithdrawnAtIsNull(authenticatedUserId)
-			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 		FamilyGroup group = familyGroupRepository.save(new FamilyGroup(name, generateInviteCode()));
 		GroupMember manager = groupMemberRepository.save(
 			new GroupMember(group, creator, request.myRole(), true, Instant.now()));
@@ -232,7 +240,8 @@ public class GroupService {
 	/**
 	 * 피보호자는 동시에 하나의 활성 그룹에만 참여할 수 있다는 규칙을 미리 확인한다.
 	 *
-	 * <p>최종 보장은 {@code uq_user_active_care_receiver} 부분 유니크 인덱스가 담당한다.
+	 * <p>호출자가 대상 계정 행을 잠근 뒤에 확인하므로 잠그지 않고 읽어도 된다. 최종 보장은
+	 * {@code uq_user_active_care_receiver} 부분 유니크 인덱스가 담당한다.
 	 */
 	private boolean isActiveCareReceiver(Long userId) {
 		return groupMemberRepository.findAllActiveByUserId(userId).stream()

@@ -9,10 +9,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.s15p11b104.domain.account.entity.User;
+import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
 import com.ssafy.s15p11b104.domain.group.dto.GroupMemberItemResponse;
 import com.ssafy.s15p11b104.domain.group.dto.GroupMemberListResponse;
 import com.ssafy.s15p11b104.domain.group.dto.ManagerUpdateRequest;
@@ -26,6 +28,7 @@ import com.ssafy.s15p11b104.domain.group.entity.MemberAlias;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
+import com.ssafy.s15p11b104.global.exception.ConstraintViolationTranslator;
 import com.ssafy.s15p11b104.global.exception.ErrorCode;
 
 /**
@@ -41,12 +44,18 @@ public class GroupMemberService {
 
 	private final GroupMemberRepository groupMemberRepository;
 	private final MemberAliasRepository memberAliasRepository;
+	private final UserRepository userRepository;
+	private final ConstraintViolationTranslator constraintViolationTranslator;
 
 	public GroupMemberService(
 		GroupMemberRepository groupMemberRepository,
-		MemberAliasRepository memberAliasRepository) {
+		MemberAliasRepository memberAliasRepository,
+		UserRepository userRepository,
+		ConstraintViolationTranslator constraintViolationTranslator) {
 		this.groupMemberRepository = groupMemberRepository;
 		this.memberAliasRepository = memberAliasRepository;
+		this.userRepository = userRepository;
+		this.constraintViolationTranslator = constraintViolationTranslator;
 	}
 
 	/**
@@ -101,6 +110,11 @@ public class GroupMemberService {
 	 * 관리자가 활성 구성원의 역할을 변경한다.
 	 *
 	 * <p>{@code role}과 관리자 여부는 독립된 축이므로 관리자 본인의 역할도 변경할 수 있다.
+	 *
+	 * <p>피보호자로 바꿀 때는 대상 계정 행을 멤버십 행보다 먼저 잠근다. 활성 피보호자 제약은
+	 * 그룹을 가로지르므로 그룹별 멤버십 행을 잠그는 것만으로는 서로 다른 그룹의 두 요청이
+	 * 직렬화되지 않고, 아직 없는 멤버십을 잠글 수도 없다. 두 요청이 반드시 만나는 기존 행은
+	 * 대상 계정뿐이다.
 	 */
 	@Transactional
 	public MemberRoleUpdateResponse changeRole(
@@ -108,14 +122,19 @@ public class GroupMemberService {
 		Long memberId,
 		Long authenticatedUserId,
 		MemberRoleUpdateRequest request) {
+		GroupRole role = request.role();
+		if (role == GroupRole.CARE_RECEIVER) {
+			lockMemberAccount(groupId, memberId);
+		}
+
 		requireActiveManager(groupId, authenticatedUserId);
 		GroupMember target = getManageableMember(groupId, memberId);
 
-		GroupRole role = request.role();
 		if (role == GroupRole.CARE_RECEIVER && hasOtherActiveCareReceiverMembership(target)) {
 			throw new BusinessException(ErrorCode.CARE_RECEIVER_ALREADY_ACTIVE_IN_OTHER_GROUP);
 		}
 		target.changeRole(role);
+		flushRoleChange();
 
 		return new MemberRoleUpdateResponse(groupId, target.getId(), role);
 	}
@@ -202,12 +221,45 @@ public class GroupMemberService {
 	 * 대상 구성원을 제외한 다른 그룹에서 이미 활성 피보호자인지 확인한다.
 	 *
 	 * <p>대상 자신을 함께 세면 같은 그룹의 기존 피보호자를 다시 피보호자로 지정할 때 잘못된
-	 * 충돌이 발생한다. 최종 보장은 {@code uq_user_active_care_receiver}가 담당한다.
+	 * 충돌이 발생한다.
+	 *
+	 * <p>대상 계정 행을 잠근 뒤에 확인하므로 잠그지 않고 읽어도 된다. 피보호자를 지정하는 모든
+	 * 경로가 대상 계정 행을 먼저 잠그므로 이 조회 시점에 경쟁 트랜잭션이 진행될 수 없다. 그래도
+	 * {@code uq_user_active_care_receiver}가 최종 방어를 담당하며, 위반은
+	 * {@link #flushRoleChange()}가 계약된 409로 바꾼다.
 	 */
 	private boolean hasOtherActiveCareReceiverMembership(GroupMember target) {
 		return groupMemberRepository.findAllActiveByUserId(target.getUser().getId()).stream()
 			.filter(membership -> !membership.getId().equals(target.getId()))
 			.anyMatch(membership -> membership.getRole() == GroupRole.CARE_RECEIVER);
+	}
+
+	/**
+	 * 대상 구성원의 계정 행을 멤버십 행보다 먼저 잠근다.
+	 *
+	 * <p>잠글 계정을 알아내는 조회는 잠그지 않는다. 구성원을 찾지 못하면 잠그지 않고 넘어가
+	 * 뒤따르는 권한 검사와 404·409 판정을 앞지르지 않는다.
+	 */
+	private void lockMemberAccount(Long groupId, Long memberId) {
+		groupMemberRepository.findUserIdByGroupIdAndMemberId(groupId, memberId)
+			.ifPresent(userRepository::findActiveByIdForUpdate);
+	}
+
+	/**
+	 * 역할 변경을 트랜잭션 안에서 flush하고 제약 위반을 계약된 오류로 바꾼다.
+	 *
+	 * <p>더티체킹에만 맡기면 위반이 커밋 시점에 올라와 서비스에서 잡을 수 없고, 계약에 없는 500이
+	 * 된다.
+	 */
+	private void flushRoleChange() {
+		try {
+			groupMemberRepository.flush();
+		} catch (DataIntegrityViolationException exception) {
+			if (constraintViolationTranslator.isActiveCareReceiver(exception)) {
+				throw new BusinessException(ErrorCode.CARE_RECEIVER_ALREADY_ACTIVE_IN_OTHER_GROUP);
+			}
+			throw exception;
+		}
 	}
 
 	private GroupMember findViewer(List<GroupMember> activeMembers, Long authenticatedUserId) {
