@@ -15,8 +15,6 @@ import {getGroupManagementErrorMessage} from '../api/groupManagementApi';
 interface LeaveGroupScreenProps {
   groupName: string;
   memberCount: number;
-  // 가족 기록 개수. 계약 밖 목업값이다(H-8 요약 카드).
-  recordCount: number;
   managerName: string;
   // 조회자가 그룹관리자이면 먼저 위임해야 나갈 수 있어 나가기 버튼을 비활성화한다
   // (spec 규칙 10: 관리자는 다른 구성원이 있는 그룹에서 나가려면 먼저 위임한다).
@@ -32,7 +30,6 @@ interface LeaveGroupScreenProps {
 export function LeaveGroupScreen({
   groupName,
   memberCount,
-  recordCount,
   managerName,
   isViewerManager,
   onBack,
@@ -92,9 +89,8 @@ export function LeaveGroupScreen({
 
         <View style={styles.summaryCard}>
           <Text style={styles.groupName}>{groupName}</Text>
-          <Text style={styles.summaryLine}>
-            구성원 {memberCount}명 · 가족 기록 {recordCount}개
-          </Text>
+          {/* 가족 기록 개수는 어떤 조회 API도 제공하지 않아(계약 밖) 표시하지 않는다. */}
+          <Text style={styles.summaryLine}>구성원 {memberCount}명</Text>
           <Text style={styles.summaryLine}>그룹관리자 · {managerName}</Text>
         </View>
 

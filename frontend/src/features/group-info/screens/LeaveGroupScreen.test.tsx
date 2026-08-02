@@ -30,7 +30,6 @@ function render(overrides: {
         onBack={() => {}}
         onGoToChangeManager={overrides.onGoToChangeManager ?? (() => {})}
         onLeaveGroup={overrides.onLeaveGroup}
-        recordCount={128}
       />,
     );
   });
@@ -64,7 +63,8 @@ test('그룹 요약과 관리자 위임 안내를 보여준다', () => {
 
   expect(hasText(renderer, '정말 그룹을 나가시겠어요?')).toBe(true);
   expect(hasText(renderer, '우리 가족')).toBe(true);
-  expect(hasText(renderer, '구성원 4명 · 가족 기록 128개')).toBe(true);
+  // 가족 기록 개수는 제공하는 API가 없어 표시하지 않는다(F-19).
+  expect(hasText(renderer, '구성원 4명')).toBe(true);
   expect(hasText(renderer, '그룹관리자 · 이경호')).toBe(true);
   expect(hasText(renderer, '그룹관리자는 바로 나갈 수 없어요')).toBe(true);
 });

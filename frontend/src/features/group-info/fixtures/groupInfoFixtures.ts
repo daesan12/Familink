@@ -8,9 +8,6 @@ export interface GroupInfoSnapshot {
   currentMemberId: string;
   // 가입 승인 대기 건수. "승인 요청 N건" 문구에 쓴다.
   pendingJoinCount: number;
-  // 가족 기록 개수. 어떤 조회 API도 내려주지 않아(계약 밖) H-8 그룹 나가기 요약 카드에서만
-  // 목업으로 표시한다. 연동 시 서버 값으로 대체한다.
-  recordCount: number;
 }
 
 // '우리 가족의 이야기' 그룹 (피보호자 2명, 보호자 3명). 이경호가 방장이다.
@@ -159,14 +156,12 @@ const FAMILY_GROUP_INFO: GroupInfoSnapshot = {
   members: FAMILY_MEMBERS,
   currentMemberId: 'member-gyeongho',
   pendingJoinCount: 2,
-  recordCount: 128,
 };
 
 const EMPTY_GROUP_INFO: GroupInfoSnapshot = {
   members: [],
   currentMemberId: '',
   pendingJoinCount: 0,
-  recordCount: 0,
 };
 
 // App.tsx의 DEVELOPMENT_GROUPS 그룹 ID와 맞춘다.
@@ -176,13 +171,11 @@ const DEVELOPMENT_GROUP_INFO: Record<string, GroupInfoSnapshot> = {
     members: COUSINS_MEMBERS,
     currentMemberId: 'member-malsun',
     pendingJoinCount: 0,
-    recordCount: 43,
   },
   'development-empty-group': {
     members: MATERNAL_MEMBERS,
     currentMemberId: 'member-youngsook',
     pendingJoinCount: 1,
-    recordCount: 7,
   },
 };
 

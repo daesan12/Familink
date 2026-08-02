@@ -31,5 +31,4 @@ test('알 수 없는 실제 그룹에는 개발용 가족 정보를 노출하지
   expect(unknownGroup.members).toEqual([]);
   expect(unknownGroup.currentMemberId).toBe('');
   expect(unknownGroup.pendingJoinCount).toBe(0);
-  expect(unknownGroup.recordCount).toBe(0);
 });

@@ -65,8 +65,6 @@ export interface GroupInfoScreenProps extends AppScreenProps {
   currentMemberId?: string;
   initialMembers?: readonly GroupMember[];
   pendingJoinCount?: number;
-  // 가족 기록 개수. 계약 밖 목업값이며 H-8 그룹 나가기 요약 카드에 쓴다.
-  recordCount?: number;
   // 주간 효자 랭킹 로더 주입(테스트·연동용). 없으면 기본 로더로 조회한다.
   rankingLoader?: WeeklyRankingLoader;
   memberCarnationLoader?: MemberCarnationLoader;
@@ -103,7 +101,6 @@ export function GroupInfoScreen({
   currentMemberId,
   initialMembers,
   pendingJoinCount,
-  recordCount,
   rankingLoader,
   memberCarnationLoader,
   groupDetailLoader,
@@ -129,14 +126,12 @@ export function GroupInfoScreen({
           members: initialMembers,
           currentMemberId: currentMemberId ?? '',
           pendingJoinCount: pendingJoinCount ?? 0,
-          recordCount: recordCount ?? 0,
         }
       : membersLoader !== undefined
         ? {
             members: EMPTY_MEMBERS,
             currentMemberId: currentMemberId ?? '',
             pendingJoinCount: pendingJoinCount ?? 0,
-            recordCount: recordCount ?? 0,
           }
       : __DEV__
         ? getDevelopmentGroupInfo(currentGroup.id)
@@ -144,7 +139,6 @@ export function GroupInfoScreen({
             members: EMPTY_MEMBERS,
             currentMemberId: currentMemberId ?? '',
             pendingJoinCount: pendingJoinCount ?? 0,
-            recordCount: recordCount ?? 0,
           };
 
   // 주간 효자 랭킹을 비동기로 조회한다(useFeed와 같은 로더/훅 패턴).
@@ -719,7 +713,6 @@ export function GroupInfoScreen({
         onBack={() => setSubScreen(null)}
         onGoToChangeManager={() => setSubScreen('changeManager')}
         onLeaveGroup={handleLeaveGroup}
-        recordCount={scoped.recordCount}
       />
     );
   }
