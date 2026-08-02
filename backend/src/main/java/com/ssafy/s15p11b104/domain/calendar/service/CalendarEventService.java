@@ -115,11 +115,13 @@ public class CalendarEventService {
 
 	/**
 	 * 일정을 등록하고 참여자를 연결한다.
+	 *
+	 * <p>등록자의 활성 멤버십을 잠근 상태에서 검사한다. 근거는 {@link #getActiveMemberForWrite}에 있다.
 	 */
 	@Transactional
 	public CalendarEventCreateResponse create(
 		Long groupId, CalendarEventCreateRequest request, Long authenticatedUserId) {
-		GroupMember creator = getActiveMember(groupId, authenticatedUserId);
+		GroupMember creator = getActiveMemberForWrite(groupId, authenticatedUserId);
 		EventSchedule schedule = resolveSchedule(
 			request.eventDate(), request.endDate(), request.startAt(), request.endAt());
 		List<GroupMember> participants = resolveParticipants(groupId, request.participantMemberIds());
@@ -211,6 +213,18 @@ public class CalendarEventService {
 
 	private GroupMember getActiveMember(Long groupId, Long authenticatedUserId) {
 		return groupMemberRepository.findActiveByGroupIdAndUserId(groupId, authenticatedUserId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+	}
+
+	/**
+	 * 일정을 저장하기 전에 등록자의 활성 멤버십 행을 잠그고 찾는다.
+	 *
+	 * <p>잠그지 않으면 활성 구성원임을 읽은 뒤 그룹 나가기나 회원 탈퇴가 커밋되고, 그 다음 일정이
+	 * 저장되어 이미 떠난 구성원이 등록한 일정이 남는다. 나가기가 먼저 커밋된 경우 이 조회가 빈
+	 * 결과를 돌려주므로 잠금 없는 검사와 같은 {@code 403}으로 끝난다.
+	 */
+	private GroupMember getActiveMemberForWrite(Long groupId, Long authenticatedUserId) {
+		return groupMemberRepository.findActiveForUpdateByGroupIdAndUserId(groupId, authenticatedUserId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
 	}
 

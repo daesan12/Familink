@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.io.InputStream;
 import java.math.BigDecimal;
@@ -72,6 +73,40 @@ class S3MediaValidatorTest {
 
 		assertThatCode(() -> validator.validate(MediaType.IMAGE, "https://cdn/post-media/photo.jpg"))
 			.doesNotThrowAnyException();
+	}
+
+	@Test
+	void acceptsExistingProfileImageWithinLimit() {
+		given(s3Client.headObject(any(HeadObjectRequest.class)))
+			.willReturn(HeadObjectResponse.builder().contentLength(1024L).contentType("image/webp").build());
+
+		assertThatCode(() -> validator.validateProfileImage("https://cdn/profile-image/profile.webp"))
+			.doesNotThrowAnyException();
+		verify(s3Client).headObject(argThat((HeadObjectRequest request) ->
+			BUCKET.equals(request.bucket()) && "profile-image/profile.webp".equals(request.key())));
+	}
+
+	@Test
+	void rejectsProfileImageOutsideItsPurposeWithoutCallingS3() {
+		assertThatThrownBy(() -> validator.validateProfileImage("https://cdn/post-media/post.jpg"))
+			.isInstanceOf(BusinessException.class);
+
+		verifyNoInteractions(s3Client);
+	}
+
+	@Test
+	void rejectsProfileImageWithInvalidMetadata() {
+		given(s3Client.headObject(any(HeadObjectRequest.class)))
+			.willReturn(
+				HeadObjectResponse.builder().contentLength(0L).contentType("image/jpeg").build(),
+				HeadObjectResponse.builder().contentLength(10L * 1024 * 1024 + 1)
+					.contentType("image/jpeg").build(),
+				HeadObjectResponse.builder().contentLength(1024L).contentType("image/gif").build());
+
+		for (int attempt = 0; attempt < 3; attempt++) {
+			assertThatThrownBy(() -> validator.validateProfileImage("https://cdn/profile-image/invalid.jpg"))
+				.isInstanceOf(BusinessException.class);
+		}
 	}
 
 	@Test

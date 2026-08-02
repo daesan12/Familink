@@ -14,6 +14,7 @@ import com.ssafy.s15p11b104.domain.account.dto.ProfileUpdateRequest;
 import com.ssafy.s15p11b104.domain.account.dto.ProfileUpdateResponse;
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.file.service.S3MediaValidator;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.notification.repository.DeviceTokenRepository;
@@ -36,6 +37,7 @@ public class UserService {
 	private final AccessTokenProvider accessTokenProvider;
 	private final AccessTokenBlacklist accessTokenBlacklist;
 	private final DeviceTokenRepository deviceTokenRepository;
+	private final S3MediaValidator s3MediaValidator;
 
 	UserService(
 		UserRepository userRepository,
@@ -43,7 +45,8 @@ public class UserService {
 		RefreshTokenStore refreshTokenStore,
 		AccessTokenProvider accessTokenProvider,
 		AccessTokenBlacklist accessTokenBlacklist,
-		DeviceTokenRepository deviceTokenRepository
+		DeviceTokenRepository deviceTokenRepository,
+		S3MediaValidator s3MediaValidator
 	) {
 		this.userRepository = userRepository;
 		this.groupMemberRepository = groupMemberRepository;
@@ -51,6 +54,7 @@ public class UserService {
 		this.accessTokenProvider = accessTokenProvider;
 		this.accessTokenBlacklist = accessTokenBlacklist;
 		this.deviceTokenRepository = deviceTokenRepository;
+		this.s3MediaValidator = s3MediaValidator;
 	}
 
 	/**
@@ -92,6 +96,9 @@ public class UserService {
 		if (newLoginId != null && !newLoginId.equals(user.getLoginId())
 			&& userRepository.existsByLoginId(newLoginId)) {
 			throw new BusinessException(ErrorCode.LOGIN_ID_DUPLICATED);
+		}
+		if (request.profileImageUrlProvided() && request.profileImageUrl() != null) {
+			s3MediaValidator.validateProfileImage(request.profileImageUrl());
 		}
 
 		user.updateProfile(newLoginId, request.name(), request.birthDate(), request.gender());

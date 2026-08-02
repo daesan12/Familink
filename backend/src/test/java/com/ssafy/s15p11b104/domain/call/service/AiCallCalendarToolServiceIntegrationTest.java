@@ -4,18 +4,37 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.ZoneId;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
+/**
+ * "오늘" 같은 상대 날짜 표현을 다루므로 애플리케이션 시계를 고정한다. 고정하지 않으면 픽스처가
+ * 어느 날짜를 "오늘"로 볼지 정할 수 없어, 실행한 날에 따라 결과가 달라진다.
+ */
 @Transactional
+@Import(AiCallCalendarToolServiceIntegrationTest.FixedClockConfiguration.class)
 class AiCallCalendarToolServiceIntegrationTest extends IntegrationTest {
+
+	private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
+
+	/** 한국 시간 2026-08-02 09:00. 날짜 경계에서 멀어 시간대 변환 실수가 결과를 바꾸지 않는다. */
+	private static final Instant FIXED_NOW = Instant.parse("2026-08-02T00:00:00Z");
+	private static final String TODAY = "2026-08-02";
+	private static final String YESTERDAY = "2026-08-01";
+	private static final String TOMORROW = "2026-08-03";
+	private static final String DAY_AFTER_TOMORROW = "2026-08-04";
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
@@ -44,15 +63,15 @@ class AiCallCalendarToolServiceIntegrationTest extends IntegrationTest {
 		);
 		Long callSessionId = insertCallSession(groupId, careReceiverId, "IN_PROGRESS");
 
-		insertCalendarEvent(groupId, creatorId, "당일 일정", "2026-08-02", "2026-08-02");
-		insertCalendarEvent(groupId, creatorId, "여러 날 일정", "2026-08-01", "2026-08-03");
-		insertCalendarEvent(groupId, creatorId, "다른 날짜", "2026-08-04", "2026-08-04");
-		insertCalendarEvent(otherGroupId, otherCreatorId, "외부 그룹", "2026-08-02", "2026-08-02");
+		insertCalendarEvent(groupId, creatorId, "당일 일정", TODAY, TODAY);
+		insertCalendarEvent(groupId, creatorId, "여러 날 일정", YESTERDAY, TOMORROW);
+		insertCalendarEvent(groupId, creatorId, "다른 날짜", DAY_AFTER_TOMORROW, DAY_AFTER_TOMORROW);
+		insertCalendarEvent(otherGroupId, otherCreatorId, "외부 그룹", TODAY, TODAY);
 
 		AiCallToolResult result = calendarToolService.getEventsByDate(callSessionId, "오늘");
 
 		assertThat(result.status()).isEqualTo(AiCallToolResult.Status.SUCCESS);
-		assertThat(result.date()).isEqualTo("2026-08-02");
+		assertThat(result.date()).isEqualTo(TODAY);
 		assertThat(result.events()).extracting(AiCallToolResult.CalendarEventItem::title)
 			.containsExactlyInAnyOrder("당일 일정", "여러 날 일정");
 	}
@@ -153,8 +172,18 @@ class AiCallCalendarToolServiceIntegrationTest extends IntegrationTest {
 			title,
 			Date.valueOf(eventDate),
 			Date.valueOf(endDate),
-			Timestamp.from(Instant.parse("2026-08-01T00:00:00Z")),
-			Timestamp.from(Instant.parse("2026-08-01T00:00:00Z")),
-			Timestamp.from(Instant.parse("2026-08-01T00:00:00Z")));
+			Timestamp.from(FIXED_NOW),
+			Timestamp.from(FIXED_NOW),
+			Timestamp.from(FIXED_NOW));
+	}
+
+	@TestConfiguration(proxyBeanMethods = false)
+	static class FixedClockConfiguration {
+
+		@Bean
+		@Primary
+		Clock fixedClock() {
+			return Clock.fixed(FIXED_NOW, BUSINESS_ZONE);
+		}
 	}
 }

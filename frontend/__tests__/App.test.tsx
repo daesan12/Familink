@@ -2694,6 +2694,151 @@ test("앱 셸 진입 시 알림 미읽음 개수를 벨 배지에 표시한다",
   ).toBeGreaterThan(0);
 });
 
+test("활성 탭을 다시 누르면 화면을 재마운트해 최신 데이터를 다시 조회한다", async () => {
+  const mountLog: number[] = [];
+  function FeedProbe() {
+    React.useEffect(() => {
+      mountLog.push(1);
+    }, []);
+    return null;
+  }
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        initialRootRoute="appShell"
+        screens={{ feed: FeedProbe }}
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(mountLog).toHaveLength(1);
+
+  // 이미 활성인 피드 탭을 다시 누르면 화면이 재마운트되어 조회가 다시 실행된다.
+  await TestRenderer.act(() => {
+    renderer!.root.findByProps({ accessibilityLabel: "피드 탭" }).props.onPress();
+  });
+
+  expect(mountLog).toHaveLength(2);
+});
+
+test("피드에 진입하거나 피드를 다시 누르면 미읽음 배지를 다시 조회한다", async () => {
+  const notificationGateway = createNotificationGateway();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <App
+        initialRootRoute="appShell"
+        notificationGateway={notificationGateway}
+        screens={{}}
+      />
+    );
+    await flushAsyncWork();
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(notificationGateway.getUnreadCount).toHaveBeenCalledTimes(1);
+
+  // 배지는 피드 헤더에서만 쓰므로 다른 탭 진입에는 재조회하지 않는다.
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹정보 탭" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+  expect(notificationGateway.getUnreadCount).toHaveBeenCalledTimes(1);
+
+  // 피드로 돌아오면 최신 미읽음 수를 다시 조회한다.
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "피드 탭" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+  expect(notificationGateway.getUnreadCount).toHaveBeenCalledTimes(2);
+
+  // 피드 탭을 다시 눌러도 재조회한다.
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "피드 탭" })
+      .props.onPress();
+    await flushAsyncWork();
+  });
+  expect(notificationGateway.getUnreadCount).toHaveBeenCalledTimes(3);
+});
+
+test("아카이브 화면에서 피드 탭을 누르면 재탭이 아니라 피드로 복귀한다", async () => {
+  const mountLog: number[] = [];
+  function FeedProbe() {
+    React.useEffect(() => {
+      mountLog.push(1);
+    }, []);
+    return null;
+  }
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        initialRootRoute="appShell"
+        initialShellRoute="archive"
+        screens={{ archive: () => null, feed: FeedProbe }}
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  // 아카이브 상태에서는 피드 화면이 아직 마운트되지 않았다.
+  expect(mountLog).toHaveLength(0);
+
+  await TestRenderer.act(() => {
+    renderer!.root.findByProps({ accessibilityLabel: "피드 탭" }).props.onPress();
+  });
+
+  // 탭 하이라이트는 피드였지만 화면은 아카이브였으므로 일반 이동으로 처리한다.
+  expect(mountLog).toHaveLength(1);
+});
+
+test("AI 전화 탭은 다시 눌러도 재마운트하지 않는다", async () => {
+  const mountLog: number[] = [];
+  function AiCallProbe() {
+    React.useEffect(() => {
+      mountLog.push(1);
+    }, []);
+    return null;
+  }
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        groups={[
+          { id: "cr-group", name: "우리 가족", role: "careReceiver" },
+        ]}
+        initialGroupId="cr-group"
+        initialRootRoute="appShell"
+        initialShellRoute="aiCall"
+        screens={{ aiCall: AiCallProbe }}
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(mountLog).toHaveLength(1);
+
+  // 통화 선택 상태를 잃지 않도록 AI 전화는 재탭 새로고침에서 제외한다.
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "AI 전화 탭" })
+      .props.onPress();
+  });
+
+  expect(mountLog).toHaveLength(1);
+});
+
 test("캘린더 헤더는 일정 추가 버튼과 그룹 전환만 표시한다", async () => {
   let createCalendarEventRequestId = 0;
   let renderer: TestRenderer.ReactTestRenderer;
