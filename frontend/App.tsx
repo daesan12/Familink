@@ -34,6 +34,7 @@ import {
   getInterestErrorMessage,
   type InterestGateway,
 } from "./src/features/auth/api/interestApi";
+import { SessionRestoreErrorScreen } from "./src/features/auth/screens/SessionRestoreErrorScreen";
 import { SignedInWelcomeScreen } from "./src/features/auth/screens/SignedInWelcomeScreen";
 import { SignupFlowScreen } from "./src/features/auth/screens/SignupFlowScreen";
 import { WelcomeScreen } from "./src/features/auth/screens/WelcomeScreen";
@@ -528,6 +529,14 @@ export default function App({
   const [authenticationResolved, setAuthenticationResolved] = useState(
     !shouldRestoreSession
   );
+  // 세션 복원이 재시도 가능한 오류로 멈춘 상태. 백지 대신 재시도 화면을 보여준다.
+  const [sessionRestoreFailed, setSessionRestoreFailed] = useState(false);
+  // 재시도 복원 진행 중. 오류 화면을 유지한 채 버튼만 로딩으로 잠근다.
+  const [sessionRestoreRetrying, setSessionRestoreRetrying] = useState(false);
+  // 복원 effect가 만든 재실행 함수. 재시도 버튼이 disposed/invalidated 가드를 공유해 호출한다.
+  const retrySessionRestoreRef = useRef<(() => void) | null>(null);
+  // 복원 in-flight 가드. 같은 프레임의 중복 재시도 탭이 복원을 겹쳐 실행하지 않게 한다.
+  const sessionRestoreInFlightRef = useRef(false);
   const authInvalidationVersionRef = useRef(0);
   const loginAttemptIdRef = useRef(0);
   const loginAbortControllerRef = useRef<AbortController | null>(null);
@@ -799,41 +808,66 @@ export default function App({
       return unsubscribe;
     }
 
-    setAuthenticationResolved(false);
-    authSession
-      .restore()
-      .then(async (result) => {
-        if (disposed || invalidated) {
-          return;
-        }
-        if (result.status === "authenticated") {
-          const restoredUser: AuthenticatedUser = {
-            activeGroupId: initialGroupId ?? null,
-            id: result.user.id,
-            name: result.user.name,
-          };
-          await enterAuthenticatedState(
-            restoredUser,
-            () => !disposed && !invalidated
-          );
+    const runSessionRestore = () => {
+      if (sessionRestoreInFlightRef.current) {
+        return;
+      }
+      sessionRestoreInFlightRef.current = true;
+      setAuthenticationResolved(false);
+      authSession
+        .restore()
+        .then(async (result) => {
           if (disposed || invalidated) {
             return;
           }
-          void registerCurrentDeviceToken().catch(() => undefined);
-          setAuthenticationResolved(true);
-          return;
-        }
-        if (result.status === "signedOut") {
-          clearAuthenticationState();
-          setAuthenticationResolved(true);
-        }
-      })
-      .catch(() => {
-        // 확정되지 않은 복원 오류에서는 인증·비로그인 화면을 선택하지 않는다.
-      });
+          if (result.status === "authenticated") {
+            const restoredUser: AuthenticatedUser = {
+              activeGroupId: initialGroupId ?? null,
+              id: result.user.id,
+              name: result.user.name,
+            };
+            await enterAuthenticatedState(
+              restoredUser,
+              () => !disposed && !invalidated
+            );
+            if (disposed || invalidated) {
+              return;
+            }
+            void registerCurrentDeviceToken().catch(() => undefined);
+            setSessionRestoreFailed(false);
+            setSessionRestoreRetrying(false);
+            setAuthenticationResolved(true);
+            return;
+          }
+          if (result.status === "signedOut") {
+            clearAuthenticationState();
+            setSessionRestoreFailed(false);
+            setSessionRestoreRetrying(false);
+            setAuthenticationResolved(true);
+            return;
+          }
+          // retryableError: 세션을 버리지 않고 재시도 화면으로 전환한다.
+          setSessionRestoreFailed(true);
+          setSessionRestoreRetrying(false);
+        })
+        .catch(() => {
+          // 확정되지 않은 복원 오류에서는 인증·비로그인 화면을 선택하지 않는다.
+          if (!disposed && !invalidated) {
+            setSessionRestoreFailed(true);
+            setSessionRestoreRetrying(false);
+          }
+        })
+        .finally(() => {
+          sessionRestoreInFlightRef.current = false;
+        });
+    };
+
+    retrySessionRestoreRef.current = runSessionRestore;
+    runSessionRestore();
 
     return () => {
       disposed = true;
+      retrySessionRestoreRef.current = null;
       unsubscribe();
     };
   }, [
@@ -1440,7 +1474,20 @@ export default function App({
   );
 
   if (!authenticationResolved) {
-    return null;
+    // 복원이 재시도 가능한 오류로 멈추면 백지 대신 안내와 재시도 버튼을 보여준다.
+    // 재시도 중에도 화면을 유지하고 버튼만 로딩으로 잠근다.
+    return sessionRestoreFailed ? (
+      <SessionRestoreErrorScreen
+        onRetry={() => {
+          if (sessionRestoreInFlightRef.current) {
+            return;
+          }
+          setSessionRestoreRetrying(true);
+          retrySessionRestoreRef.current?.();
+        }}
+        retrying={sessionRestoreRetrying}
+      />
+    ) : null;
   }
 
   return (
