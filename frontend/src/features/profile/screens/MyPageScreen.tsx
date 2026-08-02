@@ -125,7 +125,7 @@ export function MyPageScreen({
   useHardwareBack(() => {
     setSubScreen(null);
     return true;
-  }, subScreen !== null);
+  }, subScreen !== null && subScreen !== 'edit');
   const [weeklyRetryCount, setWeeklyRetryCount] = useState(0);
   const [monthlyRetryCount, setMonthlyRetryCount] = useState(0);
   const [weeklyState, setWeeklyState] = useState<WeeklyStampLoadState>({

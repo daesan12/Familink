@@ -15,6 +15,7 @@ import {launchImageLibrary} from 'react-native-image-picker';
 
 import {DatePickerSheet} from '../../auth';
 import {COLORS, RADII} from '../../../design/tokens';
+import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {
   getProfileSaveErrorMessage,
   getProfileWithdrawErrorMessage,
@@ -63,6 +64,14 @@ export function ProfileEditScreen<T extends BaseProfile>({
   const [isDateOpen, setIsDateOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
+
+  useHardwareBack(() => {
+    if (isSaving) {
+      return true;
+    }
+    onBack();
+    return true;
+  });
 
   const previewImageUrl =
     imageChange.type === 'replace'
