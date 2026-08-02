@@ -13,5 +13,5 @@ public record PresignedUrlRequest(
 	@Size(max = 50)
 	@Pattern(regexp = "[A-Za-z0-9_-]+")
 	String purpose,
-	@NotEmpty List<@Valid FileUploadRequest> files) {
+	@NotEmpty @Size(max = 4) List<@Valid FileUploadRequest> files) {
 }

@@ -33,6 +33,7 @@ public class S3PresignedUploadProvider implements PresignedUploadProvider {
 			.bucket(properties.bucket())
 			.key(objectKey)
 			.contentType(file.contentType())
+			.contentLength(file.sizeBytes())
 			.build();
 		PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
 			.signatureDuration(properties.presignedUrlDuration())
@@ -44,7 +45,9 @@ public class S3PresignedUploadProvider implements PresignedUploadProvider {
 		return new UploadResponse(
 			presigned.url().toString(),
 			fileUrl(objectKey),
-			Map.of("Content-Type", file.contentType()),
+			Map.of(
+				"Content-Type", file.contentType(),
+				"Content-Length", String.valueOf(file.sizeBytes())),
 			expiresAt);
 	}
 
