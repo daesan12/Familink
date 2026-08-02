@@ -5,6 +5,10 @@ app:
   event-reminder:
     fixed-delay-ms: 3600000
     initial-delay-ms: 3600000
+  ai-call-lease:
+    lease-duration: 90s
+    fixed-delay-ms: 3600000
+    initial-delay-ms: 3600000
   auth:
     secret: test-only-access-token-signing-secret-value
   storage:

@@ -12,7 +12,9 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -37,6 +39,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.s15p11b104.domain.call.service.CallActor;
 import com.ssafy.s15p11b104.domain.call.service.CallActorResolver;
+import com.ssafy.s15p11b104.domain.call.service.CallSessionLeaseService;
 import com.ssafy.s15p11b104.domain.call.service.OpenAiCall;
 import com.ssafy.s15p11b104.domain.call.service.OpenAiRealtimeGateway;
 import com.ssafy.s15p11b104.domain.call.service.SidebandSessionManager;
@@ -60,6 +63,9 @@ class CallSessionConcurrencyIntegrationTest extends IntegrationTest {
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
+	@Autowired
+	private CallSessionLeaseService callSessionLeaseService;
+
 	@MockitoBean
 	private CallActorResolver callActorResolver;
 
@@ -70,18 +76,20 @@ class CallSessionConcurrencyIntegrationTest extends IntegrationTest {
 	private SidebandSessionManager sidebandSessionManager;
 
 	private Long careReceiverMemberId;
+	private Long groupId;
 	private Long userId;
 
 	@BeforeEach
 	void setUp() {
 		cleanFixture();
-		Long groupId = insertGroup();
+		groupId = insertGroup();
 		userId = insertUser();
 		careReceiverMemberId = insertCareReceiver(groupId, userId);
 
 		when(callActorResolver.resolve()).thenReturn(new CallActor(careReceiverMemberId));
 		when(realtimeGateway.createCall(anyString(), any(), anyString(), eq(careReceiverMemberId)))
 			.thenReturn(new OpenAiCall(OPEN_AI_CALL_ID, "v=0\r\nmock-answer"));
+		when(sidebandSessionManager.activeSessionIds()).thenReturn(Set.of());
 	}
 
 	@AfterEach
@@ -120,6 +128,57 @@ class CallSessionConcurrencyIntegrationTest extends IntegrationTest {
 		}
 	}
 
+	@Test
+	void expiredConnectingSessionIsRecoveredBeforeNewCallCreation() throws Exception {
+		Long expiredSessionId = insertExpiredCallSession("CONNECTING");
+
+		MvcResult result = performCreateRequest();
+
+		assertThat(result.getResponse().getStatus()).isEqualTo(201);
+		assertThat(statusOf(expiredSessionId)).isEqualTo("FAILED");
+		assertThat(endedAtOf(expiredSessionId)).isNotNull();
+		assertThat(countActiveSessions()).isEqualTo(1);
+	}
+
+	@Test
+	void expiredInProgressSessionIsRecoveredAsIncomplete() {
+		Long expiredSessionId = insertExpiredCallSession("IN_PROGRESS");
+
+		callSessionLeaseService.recoverExpired(Instant.now());
+
+		assertThat(statusOf(expiredSessionId)).isEqualTo("INCOMPLETE");
+		assertThat(endedAtOf(expiredSessionId)).isNotNull();
+		assertThat(countActiveSessions()).isZero();
+	}
+
+	@Test
+	void lateConnectedResultCannotReviveExpiredConnectingSession() throws Exception {
+		Long expiredSessionId = insertExpiredCallSession("CONNECTING");
+		when(sidebandSessionManager.prepareClose(expiredSessionId)).thenReturn(OPEN_AI_CALL_ID);
+
+		MvcResult result = performConnectedResultRequest(expiredSessionId);
+
+		assertThat(result.getResponse().getStatus()).isEqualTo(409);
+		JsonNode responseBody = objectMapper.readTree(result.getResponse().getContentAsString());
+		assertThat(responseBody.at("/error/code").asText()).isEqualTo("INVALID_CALL_STATUS");
+		assertThat(statusOf(expiredSessionId)).isEqualTo("FAILED");
+		assertThat(endedAtOf(expiredSessionId)).isNotNull();
+		verify(sidebandSessionManager).prepareClose(expiredSessionId);
+		verify(realtimeGateway).hangUp(OPEN_AI_CALL_ID);
+		verify(sidebandSessionManager).finishClose(expiredSessionId);
+	}
+
+	@Test
+	void lateUserEndPreservesRecoveredIncompleteStatus() throws Exception {
+		Long expiredSessionId = insertExpiredCallSession("IN_PROGRESS");
+
+		MvcResult result = performEndRequest(expiredSessionId);
+
+		assertThat(result.getResponse().getStatus()).isEqualTo(202);
+		assertThat(statusOf(expiredSessionId)).isEqualTo("INCOMPLETE");
+		assertThat(endedAtOf(expiredSessionId)).isNotNull();
+	}
+
 	private MvcResult performCreateRequest() throws Exception {
 		return mockMvc.perform(post("/call-sessions")
 				.with(authenticatedAs(userId))
@@ -130,6 +189,22 @@ class CallSessionConcurrencyIntegrationTest extends IntegrationTest {
 					  "sdp_offer": "v=0\\r\\nmock-offer"
 					}
 					"""))
+			.andReturn();
+	}
+
+	private MvcResult performConnectedResultRequest(Long callSessionId) throws Exception {
+		return mockMvc.perform(post("/call-sessions/{callSessionId}/connection-result", callSessionId)
+				.with(authenticatedAs(userId))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"result\":\"CONNECTED\"}"))
+			.andReturn();
+	}
+
+	private MvcResult performEndRequest(Long callSessionId) throws Exception {
+		return mockMvc.perform(post("/call-sessions/{callSessionId}/end", callSessionId)
+				.with(authenticatedAs(userId))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"termination_type\":\"USER_REQUESTED\"}"))
 			.andReturn();
 	}
 
@@ -188,6 +263,44 @@ class CallSessionConcurrencyIntegrationTest extends IntegrationTest {
 			values (?, ?, 'CARE_RECEIVER', false, current_timestamp)
 			returning id
 			""", Long.class, groupId, createdUserId);
+	}
+
+	private Long insertExpiredCallSession(String status) {
+		return jdbcTemplate.queryForObject("""
+			insert into call_sessions (
+				group_id,
+				care_receiver_member_id,
+				persona_id,
+				status,
+				started_at,
+				lease_expires_at
+			)
+			values (
+				?,
+				?,
+				1,
+				cast(? as call_status),
+				case when ? = 'IN_PROGRESS' then current_timestamp - interval '10 minutes' end,
+				current_timestamp - interval '1 second'
+			)
+			returning id
+			""", Long.class, groupId, careReceiverMemberId, status, status);
+	}
+
+	private String statusOf(Long callSessionId) {
+		return jdbcTemplate.queryForObject(
+			"select status::text from call_sessions where id = ?",
+			String.class,
+			callSessionId
+		);
+	}
+
+	private Instant endedAtOf(Long callSessionId) {
+		return jdbcTemplate.queryForObject(
+			"select ended_at from call_sessions where id = ?",
+			Instant.class,
+			callSessionId
+		);
 	}
 
 	private int countActiveSessions() {

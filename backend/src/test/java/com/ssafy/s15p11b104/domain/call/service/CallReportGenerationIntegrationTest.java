@@ -213,13 +213,16 @@ class CallReportGenerationIntegrationTest extends IntegrationTest {
 			""", Long.class, groupId, userId);
 		Long callSessionId = jdbcTemplate.queryForObject("""
 			INSERT INTO call_sessions (
-				group_id, care_receiver_member_id, persona_id, status, started_at, ended_at
+				group_id, care_receiver_member_id, persona_id, status,
+				started_at, ended_at, lease_expires_at
 			)
 			VALUES (?, ?, 1, CAST(? AS call_status),
 				CASE WHEN ? IN ('IN_PROGRESS', 'COMPLETED', 'INCOMPLETE') THEN CURRENT_TIMESTAMP ELSE NULL END,
-				CASE WHEN ? IN ('COMPLETED', 'INCOMPLETE', 'CANCELLED', 'FAILED') THEN CURRENT_TIMESTAMP ELSE NULL END)
+				CASE WHEN ? IN ('COMPLETED', 'INCOMPLETE', 'CANCELLED', 'FAILED') THEN CURRENT_TIMESTAMP ELSE NULL END,
+				CASE WHEN ? IN ('CONNECTING', 'IN_PROGRESS')
+					THEN CURRENT_TIMESTAMP + INTERVAL '90 seconds' ELSE NULL END)
 			RETURNING id
-			""", Long.class, groupId, memberId, status.name(), status.name(), status.name());
+			""", Long.class, groupId, memberId, status.name(), status.name(), status.name(), status.name());
 		return new Fixture(memberId, callSessionId);
 	}
 
