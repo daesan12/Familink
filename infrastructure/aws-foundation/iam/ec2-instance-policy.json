@@ -21,6 +21,22 @@
       "Resource": "arn:aws:ssm:ap-northeast-2:<AWS_ACCOUNT_ID>:parameter/familink/prod/*"
     },
     {
+      "Sid": "AuthenticateToEcr",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "PullFamilinkBackendImages",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+      ],
+      "Resource": "arn:aws:ecr:ap-northeast-2:<AWS_ACCOUNT_ID>:repository/familink-backend"
+    },
+    {
       "Sid": "DecryptProductionParameters",
       "Effect": "Allow",
       "Action": "kms:Decrypt",
