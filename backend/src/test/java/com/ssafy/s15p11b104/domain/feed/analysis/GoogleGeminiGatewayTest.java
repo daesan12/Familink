@@ -1,6 +1,7 @@
 package com.ssafy.s15p11b104.domain.feed.analysis;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -11,10 +12,32 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
+import com.ssafy.s15p11b104.global.ai.gemini.GeminiClientException;
+import com.ssafy.s15p11b104.global.ai.gemini.GeminiFailureType;
+
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 class GoogleGeminiGatewayTest {
+
+	@Test
+	void preservesRetryMetadataWithoutExposingUpstreamDetails() {
+		GoogleGeminiGateway gateway = new GoogleGeminiGateway(request -> {
+			throw new GeminiClientException(
+				"safe message",
+				GeminiFailureType.RATE_LIMITED,
+				"HTTP_429",
+				true,
+				new IllegalStateException("test-secret"));
+		});
+
+		assertThatThrownBy(() -> gateway.generate(new GeminiRequest("model", "prompt", List.of())))
+			.isInstanceOfSatisfying(GeminiGatewayException.class, exception -> {
+				assertThat(exception.getFailureCode()).isEqualTo("HTTP_429");
+				assertThat(exception.isRetryable()).isTrue();
+				assertThat(exception).hasMessageNotContaining("test-secret");
+			});
+	}
 
 	@Test
 	void sendsGmsProxyPathAndHeaderToConfiguredBaseUrl() throws IOException {

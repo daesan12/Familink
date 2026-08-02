@@ -32,6 +32,7 @@ springdoc:
     path: /swagger-ui.html
 
 gemini:
+  request-timeout-ms: ${GEMINI_REQUEST_TIMEOUT_MS:30000}
   analysis:
     api-key: ${GMS_API_KEY:}
     base-url: ${GMS_API_BASE_URL:https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com}
@@ -43,6 +44,9 @@ gemini:
     model: ${GEMINI_DAILY_REPORT_MODEL:gemini-3.5-flash}
 
 app:
+  ai-execution:
+    max-concurrency: ${AI_EXECUTOR_MAX_CONCURRENCY:2}
+    queue-capacity: ${AI_EXECUTOR_QUEUE_CAPACITY:20}
   auth:
     access-token-validity: 30m
     refresh-token-validity: 14d

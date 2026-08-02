@@ -167,7 +167,7 @@ class GeminiPostContentAnalyzerTest {
 	@Test
 	void mapsGatewayFailureWithoutExposingGatewayMessage() {
 		RecordingGateway gateway = new RecordingGateway(null);
-		gateway.failure = new GeminiGatewayException("upstream failure test-secret");
+		gateway.failure = new GeminiGatewayException("upstream failure test-secret", "HTTP_429", true);
 
 		PostContentAnalysisException exception = org.assertj.core.api.Assertions.catchThrowableOfType(
 			() -> analyzer(gateway).analyze(new PostContentInput(
@@ -175,6 +175,8 @@ class GeminiPostContentAnalyzerTest {
 			PostContentAnalysisException.class);
 
 		assertThat(exception.getType()).isEqualTo(AnalysisFailureType.UPSTREAM_FAILURE);
+		assertThat(exception.getFailureCode()).isEqualTo("HTTP_429");
+		assertThat(exception.isRetryable()).isTrue();
 		assertThat(exception).hasMessageNotContaining("test-secret");
 		assertThat(exception.getCause()).isNull();
 	}

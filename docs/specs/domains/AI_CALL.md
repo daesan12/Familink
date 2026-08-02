@@ -72,6 +72,11 @@
 18. Spring Boot는 Sideband의 발화 완료 이벤트를 기준으로 사용자와 AI
     전사를 `call_transcripts`에 순서대로 저장하고, 통화 종료 상태에 따라
     Gemini로 건별 리포트를 생성해 `call_reports`에 저장한다.
+19. 종료 후 건별 리포트의 Gemini 호출은 30초 총 제한시간과 공용 AI
+    bounded executor(최대 동시 2개·대기열 20개)를 사용한다. 입력 전사 조회와
+    결과 저장은 각각 짧은 트랜잭션으로 수행하고 Gemini 호출 중에는 DB
+    트랜잭션을 유지하지 않는다. 건별 리포트 자동 재시도는 이번 범위에
+    포함하지 않는다.
 
 확정된 예외:
 
@@ -145,6 +150,9 @@
     [`../contracts/DATA_MODEL.md`](../contracts/DATA_MODEL.md)를 따른다.
   - 주요 제약조건: 원본 음성·전체 전문을 보호자 조회 데이터로 만들지 않는다. `call_sessions`에는 상세 disconnect reason 컬럼을 두지 않으며,
     활성 상태 수명 관리를 위한 nullable `lease_expires_at`만 추가한다.
+- AI 실행: 건별 리포트 작업은 게시글 분석·일일 리포트와 같은 bounded
+  executor를 사용한다. 대기열 포화나 Gemini 실패를 이유로 종료 API의
+  확정 상태를 되돌리지 않으며, 자동 재처리 API는 별도 결정 전 추가하지 않는다.
 - 화면:
   - 진입점: 피보호자 하단 `AI 전화` 탭, IA `F-1`~`F-3`
   - 사용자에게 표시할 결과: 페르소나 예시, 연결·통화 상태, 실시간 자막, 통화 제어, 종료 결과. 건별 감정과 전체 전문은 표시하지 않는다.
@@ -197,6 +205,13 @@
 - Then: `CONNECTING`은 `FAILED`, `IN_PROGRESS`는 `INCOMPLETE`로 한 번만
   전환되고 종료 시각이 기록되며, 해당 stale 세션 때문에 새 통화가
   `ACTIVE_CALL_EXISTS`로 차단되지 않는다.
+
+### AC-007
+
+- Given: 종료된 통화의 건별 리포트 Gemini 호출이 응답하지 않는다.
+- When: 비동기 리포트 생성을 실행한다.
+- Then: 호출은 30초 안에 실패하고 DB 트랜잭션과 공용 AI 실행 자원을
+  반환하며, 이미 확정된 통화 종료 상태는 유지된다.
 
 ## 미결정 사항
 

@@ -46,7 +46,10 @@ public class GoogleGeminiGateway implements GeminiGateway {
 				RESPONSE_SCHEMA
 			));
 		} catch (GeminiClientException exception) {
-			throw new GeminiGatewayException(exception.getMessage());
+			throw new GeminiGatewayException(
+				exception.getMessage(),
+				exception.getFailureCode(),
+				exception.isRetryable());
 		}
 	}
 }

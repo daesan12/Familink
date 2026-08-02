@@ -45,10 +45,18 @@ public class GeminiPostContentAnalyzer implements PostContentAnalyzer {
 		String rawResponse;
 		try {
 			rawResponse = geminiGateway.generate(request);
+		} catch (GeminiGatewayException exception) {
+			throw new PostContentAnalysisException(
+				AnalysisFailureType.UPSTREAM_FAILURE,
+				"Gemini 분석 호출에 실패했습니다.",
+				exception.getFailureCode(),
+				exception.isRetryable());
 		} catch (RuntimeException exception) {
 			throw new PostContentAnalysisException(
 				AnalysisFailureType.UPSTREAM_FAILURE,
-				"Gemini 분석 호출에 실패했습니다.");
+				"Gemini 분석 호출에 실패했습니다.",
+				"UPSTREAM_FAILURE",
+				false);
 		}
 
 		return parseSummary(rawResponse);

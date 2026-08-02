@@ -86,6 +86,12 @@ class GroupDeletionForeignKeyContractTest extends IntegrationTest {
 			"NO ACTION",
 			CleanupMode.PARENT_ENTITY_DELETE),
 		expected(
+			"daily_report_generation_claims",
+			"care_receiver_member_id",
+			"group_members",
+			"CASCADE",
+			CleanupMode.CASCADE),
+		expected(
 			"carnations",
 			"group_member_id",
 			"group_members",
@@ -287,6 +293,17 @@ class GroupDeletionForeignKeyContractTest extends IntegrationTest {
 			formerMemberId);
 		jdbcTemplate.update(
 			"""
+				INSERT INTO daily_report_generation_claims (
+					care_receiver_member_id, report_date, claim_token, claim_expires_at,
+					input_report_count, input_latest_report_id
+				)
+				VALUES (?, DATE '2026-07-30', CAST('11111111-1111-1111-1111-111111111111' AS UUID),
+					CURRENT_TIMESTAMP + INTERVAL '90 seconds', 1, ?)
+				""",
+			formerMemberId,
+			callReportId);
+		jdbcTemplate.update(
+			"""
 				INSERT INTO carnations (group_id, group_member_id, earned_date)
 				VALUES (?, ?, DATE '2026-07-30')
 				""",
@@ -329,6 +346,7 @@ class GroupDeletionForeignKeyContractTest extends IntegrationTest {
 		assertThat(countRows("call_transcripts")).isZero();
 		assertThat(countRows("call_reports")).isZero();
 		assertThat(countRows("daily_reports")).isZero();
+		assertThat(countRows("daily_report_generation_claims")).isZero();
 		assertThat(countRows("carnations")).isZero();
 		assertThat(countRows("users")).isEqualTo(2);
 

@@ -31,6 +31,7 @@ import com.ssafy.s15p11b104.domain.feed.repository.PostAnalysisRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostMediaRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostReactionRepository;
+import com.ssafy.s15p11b104.domain.feed.service.PostAnalysisService;
 import com.ssafy.s15p11b104.domain.group.repository.FamilyGroupRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupJoinRequestRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
@@ -44,6 +45,7 @@ import com.ssafy.s15p11b104.domain.notification.repository.NotificationSettingRe
 import com.ssafy.s15p11b104.domain.notification.service.EventReminderService;
 import com.ssafy.s15p11b104.domain.report.repository.DailyReportRepository;
 import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationService;
+import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationClaimCleanupService;
 
 import jakarta.persistence.EntityManager;
 
@@ -76,6 +78,9 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private DailyReportGenerationService dailyReportGenerationService;
+
+	@MockitoBean
+	private DailyReportGenerationClaimCleanupService dailyReportGenerationClaimCleanupService;
 
 	@MockitoBean
 	private AiCallPromptContextProvider promptContextProvider;
@@ -118,6 +123,9 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private PostAnalysisRepository postAnalysisRepository;
+
+	@MockitoBean
+	private PostAnalysisService postAnalysisService;
 
 	@MockitoBean
 	private CommentRepository commentRepository;

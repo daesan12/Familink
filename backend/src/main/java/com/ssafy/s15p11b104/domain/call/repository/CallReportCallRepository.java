@@ -39,6 +39,24 @@ public interface CallReportCallRepository extends JpaRepository<CallReport, Long
 		select report
 		from CallReport report
 		join fetch report.callSession session
+		join fetch session.careReceiverMember member
+		where member.id = :careReceiverMemberId
+			and session.status = :status
+			and session.endedAt >= :startInclusive
+			and session.endedAt < :endExclusive
+		order by session.endedAt asc, report.id asc
+		""")
+	List<CallReport> findCompletedForMemberInEndedAtRange(
+		@Param("careReceiverMemberId") Long careReceiverMemberId,
+		@Param("status") CallStatus status,
+		@Param("startInclusive") Instant startInclusive,
+		@Param("endExclusive") Instant endExclusive
+	);
+
+	@Query("""
+		select report
+		from CallReport report
+		join fetch report.callSession session
 		where session.careReceiverMember.id = :careReceiverMemberId
 			and session.status = :status
 			and session.endedAt is not null
