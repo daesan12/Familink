@@ -2,11 +2,12 @@ import React from 'react';
 import {Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
+import {ApiError} from '../../../shared/api';
 import {
   DEVELOPMENT_NOTIFICATIONS,
   EMPTY_NOTIFICATIONS,
 } from '../fixtures/notificationFixtures';
-import type {NotificationGateway} from '../types';
+import type {AppNotification, NotificationGateway} from '../types';
 import {NotificationsScreen} from './NotificationsScreen';
 
 jest.mock('lucide-react-native/icons/bell-off', () => 'BellOff');
@@ -26,6 +27,10 @@ const baseProps = {
   currentGroup: {id: 'group-1', name: '우리 가족', role: 'guardian'} as const,
   role: 'guardian' as const,
 };
+
+function joinedChildren(children: unknown): string {
+  return Array.isArray(children) ? children.join('') : String(children);
+}
 
 test('알림을 읽음 처리하고 연결된 게시글을 연다', () => {
   const onOpenPost = jest.fn();
@@ -132,7 +137,7 @@ test('그룹 요청 승인과 거부 팝업을 표시한다', async () => {
     renderer!.root
       .findAllByType(Text)
       .some(node =>
-        String(node.props.children).includes(
+        joinedChildren(node.props.children).includes(
           '수호님이 우리 가족에 참여했습니다.',
         ),
       ),
@@ -151,8 +156,8 @@ test('그룹 요청 승인과 거부 팝업을 표시한다', async () => {
     renderer!.root
       .findAllByType(Text)
       .some(node =>
-        String(node.props.children).includes(
-          '그룹 참여 신청이 거절되었습니다.',
+        joinedChildren(node.props.children).includes(
+          '수호님의 그룹 참여 신청이 거절되었습니다.',
         ),
       ),
   ).toBe(true);
@@ -285,8 +290,8 @@ test('읽음 API 실패 시 상위 읽음 id를 저장하지 않고 화면 상�
   ).toBe(true);
 });
 
-test('실제 gateway의 그룹 요청 거부도 읽음 처리해 badge를 줄인다', async () => {
-  const gateway = {
+function createDecisionGateway(): jest.Mocked<NotificationGateway> {
+  return {
     deactivateDeviceToken: jest.fn(),
     getUnreadCount: jest.fn().mockResolvedValue(1),
     loadPage: jest.fn().mockResolvedValue({
@@ -302,11 +307,21 @@ test('실제 gateway의 그룹 요청 거부도 읽음 처리해 badge를 줄인
     registerDeviceToken: jest.fn(),
     updateSettings: jest.fn(),
   } as unknown as jest.Mocked<NotificationGateway>;
+}
+
+test('그룹 요청 거부는 가입 요청 API 처리 후 알림을 정리한다', async () => {
+  const gateway = createDecisionGateway();
+  const processJoinRequest = jest.fn().mockResolvedValue(undefined);
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <NotificationsScreen {...baseProps} gateway={gateway} currentUserId={7} />,
+      <NotificationsScreen
+        {...baseProps}
+        gateway={gateway}
+        currentUserId={7}
+        processJoinRequest={processJoinRequest}
+      />,
     );
     await Promise.resolve();
   });
@@ -319,6 +334,14 @@ test('실제 gateway의 그룹 요청 거부도 읽음 처리해 badge를 줄인
     await Promise.resolve();
   });
 
+  expect(processJoinRequest).toHaveBeenCalledWith(
+    'development-guardian-group',
+    {
+      assignedRole: undefined,
+      decision: 'REJECT',
+      joinRequestId: 'join-request-suho',
+    },
+  );
   expect(gateway.markRead).toHaveBeenCalledWith('group-request-suho');
   expect(
     renderer!.root
@@ -332,25 +355,75 @@ test('실제 gateway의 그룹 요청 거부도 읽음 처리해 badge를 줄인
   ).toHaveLength(0);
 });
 
-test('그룹 요청 승인 읽음 API 실패 후 역할을 선택해도 알림을 보존한다', async () => {
-  const gateway = {
-    deactivateDeviceToken: jest.fn(),
-    getUnreadCount: jest.fn().mockResolvedValue(1),
-    loadPage: jest.fn().mockResolvedValue({
-      hasNext: false,
-      notifications: [DEVELOPMENT_NOTIFICATIONS[0]],
-    }),
-    loadSettings: jest.fn(),
-    markAllRead: jest.fn(),
-    markRead: jest.fn().mockRejectedValue(new Error('read failed')),
-    registerDeviceToken: jest.fn(),
-    updateSettings: jest.fn(),
-  } as unknown as jest.Mocked<NotificationGateway>;
+test('그룹 요청 승인은 역할 선택 후 APPROVE로 처리한다', async () => {
+  const gateway = createDecisionGateway();
+  const processJoinRequest = jest.fn().mockResolvedValue(undefined);
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <NotificationsScreen {...baseProps} gateway={gateway} currentUserId={7} />,
+      <NotificationsScreen
+        {...baseProps}
+        gateway={gateway}
+        currentUserId={7}
+        processJoinRequest={processJoinRequest}
+      />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({
+      accessibilityLabel: '그룹 요청 승인',
+    }).props.onPress({stopPropagation: jest.fn()});
+    await Promise.resolve();
+  });
+
+  // 팝업만 열린 상태에서는 아직 서버 처리·읽음이 없어야 한다.
+  expect(processJoinRequest).not.toHaveBeenCalled();
+  expect(gateway.markRead).not.toHaveBeenCalled();
+
+  await TestRenderer.act(async () => {
+    const roleButton = renderer!.root.findAllByProps({
+      accessibilityRole: 'button',
+    }).find(item => item.props.children?.props?.children === '보호자');
+    expect(roleButton).toBeTruthy();
+    roleButton!.props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(processJoinRequest).toHaveBeenCalledWith(
+    'development-guardian-group',
+    {
+      assignedRole: 'guardian',
+      decision: 'APPROVE',
+      joinRequestId: 'join-request-suho',
+    },
+  );
+  expect(gateway.markRead).toHaveBeenCalledWith('group-request-suho');
+  expect(
+    renderer!.root.findAllByProps({
+      accessibilityLabel: '수호님의 그룹 승인 요청, 방금',
+    }),
+  ).toHaveLength(0);
+});
+
+test('가입 요청 처리 실패 시 알림을 보존하고 오류 문구를 표시한다', async () => {
+  const gateway = createDecisionGateway();
+  const processJoinRequest = jest
+    .fn()
+    .mockRejectedValue(new Error('process failed'));
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        gateway={gateway}
+        currentUserId={7}
+        processJoinRequest={processJoinRequest}
+      />,
     );
     await Promise.resolve();
   });
@@ -371,10 +444,181 @@ test('그룹 요청 승인 읽음 API 실패 후 역할을 선택해도 알림�
     await Promise.resolve();
   });
 
-  expect(gateway.markRead).toHaveBeenCalledTimes(1);
+  expect(gateway.markRead).not.toHaveBeenCalled();
   expect(
     renderer!.root.findAllByProps({
       accessibilityLabel: '수호님의 그룹 승인 요청, 방금',
     }).length,
   ).toBeGreaterThan(0);
+  expect(
+    renderer!.root
+      .findAllByType(Text)
+      .some(node =>
+        String(node.props.children).includes('가입 요청을 처리하지 못했습니다'),
+      ),
+  ).toBe(true);
+  // 실패 시 "참여했습니다" 팝업이 남지 않아야 한다.
+  expect(
+    renderer!.root
+      .findAllByType(Text)
+      .some(node =>
+        String(node.props.children).includes('우리 가족에 참여했습니다'),
+      ),
+  ).toBe(false);
+});
+
+test('이미 처리된 요청 409는 문구를 보여주고 알림을 정리한다', async () => {
+  const gateway = createDecisionGateway();
+  const processJoinRequest = jest.fn().mockRejectedValue(
+    new ApiError({
+      code: 'JOIN_REQUEST_ALREADY_PROCESSED',
+      kind: 'server',
+      message: 'conflict',
+      status: 409,
+    }),
+  );
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        gateway={gateway}
+        currentUserId={7}
+        processJoinRequest={processJoinRequest}
+      />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({
+      accessibilityLabel: '그룹 요청 거부',
+    }).props.onPress({stopPropagation: jest.fn()});
+    await Promise.resolve();
+  });
+
+  expect(
+    renderer!.root.findAllByProps({
+      accessibilityLabel: '수호님의 그룹 승인 요청, 방금',
+    }),
+  ).toHaveLength(0);
+  expect(
+    renderer!.root
+      .findAllByType(Text)
+      .some(node =>
+        String(node.props.children).includes('이미 처리된 가입 요청이에요.'),
+      ),
+  ).toBe(true);
+});
+
+test('가입 요청 식별자가 없으면 처리하지 않고 오류 문구를 표시한다', async () => {
+  const gateway = createDecisionGateway();
+  const withoutIds: AppNotification = {...DEVELOPMENT_NOTIFICATIONS[0]};
+  delete withoutIds.groupId;
+  delete withoutIds.relatedJoinRequestId;
+  gateway.loadPage.mockResolvedValue({
+    hasNext: false,
+    notifications: [withoutIds],
+  });
+  const processJoinRequest = jest.fn();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        gateway={gateway}
+        currentUserId={7}
+        processJoinRequest={processJoinRequest}
+      />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({
+      accessibilityLabel: '그룹 요청 거부',
+    }).props.onPress({stopPropagation: jest.fn()});
+    await Promise.resolve();
+  });
+
+  expect(processJoinRequest).not.toHaveBeenCalled();
+  expect(
+    renderer!.root.findAllByProps({
+      accessibilityLabel: '수호님의 그룹 승인 요청, 방금',
+    }).length,
+  ).toBeGreaterThan(0);
+  expect(
+    renderer!.root
+      .findAllByType(Text)
+      .some(node =>
+        String(node.props.children).includes(
+          '가입 요청 정보를 확인하지 못했습니다',
+        ),
+      ),
+  ).toBe(true);
+});
+
+test('처리 성공 후 읽음 동기화가 실패해도 알림 정리를 유지한다', async () => {
+  const gateway = createDecisionGateway();
+  gateway.markRead.mockRejectedValue(new Error('read failed'));
+  const processJoinRequest = jest.fn().mockResolvedValue(undefined);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        gateway={gateway}
+        currentUserId={7}
+        processJoinRequest={processJoinRequest}
+      />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({
+      accessibilityLabel: '그룹 요청 거부',
+    }).props.onPress({stopPropagation: jest.fn()});
+    await Promise.resolve();
+  });
+
+  // 가입 요청은 서버에서 이미 처리됐으므로 읽음 실패가 목록 제거를 되돌리지 않는다.
+  expect(gateway.markRead).toHaveBeenCalledWith('group-request-suho');
+  expect(
+    renderer!.root.findAllByProps({
+      accessibilityLabel: '수호님의 그룹 승인 요청, 방금',
+    }),
+  ).toHaveLength(0);
+});
+
+test('unread-count 실패에도 알림 목록은 표시한다', async () => {
+  const gateway = createDecisionGateway();
+  gateway.getUnreadCount.mockRejectedValue(new Error('badge failed'));
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen {...baseProps} gateway={gateway} currentUserId={7} />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(
+    renderer!.root.findAllByProps({
+      accessibilityLabel: '수호님의 그룹 승인 요청, 방금',
+    }).length,
+  ).toBeGreaterThan(0);
+  // badge는 목록 기준 fallback 개수로 표시한다.
+  expect(
+    renderer!.root
+      .findAllByType(Text)
+      .some(node => node.props.children?.join?.('') === '읽지 않은 알림 1개'),
+  ).toBe(true);
 });

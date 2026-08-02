@@ -6,6 +6,8 @@ import {COLORS, RADII} from '../../../design/tokens';
 import type {AppNotification} from '../types';
 
 interface NotificationItemProps {
+  // 가입 요청 처리(API 왕복)가 진행 중이면 승인·거부 버튼을 잠근다.
+  decisionDisabled?: boolean;
   notification: AppNotification;
   onApprove: (notificationId: string) => void;
   onPress: (notification: AppNotification) => void;
@@ -13,6 +15,7 @@ interface NotificationItemProps {
 }
 
 export function NotificationItem({
+  decisionDisabled = false,
   notification,
   onApprove,
   onPress,
@@ -48,12 +51,14 @@ export function NotificationItem({
           <DecisionButton
             accessibilityLabel="그룹 요청 승인"
             color={COLORS.purpleDeep}
+            disabled={decisionDisabled}
             icon="check"
             onPress={() => onApprove(notification.id)}
           />
           <DecisionButton
             accessibilityLabel="그룹 요청 거부"
             color={COLORS.textMuted}
+            disabled={decisionDisabled}
             icon="x"
             onPress={() => onReject(notification.id)}
           />
@@ -66,11 +71,13 @@ export function NotificationItem({
 function DecisionButton({
   accessibilityLabel,
   color,
+  disabled,
   icon,
   onPress,
 }: {
   accessibilityLabel: string;
   color: string;
+  disabled: boolean;
   icon: 'check' | 'x';
   onPress: () => void;
 }) {
@@ -80,6 +87,7 @@ function DecisionButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      disabled={disabled}
       hitSlop={6}
       onPress={event => {
         event.stopPropagation();
@@ -89,6 +97,7 @@ function DecisionButton({
         styles.decisionButton,
         {backgroundColor: color},
         pressed && styles.decisionButtonPressed,
+        disabled && styles.decisionButtonDisabled,
       ]}
     >
       <Icon color={COLORS.background} size={18} strokeWidth={2.5} />
@@ -140,6 +149,9 @@ const styles = StyleSheet.create({
     height: 38,
     justifyContent: 'center',
     width: 38,
+  },
+  decisionButtonDisabled: {
+    opacity: 0.5,
   },
   decisionButtonPressed: {
     opacity: 0.76,
