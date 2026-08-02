@@ -35,11 +35,18 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 		@Param("groupId") Long groupId,
 		@Param("userId") Long userId);
 
+	/**
+	 * 그룹·사용자 조합의 활성 멤버십 행을 잠그고 찾는다.
+	 *
+	 * <p>{@code member.user}를 함께 조회하지 않는 것은 잠금 범위를 {@code group_members}로
+	 * 제한하기 위해서다. PostgreSQL은 조인한 테이블의 행까지 잠그므로 함께 조회하면 이 경로가
+	 * {@code group_members} 다음 {@code users}를 잠가, 공통 잠금 순서
+	 * {@code users → family_groups → group_members → 자식 행}을 거스른다.
+	 */
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 		select member
 		from GroupMember member
-		join fetch member.user
 		where member.group.id = :groupId
 		  and member.user.id = :userId
 		  and member.leftAt is null
@@ -97,6 +104,22 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 	Optional<GroupMember> findByGroupIdAndUserId(
 		@Param("groupId") Long groupId,
 		@Param("userId") Long userId);
+
+	/**
+	 * 멤버십 행을 잠그기 전에 구성원의 계정 id만 확인한다.
+	 *
+	 * <p>공통 잠금 순서가 계정 행을 먼저 요구하므로 이 조회는 잠그지 않는다. 이미 떠난 구성원도
+	 * 반환해, 호출자가 404와 409를 구분하는 기존 판정을 그대로 유지한다.
+	 */
+	@Query("""
+		select member.user.id
+		from GroupMember member
+		where member.group.id = :groupId
+		  and member.id = :memberId
+		""")
+	Optional<Long> findUserIdByGroupIdAndMemberId(
+		@Param("groupId") Long groupId,
+		@Param("memberId") Long memberId);
 
 	@Query("""
 		select member

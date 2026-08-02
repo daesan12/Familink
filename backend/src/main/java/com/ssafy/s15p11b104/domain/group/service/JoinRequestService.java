@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,7 @@ import com.ssafy.s15p11b104.domain.group.repository.GroupJoinRequestRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.notification.event.DomainNotificationEvent;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
+import com.ssafy.s15p11b104.global.exception.ConstraintViolationTranslator;
 import com.ssafy.s15p11b104.global.exception.ErrorCode;
 
 @Service
@@ -38,6 +40,7 @@ public class JoinRequestService {
 	private final GroupMemberRepository groupMemberRepository;
 	private final GroupJoinRequestRepository groupJoinRequestRepository;
 	private final UserRepository userRepository;
+	private final ConstraintViolationTranslator constraintViolationTranslator;
 	private final ApplicationEventPublisher eventPublisher;
 
 	public JoinRequestService(
@@ -45,20 +48,33 @@ public class JoinRequestService {
 		GroupMemberRepository groupMemberRepository,
 		GroupJoinRequestRepository groupJoinRequestRepository,
 		UserRepository userRepository,
+		ConstraintViolationTranslator constraintViolationTranslator,
 		ApplicationEventPublisher eventPublisher) {
 		this.familyGroupRepository = familyGroupRepository;
 		this.groupMemberRepository = groupMemberRepository;
 		this.groupJoinRequestRepository = groupJoinRequestRepository;
 		this.userRepository = userRepository;
+		this.constraintViolationTranslator = constraintViolationTranslator;
 		this.eventPublisher = eventPublisher;
 	}
 
+	/**
+	 * 초대 코드로 대기 중 가입 요청을 만든다.
+	 *
+	 * <p>신청자 계정 행을 잠근 뒤 중복 여부를 검사해 같은 사용자의 동시 요청을 직렬화한다.
+	 * 잠그지 않으면 두 트랜잭션이 사전 검사를 모두 통과한 뒤 대기 중 요청을 한 건으로 제한하는
+	 * 부분 유니크 인덱스에서 한쪽이 실패한다. 잠글 대상을 {@code group_join_requests}로 잡을 수
+	 * 없는 것은 아직 없는 행이 경쟁 대상이기 때문이며, 두 트랜잭션이 반드시 만나는 기존 행은
+	 * 신청자 계정뿐이다.
+	 */
 	@Transactional
 	public JoinRequestCreateResponse createByInviteCode(
 		Long authenticatedUserId,
 		JoinRequestCreateRequest request) {
 		FamilyGroup group = familyGroupRepository.findByInviteCode(normalizeInviteCode(request.inviteCode()))
 			.orElseThrow(() -> new BusinessException(ErrorCode.INVITE_CODE_INVALID));
+		User applicant = userRepository.findActiveByIdForUpdate(authenticatedUserId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 
 		if (groupMemberRepository.findActiveByGroupIdAndUserId(group.getId(), authenticatedUserId).isPresent()) {
 			throw new BusinessException(ErrorCode.ALREADY_GROUP_MEMBER);
@@ -68,14 +84,29 @@ public class JoinRequestService {
 			throw new BusinessException(ErrorCode.JOIN_REQUEST_ALREADY_EXISTS);
 		}
 
-		User applicant = userRepository.findByIdAndWithdrawnAtIsNull(authenticatedUserId)
-			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
-		GroupJoinRequest joinRequest = groupJoinRequestRepository.save(
+		GroupJoinRequest joinRequest = savePendingRequest(
 			new GroupJoinRequest(group, applicant, JoinRequestStatus.PENDING_ADMIN));
 		eventPublisher.publishEvent(new DomainNotificationEvent.JoinRequestCreated(joinRequest.getId()));
 
 		return new JoinRequestCreateResponse(
 			joinRequest.getId(), group.getId(), group.getName(), joinRequest.getStatus());
+	}
+
+	/**
+	 * 대기 중 가입 요청을 저장하면서 제약 위반을 계약된 오류로 바꾼다.
+	 *
+	 * <p>트랜잭션 안에서 flush해야 위반을 여기서 잡을 수 있다. 커밋 시점까지 미루면 예외가 서비스
+	 * 밖에서 올라와 계약에 없는 500이 된다.
+	 */
+	private GroupJoinRequest savePendingRequest(GroupJoinRequest joinRequest) {
+		try {
+			return groupJoinRequestRepository.saveAndFlush(joinRequest);
+		} catch (DataIntegrityViolationException exception) {
+			if (constraintViolationTranslator.isPendingJoinRequest(exception)) {
+				throw new BusinessException(ErrorCode.JOIN_REQUEST_ALREADY_EXISTS);
+			}
+			throw exception;
+		}
 	}
 
 	@Transactional(readOnly = true)
@@ -108,6 +139,7 @@ public class JoinRequestService {
 		GroupMember manager = requireActiveManager(groupId, authenticatedUserId);
 
 		String decision = normalizeDecision(request.decision());
+		lockApplicantAccount(joinRequestId, groupId);
 		GroupJoinRequest joinRequest = groupJoinRequestRepository
 			.findForUpdateByIdAndGroupId(joinRequestId, groupId)
 			.filter(candidate -> candidate.getApplicant().getWithdrawnAt() == null)
@@ -153,7 +185,7 @@ public class JoinRequestService {
 		}
 
 		Instant now = Instant.now();
-		return groupMemberRepository
+		GroupMember membership = groupMemberRepository
 			.findByGroupIdAndUserId(joinRequest.getGroup().getId(), applicantUserId)
 			.map(existing -> {
 				if (existing.isActive()) {
@@ -162,13 +194,49 @@ public class JoinRequestService {
 				existing.rejoin(assignedRole, now);
 				return existing;
 			})
-			.orElseGet(() -> groupMemberRepository.save(new GroupMember(
-				joinRequest.getGroup(), joinRequest.getApplicant(), assignedRole, false, now)));
+			.orElseGet(() -> new GroupMember(
+				joinRequest.getGroup(), joinRequest.getApplicant(), assignedRole, false, now));
+
+		return saveMembership(membership);
 	}
 
+	/**
+	 * 신청자 계정 행을 잠근 뒤에 확인하므로 잠그지 않고 읽어도 된다.
+	 *
+	 * <p>피보호자를 지정하는 모든 경로가 대상 계정 행을 먼저 잠그므로, 이 조회 시점에는 같은
+	 * 사용자를 다른 그룹의 피보호자로 만드는 트랜잭션이 동시에 진행될 수 없다.
+	 */
 	private boolean isActiveCareReceiver(Long userId) {
 		return groupMemberRepository.findAllActiveByUserId(userId).stream()
 			.anyMatch(membership -> membership.getRole() == GroupRole.CARE_RECEIVER);
+	}
+
+	/**
+	 * 결정 대상 요청의 신청자 계정 행을 요청 행보다 먼저 잠근다.
+	 *
+	 * <p>계정 행이 서로 다른 그룹의 두 승인 트랜잭션이 반드시 만나는 유일한 기존 행이므로, 이
+	 * 잠금이 활성 피보호자 검사와 멤버십 쓰기를 직렬화한다. 요청이나 신청자를 찾지 못하면 잠그지
+	 * 않고 넘어가 뒤따르는 조회가 기존 404·권한 판정을 그대로 내리게 한다.
+	 */
+	private void lockApplicantAccount(Long joinRequestId, Long groupId) {
+		groupJoinRequestRepository.findApplicantUserIdByIdAndGroupId(joinRequestId, groupId)
+			.ifPresent(userRepository::findActiveByIdForUpdate);
+	}
+
+	/**
+	 * 멤버십을 저장하면서 활성 피보호자 제약 위반을 계약된 오류로 바꾼다.
+	 *
+	 * <p>재가입은 더티체킹으로 UPDATE되므로 명시적으로 flush해야 위반을 여기서 잡을 수 있다.
+	 */
+	private GroupMember saveMembership(GroupMember membership) {
+		try {
+			return groupMemberRepository.saveAndFlush(membership);
+		} catch (DataIntegrityViolationException exception) {
+			if (constraintViolationTranslator.isActiveCareReceiver(exception)) {
+				throw new BusinessException(ErrorCode.CARE_RECEIVER_ALREADY_ACTIVE_IN_OTHER_GROUP);
+			}
+			throw exception;
+		}
 	}
 
 	private GroupMember requireActiveManager(Long groupId, Long authenticatedUserId) {
