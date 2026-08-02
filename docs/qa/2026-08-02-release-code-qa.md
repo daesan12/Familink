@@ -35,6 +35,8 @@
 
 QA-032는 `origin/develop`에서 아직 재현되지만 `origin/feature/S15P11B104-214-jwt-call-actor-resolver`의 `988fc25` 커밋에서 수정 중이다. 이 브랜치는 후속 검증 시점에 `develop`보다 1커밋 앞서 있었으며 아직 병합 증거는 없다.
 
+2026-08-02 후속 확인: `988fc25`는 병합 커밋 `8ba72e4`로 `develop`(local·origin 동일)에 병합되었다. 병합 후 검증 결과는 QA-032 항목의 후속 검증 기록을 따른다.
+
 ## 사용자 특수 케이스 추가 점검 범위
 
 - 느린 응답 중 중복 탭·뒤로 가기·modal 닫기·다른 계정 재시도
@@ -278,6 +280,11 @@ final class JwtCallActorResolver implements CallActorResolver {
     }
 }
 ```
+
+- 후속 검증 (2026-08-02, 병합 커밋 `8ba72e4` 기준):
+  - 코드 대조: 병합된 `JwtCallActorResolver`가 수정 가이드와 일치한다. `@Profile("!ai-call-dev")`로 운영(`prod`) profile에서 유일한 `CallActorResolver`가 되고, SecurityContext의 `AuthenticatedUser`를 읽어 활성 `CARE_RECEIVER` 멤버십을 단건 확정하며(부분 유니크 인덱스 `uq_user_active_care_receiver` 전제), 미인증 401과 비피보호자 403을 구분한다. `UnavailableCallActorResolver`는 삭제되었다. `CallSessionService`는 생성·연결 결과·종료 모두 `resolve()`와 `findOwnedSessionForUpdate`로 같은 actor 기준 소유권을 검증한다.
+  - 테스트: 단위 4건(정상 해석·미인증 401·principal 타입 불일치 401·비피보호자 403)과 통합 5건(피보호자 201, 이중 역할 사용자의 피보호자 멤버십 해석, 보호자 403, 탈퇴 피보호자 403, 미인증 401)이 resolver를 모킹하지 않고 `ai-call-dev` 비활성 조건에서 검증한다. 백엔드 전체 `cleanTest test --no-build-cache --offline` 실제 실행 결과 78 suites·593 tests 통과(failure 0·error 0·skipped 0, 1m 37s). 기존 76 suites·584 tests 대비 증가분은 214 추가 테스트 2 suites·9 tests와 정확히 일치한다.
+  - 잔여: 운영과 동일한 staging 환경의 E2E(에뮬레이터 Phase 5·6 재실행 포함)는 미실행. 코드·테스트 수준 검증은 완료 상태다.
 
 ## P2 발견 사항
 
@@ -761,7 +768,7 @@ return postReadService.getArchive(groupId, bounded, filters);
 
 ## 출시 전 최소 종료 조건
 
-1. 보안 High인 SEC-001과 P1 13건을 수정하고 각 실패 경로의 회귀 테스트를 추가한다. QA-032는 `S15P11B104-214` MR이 `develop`에 실제 병합된 뒤 운영 profile 통합 테스트까지 확인한다.
+1. 보안 High인 SEC-001과 P1 13건을 수정하고 각 실패 경로의 회귀 테스트를 추가한다. QA-032는 `S15P11B104-214` MR이 `develop`에 실제 병합된 뒤 운영 profile 통합 테스트까지 확인한다. — 2026-08-02 병합(`8ba72e4`)과 코드 대조·단위 4건·통합 5건·전체 suite 통과를 확인했다(QA-032 후속 검증 기록 참조). staging E2E만 잔여.
 2. QA-014의 기존 HOUR_BEFORE 삭제 기대 테스트를 공식 스펙에 맞게 수정하고, 발송 뒤 startAt 변경 재현 테스트를 추가한다.
 3. DB 동시성 테스트로 QA-016~024를 실제 PostgreSQL에서 재현하고 탈퇴 불변식·409·직렬 결과를 검증한다.
 4. 느린·역순 응답 UI 테스트로 QA-020~028의 중복 탭, 닫기, 재열기, 로드 실패와 데이터 보존을 검증한다.
