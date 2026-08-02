@@ -166,6 +166,31 @@ test('로그아웃을 누르면 onRequestLogout을 호출한다', () => {
   expect(onRequestLogout).toHaveBeenCalledTimes(1);
 });
 
+test('프로필 조회가 지연되면 피보호자 fixture와 편집 진입을 노출하지 않는다', () => {
+  const pending = deferred<{
+    birthDate: string;
+    gender: 'male';
+    loginId: string;
+    name: string;
+    profileImageUrl: null;
+  }>();
+  const updateCurrentProfile = jest.fn();
+  const profileGateway: ProfileGateway = {
+    loadCurrentProfile: jest.fn(() => pending.promise),
+    updateCurrentProfile,
+    uploadProfileImage: jest.fn(),
+    withdrawCurrentUser: jest.fn(),
+  };
+  const renderer = render({profileGateway});
+
+  expect(hasText(renderer, '프로필을 불러오는 중이에요.')).toBe(true);
+  expect(hasText(renderer, '손수호 님')).toBe(false);
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '프로필 편집'}),
+  ).toHaveLength(0);
+  expect(updateCurrentProfile).not.toHaveBeenCalled();
+});
+
 test('프로필 이미지 제거는 null로 저장하고 성공한 뒤에만 부모 상태를 갱신한다', async () => {
   const updateCurrentProfile = jest.fn().mockResolvedValue({
     id: '2',
@@ -205,9 +230,7 @@ test('프로필 이미지 제거는 null로 저장하고 성공한 뒤에만 부
   });
 
   expect(profileGateway.uploadProfileImage).not.toHaveBeenCalled();
-  expect(updateCurrentProfile).toHaveBeenCalledWith(
-    expect.objectContaining({profileImageUrl: null}),
-  );
+  expect(updateCurrentProfile).toHaveBeenCalledWith({profileImageUrl: null});
   expect(renderer.root.findByType(MyPageProfileCard).props).toMatchObject({
     profileImageUrl: null,
   });

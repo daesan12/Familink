@@ -163,6 +163,74 @@ test('renders the profile returned by the API gateway', async () => {
   ).toBe(true);
 });
 
+test('프로필 조회가 끝나기 전에는 fixture와 편집 진입을 노출하지 않는다', () => {
+  const pending = deferred<{
+    birthDate: string;
+    gender: 'male';
+    loginId: string;
+    name: string;
+    profileImageUrl: null;
+  }>();
+  const updateCurrentProfile = jest.fn();
+  const profileGateway: ProfileGateway = {
+    loadCurrentProfile: jest.fn(() => pending.promise),
+    updateCurrentProfile,
+    uploadProfileImage: jest.fn(),
+    withdrawCurrentUser: jest.fn(),
+  };
+  const renderer = render({profileGateway});
+
+  expect(hasText(renderer, '프로필을 불러오는 중이에요.')).toBe(true);
+  expect(hasText(renderer, '이종철 님')).toBe(false);
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '프로필 편집'}),
+  ).toHaveLength(0);
+  expect(updateCurrentProfile).not.toHaveBeenCalled();
+});
+
+test('프로필 조회 실패 화면에서 뒤로 가거나 다시 시도할 수 있다', async () => {
+  const onCloseProfile = jest.fn();
+  const profileGateway: ProfileGateway = {
+    loadCurrentProfile: jest
+      .fn()
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce({
+        birthDate: '1995-03-17',
+        gender: 'male',
+        loginId: 'api-user',
+        name: '재시도 사용자',
+        profileImageUrl: null,
+      }),
+    updateCurrentProfile: jest.fn(),
+    uploadProfileImage: jest.fn(),
+    withdrawCurrentUser: jest.fn(),
+  };
+  const renderer = render({onCloseProfile, profileGateway});
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+
+  expect(hasText(renderer, '프로필을 불러오지 못했어요')).toBe(true);
+  expect(hasText(renderer, '이종철 님')).toBe(false);
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '프로필 조회에서 뒤로 가기'})
+      .props.onPress();
+  });
+  expect(onCloseProfile).toHaveBeenCalledTimes(1);
+
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '프로필 다시 시도'})
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+  expect(hasText(renderer, '재시도 사용자 님')).toBe(true);
+  expect(profileGateway.loadCurrentProfile).toHaveBeenCalledTimes(2);
+});
+
 test('새 프로필 이미지는 업로드 후 안정적인 URL로 저장하고 부모 상태를 갱신한다', async () => {
   const localAsset = {
     contentType: 'image/webp',
@@ -214,12 +282,10 @@ test('새 프로필 이미지는 업로드 후 안정적인 URL로 저장하고 
   });
 
   expect(profileGateway.uploadProfileImage).toHaveBeenCalledWith(localAsset);
-  expect(updateCurrentProfile).toHaveBeenCalledWith(
-    expect.objectContaining({
-      name: '변경된 이름',
-      profileImageUrl: 'https://cdn.example.com/new.webp',
-    }),
-  );
+  expect(updateCurrentProfile).toHaveBeenCalledWith({
+    name: '변경된 이름',
+    profileImageUrl: 'https://cdn.example.com/new.webp',
+  });
   expect(renderer.root.findByType(MyPageProfileCard).props).toMatchObject({
     name: '변경된 이름',
     profileImageUrl: 'https://cdn.example.com/new.webp',
@@ -497,3 +563,13 @@ test('월간 네트워크 오류는 재시도로 다시 조회한다', async () 
       .some(stamp => stamp.props.filled),
   ).toBe(true);
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return {promise, reject, resolve};
+}

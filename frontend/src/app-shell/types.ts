@@ -39,6 +39,7 @@ export interface AppScreenProps {
   currentUserName?: string;
   onCloseArchive?: () => void;
   onCloseNotifications?: () => void;
+  onCloseProfile?: () => void;
   onFullscreenChange?: (isFullscreen: boolean) => void;
   onHeaderVisibilityChange?: (isVisible: boolean) => void;
   onNotificationRead?: (notificationId: string) => void;

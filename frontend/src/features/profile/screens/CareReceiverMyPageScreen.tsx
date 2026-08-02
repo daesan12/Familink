@@ -26,10 +26,11 @@ import {
   type MyPageMenuItem,
 } from '../components/MyPageSettingsSection';
 import {CARE_RECEIVER_PROFILE} from '../fixtures/profileFixtures';
-import {mergeUserProfile, toApiProfileUpdate} from '../profileModel';
+import {mergeUserProfile, toChangedApiProfileUpdate} from '../profileModel';
 import type {CareReceiverProfile, ProfileImageChange} from '../types';
 import {ProfileEditScreen} from './ProfileEditScreen';
 import {ProfileGuideScreen} from './ProfileGuideScreen';
+import {ProfileLoadStateScreen} from './ProfileLoadStateScreen';
 
 export interface CareReceiverMyPageScreenProps extends AppScreenProps {
   // 초기 프로필 주입(테스트·연동용). 없으면 mock 프로필을 사용한다.
@@ -41,6 +42,11 @@ export interface CareReceiverMyPageScreenProps extends AppScreenProps {
 // 하위 전체화면. 진입 시 하단 탭을 숨긴다.
 type SubScreen = 'edit' | 'interest' | 'guide' | 'notificationSettings' | null;
 
+type ProfileLoadState =
+  | {status: 'loading'}
+  | {status: 'ready'}
+  | {message: string; status: 'error'};
+
 type InterestLoadState =
   | {status: 'idle'}
   | {scopeKey: string; status: 'loading'}
@@ -48,20 +54,40 @@ type InterestLoadState =
   | {interests: readonly string[]; scopeKey: string; status: 'ready'};
 
 const IDLE_INTEREST_LOAD_STATE: InterestLoadState = {status: 'idle'};
+const PROFILE_LOAD_ERROR_MESSAGE =
+  '네트워크 연결을 확인하고 다시 시도해 주세요.';
+const EMPTY_CARE_RECEIVER_PROFILE: CareReceiverProfile = {
+  age: 0,
+  birthDate: '',
+  gender: 'male',
+  interests: [],
+  loginId: '',
+  name: '',
+};
 
 // J-1 마이페이지(피보호자). 효자 도장 대신 관심사 설정을 다루고, 프로필 편집·알림 설정·이용가이드는 보호자와 공유한다.
 export function CareReceiverMyPageScreen({
   currentGroup,
   initialProfile,
   interestGateway,
+  onCloseProfile,
   onFullscreenChange,
   onRequestLogout,
   onRequestWithdrawal,
   profileGateway,
 }: CareReceiverMyPageScreenProps) {
+  const hasLocalProfile = initialProfile !== undefined || __DEV__;
   const [profile, setProfile] = useState(
-    initialProfile ?? CARE_RECEIVER_PROFILE,
+    initialProfile ??
+      (__DEV__ ? CARE_RECEIVER_PROFILE : EMPTY_CARE_RECEIVER_PROFILE),
   );
+  const [profileLoadState, setProfileLoadState] =
+    useState<ProfileLoadState>(
+      profileGateway === undefined && hasLocalProfile
+        ? {status: 'ready'}
+        : {status: 'loading'},
+    );
+  const [profileRetryCount, setProfileRetryCount] = useState(0);
   const [subScreen, setSubScreen] = useState<SubScreen>(null);
   const [interestLoadState, setInterestLoadState] =
     useState<InterestLoadState>(IDLE_INTEREST_LOAD_STATE);
@@ -98,30 +124,38 @@ export function CareReceiverMyPageScreen({
 
   useEffect(() => {
     if (profileGateway === undefined) {
+      setProfileLoadState(
+        hasLocalProfile
+          ? {status: 'ready'}
+          : {message: PROFILE_LOAD_ERROR_MESSAGE, status: 'error'},
+      );
       return;
     }
 
     let disposed = false;
+    setProfileLoadState({status: 'loading'});
     profileGateway
       .loadCurrentProfile()
       .then(remote => {
         if (!disposed) {
           setProfile(current => mergeUserProfile(current, remote));
+          setProfileLoadState({status: 'ready'});
         }
       })
       .catch(() => {
         if (!disposed) {
-          Alert.alert(
-            '?꾨줈???뺣낫瑜?遺덈윭?ㅼ? 紐삵뻽?듬땲??',
-            '?ㅽ듃?뚰겕 ?곌껐???뺤씤?????ㅼ떆 ?쒕룄??二쇱꽭??',
-          );
+          setSubScreen(null);
+          setProfileLoadState({
+            message: PROFILE_LOAD_ERROR_MESSAGE,
+            status: 'error',
+          });
         }
       });
 
     return () => {
       disposed = true;
     };
-  }, [profileGateway]);
+  }, [hasLocalProfile, profileGateway, profileRetryCount]);
 
   const handleProfileSave = async (
     nextProfile: CareReceiverProfile,
@@ -138,9 +172,14 @@ export function CareReceiverMyPageScreen({
         : imageChange.type === 'remove'
           ? null
           : undefined;
-    await profileGateway.updateCurrentProfile(
-      toApiProfileUpdate(nextProfile, profileImageUrl),
+    const update = toChangedApiProfileUpdate(
+      profile,
+      nextProfile,
+      profileImageUrl,
     );
+    if (Object.keys(update).length > 0) {
+      await profileGateway.updateCurrentProfile(update);
+    }
     setProfile({
       ...nextProfile,
       profileImageUrl:
@@ -254,6 +293,20 @@ export function CareReceiverMyPageScreen({
       status: 'ready',
     });
   };
+
+  if (profileLoadState.status === 'loading') {
+    return <ProfileLoadStateScreen onBack={onCloseProfile} />;
+  }
+
+  if (profileLoadState.status === 'error') {
+    return (
+      <ProfileLoadStateScreen
+        errorMessage={profileLoadState.message}
+        onBack={onCloseProfile}
+        onRetry={() => setProfileRetryCount(count => count + 1)}
+      />
+    );
+  }
 
   if (subScreen === 'edit') {
     return (

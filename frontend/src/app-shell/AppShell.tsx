@@ -363,6 +363,7 @@ export function AppShell({
             currentUserName={currentUserName}
             onCloseArchive={() => setActiveRoute('feed')}
             onCloseNotifications={() => setActiveRoute('feed')}
+            onCloseProfile={() => setActiveRoute('feed')}
             onCallResult={onCallResult}
             onFullscreenChange={setIsScreenFullscreen}
             onHeaderVisibilityChange={setIsScreenHeaderVisible}
