@@ -95,6 +95,7 @@ internal fun AiCallRoute(
   var permissionResult by remember { mutableStateOf<Boolean?>(null) }
   var connectionLostSignal by remember { mutableIntStateOf(0) }
   var isEnding by rememberSaveable { mutableStateOf(false) }
+  var failedEndPhase by remember { mutableStateOf<AiCallPhase?>(null) }
   var callJob by remember { mutableStateOf<Job?>(null) }
 
   val coroutineScope = rememberCoroutineScope()
@@ -159,6 +160,7 @@ internal fun AiCallRoute(
       return@LaunchedEffect
     }
     isEnding = true
+    failedEndPhase = null
     phase = AiCallPhase.Failed
     runCatching {
       callRuntime?.end(
@@ -173,11 +175,13 @@ internal fun AiCallRoute(
   val startCallWithPermission = { personaId: Long ->
     val runtime = callRuntime
     if (runtime == null) {
+      failedEndPhase = null
       phase = AiCallPhase.Failed
       onCallResult(AiCallResult.Failed.wireValue)
     } else {
       callJob?.cancel()
       isEnding = false
+      failedEndPhase = null
       durationSeconds = 0
       captionDraft = ""
       currentCaption = null
@@ -206,6 +210,7 @@ internal fun AiCallRoute(
     if (granted) {
       startCallWithPermission(requestedPersonaId)
     } else {
+      failedEndPhase = null
       phase = AiCallPhase.Failed
       onCallResult(AiCallResult.Failed.wireValue)
     }
@@ -225,6 +230,7 @@ internal fun AiCallRoute(
     callJob?.cancel()
     callRuntime?.close()
     isEnding = false
+    failedEndPhase = null
     phase = AiCallPhase.Selecting
     durationSeconds = 0
     captionDraft = ""
@@ -234,32 +240,30 @@ internal fun AiCallRoute(
     isSpeakerOn = true
   }
 
-  val finishCall = {
-    if (!isEnding && (phase == AiCallPhase.Connecting || phase == AiCallPhase.InProgress)) {
+  val finishCallFromPhase: (AiCallPhase) -> Unit = { endingPhase ->
+    if (!isEnding) {
       isEnding = true
-      if (phase == AiCallPhase.Connecting) {
+      if (endingPhase == AiCallPhase.Connecting) {
         callJob?.cancel()
       }
-      val result =
-          if (phase == AiCallPhase.Connecting) {
-            AiCallResult.Cancelled
-          } else {
-            AiCallResult.Completed
-          }
-      phase =
-          if (result == AiCallResult.Cancelled) {
-            AiCallPhase.Cancelled
-          } else {
-            AiCallPhase.Completed
-          }
+      phase = AiCallPhase.Ending
       coroutineScope.launch {
         try {
-          callRuntime?.end(
-              accessToken = bridgeContext.accessToken,
-              terminationType = AiCallTerminationType.UserRequested,
+          val result =
+              awaitAiCallEndConfirmation(
+                  initialPhase = endingPhase,
+                  requestEnd = {
+                    callRuntime?.end(
+                        accessToken = bridgeContext.accessToken,
+                        terminationType = AiCallTerminationType.UserRequested,
+                    )
+                  },
+                  onConfirmed = { confirmed -> phase = confirmed.terminalPhase },
           )
+          failedEndPhase = null
           onCallResult(result.wireValue)
         } catch (exception: Throwable) {
+          failedEndPhase = endingPhase
           phase = AiCallPhase.Failed
           onCallResult(AiCallResult.Failed.wireValue)
         } finally {
@@ -269,11 +273,24 @@ internal fun AiCallRoute(
     }
   }
 
+  val finishCall = {
+    if (!isEnding && (phase == AiCallPhase.Connecting || phase == AiCallPhase.InProgress)) {
+      finishCallFromPhase(phase)
+    }
+  }
+
   BackHandler(enabled = phase != AiCallPhase.Selecting) {
     when (phase) {
       AiCallPhase.Connecting,
       AiCallPhase.InProgress,
       -> finishCall()
+
+      AiCallPhase.Ending -> Unit
+
+      AiCallPhase.Failed ->
+          if (isFailedCallSelectionAllowed(failedEndPhase != null)) {
+            returnToSelection()
+          }
 
       else -> returnToSelection()
     }
@@ -284,6 +301,7 @@ internal fun AiCallRoute(
           AiCallUiState(
               phase = phase,
               persona = selectedPersona,
+              endRetryRequired = failedEndPhase != null,
               durationSeconds = durationSeconds,
               isMuted = isMuted,
               isSpeakerOn = isSpeakerOn,
@@ -299,6 +317,7 @@ internal fun AiCallRoute(
       },
       onPreviewFailure = {
         if (selectedPersona != null) {
+          failedEndPhase = null
           durationSeconds = 0
           phase = AiCallPhase.Failed
           onCallResult(AiCallResult.Failed.wireValue)
@@ -315,7 +334,12 @@ internal fun AiCallRoute(
       onEndCall = finishCall,
       onConfirm = returnToSelection,
       onRetry = {
-        selectedPersona?.let { startCall(it.id) }
+        val retryPhase = failedEndPhase
+        if (retryPhase != null) {
+          finishCallFromPhase(retryPhase)
+        } else {
+          selectedPersona?.let { startCall(it.id) }
+        }
       },
   )
 }
@@ -344,6 +368,7 @@ internal fun AiCallContent(
 
     AiCallPhase.Connecting,
     AiCallPhase.InProgress,
+    AiCallPhase.Ending,
     ->
         ActiveCallScreen(
             state = state,
@@ -363,6 +388,7 @@ internal fun AiCallContent(
     AiCallPhase.Failed ->
         CallFailedScreen(
             persona = state.persona,
+            endRetryRequired = state.endRetryRequired,
             onConfirm = onConfirm,
             onRetry = onRetry,
         )
@@ -617,6 +643,7 @@ private fun ActiveCallScreen(
 ) {
   val persona = state.persona ?: return
   val isConnecting = state.phase == AiCallPhase.Connecting
+  val isEnding = state.phase == AiCallPhase.Ending
   val currentCaption = state.currentCaption ?: "자막을 기다리는 중입니다."
   val previousCaption = state.captionHistory.dropLast(1).lastOrNull()
 
@@ -631,6 +658,8 @@ private fun ActiveCallScreen(
         text =
             if (isConnecting) {
               "통화 연결 중"
+            } else if (isEnding) {
+              "통화 종료 중"
             } else {
               formatCallDuration(state.durationSeconds)
             },
@@ -663,7 +692,7 @@ private fun ActiveCallScreen(
     )
 
     Spacer(modifier = Modifier.weight(1f))
-    if (!isConnecting) {
+    if (!isConnecting && !isEnding) {
       Column(
           modifier =
               Modifier.fillMaxWidth()
@@ -691,7 +720,7 @@ private fun ActiveCallScreen(
       }
     } else {
       Text(
-          text = "잠시만 기다려 주세요.",
+          text = if (isEnding) "통화 종료 중입니다." else "잠시만 기다려 주세요.",
           color = AiCallColors.OnDarkMuted,
           fontSize = 17.sp,
       )
@@ -875,6 +904,7 @@ private fun CallEndedScreen(
 @Composable
 private fun CallFailedScreen(
     persona: AiPersona?,
+    endRetryRequired: Boolean,
     onConfirm: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -896,7 +926,7 @@ private fun CallFailedScreen(
       Spacer(modifier = Modifier.height(28.dp))
     }
     Text(
-        text = "통화를 연결하지 못했어요.",
+        text = if (endRetryRequired) "통화를 종료하지 못했어요." else "통화를 연결하지 못했어요.",
         color = AiCallColors.OnDark,
         fontSize = 25.sp,
         fontWeight = FontWeight.Bold,
@@ -904,7 +934,12 @@ private fun CallFailedScreen(
     )
     Spacer(modifier = Modifier.height(10.dp))
     Text(
-        text = "인터넷 연결을 확인한 뒤 다시 시도해 주세요.",
+        text =
+            if (endRetryRequired) {
+              "종료 요청을 다시 시도해 주세요."
+            } else {
+              "인터넷 연결을 확인한 뒤 다시 시도해 주세요."
+            },
         color = AiCallColors.OnDarkMuted,
         fontSize = 16.sp,
         lineHeight = 24.sp,
@@ -932,16 +967,18 @@ private fun CallFailedScreen(
           fontWeight = FontWeight.Bold,
       )
     }
-    Spacer(modifier = Modifier.height(12.dp))
-    Text(
-        text = "다른 상대 선택",
-        color = AiCallColors.OnDark,
-        fontSize = 16.sp,
-        fontWeight = FontWeight.SemiBold,
-        modifier =
-            Modifier.clip(RoundedCornerShape(12.dp))
-                .clickable(onClick = onConfirm)
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-    )
+    if (!endRetryRequired) {
+      Spacer(modifier = Modifier.height(12.dp))
+      Text(
+          text = "다른 상대 선택",
+          color = AiCallColors.OnDark,
+          fontSize = 16.sp,
+          fontWeight = FontWeight.SemiBold,
+          modifier =
+              Modifier.clip(RoundedCornerShape(12.dp))
+                  .clickable(onClick = onConfirm)
+                  .padding(horizontal = 20.dp, vertical = 14.dp),
+      )
+    }
   }
 }
