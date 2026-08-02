@@ -6,6 +6,7 @@ import {
   View,
 } from 'react-native';
 
+import {ApiError} from '../../../shared/api';
 import {AUTH_COLORS} from '../theme';
 import {GroupBottomSheet} from './GroupBottomSheet';
 import {PrimaryButton} from './PrimaryButton';
@@ -19,6 +20,18 @@ interface JoinGroupSheetProps {
 const INVITE_CODE_LENGTH = 6;
 const JOIN_REQUEST_ERROR_MESSAGE =
   '초대 코드를 확인하고 다시 시도해주세요.';
+
+// API-GROUPS-003의 409는 코드가 잘못된 경우와 원인이 다르므로 문구를 구분한다.
+export function joinRequestErrorMessage(error: unknown): string {
+  const code = error instanceof ApiError ? error.code : null;
+  if (code === 'JOIN_REQUEST_ALREADY_EXISTS') {
+    return '이미 참여 요청을 보낸 그룹이에요. 관리자의 승인을 기다려 주세요.';
+  }
+  if (code === 'ALREADY_GROUP_MEMBER') {
+    return '이미 참여하고 있는 그룹이에요.';
+  }
+  return JOIN_REQUEST_ERROR_MESSAGE;
+}
 
 export function JoinGroupSheet({
   onDismiss,
@@ -63,8 +76,8 @@ export function JoinGroupSheet({
     try {
       await onSubmit(inviteCode);
       onDismiss();
-    } catch {
-      setSubmitError(JOIN_REQUEST_ERROR_MESSAGE);
+    } catch (error) {
+      setSubmitError(joinRequestErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
