@@ -926,6 +926,90 @@ test('가입 승인 대기 카드를 누르면 승인 화면으로 이동한다'
   expect(hasText(renderer!, '승인 요청 1건')).toBe(true);
   expect(hasText(renderer!, '손수호')).toBe(true);
 });
+test('하위 화면에서 돌아오면 구성원 목록과 그룹 상세를 다시 조회한다', async () => {
+  const membersLoader = jest.fn().mockResolvedValue([
+    {
+      age: null,
+      alias: null,
+      avatarText: '아',
+      gender: null,
+      isManager: true,
+      memberId: 'm-manager',
+      name: '아빠',
+      role: 'guardian' as const,
+      userId: 'u-manager',
+    },
+  ]);
+  const groupDetailLoader = jest.fn().mockResolvedValue({
+    careReceiverCount: 0,
+    guardianCount: 1,
+    id: 'group-1',
+    isManager: true,
+    managerMemberId: 'm-manager',
+    memberCount: 1,
+    name: '우리 가족',
+  });
+  const joinRequestsLoader = jest.fn().mockResolvedValue([]);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        groupDetailLoader={groupDetailLoader}
+        joinRequestsLoader={joinRequestsLoader}
+        membersLoader={membersLoader}
+        pendingJoinCount={0}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+  expect(membersLoader).toHaveBeenCalledTimes(1);
+  expect(groupDetailLoader).toHaveBeenCalledTimes(1);
+
+  // 가입 승인 대기 화면에 들어갔다가 돌아온다.
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '가입 승인 대기'})
+      .props.onPress();
+    await Promise.resolve();
+  });
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '뒤로 가기'})
+      .props.onPress();
+    await Promise.resolve();
+  });
+
+  // 승인 등 화면 밖 변경이 반영되도록 목록과 상세를 다시 조회한다.
+  expect(membersLoader).toHaveBeenCalledTimes(2);
+  expect(groupDetailLoader).toHaveBeenCalledTimes(2);
+
+  // 재조회 중에도 기존 목록을 유지해 스피너·오분기 없이 갱신한다.
+  expect(hasText(renderer!, '아빠')).toBe(true);
+  expect(
+    renderer!.root.findAllByProps({
+      accessibilityLabel: '구성원 정보를 불러오는 중',
+    }),
+  ).toHaveLength(0);
+
+  // 멤버십이 바뀔 수 없는 그룹 코드 화면 복귀는 재조회하지 않는다.
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({accessibilityLabel: '그룹 코드'}).props.onPress();
+    await Promise.resolve();
+  });
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '뒤로 가기'})
+      .props.onPress();
+    await Promise.resolve();
+  });
+  expect(membersLoader).toHaveBeenCalledTimes(2);
+});
+
 test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공 후 상태를 갱신한다', async () => {
   const membersLoader = jest.fn().mockResolvedValue([
     {
