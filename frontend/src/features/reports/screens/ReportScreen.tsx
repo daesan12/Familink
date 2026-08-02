@@ -24,7 +24,10 @@ import {
 import { ReportPageIndicator } from "../components/ReportPageIndicator";
 import { DEVELOPMENT_REPORT_PAGES } from "../fixtures/reportFixtures";
 import { useCareReceiverReportTargets } from "../hooks/useCareReceiverReportTargets";
-import { useReportPages } from "../hooks/useReportPages";
+import {
+  type ReportPageLoadItem,
+  useReportPages,
+} from "../hooks/useReportPages";
 import {
   getReportPageState,
   sortCallsByStartedAt,
@@ -81,11 +84,11 @@ export function ReportScreen({
       : EMPTY_REPORT_TARGETS);
   const hasRemoteSource =
     reportGateway !== undefined &&
-    (careReceiverTargets !== undefined || careReceiverTargetsLoader !== undefined);
+    (careReceiverTargets !== undefined ||
+      careReceiverTargetsLoader !== undefined);
   const remotePages = useReportPages({
     enabled:
-      hasRemoteSource &&
-      (!shouldLoadTargets || targetState.status === "ready"),
+      hasRemoteSource && (!shouldLoadTargets || targetState.status === "ready"),
     groupId: currentGroup.id,
     reportDate: selectedReportDate,
     reportGateway,
@@ -96,12 +99,19 @@ export function ReportScreen({
     (__DEV__ && currentGroup.id === "development-guardian-group"
       ? DEVELOPMENT_REPORT_PAGES
       : EMPTY_REPORT_PAGES);
-  const pages =
+  const reportItems: readonly ReportPageLoadItem[] =
     hasRemoteSource && remotePages.status === "ready"
-      ? remotePages.pages
-      : localPages;
-  const pageIdentity = `${currentGroup.id}:${pages
-    .map((page) => page.memberId)
+      ? remotePages.items
+      : localPages.map((page) => ({
+          page,
+          status: "ready" as const,
+          target: {
+            displayName: page.displayName,
+            memberId: page.memberId,
+          },
+        }));
+  const pageIdentity = `${currentGroup.id}:${reportItems
+    .map((item) => item.target.memberId)
     .join(",")}`;
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedDetail, setSelectedDetail] =
@@ -134,15 +144,15 @@ export function ReportScreen({
   const calendarDates = !calendarTarget
     ? EMPTY_REPORT_DATES
     : reportGateway && calendarMonthKey
-      ? (calendarDatesByMonth[calendarMonthKey] ?? EMPTY_REPORT_DATES)
-      : filterReportDatesByMonth(
-          calendarTarget.localReportDates,
-          calendarMonth.year,
-          calendarMonth.month
-        );
+    ? calendarDatesByMonth[calendarMonthKey] ?? EMPTY_REPORT_DATES
+    : filterReportDatesByMonth(
+        calendarTarget.localReportDates,
+        calendarMonth.year,
+        calendarMonth.month
+      );
   const calendarStatus =
     reportGateway && calendarMonthKey
-      ? (calendarStatusByMonth[calendarMonthKey] ?? "loading")
+      ? calendarStatusByMonth[calendarMonthKey] ?? "loading"
       : "ready";
 
   useEffect(() => {
@@ -239,12 +249,12 @@ export function ReportScreen({
   }, [pageIdentity]);
 
   const handlePageChange = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (pages.length === 0 || width <= 0) {
+    if (reportItems.length === 0 || width <= 0) {
       return;
     }
 
     const nextIndex = Math.min(
-      pages.length - 1,
+      reportItems.length - 1,
       Math.max(0, Math.round(event.nativeEvent.contentOffset.x / width))
     );
     setCurrentIndex(nextIndex);
@@ -385,19 +395,7 @@ export function ReportScreen({
     );
   }
 
-  if (hasRemoteSource && remotePages.status === "error") {
-    return (
-      <ReportLoadState
-        actionLabel="다시 시도"
-        description={remotePages.message}
-        icon="alert-circle-outline"
-        onAction={remotePages.retry}
-        title="리포트 조회에 실패했어요"
-      />
-    );
-  }
-
-  if (pages.length === 0) {
+  if (reportItems.length === 0) {
     return (
       <View
         accessibilityLabel="조회할 피보호자가 없는 리포트"
@@ -425,19 +423,31 @@ export function ReportScreen({
         showsHorizontalScrollIndicator={false}
         testID="care-receiver-report-pager"
       >
-        {pages.map((page) => (
-          <ReportPage
-            isToday={selectedReportDate === reportDate}
-            key={page.memberId}
-            onOpenCalendar={handleOpenCalendar}
-            onOpenCall={handleOpenCall}
-            page={page}
-            width={width}
-          />
-        ))}
+        {reportItems.map((item) =>
+          item.status === "ready" ? (
+            <ReportPage
+              isToday={selectedReportDate === reportDate}
+              key={item.target.memberId}
+              onOpenCalendar={handleOpenCalendar}
+              onOpenCall={handleOpenCall}
+              page={item.page}
+              width={width}
+            />
+          ) : (
+            <ReportPageRequestState
+              item={item}
+              key={item.target.memberId}
+              onRetry={remotePages.retry}
+              width={width}
+            />
+          )
+        )}
       </ScrollView>
 
-      <ReportPageIndicator currentIndex={currentIndex} pages={pages} />
+      <ReportPageIndicator
+        currentIndex={currentIndex}
+        pages={reportItems.map((item) => item.target)}
+      />
 
       <CallReportDetailModal
         detail={selectedDetail}
@@ -464,6 +474,7 @@ export function ReportScreen({
 
 interface ReportLoadStateProps {
   actionLabel?: string;
+  actionAccessibilityLabel?: string;
   description: string;
   icon: ComponentProps<typeof MaterialDesignIcons>["name"];
   onAction?: () => void;
@@ -472,6 +483,7 @@ interface ReportLoadStateProps {
 
 function ReportLoadState({
   actionLabel,
+  actionAccessibilityLabel,
   description,
   icon,
   onAction,
@@ -484,6 +496,7 @@ function ReportLoadState({
       <Text style={styles.loadStateDescription}>{description}</Text>
       {actionLabel && onAction ? (
         <Pressable
+          accessibilityLabel={actionAccessibilityLabel}
           accessibilityRole="button"
           onPress={onAction}
           style={styles.retryButton}
@@ -491,6 +504,39 @@ function ReportLoadState({
           <Text style={styles.retryButtonText}>{actionLabel}</Text>
         </Pressable>
       ) : null}
+    </View>
+  );
+}
+
+function ReportPageRequestState({
+  item,
+  onRetry,
+  width,
+}: {
+  item: Exclude<ReportPageLoadItem, { status: "ready" }>;
+  onRetry: (memberId: string) => void;
+  width: number;
+}) {
+  const isError = item.status === "error";
+
+  return (
+    <View style={[styles.page, { width }]}>
+      <ReportLoadState
+        actionAccessibilityLabel={`${item.target.displayName} 님 리포트 다시 시도`}
+        actionLabel={isError ? "이 리포트 다시 시도" : undefined}
+        description={
+          isError
+            ? `${item.message} 다른 피보호자의 리포트는 계속 확인할 수 있어요.`
+            : "다른 피보호자의 리포트는 그대로 유지돼요."
+        }
+        icon={isError ? "alert-circle-outline" : "clock-outline"}
+        onAction={isError ? () => onRetry(item.target.memberId) : undefined}
+        title={
+          isError
+            ? `${item.target.displayName} 님의 리포트 조회에 실패했어요`
+            : `${item.target.displayName} 님의 리포트를 다시 불러오고 있어요`
+        }
+      />
     </View>
   );
 }
@@ -607,9 +653,7 @@ function moveReportYearMonth(
   current: ReportYearMonth,
   offset: number
 ): ReportYearMonth {
-  const date = new Date(
-    Date.UTC(current.year, current.month - 1 + offset, 1)
-  );
+  const date = new Date(Date.UTC(current.year, current.month - 1 + offset, 1));
   return {
     month: date.getUTCMonth() + 1,
     year: date.getUTCFullYear(),

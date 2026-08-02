@@ -5,7 +5,7 @@ import type { CareReceiverReportPage } from "../types";
 
 interface ReportPageIndicatorProps {
   currentIndex: number;
-  pages: readonly CareReceiverReportPage[];
+  pages: readonly Pick<CareReceiverReportPage, "displayName" | "memberId">[];
 }
 
 export function ReportPageIndicator({
