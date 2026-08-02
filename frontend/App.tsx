@@ -1449,6 +1449,7 @@ export default function App({
             )}
             {route === "groupOnboarding" && (
               <GroupOnboardingScreen
+                hasJoinedGroups={availableGroups.length > 0}
                 onBack={() => setRoute(groupOnboardingReturnRoute)}
                 onCreateGroup={handleCreateGroup}
                 onJoinByCode={handleJoinGroup}

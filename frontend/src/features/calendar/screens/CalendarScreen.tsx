@@ -267,6 +267,9 @@ export function CalendarScreen({
       detailController.current?.abort();
       const controller = new AbortController();
       detailController.current = controller;
+      // native 팝업이 겹겹이 쌓이지 않도록 시트를 닫고 상세만 연다.
+      // Android는 동시에 표시된 Modal마다 별도 dialog를 만들어 잔존 위험이 있다.
+      setIsSheetVisible(false);
       setDetailState({
         deleteErrorMessage: null,
         deleting: false,
@@ -316,6 +319,8 @@ export function CalendarScreen({
     detailController.current?.abort();
     deleteController.current?.abort();
     setDetailState(CLOSED_DETAIL);
+    // 상세는 시트에서만 열리므로 닫으면 선택 날짜 목록으로 복귀한다.
+    setIsSheetVisible(true);
   };
 
   const handleRetryDetail = () => {
@@ -353,6 +358,8 @@ export function CalendarScreen({
         if (!controller.signal.aborted) {
           removeEvent(eventId);
           setDetailState(CLOSED_DETAIL);
+          // 삭제 후에도 선택 날짜 목록으로 복귀한다(스펙: 상세만 닫고 목록에서 제거).
+          setIsSheetVisible(true);
         }
       })
       .catch((error) => {
@@ -380,108 +387,119 @@ export function CalendarScreen({
     ]);
   };
 
-  if (editorState) {
-    return (
-      <CalendarEventFormScreen
-        currentMember={currentMember}
-        currentUserName={currentUserName}
-        gateway={resolvedGateway}
-        groupId={currentGroup.id}
-        initialDate={selectedDate}
-        initialDetail={editorState.detail ?? undefined}
-        members={members}
-        now={now}
-        onCancel={() => setEditorState(null)}
-        onSaved={() => {
-          setEditorState(null);
-          setDetailState(CLOSED_DETAIL);
-          setIsSheetVisible(true);
-          reload();
-        }}
-      />
-    );
-  }
+  // 편집 화면은 시트·상세 Modal을 마운트 해제하지 않고 같은 트리에서 전환한다.
+  // 표시 중인 Modal을 언마운트하면 native 팝업이 정리되지 않고 겹겹이 남을 수 있다.
+  const editorScreen = editorState ? (
+    <CalendarEventFormScreen
+      currentMember={currentMember}
+      currentUserName={currentUserName}
+      gateway={resolvedGateway}
+      groupId={currentGroup.id}
+      initialDate={selectedDate}
+      initialDetail={editorState.detail ?? undefined}
+      members={members}
+      now={now}
+      onCancel={() => setEditorState(null)}
+      onSaved={() => {
+        setEditorState(null);
+        setDetailState(CLOSED_DETAIL);
+        setIsSheetVisible(true);
+        reload();
+      }}
+    />
+  ) : null;
 
   return (
     <View style={styles.screen}>
-      <View style={styles.monthToolbar}>
-        <Text accessibilityRole="header" style={styles.monthTitle}>
-          {formatMonthLabel(visibleMonth)}
-        </Text>
-      </View>
-
-      <View style={styles.weekdays}>
-        {WEEKDAY_LABELS.map((label, index) => (
-          <Text
-            key={label}
-            style={[
-              styles.weekday,
-              index === 0 && styles.sunday,
-              index === 6 && styles.saturday,
-            ]}
-          >
-            {label}
-          </Text>
-        ))}
-      </View>
-
-      <View
-        accessibilityHint="위로 밀면 다음 달, 아래로 밀면 이전 달로 이동합니다"
-        style={styles.calendarViewport}
-        {...panResponder.panHandlers}
-      >
-        <Animated.View style={{ transform: [{ translateY }] }}>
-          <CalendarMonthGrid
-            events={events}
-            month={calendarMonth}
-            onSelectDate={handleSelectDate}
-            selectedDate={selectedDate}
-            today={today}
-          />
-        </Animated.View>
-
-        {status === "loading" ? (
-          <View pointerEvents="none" style={styles.loadingOverlay}>
-            <ActivityIndicator color={COLORS.purpleDeep} />
+      {editorScreen ?? (
+        <>
+          <View style={styles.monthToolbar}>
+            <Text accessibilityRole="header" style={styles.monthTitle}>
+              {formatMonthLabel(visibleMonth)}
+            </Text>
           </View>
-        ) : null}
-      </View>
 
-      {status === "error" ? (
-        <View style={styles.messageCard}>
-          <MaterialDesignIcons
-            color={COLORS.error}
-            name="alert-circle-outline"
-            size={22}
-          />
-          <View style={styles.messageContent}>
-            <Text style={styles.messageTitle}>일정을 불러오지 못했어요</Text>
-            <Text style={styles.messageDescription}>{errorMessage}</Text>
+          <View style={styles.weekdays}>
+            {WEEKDAY_LABELS.map((label, index) => (
+              <Text
+                key={label}
+                style={[
+                  styles.weekday,
+                  index === 0 && styles.sunday,
+                  index === 6 && styles.saturday,
+                ]}
+              >
+                {label}
+              </Text>
+            ))}
           </View>
-          <Pressable
-            accessibilityLabel="일정 다시 시도"
-            accessibilityRole="button"
-            onPress={reload}
-            style={styles.retryButton}
-          >
-            <Text style={styles.retryText}>재시도</Text>
-          </Pressable>
-        </View>
-      ) : status === "success" && events.length === 0 ? (
-        <View style={styles.emptyMessage}>
-          <Text style={styles.emptyTitle}>이번 달에는 아직 일정이 없어요</Text>
-          <Text style={styles.emptyDescription}>
-            날짜를 선택해 일정을 확인해 보세요.
-          </Text>
-        </View>
-      ) : null}
 
+          <View
+            accessibilityHint="위로 밀면 다음 달, 아래로 밀면 이전 달로 이동합니다"
+            style={styles.calendarViewport}
+            {...panResponder.panHandlers}
+          >
+            <Animated.View style={{ transform: [{ translateY }] }}>
+              <CalendarMonthGrid
+                events={events}
+                month={calendarMonth}
+                onSelectDate={handleSelectDate}
+                selectedDate={selectedDate}
+                today={today}
+              />
+            </Animated.View>
+
+            {status === "loading" ? (
+              <View pointerEvents="none" style={styles.loadingOverlay}>
+                <ActivityIndicator color={COLORS.purpleDeep} />
+              </View>
+            ) : null}
+          </View>
+
+          {status === "error" ? (
+            <View style={styles.messageCard}>
+              <MaterialDesignIcons
+                color={COLORS.error}
+                name="alert-circle-outline"
+                size={22}
+              />
+              <View style={styles.messageContent}>
+                <Text style={styles.messageTitle}>
+                  일정을 불러오지 못했어요
+                </Text>
+                <Text style={styles.messageDescription}>{errorMessage}</Text>
+              </View>
+              <Pressable
+                accessibilityLabel="일정 다시 시도"
+                accessibilityRole="button"
+                onPress={reload}
+                style={styles.retryButton}
+              >
+                <Text style={styles.retryText}>재시도</Text>
+              </Pressable>
+            </View>
+          ) : status === "success" && events.length === 0 ? (
+            <View style={styles.emptyMessage}>
+              <Text style={styles.emptyTitle}>
+                이번 달에는 아직 일정이 없어요
+              </Text>
+              <Text style={styles.emptyDescription}>
+                날짜를 선택해 일정을 확인해 보세요.
+              </Text>
+            </View>
+          ) : null}
+        </>
+      )}
+
+      {/* RN Modal은 동시에 하나만 표시한다(F-16). 시트·상세 상호배제를 렌더에서 강제한다. */}
       <CalendarEventsSheet
         dateKey={selectedDate}
         events={selectedEvents}
         onClose={() => setIsSheetVisible(false)}
         onOpenEvent={loadEventDetail}
-        visible={isSheetVisible}
+        visible={
+          isSheetVisible && !detailState.visible && editorScreen === null
+        }
       />
       <CalendarEventDetailModal
         canManage={canManageSelectedEvent}
@@ -495,7 +513,7 @@ export function CalendarScreen({
         onDelete={handleRequestDelete}
         onEdit={handleEditDetail}
         onRetry={handleRetryDetail}
-        visible={detailState.visible}
+        visible={detailState.visible && editorScreen === null}
       />
     </View>
   );

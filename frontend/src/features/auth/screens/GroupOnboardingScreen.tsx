@@ -36,6 +36,8 @@ export type PendingJoinRequest =
   | UnapprovedJoinRequest;
 
 interface GroupOnboardingScreenProps {
+  // 그룹 전환에서 진입한 그룹 보유 사용자인지. 빈 상태 문구를 상황에 맞게 바꾼다.
+  hasJoinedGroups?: boolean;
   onBack: () => void;
   onCreateGroup: (input: CreateGroupInput) => void;
   onJoinByCode: (inviteCode: string) => Promise<void> | void;
@@ -44,6 +46,7 @@ interface GroupOnboardingScreenProps {
 }
 
 export function GroupOnboardingScreen({
+  hasJoinedGroups = false,
   onBack,
   onCreateGroup,
   onJoinByCode,
@@ -112,8 +115,9 @@ export function GroupOnboardingScreen({
               accessibilityLiveRegion="polite"
               style={styles.emptyState}>
               <Text style={styles.emptyText}>
-                아직 참가한 그룹이 없어요{'\n'}
-                코드를 입력해서 참가해보세요
+                {hasJoinedGroups
+                  ? '대기 중인 참여 요청이 없어요\n코드를 입력해 다른 그룹에 참가할 수 있어요'
+                  : '아직 참가한 그룹이 없어요\n코드를 입력해서 참가해보세요'}
               </Text>
             </View>
           ) : (
