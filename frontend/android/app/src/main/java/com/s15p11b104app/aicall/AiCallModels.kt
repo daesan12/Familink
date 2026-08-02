@@ -13,6 +13,13 @@ internal enum class AiCallPhase {
   Failed,
 }
 
+internal enum class AiCallFailureReason {
+  Connection,
+  EndRequest,
+  MicrophonePermissionDenied,
+  MicrophonePermissionBlocked,
+}
+
 internal enum class AiCallResult(
     val wireValue: String,
     val terminalPhase: AiCallPhase,
@@ -97,7 +104,7 @@ internal val aiPersonas =
 internal data class AiCallUiState(
     val phase: AiCallPhase,
     val persona: AiPersona?,
-    val endRetryRequired: Boolean = false,
+    val failureReason: AiCallFailureReason = AiCallFailureReason.Connection,
     val durationSeconds: Int = 0,
     val isMuted: Boolean = false,
     val isSpeakerOn: Boolean = true,

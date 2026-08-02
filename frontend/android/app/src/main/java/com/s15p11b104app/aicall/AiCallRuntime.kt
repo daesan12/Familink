@@ -20,6 +20,15 @@ internal class AiCallRuntime(
     private val accessTokenProvider: AiCallAccessTokenProvider,
     private val onCaptionUpdate: (AiCallCaptionUpdate) -> Unit,
     private val onConnectionLost: () -> Unit,
+    private val mediaSessionFactory:
+        (Context, (AiCallCaptionUpdate) -> Unit, () -> Unit) -> AiCallMediaSession =
+        { sessionContext, captionCallback, connectionLostCallback ->
+          AiCallWebRtcSession(
+              context = sessionContext,
+              onCaptionUpdate = captionCallback,
+              onConnectionLost = connectionLostCallback,
+          )
+        },
 ) {
 
   private data class EndRequest(
@@ -39,7 +48,7 @@ internal class AiCallRuntime(
   private var pendingEndRequest: EndRequest? = null
   private var endRequestSent = false
   private var endCompletion: CompletableDeferred<Unit>? = null
-  private var webRtcSession: AiCallWebRtcSession? = null
+  private var webRtcSession: AiCallMediaSession? = null
 
   var callSessionId: Long? = null
     private set
@@ -53,7 +62,7 @@ internal class AiCallRuntime(
     }
     val currentJob = currentCoroutineContext()[Job]
     synchronized(stateLock) {
-      if (startJob != null) {
+      if (startJob != null || webRtcSession != null) {
         throw AiCallApiException(
             statusCode = 409,
             errorCode = "ACTIVE_CALL_EXISTS",
@@ -82,11 +91,7 @@ internal class AiCallRuntime(
 
     val session =
         try {
-          AiCallWebRtcSession(
-              context = context,
-              onCaptionUpdate = onCaptionUpdate,
-              onConnectionLost = onConnectionLost,
-          )
+          mediaSessionFactory(context, onCaptionUpdate, onConnectionLost)
         } catch (exception: Throwable) {
           synchronized(stateLock) {
             if (startJob === currentJob) {
@@ -96,7 +101,19 @@ internal class AiCallRuntime(
           completePendingEndWithoutServerSession()
           throw exception
         }
-    webRtcSession = session
+    val ownsSession =
+        synchronized(stateLock) {
+          if (startJob === currentJob && pendingEndRequest == null && webRtcSession == null) {
+            webRtcSession = session
+            true
+          } else {
+            false
+          }
+        }
+    if (!ownsSession) {
+      session.close()
+      throw CancellationException("The AI call was ended while media was initializing.")
+    }
 
     var connectedReportStarted = false
     try {
@@ -124,7 +141,7 @@ internal class AiCallRuntime(
       withContext(NonCancellable) {
         runCatching { dispatchPendingEndIfRequested() }
       }
-      session.close()
+      closeSession(session)
       throw exception
     } catch (exception: Throwable) {
       if (hasPendingEndRequest()) {
@@ -158,7 +175,7 @@ internal class AiCallRuntime(
           }
         }
       }
-      session.close()
+      closeSession(session)
       throw exception
     } finally {
       synchronized(stateLock) {
@@ -167,9 +184,6 @@ internal class AiCallRuntime(
         }
       }
       completePendingEndWithoutServerSession()
-      if (webRtcSession === session) {
-        webRtcSession = null
-      }
     }
   }
 
@@ -230,25 +244,43 @@ internal class AiCallRuntime(
   }
 
   fun setMicrophoneEnabled(enabled: Boolean) {
-    webRtcSession?.setMicrophoneEnabled(enabled)
+    synchronized(stateLock) { webRtcSession }?.setMicrophoneEnabled(enabled)
   }
 
   fun setSpeakerEnabled(enabled: Boolean) {
-    webRtcSession?.setSpeakerEnabled(enabled)
+    synchronized(stateLock) { webRtcSession }?.setSpeakerEnabled(enabled)
   }
 
   fun close() {
-    webRtcSession?.close()
-    webRtcSession = null
+    val session =
+        synchronized(stateLock) {
+          webRtcSession.also { webRtcSession = null }
+        }
+    session?.close()
   }
 
-  private suspend fun abortIfEnding(session: AiCallWebRtcSession) {
+  private suspend fun abortIfEnding(session: AiCallMediaSession) {
     if (!hasPendingEndRequest()) {
       return
     }
     dispatchPendingEndIfRequested()
-    session.close()
+    closeSession(session)
     throw CancellationException("The AI call was ended before it connected.")
+  }
+
+  private fun closeSession(session: AiCallMediaSession) {
+    val shouldClose =
+        synchronized(stateLock) {
+          if (webRtcSession === session) {
+            webRtcSession = null
+            true
+          } else {
+            false
+          }
+        }
+    if (shouldClose) {
+      session.close()
+    }
   }
 
   private suspend fun dispatchPendingEndIfRequested() {
@@ -311,8 +343,5 @@ internal class AiCallRuntime(
         endCompletion?.complete(Unit)
       }
     }
-  }
-
-  companion object {
   }
 }
