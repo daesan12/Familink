@@ -22,10 +22,12 @@ final class SidebandToolHandler {
 	private static final String FUNCTION_CALL = "function_call";
 	private static final String COMPLETED = "completed";
 	private static final String RECENT_POST_TOOL = "get_person_recent_post_summaries";
+	private static final String CALENDAR_TOOL = "get_calendar_events_by_date";
 
 	private final Long callSessionId;
 	private final ObjectMapper objectMapper;
 	private final AiCallPostToolService postToolService;
+	private final AiCallCalendarToolService calendarToolService;
 	private final StringBuilder textBuffer = new StringBuilder();
 	private final Map<String, AiCallPersonReference> personReferences;
 	private final Set<String> processedCallIds = new HashSet<>();
@@ -38,10 +40,21 @@ final class SidebandToolHandler {
 		ObjectMapper objectMapper,
 		AiCallPostToolService postToolService
 	) {
+		this(callSessionId, personReferences, objectMapper, postToolService, null);
+	}
+
+	SidebandToolHandler(
+		Long callSessionId,
+		Map<String, AiCallPersonReference> personReferences,
+		ObjectMapper objectMapper,
+		AiCallPostToolService postToolService,
+		AiCallCalendarToolService calendarToolService
+	) {
 		this.callSessionId = callSessionId;
 		this.personReferences = new LinkedHashMap<>(personReferences);
 		this.objectMapper = objectMapper;
 		this.postToolService = postToolService;
+		this.calendarToolService = calendarToolService;
 	}
 
 	synchronized List<String> acceptText(CharSequence data, boolean last) {
@@ -132,6 +145,9 @@ final class SidebandToolHandler {
 
 	private AiCallToolResult executeTool(JsonNode item, String callId) {
 		String toolName = textValue(item, "name");
+		if (CALENDAR_TOOL.equals(toolName)) {
+			return executeCalendarTool(item, callId);
+		}
 		if (!RECENT_POST_TOOL.equals(toolName)) {
 			return AiCallToolResult.error(AiCallToolResult.Reason.UNKNOWN_TOOL);
 		}
@@ -165,7 +181,33 @@ final class SidebandToolHandler {
 		}
 	}
 
+	private AiCallToolResult executeCalendarTool(JsonNode item, String callId) {
+		String dateExpression = parseArgument(textValue(item, "arguments"), "date_expression");
+		if (!StringUtils.hasText(dateExpression)) {
+			return AiCallToolResult.needsClarification(AiCallToolResult.Reason.INVALID_ARGUMENTS);
+		}
+		if (calendarToolService == null) {
+			return AiCallToolResult.error(AiCallToolResult.Reason.TEMPORARY_FAILURE);
+		}
+
+		try {
+			return calendarToolService.getEventsByDate(callSessionId, dateExpression);
+		} catch (RuntimeException exception) {
+			LOGGER.error(
+				"일정 Tool 조회에 실패했습니다. callSessionId={}, callId={}, errorType={}",
+				callSessionId,
+				callId,
+				exception.getClass().getSimpleName()
+			);
+			return AiCallToolResult.error(AiCallToolResult.Reason.TEMPORARY_FAILURE);
+		}
+	}
+
 	private String parsePersonKey(String argumentsJson) {
+		return parseArgument(argumentsJson, "person_key");
+	}
+
+	private String parseArgument(String argumentsJson, String fieldName) {
 		if (!StringUtils.hasText(argumentsJson)) {
 			return null;
 		}
@@ -174,7 +216,7 @@ final class SidebandToolHandler {
 			if (arguments == null || !arguments.isObject() || arguments.size() != 1) {
 				return null;
 			}
-			return textValue(arguments, "person_key");
+			return textValue(arguments, fieldName);
 		} catch (JsonProcessingException exception) {
 			return null;
 		}

@@ -138,6 +138,28 @@ public class OpenAiRealtimeGateway {
 		);
 		recentPostTool.put("parameters", toolParameters);
 
+		Map<String, Object> dateExpressionProperty = new LinkedHashMap<>();
+		dateExpressionProperty.put("type", "string");
+		dateExpressionProperty.put("description", "사용자가 말한 원문 날짜 표현");
+
+		Map<String, Object> calendarToolProperties = new LinkedHashMap<>();
+		calendarToolProperties.put("date_expression", dateExpressionProperty);
+
+		Map<String, Object> calendarToolParameters = new LinkedHashMap<>();
+		calendarToolParameters.put("type", "object");
+		calendarToolParameters.put("properties", calendarToolProperties);
+		calendarToolParameters.put("required", List.of("date_expression"));
+		calendarToolParameters.put("additionalProperties", false);
+
+		Map<String, Object> calendarTool = new LinkedHashMap<>();
+		calendarTool.put("type", "function");
+		calendarTool.put("name", "get_calendar_events_by_date");
+		calendarTool.put(
+			"description",
+			"Asia/Seoul 기준 특정 하루와 겹치는 현재 그룹의 모든 일정을 조회합니다."
+		);
+		calendarTool.put("parameters", calendarToolParameters);
+
 		Map<String, Object> session = new LinkedHashMap<>();
 		session.put("type", "realtime");
 		session.put("model", properties.getModel());
@@ -145,7 +167,7 @@ public class OpenAiRealtimeGateway {
 		session.put("output_modalities", List.of("audio"));
 		session.put("audio", audio);
 		session.put("reasoning", reasoning);
-		session.put("tools", List.of(recentPostTool));
+		session.put("tools", List.of(recentPostTool, calendarTool));
 		session.put("tool_choice", "auto");
 
 		try {
