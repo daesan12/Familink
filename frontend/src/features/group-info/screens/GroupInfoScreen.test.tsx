@@ -363,6 +363,10 @@ test('역할 변경 확인 팝업에서 취소하면 역할이 유지된다', ()
   confirmLastAlert(alertSpy, '취소');
 
   expect(hasText(renderer, '피보호자 1명, 보호자 2명')).toBe(true);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '손수호 보호자'}).props
+      .accessibilityState,
+  ).toEqual({selected: true});
 });
 
 test('호칭 편집 모드에서는 역할 토글이 표시되지 않는다', () => {
@@ -425,6 +429,10 @@ test('역할 변경 API가 실패하면 오류 팝업을 띄우고 역할을 유
     '관리자 권한과 구성원 상태를 확인한 뒤 다시 시도해 주세요.',
   );
   expect(hasText(renderer, '피보호자 1명, 보호자 2명')).toBe(true);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '손수호 보호자'}).props
+      .accessibilityState,
+  ).toEqual({selected: true});
 });
 
 test('방장이 아니면 역할 토글 시 안내 팝업을 띄우고 역할을 바꾸지 않는다', () => {
@@ -1175,6 +1183,15 @@ test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공
     memberId: 'm-member',
     role: 'careReceiver' as const,
   });
+  const groupDetailLoader = jest.fn().mockResolvedValue({
+    careReceiverCount: 0,
+    guardianCount: 2,
+    id: 'group-1',
+    isManager: true,
+    managerMemberId: 'm-manager',
+    memberCount: 2,
+    name: '우리 가족',
+  });
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(async () => {
@@ -1182,6 +1199,7 @@ test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공
       <GroupInfoScreen
         {...baseProps}
         currentMemberId="m-manager"
+        groupDetailLoader={groupDetailLoader}
         membersLoader={membersLoader}
         onUpdateMemberRole={updateMemberRole}
         pendingJoinCount={0}
@@ -1189,11 +1207,14 @@ test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공
       />,
     );
     await Promise.resolve();
+    await Promise.resolve();
   });
 
   mountedRenderers.push(renderer!);
   expect(membersLoader).toHaveBeenCalledWith('group-1');
+  expect(groupDetailLoader).toHaveBeenCalledWith('group-1');
   expect(hasText(renderer!, '엄마')).toBe(true);
+  expect(hasText(renderer!, '피보호자 0명, 보호자 2명')).toBe(true);
 
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   press(renderer!, '엄마 피보호자');
@@ -1207,6 +1228,10 @@ test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공
     'm-member',
     'careReceiver',
   );
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '엄마 피보호자'}).props
+      .accessibilityState,
+  ).toEqual({selected: true});
   expect(hasText(renderer!, '피보호자 1명, 보호자 1명')).toBe(true);
 });
 
