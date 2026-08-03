@@ -47,6 +47,7 @@ import {
   authSessionManager,
   type AuthSessionCoordinator,
 } from "./src/features/auth/session";
+import { openedJoinRequestStore } from "./src/features/auth/storage/openedJoinRequestStore";
 import { AiCallScreen } from "./src/features/ai-call";
 import { ArchiveScreen, type ArchiveMember } from "./src/features/archive";
 import { loadArchive } from "./src/features/archive/api/archiveApi";
@@ -169,6 +170,9 @@ interface PendingDeviceTokenRegistration {
   token: string;
 }
 
+// 가입 승인 대기 화면(B-3) 폴링 주기.
+const JOIN_APPROVAL_POLL_INTERVAL_MS = 5000;
+
 const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
   {
     id: "development-care-receiver-group",
@@ -188,11 +192,25 @@ const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
 ];
 
 function toPendingJoinRequests(
-  requests: readonly GroupJoinRequestSummary[]
+  requests: readonly GroupJoinRequestSummary[],
+  groups: readonly FamilyGroup[]
 ): readonly PendingJoinRequest[] {
   const pendingRequests: PendingJoinRequest[] = [];
   requests.forEach((request) => {
     if (request.status === "APPROVED") {
+      // 진입에 필요한 역할은 같은 응답의 groups에서 온다. 승인 직후 그룹
+      // 정보가 아직 없으면 카드를 만들 수 없으므로 다음 갱신에서 반영한다.
+      const role = groups.find((group) => group.id === request.groupId)?.role;
+      if (role === undefined) {
+        return;
+      }
+      pendingRequests.push({
+        groupId: request.groupId,
+        groupName: request.groupName,
+        id: request.joinRequestId,
+        role,
+        status: "APPROVED",
+      });
       return;
     }
     pendingRequests.push({
@@ -493,6 +511,10 @@ export default function App({
   const [interestLoadFailed, setInterestLoadFailed] = useState(false);
   const [joinRequests, setJoinRequests] =
     useState<readonly PendingJoinRequest[]>(initialJoinRequests);
+  // 이미 입장한 승인 요청 ID. 서버가 처리된 요청을 계속 반환해도 카드를 숨긴다.
+  const [openedJoinRequestIds, setOpenedJoinRequestIds] = useState<
+    readonly string[]
+  >([]);
   const resolvedCalendarGateway = useMemo(
     () =>
       calendarGateway ??
@@ -582,6 +604,23 @@ export default function App({
   }, [cancelLoginAttempt]);
 
   useEffect(() => cancelLoginAttempt, [cancelLoginAttempt]);
+
+  useEffect(() => {
+    let disposed = false;
+    openedJoinRequestStore
+      .load()
+      .then((ids) => {
+        if (!disposed) {
+          setOpenedJoinRequestIds(ids);
+        }
+      })
+      .catch(() => {
+        // 읽기 실패 시 입장했던 승인 카드가 다시 보일 수 있지만 동작에는 지장이 없다.
+      });
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   const registerCurrentDeviceToken = useCallback(
     async (refreshedToken?: string) => {
@@ -761,7 +800,10 @@ export default function App({
         try {
           const snapshot = await groupGateway.loadGroups();
           loadedGroups = snapshot.groups;
-          loadedJoinRequests = toPendingJoinRequests(snapshot.joinRequests);
+          loadedJoinRequests = toPendingJoinRequests(
+            snapshot.joinRequests,
+            snapshot.groups
+          );
         } catch {
           if (!shouldApply()) {
             return;
@@ -904,6 +946,30 @@ export default function App({
     registerCurrentDeviceToken,
   ]);
 
+  // 그룹 목록·가입 요청 스냅샷을 서버에서 다시 읽는다. 포그라운드 복귀와
+  // 대기 화면 폴링이 공유하며, 로그아웃·재로그인과 겹친 낡은 응답은 버린다.
+  const refreshGroupsSnapshot = useCallback(async () => {
+    if (foregroundGroupRefreshInFlightRef.current) {
+      return;
+    }
+    foregroundGroupRefreshInFlightRef.current = true;
+    const sessionVersion = authInvalidationVersionRef.current;
+    try {
+      const snapshot = await groupGateway.loadGroups();
+      if (authInvalidationVersionRef.current !== sessionVersion) {
+        return;
+      }
+      setAvailableGroups([...snapshot.groups]);
+      setJoinRequests(
+        toPendingJoinRequests(snapshot.joinRequests, snapshot.groups)
+      );
+    } catch {
+      // 갱신 실패는 조용히 넘기고 다음 트리거에서 다시 시도한다.
+    } finally {
+      foregroundGroupRefreshInFlightRef.current = false;
+    }
+  }, [groupGateway]);
+
   // 관리자가 변경한 내 역할이 재로그인 없이도 반영되도록, 앱이 포그라운드로
   // 돌아올 때 그룹 목록을 다시 조회한다. 주입된 groups(테스트·프리뷰)는 갱신하지 않는다.
   useEffect(() => {
@@ -912,35 +978,40 @@ export default function App({
     }
 
     const subscription = AppState.addEventListener("change", (nextState) => {
-      if (
-        nextState !== "active" ||
-        foregroundGroupRefreshInFlightRef.current
-      ) {
+      if (nextState !== "active") {
         return;
       }
-      foregroundGroupRefreshInFlightRef.current = true;
-      const sessionVersion = authInvalidationVersionRef.current;
-      void groupGateway
-        .loadGroups()
-        .then((snapshot) => {
-          if (authInvalidationVersionRef.current !== sessionVersion) {
-            return;
-          }
-          setAvailableGroups([...snapshot.groups]);
-          setJoinRequests(toPendingJoinRequests(snapshot.joinRequests));
-        })
-        .catch(() => {
-          // 복귀 갱신 실패는 조용히 넘기고 다음 포그라운드 전환에서 다시 시도한다.
-        })
-        .finally(() => {
-          foregroundGroupRefreshInFlightRef.current = false;
-        });
+      void refreshGroupsSnapshot();
     });
 
     return () => {
       subscription.remove();
     };
-  }, [groupGateway, groups, user]);
+  }, [groups, refreshGroupsSnapshot, user]);
+
+  // 대기 카드가 있는 동안 B-3 화면에서 승인 여부를 주기적으로 확인해,
+  // 관리자가 수락하면 화면을 벗어나지 않고도 진입 카드로 바뀌게 한다.
+  const hasPendingAdminRequest = joinRequests.some(
+    (request) => request.status === "PENDING_ADMIN"
+  );
+  useEffect(() => {
+    if (
+      route !== "groupOnboarding" ||
+      user === null ||
+      groups !== undefined ||
+      !hasPendingAdminRequest
+    ) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      void refreshGroupsSnapshot();
+    }, JOIN_APPROVAL_POLL_INTERVAL_MS);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [groups, hasPendingAdminRequest, refreshGroupsSnapshot, route, user]);
 
   const handleLogin = async (credentials: LoginCredentials) => {
     const previousController = loginAbortControllerRef.current;
@@ -1337,7 +1408,9 @@ export default function App({
       if (signal.aborted) {
         return;
       }
-      const refreshedRequests = [...toPendingJoinRequests(snapshot.joinRequests)];
+      const refreshedRequests = [
+        ...toPendingJoinRequests(snapshot.joinRequests, snapshot.groups),
+      ];
       if (!refreshedRequests.some((item) => item.id === request.id)) {
         refreshedRequests.push(request);
       }
@@ -1357,6 +1430,12 @@ export default function App({
   };
 
   const handleOpenApprovedGroup = async (request: ApprovedJoinRequest) => {
+    setOpenedJoinRequestIds((current) =>
+      current.includes(request.id) ? current : [...current, request.id]
+    );
+    openedJoinRequestStore.add(request.id).catch(() => {
+      // 저장 실패 시 재시작 후 카드가 다시 보일 수 있지만 진입은 계속한다.
+    });
     const groupId = request.groupId;
     const groupForState: FamilyGroupWithMemberId = {
       id: groupId,
@@ -1640,7 +1719,11 @@ export default function App({
                 onCreateGroup={handleCreateGroup}
                 onJoinByCode={handleJoinGroup}
                 onOpenApprovedGroup={handleOpenApprovedGroup}
-                pendingRequests={joinRequests}
+                pendingRequests={joinRequests.filter(
+                  (request) =>
+                    request.status !== "APPROVED" ||
+                    !openedJoinRequestIds.includes(request.id)
+                )}
               />
             )}
             {route === "interestSetup" && interestGroup !== null && (

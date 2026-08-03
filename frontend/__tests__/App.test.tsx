@@ -723,6 +723,106 @@ test("포그라운드로 돌아오면 그룹 목록을 다시 조회해 바뀐 �
   expect(groupGateway.loadGroups).toHaveBeenCalledTimes(2);
 });
 
+test("대기 화면 폴링이 승인을 감지해 진입 카드로 바꾸고, 입장한 카드는 다시 보이지 않는다", async () => {
+  const groupGateway = createGroupGateway();
+  const pendingSummary = {
+    groupId: "g-1",
+    groupName: "홍씨네",
+    joinRequestId: "jr-1",
+    processedAt: null,
+    requestedAt: "2026-08-03T00:00:00Z",
+    status: "PENDING_ADMIN" as const,
+  };
+  groupGateway.loadGroups.mockResolvedValueOnce({
+    groups: [],
+    joinRequests: [pendingSummary],
+  });
+  // 로그인 이후 조회(폴링 포함)부터는 승인된 스냅샷을 반환한다.
+  groupGateway.loadGroups.mockResolvedValue({
+    groups: [
+      {
+        id: "g-1",
+        isManager: false,
+        memberCount: 2,
+        myMemberId: "m-9",
+        name: "홍씨네",
+        role: "guardian",
+      },
+    ],
+    joinRequests: [
+      {
+        ...pendingSummary,
+        processedAt: "2026-08-03T01:00:00Z",
+        status: "APPROVED" as const,
+      },
+    ],
+  });
+  const { renderer } = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    groupGateway
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {});
+
+  jest.useFakeTimers();
+  try {
+    // 그룹이 없으므로 A-10에서 B-3로 이동해 대기 카드를 확인한다.
+    await TestRenderer.act(() => {
+      renderer.root
+        .findByProps({ accessibilityLabel: "가족과의 연결 시작하기" })
+        .props.onPress();
+    });
+    expect(JSON.stringify(renderer.toJSON())).toContain(
+      "관리자 승인을 기다리고 있어요"
+    );
+
+    // 폴링 주기가 지나면 화면을 벗어나지 않아도 승인 카드로 바뀐다.
+    await TestRenderer.act(async () => {
+      jest.advanceTimersByTime(5000);
+      await flushAsyncWork();
+    });
+    expect(JSON.stringify(renderer.toJSON())).toContain("가입이 승인되었어요");
+
+    // 승인 카드를 누르면 해당 그룹으로 진입한다.
+    await TestRenderer.act(async () => {
+      renderer.root
+        .findByProps({ accessibilityLabel: "홍씨네 열기" })
+        .props.onPress();
+      await flushAsyncWork();
+    });
+    expect(
+      renderer.root.findByProps({ accessibilityRole: "tablist" })
+    ).toBeTruthy();
+
+    // B-3에 다시 들어가도 이미 입장한 승인 카드는 보이지 않는다.
+    await TestRenderer.act(() => {
+      renderer.root
+        .findByProps({ accessibilityHint: "다른 가족 그룹으로 전환합니다" })
+        .props.onPress();
+    });
+    await TestRenderer.act(async () => {
+      jest.runOnlyPendingTimers();
+      await flushAsyncWork();
+    });
+    await TestRenderer.act(() => {
+      renderer.root.findByProps({ label: "그룹 참가하기" }).props.onPress();
+    });
+    const rendered = JSON.stringify(renderer.toJSON());
+    expect(rendered).not.toContain("가입이 승인되었어요");
+    expect(rendered).toContain("대기 중인 참여 요청이 없어요");
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 test("그룹 목록 조회 오류를 정상 빈 목록으로 표시하지 않는다", async () => {
   const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
   const groupGateway = createGroupGateway();
