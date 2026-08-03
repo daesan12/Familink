@@ -275,16 +275,7 @@ export function AppShell({
       resolvedRoute !== 'profile' ? (
         <View style={styles.header} testID="app-shell-header">
           {resolvedRoute === 'calendar' ? (
-            <CurrentGroupSwitcher
-              currentGroup={currentGroup}
-              groups={groups}
-              isOpen={isGroupMenuOpen}
-              onClose={() => setIsGroupMenuOpen(false)}
-              onCreateGroup={onCreateGroup}
-              onJoinGroup={onJoinGroup}
-              onSelect={handleGroupSelect}
-              onToggle={() => setIsGroupMenuOpen(isOpen => !isOpen)}
-            />
+            <View style={styles.headerSide} />
           ) : resolvedRoute === 'feed' ? (
             <View style={styles.headerActions}>
               <Pressable
@@ -347,7 +338,20 @@ export function AppShell({
               onToggle={() => setIsGroupMenuOpen(isOpen => !isOpen)}
             />
           )}
-          {resolvedRoute === 'calendar' ? null : resolvedRoute === 'feed' ? (
+          {resolvedRoute === 'calendar' ? (
+            <View style={styles.headerCenterAbsolute}>
+              <CurrentGroupSwitcher
+                currentGroup={currentGroup}
+                groups={groups}
+                isOpen={isGroupMenuOpen}
+                onClose={() => setIsGroupMenuOpen(false)}
+                onCreateGroup={onCreateGroup}
+                onJoinGroup={onJoinGroup}
+                onSelect={handleGroupSelect}
+                onToggle={() => setIsGroupMenuOpen(isOpen => !isOpen)}
+              />
+            </View>
+          ) : resolvedRoute === 'feed' ? (
             <Pressable
               accessibilityLabel="알림"
               accessibilityRole="button"
@@ -508,6 +512,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     width: 80,
+  },
+  headerCenterAbsolute: {
+    alignItems: 'center',
+    bottom: 8,
+    justifyContent: 'center',
+    left: 80,
+    position: 'absolute',
+    right: 80,
+    top: 8,
   },
   headerIconButton: {
     alignItems: 'center',

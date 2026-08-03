@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  type LayoutChangeEvent,
   PanResponder,
   Pressable,
   StyleSheet,
@@ -94,6 +95,7 @@ export function CalendarScreen({
   const [editorState, setEditorState] = useState<EditorState | null>(null);
   const [isAnimatingMonth, setIsAnimatingMonth] = useState(false);
   const translateY = useRef(new Animated.Value(0)).current;
+  const calendarViewportHeightRef = useRef(CALENDAR_MONTH_HEIGHT);
   const detailController = useRef<AbortController | null>(null);
   const deleteController = useRef<AbortController | null>(null);
   const lastCreateRequestId = useRef(createCalendarEventRequestId ?? 0);
@@ -182,8 +184,8 @@ export function CalendarScreen({
         return;
       }
       setIsAnimatingMonth(true);
-      const outgoingY =
-        delta > 0 ? -CALENDAR_MONTH_HEIGHT : CALENDAR_MONTH_HEIGHT;
+      const viewportHeight = calendarViewportHeightRef.current;
+      const outgoingY = delta > 0 ? -viewportHeight : viewportHeight;
       const incomingY = -outgoingY;
 
       Animated.timing(translateY, {
@@ -208,6 +210,13 @@ export function CalendarScreen({
       });
     },
     [isAnimatingMonth, translateY, updateMonth]
+  );
+
+  const handleCalendarViewportLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      calendarViewportHeightRef.current = event.nativeEvent.layout.height;
+    },
+    []
   );
 
   const panResponder = useMemo(
@@ -436,10 +445,13 @@ export function CalendarScreen({
 
           <View
             accessibilityHint="위로 밀면 다음 달, 아래로 밀면 이전 달로 이동합니다"
+            onLayout={handleCalendarViewportLayout}
             style={styles.calendarViewport}
             {...panResponder.panHandlers}
           >
-            <Animated.View style={{ transform: [{ translateY }] }}>
+            <Animated.View
+              style={[styles.monthAnimation, { transform: [{ translateY }] }]}
+            >
               <CalendarMonthGrid
                 events={events}
                 month={calendarMonth}
@@ -521,7 +533,7 @@ export function CalendarScreen({
 
 const styles = StyleSheet.create({
   calendarViewport: {
-    height: CALENDAR_MONTH_HEIGHT,
+    flex: 1,
     overflow: "hidden",
   },
   emptyDescription: {
@@ -577,7 +589,7 @@ const styles = StyleSheet.create({
   },
   monthTitle: {
     color: COLORS.textStrong,
-    fontSize: 22,
+    fontSize: 21,
     fontVariant: ["tabular-nums"],
     fontWeight: "800",
   },
@@ -585,8 +597,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
-    minHeight: 48,
+    minHeight: 44,
     paddingHorizontal: 16,
+  },
+  monthAnimation: {
+    flex: 1,
   },
   retryButton: {
     alignItems: "center",
@@ -617,14 +632,13 @@ const styles = StyleSheet.create({
   weekday: {
     color: COLORS.textMuted,
     flex: 1,
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "600",
     textAlign: "center",
   },
   weekdays: {
     alignItems: "center",
     flexDirection: "row",
-    height: 28,
-    paddingHorizontal: 12,
+    height: 30,
   },
 });
