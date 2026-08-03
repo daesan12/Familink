@@ -2,15 +2,23 @@ package com.s15p11b104app.notifications
 
 import com.facebook.react.ReactApplication
 import com.google.firebase.messaging.FirebaseMessagingService
+import com.google.firebase.messaging.RemoteMessage
 
 /**
- * FCM 토큰 갱신만 React Native에 전달한다.
+ * FCM 토큰 갱신을 React Native에 전달하고, 앱이 실행 중일 때 도착한 메시지를 표시한다.
  *
- * `onMessageReceived`는 의도적으로 구현하지 않는다. 서버가 `notification`
- * 페이로드를 보내므로 백그라운드·종료 상태의 알림 표시는 Android 시스템이
- * 처리한다.
+ * 서버가 `notification` 페이로드를 보내므로 백그라운드·종료 상태의 알림 표시는 Android
+ * 시스템이 처리하고 [onMessageReceived]는 호출되지 않는다. 앱이 실행 중일 때는 시스템이
+ * 표시하지 않고 이 콜백으로만 전달하므로 여기서 직접 표시해야 한다.
  */
 internal class FamilinkMessagingService : FirebaseMessagingService() {
+
+  override fun onMessageReceived(remoteMessage: RemoteMessage) {
+    super.onMessageReceived(remoteMessage)
+
+    val presentation = NotificationPresenter.presentationOf(remoteMessage) ?: return
+    NotificationPresenter.show(this, presentation)
+  }
 
   // onRegistered가 신규 콜백이지만 register()를 호출한 앱에만 전달된다.
   // 토큰 획득 경로를 getToken으로 유지하는 동안에는 onNewToken이 유일한 갱신 신호다.
