@@ -1,0 +1,32 @@
+diff --git a/node_modules/react-native-image-picker/android/src/main/java/com/imagepicker/VideoMetadata.java b/node_modules/react-native-image-picker/android/src/main/java/com/imagepicker/VideoMetadata.java
+index 2cec8b2..a4b79d3 100644
+--- a/node_modules/react-native-image-picker/android/src/main/java/com/imagepicker/VideoMetadata.java
++++ b/node_modules/react-native-image-picker/android/src/main/java/com/imagepicker/VideoMetadata.java
+@@ -1,7 +1,5 @@
+ package com.imagepicker;
+
+-import static java.lang.Integer.parseInt;
+-
+ import android.content.Context;
+ import android.media.MediaMetadataRetriever;
+ import android.net.Uri;
+@@ -37,7 +35,18 @@ public class VideoMetadata extends Metadata {
+
+             // Extract anymore metadata here...
+             if (duration != null) this.duration = Math.round(Float.parseFloat(duration)) / 1000;
+-            if (bitrate != null) this.bitrate = parseInt(bitrate);
++            if (bitrate != null) {
++                try {
++                    long parsedBitrate = Long.parseLong(bitrate);
++                    if (parsedBitrate > 0 && parsedBitrate <= Integer.MAX_VALUE) {
++                        this.bitrate = (int) parsedBitrate;
++                    } else {
++                        Log.w("VideoMetadata", "Ignoring out-of-range video bitrate metadata");
++                    }
++                } catch (NumberFormatException ignored) {
++                    Log.w("VideoMetadata", "Ignoring invalid video bitrate metadata");
++                }
++            }
+
+             if (datetime != null) {
+                 // METADATA_KEY_DATE gives us the following format: "20211214T102646.000Z"
