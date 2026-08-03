@@ -967,7 +967,7 @@ const styles = StyleSheet.create({
   },
   rankingCard: {
     alignItems: 'center',
-    backgroundColor: COLORS.textMuted,
+    backgroundColor: COLORS.lavenderSurface,
     borderCurve: 'continuous',
     borderRadius: RADII.medium,
     flexDirection: 'row',
@@ -977,14 +977,14 @@ const styles = StyleSheet.create({
   },
   rankingChevron: {
     alignItems: 'center',
-    backgroundColor: COLORS.overlay,
+    backgroundColor: COLORS.purpleDeep,
     borderRadius: RADII.pill,
     height: 32,
     justifyContent: 'center',
     width: 32,
   },
   rankingText: {
-    color: COLORS.background,
+    color: COLORS.purpleDeep,
     fontSize: 17,
     fontWeight: '700',
     lineHeight: 24,
