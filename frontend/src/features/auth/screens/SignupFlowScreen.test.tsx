@@ -245,6 +245,58 @@ test('비밀번호 규칙을 안내하고 입력 중 위반 이유를 표시한�
   ).toBe(true);
 });
 
+test('비밀번호 표시 아이콘은 각 입력창만 독립적으로 전환하고 입력값을 유지한다', async () => {
+  const {renderer} = render();
+
+  await advanceToPassword(renderer);
+  change(renderer, '회원가입 비밀번호', 'password123');
+  change(renderer, '회원가입 비밀번호 확인', 'password456');
+
+  const passwordInput = () =>
+    renderer.root.findByProps({accessibilityLabel: '회원가입 비밀번호'});
+  const confirmationInput = () =>
+    renderer.root.findByProps({
+      accessibilityLabel: '회원가입 비밀번호 확인',
+    });
+
+  expect(passwordInput().props.secureTextEntry).toBe(true);
+  expect(confirmationInput().props.secureTextEntry).toBe(true);
+
+  press(renderer, '회원가입 비밀번호 표시');
+
+  expect(passwordInput().props.secureTextEntry).toBe(false);
+  expect(confirmationInput().props.secureTextEntry).toBe(true);
+  expect(passwordInput().props.value).toBe('password123');
+  expect(confirmationInput().props.value).toBe('password456');
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: '회원가입 비밀번호 숨기기',
+    }).props.accessibilityLabel,
+  ).toBe('회원가입 비밀번호 숨기기');
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: '회원가입 비밀번호 확인 표시',
+    }).props.accessibilityLabel,
+  ).toBe('회원가입 비밀번호 확인 표시');
+
+  press(renderer, '회원가입 비밀번호 확인 표시');
+
+  expect(passwordInput().props.secureTextEntry).toBe(false);
+  expect(confirmationInput().props.secureTextEntry).toBe(false);
+
+  press(renderer, '회원가입 비밀번호 숨기기');
+
+  expect(passwordInput().props.secureTextEntry).toBe(true);
+  expect(confirmationInput().props.secureTextEntry).toBe(false);
+
+  press(renderer, '회원가입 비밀번호 확인 숨기기');
+
+  expect(passwordInput().props.secureTextEntry).toBe(true);
+  expect(confirmationInput().props.secureTextEntry).toBe(true);
+  expect(passwordInput().props.value).toBe('password123');
+  expect(confirmationInput().props.value).toBe('password456');
+});
+
 test('완료 버튼은 방금 가입한 로그인 ID를 전달한다', async () => {
   const onComplete = jest.fn();
   const {renderer} = render(createGateway(), onComplete);

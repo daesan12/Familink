@@ -583,22 +583,44 @@ function PasswordStep({
   onNext,
 }: PasswordStepProps) {
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [passwordConfirmationVisible, setPasswordConfirmationVisible] =
+    useState(false);
   const canAttempt =
     isValidPassword(draft.password) &&
     draft.passwordConfirmation.length > 0;
   // 입력 중 규칙 위반 이유를 바로 안내해 "다음" 비활성의 원인을 알 수 있게 한다.
   const passwordViolation = getPasswordRuleViolation(draft.password);
 
-  const visibilityButton = (
+  const passwordVisibilityButton = (
     <Pressable
       accessibilityLabel={
-        passwordVisible ? '비밀번호 숨기기' : '비밀번호 표시'
+        passwordVisible
+          ? '회원가입 비밀번호 숨기기'
+          : '회원가입 비밀번호 표시'
       }
       hitSlop={10}
       onPress={() => setPasswordVisible(current => !current)}>
       <MaterialDesignIcons
         color={AUTH_COLORS.placeholder}
         name={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
+        size={22}
+      />
+    </Pressable>
+  );
+  const passwordConfirmationVisibilityButton = (
+    <Pressable
+      accessibilityLabel={
+        passwordConfirmationVisible
+          ? '회원가입 비밀번호 확인 숨기기'
+          : '회원가입 비밀번호 확인 표시'
+      }
+      hitSlop={10}
+      onPress={() => setPasswordConfirmationVisible(current => !current)}>
+      <MaterialDesignIcons
+        color={AUTH_COLORS.placeholder}
+        name={
+          passwordConfirmationVisible ? 'eye-off-outline' : 'eye-outline'
+        }
         size={22}
       />
     </Pressable>
@@ -628,7 +650,7 @@ function PasswordStep({
           onChangeText={onChangePassword}
           placeholder="영문·숫자 8 ~ 16자로 입력해주세요."
           secureTextEntry={!passwordVisible}
-          trailing={visibilityButton}
+          trailing={passwordVisibilityButton}
           value={draft.password}
         />
         {errorMessage !== undefined ? (
@@ -645,8 +667,8 @@ function PasswordStep({
           label="비밀번호 확인"
           maxLength={16}
           onChangeText={onChangeConfirmation}
-          secureTextEntry={!passwordVisible}
-          trailing={visibilityButton}
+          secureTextEntry={!passwordConfirmationVisible}
+          trailing={passwordConfirmationVisibilityButton}
           value={draft.passwordConfirmation}
         />
         {mismatch && (
