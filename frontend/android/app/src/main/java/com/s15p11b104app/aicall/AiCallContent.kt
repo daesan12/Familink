@@ -1,8 +1,14 @@
 package com.s15p11b104app.aicall
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -31,6 +37,7 @@ import androidx.compose.material.icons.rounded.CallEnd
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledIconButton
@@ -69,6 +76,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -79,7 +87,7 @@ import kotlinx.coroutines.isActive
 @Composable
 internal fun AiCallRoute(
     apiBaseUrl: String?,
-    bridgeContext: AiCallBridgeContext,
+    accessTokenProvider: AiCallAccessTokenProvider,
     onCallResult: (String) -> Unit,
     onFullscreenChange: (Boolean) -> Unit,
 ) {
@@ -96,17 +104,23 @@ internal fun AiCallRoute(
   var connectionLostSignal by remember { mutableIntStateOf(0) }
   var isEnding by rememberSaveable { mutableStateOf(false) }
   var failedEndPhase by remember { mutableStateOf<AiCallPhase?>(null) }
+  var failureReason by rememberSaveable { mutableStateOf(AiCallFailureReason.Connection) }
+  var hasRequestedMicrophonePermission by rememberSaveable { mutableStateOf(false) }
   var callJob by remember { mutableStateOf<Job?>(null) }
 
   val coroutineScope = rememberCoroutineScope()
   val context = LocalContext.current
-  val sessionClient = remember(apiBaseUrl) { apiBaseUrl?.let(::HttpAiCallSessionClient) }
+  val sessionClient =
+      remember(apiBaseUrl, accessTokenProvider) {
+        apiBaseUrl?.let { HttpAiCallSessionClient(it, accessTokenProvider) }
+      }
   val callRuntime =
       remember(sessionClient) {
         sessionClient?.let { client ->
           AiCallRuntime(
               context = context,
               sessionClient = client,
+              accessTokenProvider = accessTokenProvider,
               onCaptionUpdate = { update ->
                 if (update.completed) {
                   val completedCaption =
@@ -126,18 +140,28 @@ internal fun AiCallRoute(
        }
       }
 
-  val latestAccessToken = rememberUpdatedState(bridgeContext.accessToken)
   val latestCallJob = rememberUpdatedState(callJob)
   DisposableEffect(callRuntime) {
     onDispose {
       latestCallJob.value?.cancel()
-      callRuntime?.dispose(latestAccessToken.value)
+      callRuntime?.dispose()
     }
   }
 
   val permissionLauncher =
       rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionResult = granted
+      }
+  val settingsLauncher =
+      rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED) {
+          permissionResult = true
+        } else {
+          permissionResult = null
+          failureReason = AiCallFailureReason.MicrophonePermissionBlocked
+          phase = AiCallPhase.Failed
+        }
       }
 
   val selectedPersona = aiPersonas.firstOrNull { it.id == selectedPersonaId }
@@ -161,10 +185,10 @@ internal fun AiCallRoute(
     }
     isEnding = true
     failedEndPhase = null
+    failureReason = AiCallFailureReason.Connection
     phase = AiCallPhase.Failed
     runCatching {
       callRuntime?.end(
-          accessToken = bridgeContext.accessToken,
           terminationType = AiCallTerminationType.ConnectionLost,
       )
     }
@@ -182,6 +206,7 @@ internal fun AiCallRoute(
       callJob?.cancel()
       isEnding = false
       failedEndPhase = null
+      failureReason = AiCallFailureReason.Connection
       durationSeconds = 0
       captionDraft = ""
       currentCaption = null
@@ -190,11 +215,12 @@ internal fun AiCallRoute(
       callJob =
           coroutineScope.launch {
             try {
-              runtime.start(bridgeContext = bridgeContext, personaId = personaId)
+              runtime.start(personaId = personaId)
               phase = AiCallPhase.InProgress
             } catch (exception: CancellationException) {
               throw exception
             } catch (exception: Throwable) {
+              failureReason = AiCallFailureReason.Connection
               phase = AiCallPhase.Failed
               onCallResult(AiCallResult.Failed.wireValue)
             }
@@ -205,12 +231,27 @@ internal fun AiCallRoute(
   LaunchedEffect(permissionResult, pendingPersonaId) {
     val requestedPersonaId = pendingPersonaId ?: return@LaunchedEffect
     val granted = permissionResult ?: return@LaunchedEffect
-    pendingPersonaId = null
     permissionResult = null
     if (granted) {
+      pendingPersonaId = null
+      failureReason = AiCallFailureReason.Connection
       startCallWithPermission(requestedPersonaId)
     } else {
       failedEndPhase = null
+      val activity = context.findActivity()
+      val shouldShowRationale =
+          activity?.let {
+            ActivityCompat.shouldShowRequestPermissionRationale(
+                it,
+                Manifest.permission.RECORD_AUDIO,
+            )
+          } ?: false
+      failureReason =
+          if (hasRequestedMicrophonePermission && !shouldShowRationale) {
+            AiCallFailureReason.MicrophonePermissionBlocked
+          } else {
+            AiCallFailureReason.MicrophonePermissionDenied
+          }
       phase = AiCallPhase.Failed
       onCallResult(AiCallResult.Failed.wireValue)
     }
@@ -222,7 +263,23 @@ internal fun AiCallRoute(
       startCallWithPermission(personaId)
     } else {
       pendingPersonaId = personaId
-      permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+      val activity = context.findActivity()
+      val shouldShowRationale =
+          activity?.let {
+            ActivityCompat.shouldShowRequestPermissionRationale(
+                it,
+                Manifest.permission.RECORD_AUDIO,
+            )
+          } ?: false
+      if (hasRequestedMicrophonePermission && !shouldShowRationale) {
+        failedEndPhase = null
+        failureReason = AiCallFailureReason.MicrophonePermissionBlocked
+        phase = AiCallPhase.Failed
+        onCallResult(AiCallResult.Failed.wireValue)
+      } else {
+        hasRequestedMicrophonePermission = true
+        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+      }
     }
   }
 
@@ -231,6 +288,9 @@ internal fun AiCallRoute(
     callRuntime?.close()
     isEnding = false
     failedEndPhase = null
+    failureReason = AiCallFailureReason.Connection
+    pendingPersonaId = null
+    permissionResult = null
     phase = AiCallPhase.Selecting
     durationSeconds = 0
     captionDraft = ""
@@ -254,7 +314,6 @@ internal fun AiCallRoute(
                   initialPhase = endingPhase,
                   requestEnd = {
                     callRuntime?.end(
-                        accessToken = bridgeContext.accessToken,
                         terminationType = AiCallTerminationType.UserRequested,
                     )
                   },
@@ -264,6 +323,7 @@ internal fun AiCallRoute(
           onCallResult(result.wireValue)
         } catch (exception: Throwable) {
           failedEndPhase = endingPhase
+          failureReason = AiCallFailureReason.EndRequest
           phase = AiCallPhase.Failed
           onCallResult(AiCallResult.Failed.wireValue)
         } finally {
@@ -288,7 +348,7 @@ internal fun AiCallRoute(
       AiCallPhase.Ending -> Unit
 
       AiCallPhase.Failed ->
-          if (isFailedCallSelectionAllowed(failedEndPhase != null)) {
+          if (isFailedCallSelectionAllowed(failureReason == AiCallFailureReason.EndRequest)) {
             returnToSelection()
           }
 
@@ -301,7 +361,7 @@ internal fun AiCallRoute(
           AiCallUiState(
               phase = phase,
               persona = selectedPersona,
-              endRetryRequired = failedEndPhase != null,
+              failureReason = failureReason,
               durationSeconds = durationSeconds,
               isMuted = isMuted,
               isSpeakerOn = isSpeakerOn,
@@ -318,6 +378,7 @@ internal fun AiCallRoute(
       onPreviewFailure = {
         if (selectedPersona != null) {
           failedEndPhase = null
+          failureReason = AiCallFailureReason.Connection
           durationSeconds = 0
           phase = AiCallPhase.Failed
           onCallResult(AiCallResult.Failed.wireValue)
@@ -334,11 +395,23 @@ internal fun AiCallRoute(
       onEndCall = finishCall,
       onConfirm = returnToSelection,
       onRetry = {
-        val retryPhase = failedEndPhase
-        if (retryPhase != null) {
-          finishCallFromPhase(retryPhase)
-        } else {
-          selectedPersona?.let { startCall(it.id) }
+        when (failureReason) {
+          AiCallFailureReason.EndRequest -> {
+            failedEndPhase?.let(finishCallFromPhase)
+          }
+
+          AiCallFailureReason.MicrophonePermissionBlocked -> {
+            settingsLauncher.launch(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:${context.packageName}"),
+                )
+            )
+          }
+
+          AiCallFailureReason.Connection,
+          AiCallFailureReason.MicrophonePermissionDenied,
+          -> selectedPersona?.let { startCall(it.id) }
         }
       },
   )
@@ -388,7 +461,7 @@ internal fun AiCallContent(
     AiCallPhase.Failed ->
         CallFailedScreen(
             persona = state.persona,
-            endRetryRequired = state.endRetryRequired,
+            failureReason = state.failureReason,
             onConfirm = onConfirm,
             onRetry = onRetry,
         )
@@ -904,10 +977,37 @@ private fun CallEndedScreen(
 @Composable
 private fun CallFailedScreen(
     persona: AiPersona?,
-    endRetryRequired: Boolean,
+    failureReason: AiCallFailureReason,
     onConfirm: () -> Unit,
     onRetry: () -> Unit,
 ) {
+  val title =
+      when (failureReason) {
+        AiCallFailureReason.Connection -> "통화를 연결하지 못했어요."
+        AiCallFailureReason.EndRequest -> "통화를 종료하지 못했어요."
+        AiCallFailureReason.MicrophonePermissionDenied -> "마이크 권한이 필요해요."
+        AiCallFailureReason.MicrophonePermissionBlocked -> "마이크 권한이 꺼져 있어요."
+      }
+  val message =
+      when (failureReason) {
+        AiCallFailureReason.Connection -> "인터넷 연결을 확인한 뒤 다시 시도해 주세요."
+        AiCallFailureReason.EndRequest -> "종료 요청을 다시 시도해 주세요."
+        AiCallFailureReason.MicrophonePermissionDenied ->
+            "AI 통화를 시작하려면 마이크 사용을 허용해 주세요."
+        AiCallFailureReason.MicrophonePermissionBlocked ->
+            "휴대폰 설정에서 마이크 권한을 허용해 주세요."
+      }
+  val primaryActionLabel =
+      when (failureReason) {
+        AiCallFailureReason.Connection,
+        AiCallFailureReason.EndRequest,
+        -> "다시 시도"
+
+        AiCallFailureReason.MicrophonePermissionDenied -> "권한 다시 요청"
+        AiCallFailureReason.MicrophonePermissionBlocked -> "설정 열기"
+      }
+  val canSelectAnotherPersona = failureReason != AiCallFailureReason.EndRequest
+
   Column(
       modifier =
           Modifier.fillMaxSize()
@@ -926,7 +1026,7 @@ private fun CallFailedScreen(
       Spacer(modifier = Modifier.height(28.dp))
     }
     Text(
-        text = if (endRetryRequired) "통화를 종료하지 못했어요." else "통화를 연결하지 못했어요.",
+        text = title,
         color = AiCallColors.OnDark,
         fontSize = 25.sp,
         fontWeight = FontWeight.Bold,
@@ -934,12 +1034,7 @@ private fun CallFailedScreen(
     )
     Spacer(modifier = Modifier.height(10.dp))
     Text(
-        text =
-            if (endRetryRequired) {
-              "종료 요청을 다시 시도해 주세요."
-            } else {
-              "인터넷 연결을 확인한 뒤 다시 시도해 주세요."
-            },
+        text = message,
         color = AiCallColors.OnDarkMuted,
         fontSize = 16.sp,
         lineHeight = 24.sp,
@@ -948,7 +1043,7 @@ private fun CallFailedScreen(
     Spacer(modifier = Modifier.height(38.dp))
     Button(
         onClick = onRetry,
-        modifier = Modifier.fillMaxWidth().height(58.dp),
+        modifier = Modifier.fillMaxWidth().height(58.dp).testTag("failed-primary-action"),
         colors =
             ButtonDefaults.buttonColors(
                 containerColor = AiCallColors.BrandPurple,
@@ -957,17 +1052,22 @@ private fun CallFailedScreen(
         shape = RoundedCornerShape(18.dp),
     ) {
       Icon(
-          imageVector = Icons.Rounded.Refresh,
+          imageVector =
+              if (failureReason == AiCallFailureReason.MicrophonePermissionBlocked) {
+                Icons.Rounded.Settings
+              } else {
+                Icons.Rounded.Refresh
+              },
           contentDescription = null,
       )
       Spacer(modifier = Modifier.width(8.dp))
       Text(
-          text = "다시 시도",
+          text = primaryActionLabel,
           fontSize = 18.sp,
           fontWeight = FontWeight.Bold,
       )
     }
-    if (!endRetryRequired) {
+    if (canSelectAnotherPersona) {
       Spacer(modifier = Modifier.height(12.dp))
       Text(
           text = "다른 상대 선택",
@@ -982,3 +1082,10 @@ private fun CallFailedScreen(
     }
   }
 }
+
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+      is Activity -> this
+      is ContextWrapper -> baseContext.findActivity()
+      else -> null
+    }

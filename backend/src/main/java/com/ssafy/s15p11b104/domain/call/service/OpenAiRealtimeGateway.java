@@ -97,6 +97,8 @@ public class OpenAiRealtimeGateway {
 	private String createSessionJson(PersonaDefinition persona, String instructions) {
 		Map<String, Object> turnDetection = new LinkedHashMap<>();
 		turnDetection.put("type", "server_vad");
+		turnDetection.put("threshold", 0.8);
+		turnDetection.put("interrupt_response", false);
 
 		Map<String, Object> transcription = new LinkedHashMap<>();
 		transcription.put("model", properties.getTranscriptionModel());

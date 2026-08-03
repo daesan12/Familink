@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -86,6 +87,7 @@ class AiCallContentTest {
                     phase = AiCallPhase.InProgress,
                     persona = aiPersonas[3],
                     durationSeconds = 7,
+                    currentCaption = "안녕하세요, 어르신. 오늘은 어떤 하루를 보내셨어요?",
                 ),
             selectedPersonaId = 4,
             onPersonaSelected = {},
@@ -139,7 +141,12 @@ class AiCallContentTest {
       AiCallTheme {
         AiCallRoute(
             apiBaseUrl = null,
-            bridgeContext = AiCallBridgeContext("test-access-token", "group-1"),
+            accessTokenProvider =
+                object : AiCallAccessTokenProvider {
+                  override fun currentAccessToken(): String = "test-access-token"
+
+                  override suspend fun refreshAccessToken(): String = "test-access-token"
+                },
             onCallResult = {},
             onFullscreenChange = {},
         )
@@ -150,8 +157,58 @@ class AiCallContentTest {
     composeRule.onNodeWithTag("preview-connection-failure").performClick()
     composeRule.onNodeWithText("통화를 연결하지 못했어요.").assertIsDisplayed()
     composeRule.onNodeWithText("인터넷 연결을 확인한 뒤 다시 시도해 주세요.").assertIsDisplayed()
+    composeRule.onNodeWithText("다시 시도").assertIsDisplayed()
+  }
 
-    composeRule.onNodeWithText("다시 시도").performClick()
-    composeRule.onNodeWithText("통화 연결 중").assertIsDisplayed()
+  @Test
+  fun 실패_원인에_맞는_안내와_복구_동작을_표시한다() {
+    var state by
+        mutableStateOf(
+            AiCallUiState(
+                phase = AiCallPhase.Failed,
+                persona = aiPersonas.first(),
+            )
+        )
+    var primaryActionCount = 0
+
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state = state,
+            selectedPersonaId = 1,
+            onPersonaSelected = {},
+            onStartCall = {},
+            onToggleMute = {},
+            onToggleSpeaker = {},
+            onEndCall = {},
+            onConfirm = {},
+            onRetry = { primaryActionCount += 1 },
+        )
+      }
+    }
+
+    composeRule.onNodeWithText("통화를 연결하지 못했어요.").assertIsDisplayed()
+    composeRule.onNodeWithText("인터넷 연결을 확인한 뒤 다시 시도해 주세요.").assertIsDisplayed()
+
+    composeRule.runOnIdle {
+      state = state.copy(failureReason = AiCallFailureReason.EndRequest)
+    }
+    composeRule.onNodeWithText("통화를 종료하지 못했어요.").assertIsDisplayed()
+    composeRule.onNodeWithText("다른 상대 선택").assertDoesNotExist()
+
+    composeRule.runOnIdle {
+      state = state.copy(failureReason = AiCallFailureReason.MicrophonePermissionDenied)
+    }
+    composeRule.onNodeWithText("마이크 권한이 필요해요.").assertIsDisplayed()
+    composeRule.onNodeWithText("권한 다시 요청").performClick()
+
+    composeRule.runOnIdle {
+      state = state.copy(failureReason = AiCallFailureReason.MicrophonePermissionBlocked)
+    }
+    composeRule.onNodeWithText("마이크 권한이 꺼져 있어요.").assertIsDisplayed()
+    composeRule.onNodeWithText("휴대폰 설정에서 마이크 권한을 허용해 주세요.").assertIsDisplayed()
+    composeRule.onNodeWithText("설정 열기").performClick()
+
+    composeRule.runOnIdle { assertEquals(2, primaryActionCount) }
   }
 }

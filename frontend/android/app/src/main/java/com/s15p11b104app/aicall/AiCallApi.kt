@@ -56,6 +56,7 @@ internal class AiCallApiException(
 
 internal class HttpAiCallSessionClient(
     baseUrl: String,
+    private val accessTokenProvider: AiCallAccessTokenProvider,
     private val httpClient: OkHttpClient = defaultHttpClient,
 ) : AiCallSessionClient {
 
@@ -133,7 +134,28 @@ internal class HttpAiCallSessionClient(
             .requiredLong("call_session_id")
       }
 
-  private fun executePost(
+  private suspend fun executePost(
+      path: String,
+      accessToken: String,
+      body: JSONObject,
+      expectedStatusCode: Int,
+  ): JSONObject {
+    return try {
+      executePostOnce(path, accessToken, body, expectedStatusCode)
+    } catch (exception: AiCallApiException) {
+      if (exception.statusCode != 401 || exception.errorCode != "UNAUTHORIZED") {
+        throw exception
+      }
+
+      val currentAccessToken = accessTokenProvider.currentAccessToken()
+      val retryAccessToken =
+          currentAccessToken?.takeIf { it.isNotBlank() && it != accessToken }
+              ?: accessTokenProvider.refreshAccessToken()
+      executePostOnce(path, retryAccessToken, body, expectedStatusCode)
+    }
+  }
+
+  private fun executePostOnce(
       path: String,
       accessToken: String,
       body: JSONObject,
@@ -189,10 +211,15 @@ internal class HttpAiCallSessionClient(
   private fun parseApiException(statusCode: Int, rawBody: String): AiCallApiException {
     val payload = runCatching { JSONObject(rawBody) }.getOrNull()
     val error = payload?.optJSONObject("error")
-    val code = error?.optString("code").orEmpty().ifBlank { statusCode.toString() }
+    val code =
+        error?.optString("code").orEmpty().ifBlank {
+          payload?.optString("code").orEmpty().ifBlank { statusCode.toString() }
+        }
     val message =
         error?.optString("message").orEmpty().ifBlank {
-          "The AI call request failed with HTTP $statusCode."
+          payload?.optString("message").orEmpty().ifBlank {
+            "The AI call request failed with HTTP $statusCode."
+          }
         }
     return AiCallApiException(statusCode, code, message)
   }

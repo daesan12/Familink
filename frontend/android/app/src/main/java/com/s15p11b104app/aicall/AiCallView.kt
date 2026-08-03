@@ -13,9 +13,10 @@ internal class AiCallView(
     private val reactContext: ThemedReactContext,
 ) : FrameLayout(reactContext) {
 
-  private var accessToken by mutableStateOf<String?>(null)
+  private val accessTokenProvider =
+      BridgeAiCallAccessTokenProvider(onRefreshRequested = ::emitAccessTokenRefreshRequest)
   private var apiBaseUrl by mutableStateOf<String?>(null)
-  private var groupId by mutableStateOf<String?>(null)
+  private var groupId: String? = null
 
   init {
     layoutParams =
@@ -32,7 +33,7 @@ internal class AiCallView(
             AiCallTheme {
               AiCallRoute(
                   apiBaseUrl = apiBaseUrl,
-                  bridgeContext = AiCallBridgeContext(accessToken, groupId),
+                  accessTokenProvider = accessTokenProvider,
                   onCallResult = ::emitCallResult,
                   onFullscreenChange = ::emitFullscreenChange,
               )
@@ -47,7 +48,7 @@ internal class AiCallView(
   }
 
   internal fun setAccessToken(value: String?) {
-    accessToken = value
+    accessTokenProvider.updateAccessToken(value)
   }
 
   internal fun setApiBaseUrl(value: String?) {
@@ -56,6 +57,30 @@ internal class AiCallView(
 
   internal fun setGroupId(value: String?) {
     groupId = value
+  }
+
+  internal fun completeAccessTokenRefresh(
+      requestId: String,
+      accessToken: String,
+      errorCode: String,
+  ) {
+    accessTokenProvider.completeRefresh(requestId, accessToken, errorCode)
+  }
+
+  override fun onDetachedFromWindow() {
+    accessTokenProvider.cancelPendingRequests()
+    super.onDetachedFromWindow()
+  }
+
+  private fun emitAccessTokenRefreshRequest(requestId: String) {
+    val eventDispatcher = UIManagerHelper.getEventDispatcher(reactContext)
+    eventDispatcher?.dispatchEvent(
+        AiCallAccessTokenRefreshRequestEvent(
+            surfaceId = UIManagerHelper.getSurfaceId(reactContext),
+            viewId = id,
+            requestId = requestId,
+        )
+    )
   }
 
   private fun emitFullscreenChange(isFullscreen: Boolean) {

@@ -43,6 +43,9 @@ class OpenAiRealtimeGatewayTest {
 			.andExpect(header("Authorization", "Bearer test-key"))
 			.andExpect(header("OpenAI-Safety-Identifier", org.hamcrest.Matchers.hasLength(64)))
 			.andExpect(content().string(containsString(
+				"\"turn_detection\":{\"type\":\"server_vad\",\"threshold\":0.8,\"interrupt_response\":false}"
+			)))
+			.andExpect(content().string(containsString(
 				"\"transcription\":{\"model\":\"gpt-transcribe\",\"languages\":[\"ko\"]}"
 			)))
 			.andExpect(content().string(containsString(

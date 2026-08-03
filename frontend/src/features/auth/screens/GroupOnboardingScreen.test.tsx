@@ -149,10 +149,13 @@ test('새 그룹 이름과 역할을 입력해 생성 요청을 전달한다', a
       .props.onPress();
   });
 
-  expect(onCreateGroup).toHaveBeenCalledWith({
-    name: '행복한 우리집',
-    role: 'careReceiver',
-  });
+  expect(onCreateGroup).toHaveBeenCalledWith(
+    {
+      name: '행복한 우리집',
+      role: 'careReceiver',
+    },
+    expect.any(Object),
+  );
 });
 
 test('그룹 생성 중 중복 요청을 막고 실패하면 입력 화면을 유지한다', async () => {
@@ -266,7 +269,7 @@ test('초대 코드를 입력하면 칸을 채우고 영문 대문자와 숫자 
       .props.onPress();
   });
 
-  expect(onJoinByCode).toHaveBeenCalledWith('AB12C3');
+  expect(onJoinByCode).toHaveBeenCalledWith('AB12C3', expect.any(Object));
 });
 
 test('참여 요청 중에는 로딩을 표시하고 실패하면 입력을 유지한 채 오류를 안내한다', async () => {
