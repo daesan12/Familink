@@ -11,6 +11,7 @@ import {
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {BackButton} from '../../../shared/components/BackButton';
 import {RetryButton} from '../../../shared/components/RetryButton';
 import type {ArchiveLoader} from '../api/archiveApi';
 import {
@@ -263,18 +264,10 @@ export function ArchiveScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Pressable
+        <BackButton
           accessibilityLabel="피드로 돌아가기"
-          accessibilityRole="button"
           onPress={onCloseArchive}
-          style={styles.backButton}
-        >
-          <MaterialDesignIcons
-            color={COLORS.background}
-            name="chevron-left"
-            size={24}
-          />
-        </Pressable>
+        />
         <Text style={styles.title}>보관함</Text>
         <Pressable
           accessibilityHint="날짜별로 게시글을 찾습니다"
@@ -436,15 +429,6 @@ function ArchiveEmptyState({memberName}: {memberName: string | null}) {
 }
 
 const styles = StyleSheet.create({
-  backButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.lavender,
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
-  },
   calendarButton: {
     alignItems: 'center',
     backgroundColor: COLORS.surfaceMuted,

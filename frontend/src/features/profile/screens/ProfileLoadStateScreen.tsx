@@ -1,13 +1,14 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {
   ActivityIndicator,
-  Pressable,
+
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
-import {COLORS, RADII} from '../../../design/tokens';
+import {COLORS} from '../../../design/tokens';
+import {BackButton} from '../../../shared/components/BackButton';
 import {RetryButton} from '../../../shared/components/RetryButton';
 
 interface ProfileLoadStateScreenProps {
@@ -27,18 +28,10 @@ export function ProfileLoadStateScreen({
     <View style={styles.screen}>
       <View style={styles.header}>
         {onBack ? (
-          <Pressable
+          <BackButton
             accessibilityLabel="프로필 조회에서 뒤로 가기"
-            accessibilityRole="button"
-            hitSlop={8}
             onPress={onBack}
-            style={styles.backButton}>
-            <MaterialDesignIcons
-              color={COLORS.purpleDeep}
-              name="chevron-left"
-              size={30}
-            />
-          </Pressable>
+          />
         ) : null}
         <Text style={styles.headerTitle}>마이페이지</Text>
       </View>
@@ -72,14 +65,6 @@ export function ProfileLoadStateScreen({
 }
 
 const styles = StyleSheet.create({
-  backButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.lavenderSurface,
-    borderRadius: RADII.pill,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
-  },
   content: {
     alignItems: 'center',
     flex: 1,

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {BackButton} from '../../../shared/components/BackButton';
 import {CommentItem} from '../components/CommentItem';
 import {PostActionsSheet} from '../components/PostActionsSheet';
 import {PostImageCarousel} from '../components/PostImageCarousel';
@@ -186,18 +187,7 @@ export function PostDetailScreen({
       style={styles.container}
     >
       <View style={styles.header}>
-        <Pressable
-          accessibilityLabel="피드로 돌아가기"
-          accessibilityRole="button"
-          onPress={onBack}
-          style={styles.backButton}
-        >
-          <MaterialDesignIcons
-            color={COLORS.background}
-            name="chevron-left"
-            size={28}
-          />
-        </Pressable>
+        <BackButton accessibilityLabel="피드로 돌아가기" onPress={onBack} />
         <Text numberOfLines={1} style={styles.title}>
           {currentGroupName}
         </Text>
@@ -449,15 +439,6 @@ const styles = StyleSheet.create({
     color: '#C4BAFF',
     fontSize: 16,
     fontWeight: '600',
-  },
-  backButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.lavender,
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
   },
   body: {
     color: COLORS.textStrong,

@@ -12,6 +12,7 @@ import {
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {BackButton} from '../../../shared/components/BackButton';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {
   getInterestErrorMessage,
@@ -437,18 +438,10 @@ function InterestRequestStateScreen({
   return (
     <View style={styles.requestStateScreen}>
       <View style={styles.requestStateHeader}>
-        <Pressable
+        <BackButton
           accessibilityLabel="관심사 조회에서 뒤로 가기"
-          accessibilityRole="button"
-          hitSlop={8}
           onPress={onBack}
-          style={styles.requestStateBackButton}>
-          <MaterialDesignIcons
-            color={COLORS.purpleDeep}
-            name="chevron-left"
-            size={30}
-          />
-        </Pressable>
+        />
         <Text style={styles.requestStateHeaderTitle}>관심사 설정</Text>
       </View>
 
@@ -508,14 +501,6 @@ const styles = StyleSheet.create({
     color: COLORS.textStrong,
     fontSize: 22,
     fontWeight: '700',
-  },
-  requestStateBackButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.lavenderSurface,
-    borderRadius: RADII.pill,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
   },
   requestStateContent: {
     alignItems: 'center',

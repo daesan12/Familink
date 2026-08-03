@@ -195,9 +195,9 @@ export function InterestSelectionScreen({
             onPress={onBack}>
             <View style={styles.backButton}>
               <MaterialDesignIcons
-                color={AUTH_COLORS.background}
+                color={COLORS.purpleDeep}
                 name="chevron-left"
-                size={30}
+                size={28}
               />
             </View>
           </AnimatedPressable>
@@ -517,11 +517,11 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignItems: 'center',
-    backgroundColor: AUTH_COLORS.primarySoft,
-    borderRadius: 18,
-    height: 36,
+    backgroundColor: COLORS.lavenderSurface,
+    borderRadius: 20,
+    height: 40,
     justifyContent: 'center',
-    width: 36,
+    width: 40,
   },
   logo: {
     height: 120,

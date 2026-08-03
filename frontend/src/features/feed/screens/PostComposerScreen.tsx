@@ -18,6 +18,7 @@ import {
 } from 'react-native-image-picker';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {BackButton} from '../../../shared/components/BackButton';
 import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {PostImageCarousel} from '../components/PostImageCarousel';
 import {
@@ -233,18 +234,10 @@ export function PostComposerScreen({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable
+        <BackButton
           accessibilityLabel="게시글 작성 닫기"
-          accessibilityRole="button"
           onPress={requestClose}
-          style={styles.headerButton}
-        >
-          <MaterialDesignIcons
-            color={COLORS.textStrong}
-            name="arrow-left"
-            size={24}
-          />
-        </Pressable>
+        />
         <Text style={styles.title}>
           {mode === 'create' ? '새 게시글' : '게시글 수정'}
         </Text>

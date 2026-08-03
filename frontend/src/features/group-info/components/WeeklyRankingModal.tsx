@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {BackButton} from '../../../shared/components/BackButton';
 import {RetryButton} from '../../../shared/components/RetryButton';
 import {avatarInitial, formatWeekRange, rankEntries} from '../rankingModel';
 import type {WeeklyRankingLoadState} from '../types';
@@ -54,19 +55,7 @@ export function WeeklyRankingModal({
             style={styles.card}
           >
             <View style={styles.header}>
-              <Pressable
-                accessibilityLabel="뒤로 가기"
-                accessibilityRole="button"
-                hitSlop={8}
-                onPress={onClose}
-                style={styles.backButton}
-              >
-                <MaterialDesignIcons
-                  color={COLORS.textStrong}
-                  name="chevron-left"
-                  size={24}
-                />
-              </Pressable>
+              <BackButton onPress={onClose} style={styles.backButton} />
               <Text style={styles.title}>주간 효자 랭킹</Text>
             </View>
 
@@ -180,14 +169,8 @@ const styles = StyleSheet.create({
     width: 40,
   },
   backButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceMuted,
-    borderRadius: RADII.pill,
-    height: 36,
-    justifyContent: 'center',
     left: 0,
     position: 'absolute',
-    width: 36,
     zIndex: 1,
   },
   backdrop: {

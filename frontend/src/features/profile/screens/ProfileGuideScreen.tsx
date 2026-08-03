@@ -1,7 +1,7 @@
-import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {ScrollView, StyleSheet, Text, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {BackButton} from '../../../shared/components/BackButton';
 import {QUICK_START_STEPS} from '../fixtures/profileFixtures';
 
 interface ProfileGuideScreenProps {
@@ -13,19 +13,7 @@ export function ProfileGuideScreen({onBack}: ProfileGuideScreenProps) {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Pressable
-          accessibilityLabel="뒤로 가기"
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={onBack}
-          style={styles.backButton}
-        >
-          <MaterialDesignIcons
-            color={COLORS.textStrong}
-            name="chevron-left"
-            size={24}
-          />
-        </Pressable>
+        <BackButton onPress={onBack} />
         <Text style={styles.headerTitle}>이용 가이드</Text>
       </View>
 

@@ -1,8 +1,8 @@
-import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {Pressable, ScrollView, StyleSheet, Switch, Text, View} from 'react-native';
+import {ScrollView, StyleSheet, Switch, Text, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {BackButton} from '../../../shared/components/BackButton';
 import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
@@ -172,19 +172,7 @@ export function NotificationSettingsScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Pressable
-          accessibilityLabel="뒤로 가기"
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={onBack}
-          style={styles.headerButton}
-        >
-          <MaterialDesignIcons
-            color={COLORS.textStrong}
-            name="chevron-left"
-            size={24}
-          />
-        </Pressable>
+        <BackButton onPress={onBack} />
         <Text style={styles.headerTitle}>알림 설정</Text>
         <View style={styles.headerButton} />
       </View>

@@ -11,6 +11,7 @@ import {
 } from '../components/CreateGroupSheet';
 import {JoinGroupSheet} from '../components/JoinGroupSheet';
 import {useScreenEntrance} from '../hooks/useScreenEntrance';
+import {COLORS} from '../../../design/tokens';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 
 const FAMILINK_LOGO = require('../../../assets/images/familink-logo.png');
@@ -87,7 +88,7 @@ export function GroupOnboardingScreen({
             onPress={onBack}>
             <View style={styles.backButton}>
               <MaterialDesignIcons
-                color={AUTH_COLORS.background}
+                color={COLORS.purpleDeep}
                 name="chevron-left"
                 size={28}
               />
@@ -287,11 +288,11 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignItems: 'center',
-    backgroundColor: AUTH_COLORS.primarySoft,
-    borderRadius: 18,
-    height: 36,
+    backgroundColor: COLORS.lavenderSurface,
+    borderRadius: 20,
+    height: 40,
     justifyContent: 'center',
-    width: 36,
+    width: 40,
   },
   logo: {
     height: 120,
