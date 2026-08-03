@@ -1,8 +1,10 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
+import {Image, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
 
 import type {GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+
+const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
 import {
   ALIAS_MAX_LENGTH,
   isAliasSaveable,
@@ -50,7 +52,13 @@ export function GroupMemberRow({
         accessibilityRole="button"
         onPress={onOpenProfile}
         style={styles.avatar}
-      />
+      >
+        <Image
+          accessibilityIgnoresInvertColors
+          source={PROFILE_PLACEHOLDER}
+          style={styles.avatarImage}
+        />
+      </Pressable>
 
       <View style={styles.info}>
         {isEditing ? (
@@ -144,7 +152,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceMuted,
     borderRadius: RADII.pill,
     height: 44,
+    overflow: 'hidden',
     width: 44,
+  },
+  avatarImage: {
+    height: '100%',
+    width: '100%',
   },
   cancelButton: {
     alignItems: 'center',

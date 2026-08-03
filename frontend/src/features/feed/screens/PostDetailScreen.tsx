@@ -3,6 +3,7 @@ import {useRef, useState} from 'react';
 import {
   Alert,
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -34,6 +35,8 @@ import type {
 } from '../types';
 import {MAX_COMMENT_LENGTH} from '../types';
 import {formatRelativeTime} from '../time';
+
+const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
 
 interface PostDetailScreenProps {
   canInteract: boolean;
@@ -220,7 +223,11 @@ export function PostDetailScreen({
         <View style={styles.authorRow}>
           {onPressAuthor === undefined ? (
             <View accessibilityElementsHidden style={styles.avatar}>
-              <Text style={styles.avatarText}>{post.author.avatarText}</Text>
+              <Image
+                accessibilityIgnoresInvertColors
+                source={PROFILE_PLACEHOLDER}
+                style={styles.avatarImage}
+              />
             </View>
           ) : (
             <Pressable
@@ -229,7 +236,11 @@ export function PostDetailScreen({
               onPress={() => onPressAuthor(post.author)}
               style={styles.avatar}
             >
-              <Text style={styles.avatarText}>{post.author.avatarText}</Text>
+              <Image
+                accessibilityIgnoresInvertColors
+                source={PROFILE_PLACEHOLDER}
+                style={styles.avatarImage}
+              />
             </Pressable>
           )}
           <View style={styles.authorText}>
@@ -426,19 +437,17 @@ const styles = StyleSheet.create({
   },
   avatar: {
     alignItems: 'center',
-    backgroundColor: '#F7F5FF',
-    borderColor: '#D1C9FF',
+    backgroundColor: COLORS.surfaceMuted,
     borderCurve: 'continuous',
     borderRadius: RADII.pill,
-    borderWidth: 1,
     height: 44,
     justifyContent: 'center',
+    overflow: 'hidden',
     width: 44,
   },
-  avatarText: {
-    color: '#C4BAFF',
-    fontSize: 16,
-    fontWeight: '600',
+  avatarImage: {
+    height: '100%',
+    width: '100%',
   },
   body: {
     color: COLORS.textStrong,
