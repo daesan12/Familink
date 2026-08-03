@@ -10,9 +10,6 @@ import type {
 import {SignupFlowScreen} from './SignupFlowScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
-jest.mock('react-native-image-picker', () => ({
-  launchImageLibrary: jest.fn(),
-}));
 jest.mock('../hooks/useScreenEntrance', () => ({
   useScreenEntrance: () => ({}),
 }));
@@ -86,6 +83,20 @@ function render(
   mountedRenderers.push(renderer!);
   return {gateway, renderer: renderer!};
 }
+
+test('회원가입에서는 저장되지 않는 사진 선택을 노출하지 않고 마이페이지 등록을 안내한다', () => {
+  const {renderer} = render();
+
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '프로필 사진 선택'}),
+  ).toHaveLength(0);
+  expect(
+    hasText(
+      renderer,
+      '프로필 사진은 가입 후 마이페이지에서 등록할 수 있어요',
+    ),
+  ).toBe(true);
+});
 
 test('시스템 Back은 회원가입 이전 단계를 먼저 닫고 첫 단계에서만 흐름을 종료한다', async () => {
   const onCancel = jest.fn();

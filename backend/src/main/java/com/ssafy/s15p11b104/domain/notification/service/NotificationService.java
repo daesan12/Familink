@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.notification.dto.NotificationListResponse;
 import com.ssafy.s15p11b104.domain.notification.dto.NotificationReadAllResponse;
 import com.ssafy.s15p11b104.domain.notification.dto.NotificationReadResponse;
@@ -31,13 +32,16 @@ public class NotificationService {
 
 	private final UserRepository userRepository;
 	private final NotificationRepository notificationRepository;
+	private final MediaDownloadUrlProvider mediaDownloadUrlProvider;
 
 	public NotificationService(
 		UserRepository userRepository,
-		NotificationRepository notificationRepository
+		NotificationRepository notificationRepository,
+		MediaDownloadUrlProvider mediaDownloadUrlProvider
 	) {
 		this.userRepository = userRepository;
 		this.notificationRepository = notificationRepository;
+		this.mediaDownloadUrlProvider = mediaDownloadUrlProvider;
 	}
 
 	@Transactional(readOnly = true)
@@ -84,7 +88,7 @@ public class NotificationService {
 			: new NotificationListResponse.Actor(
 				actor.getId(),
 				actor.getName(),
-				actor.getProfileImageUrl());
+				mediaDownloadUrlProvider.issueProfileImageDownloadUrl(actor.getProfileImageUrl()));
 
 		return new NotificationListResponse.Item(
 			notification.getId(),

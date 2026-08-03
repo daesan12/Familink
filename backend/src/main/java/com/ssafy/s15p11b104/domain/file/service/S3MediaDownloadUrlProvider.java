@@ -15,10 +15,15 @@ public class S3MediaDownloadUrlProvider implements MediaDownloadUrlProvider {
 
 	private final S3Presigner presigner;
 	private final S3Properties properties;
+	private final S3ObjectKeyResolver objectKeyResolver;
 
-	public S3MediaDownloadUrlProvider(S3Presigner presigner, S3Properties properties) {
+	public S3MediaDownloadUrlProvider(
+		S3Presigner presigner,
+		S3Properties properties,
+		S3ObjectKeyResolver objectKeyResolver) {
 		this.presigner = presigner;
 		this.properties = properties;
+		this.objectKeyResolver = objectKeyResolver;
 	}
 
 	@Override
@@ -40,6 +45,17 @@ public class S3MediaDownloadUrlProvider implements MediaDownloadUrlProvider {
 			.getObjectRequest(getObjectRequest)
 			.build();
 		return presigner.presignGetObject(presignRequest).url().toString();
+	}
+
+	@Override
+	public String issueProfileImageDownloadUrl(String storedProfileImageUrl) {
+		if (storedProfileImageUrl == null) {
+			return null;
+		}
+		if (objectKeyResolver.resolveProfileImage(storedProfileImageUrl).isEmpty()) {
+			throw new IllegalArgumentException("Stored profile image URL is not allowed");
+		}
+		return issueDownloadUrl(storedProfileImageUrl);
 	}
 
 	private URI parseUri(String storedFileUrl) {

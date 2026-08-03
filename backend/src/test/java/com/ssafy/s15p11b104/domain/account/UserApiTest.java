@@ -3,6 +3,7 @@ package com.ssafy.s15p11b104.domain.account;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -35,6 +36,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.entity.UserGender;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
@@ -99,6 +101,9 @@ class UserApiTest extends IntegrationTest {
 	@MockitoBean
 	private S3Client s3Client;
 
+	@MockitoBean
+	private MediaDownloadUrlProvider mediaDownloadUrlProvider;
+
 	@BeforeEach
 	void resetState() {
 		clearDatabase();
@@ -106,6 +111,11 @@ class UserApiTest extends IntegrationTest {
 			connection.serverCommands().flushDb();
 		}
 		when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(validImageMetadata());
+		when(mediaDownloadUrlProvider.issueProfileImageDownloadUrl(nullable(String.class)))
+			.thenAnswer(invocation -> {
+				String storedUrl = invocation.getArgument(0);
+				return storedUrl == null ? null : "https://signed.example/profile.png";
+			});
 	}
 
 	@Test
@@ -128,6 +138,20 @@ class UserApiTest extends IntegrationTest {
 		mockMvc.perform(get(PATH))
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+	}
+
+	@Test
+	void profileReturnsSignedImageUrlWhileDatabaseKeepsCanonicalUrl() throws Exception {
+		Session session = signupAndLogin();
+		updateProfileImage(session, PROFILE_IMAGE_JSON);
+
+		mockMvc.perform(authorized(get(PATH), session))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.profileImageUrl")
+				.value("https://signed.example/profile.png"));
+
+		assertThat(userRepository.findById(session.userId()).orElseThrow().getProfileImageUrl())
+			.isEqualTo(PROFILE_IMAGE_URL);
 	}
 
 	@Test
