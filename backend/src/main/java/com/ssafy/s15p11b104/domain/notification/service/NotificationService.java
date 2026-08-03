@@ -12,11 +12,14 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
 import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
+import com.ssafy.s15p11b104.domain.group.entity.GroupJoinRequest;
+import com.ssafy.s15p11b104.domain.group.entity.JoinRequestStatus;
 import com.ssafy.s15p11b104.domain.notification.dto.NotificationListResponse;
 import com.ssafy.s15p11b104.domain.notification.dto.NotificationReadAllResponse;
 import com.ssafy.s15p11b104.domain.notification.dto.NotificationReadResponse;
 import com.ssafy.s15p11b104.domain.notification.dto.NotificationUnreadCountResponse;
 import com.ssafy.s15p11b104.domain.notification.entity.Notification;
+import com.ssafy.s15p11b104.domain.notification.entity.NotificationType;
 import com.ssafy.s15p11b104.domain.notification.repository.NotificationRepository;
 import com.ssafy.s15p11b104.global.entity.BaseEntity;
 import com.ssafy.s15p11b104.global.entity.CreatedAtEntity;
@@ -98,12 +101,21 @@ public class NotificationService {
 			idOf(notification.getGroup()),
 			actorResponse,
 			idOf(notification.getRelatedJoinRequest()),
+			statusOf(notification),
 			idOf(notification.getRelatedPost()),
 			idOf(notification.getRelatedEvent()),
 			idOf(notification.getRelatedCallReport()),
 			idOf(notification.getRelatedDailyReport()),
 			notification.getReadAt(),
 			notification.getCreatedAt());
+	}
+
+	private JoinRequestStatus statusOf(Notification notification) {
+		if (notification.getType() != NotificationType.GROUP_JOIN_REQUEST) {
+			return null;
+		}
+		GroupJoinRequest joinRequest = notification.getRelatedJoinRequest();
+		return joinRequest == null ? null : joinRequest.getStatus();
 	}
 
 	private Long idOf(BaseEntity entity) {
