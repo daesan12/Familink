@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Alert, StatusBar } from "react-native";
+import { Alert, AppState, StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AppShell, currentGroupStore } from "./src/app-shell";
@@ -553,6 +553,8 @@ export default function App({
     useRef<PendingDeviceTokenRegistration | null>(null);
   const deviceTokenDeactivationRef = useRef<Promise<void> | null>(null);
   const withdrawalInFlightRef = useRef<Promise<void> | null>(null);
+  // 포그라운드 복귀 갱신 in-flight 가드. 연속 전환에서 그룹 재조회가 겹치지 않게 한다.
+  const foregroundGroupRefreshInFlightRef = useRef(false);
   const resolvedGroups = availableGroups;
 
   const cancelLoginAttempt = useCallback(() => {
@@ -901,6 +903,44 @@ export default function App({
     deactivateCurrentDeviceToken,
     registerCurrentDeviceToken,
   ]);
+
+  // 관리자가 변경한 내 역할이 재로그인 없이도 반영되도록, 앱이 포그라운드로
+  // 돌아올 때 그룹 목록을 다시 조회한다. 주입된 groups(테스트·프리뷰)는 갱신하지 않는다.
+  useEffect(() => {
+    if (user === null || groups !== undefined) {
+      return;
+    }
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (
+        nextState !== "active" ||
+        foregroundGroupRefreshInFlightRef.current
+      ) {
+        return;
+      }
+      foregroundGroupRefreshInFlightRef.current = true;
+      const sessionVersion = authInvalidationVersionRef.current;
+      void groupGateway
+        .loadGroups()
+        .then((snapshot) => {
+          if (authInvalidationVersionRef.current !== sessionVersion) {
+            return;
+          }
+          setAvailableGroups([...snapshot.groups]);
+          setJoinRequests(toPendingJoinRequests(snapshot.joinRequests));
+        })
+        .catch(() => {
+          // 복귀 갱신 실패는 조용히 넘기고 다음 포그라운드 전환에서 다시 시도한다.
+        })
+        .finally(() => {
+          foregroundGroupRefreshInFlightRef.current = false;
+        });
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [groupGateway, groups, user]);
 
   const handleLogin = async (credentials: LoginCredentials) => {
     const previousController = loginAbortControllerRef.current;
