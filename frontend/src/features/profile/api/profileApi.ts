@@ -83,7 +83,10 @@ const defaultUploadTransport: ProfileUploadTransport = {
     return response.blob();
   },
   async put(uploadUrl, data, config) {
-    await axios.put(uploadUrl, data, {headers: config.headers});
+    await axios.put(uploadUrl, data, {
+      headers: config.headers,
+      transformRequest: value => value,
+    });
   },
 };
 
