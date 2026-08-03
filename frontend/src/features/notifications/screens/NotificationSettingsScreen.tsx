@@ -3,6 +3,7 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {Pressable, ScrollView, StyleSheet, Switch, Text, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
   NOTIFICATION_SETTING_GROUPS,
@@ -197,9 +198,9 @@ export function NotificationSettingsScreen({
           <Text style={styles.statusMessage}>설정을 불러오는 중이에요.</Text>
         ) : null}
         {errorMessage ? (
-          <Text accessibilityRole="alert" style={styles.errorMessage}>
-            {errorMessage}
-          </Text>
+          <View style={styles.errorBannerWrap}>
+            <NoticeBanner message={errorMessage} />
+          </View>
         ) : null}
         {settingContent}
       </ScrollView>
@@ -219,9 +220,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     paddingHorizontal: 20,
   },
-  errorMessage: {
-    color: COLORS.error,
-    fontSize: 13,
+  errorBannerWrap: {
     marginTop: 8,
   },
   groupBlock: {

@@ -1,4 +1,3 @@
-import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
@@ -6,14 +5,14 @@ import {
   FlatList,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
 import type {AppScreenProps} from '../../../app-shell';
-import {COLORS, RADII} from '../../../design/tokens';
+import {COLORS} from '../../../design/tokens';
+import {RetryButton} from '../../../shared/components/RetryButton';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {
   MemberProfilePopup,
@@ -738,18 +737,7 @@ export function FeedScreen({
     return (
       <View accessibilityLiveRegion="polite" style={styles.centered}>
         <Text style={styles.errorText}>{feed.message}</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={feed.retry}
-          style={styles.retryButton}
-        >
-          <MaterialDesignIcons
-            color={COLORS.text}
-            name="refresh"
-            size={18}
-          />
-          <Text style={styles.retryText}>다시 시도</Text>
-        </Pressable>
+        <RetryButton onPress={feed.retry} />
       </View>
     );
   }
@@ -1062,22 +1050,5 @@ const styles = StyleSheet.create({
   },
   listFooter: {
     paddingVertical: 16,
-  },
-  retryButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.divider,
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 8,
-    minHeight: 48,
-    paddingHorizontal: 18,
-  },
-  retryText: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

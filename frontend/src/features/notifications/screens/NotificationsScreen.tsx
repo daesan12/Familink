@@ -5,6 +5,7 @@ import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
 
 import type {AppScreenProps, GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {
   processJoinRequest as processJoinRequestApi,
   type JoinRequestProcessor,
@@ -411,9 +412,9 @@ export function NotificationsScreen({
         showsVerticalScrollIndicator={false}
       />
       {errorMessage ? (
-        <Text accessibilityRole="alert" style={styles.errorMessage}>
-          {errorMessage}
-        </Text>
+        <View style={styles.errorBannerWrap}>
+          <NoticeBanner message={errorMessage} />
+        </View>
       ) : null}
       <NotificationDecisionModal
         applicantName={decision?.applicantName ?? null}
@@ -528,9 +529,7 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
     paddingHorizontal: 24,
   },
-  errorMessage: {
-    color: COLORS.error,
-    fontSize: 13,
+  errorBannerWrap: {
     paddingHorizontal: 20,
     paddingVertical: 8,
   },

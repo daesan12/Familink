@@ -11,6 +11,7 @@ import {
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {RetryButton} from '../../../shared/components/RetryButton';
 import type {ArchiveLoader} from '../api/archiveApi';
 import {
   filterPosts,
@@ -407,14 +408,7 @@ function ArchiveErrorState({
   return (
     <View style={styles.errorState}>
       <Text style={styles.errorText}>{message}</Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="보관함 다시 시도"
-        onPress={onRetry}
-        style={styles.retryButton}
-      >
-        <Text style={styles.retryText}>다시 시도</Text>
-      </Pressable>
+      <RetryButton accessibilityLabel="보관함 다시 시도" onPress={onRetry} />
     </View>
   );
 }
@@ -535,18 +529,6 @@ const styles = StyleSheet.create({
   },
   loading: {
     flex: 1,
-  },
-  retryButton: {
-    alignItems: 'center',
-    marginTop: 12,
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  retryText: {
-    color: COLORS.purpleDeep,
-    fontSize: 14,
-    fontWeight: '700',
   },
   screen: {
     backgroundColor: COLORS.background,

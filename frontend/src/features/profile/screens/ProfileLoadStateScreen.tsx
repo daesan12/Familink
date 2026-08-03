@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {RetryButton} from '../../../shared/components/RetryButton';
 
 interface ProfileLoadStateScreenProps {
   errorMessage?: string;
@@ -51,22 +52,18 @@ export function ProfileLoadStateScreen({
         ) : (
           <>
             <MaterialDesignIcons
-              color={COLORS.error}
+              color={COLORS.purpleDeep}
               name="alert-circle-outline"
-              size={46}
+              size={34}
             />
             <Text style={styles.title}>프로필을 불러오지 못했어요</Text>
             <Text style={styles.message}>{errorMessage}</Text>
-            <Pressable
-              accessibilityLabel="프로필 다시 시도"
-              accessibilityRole="button"
-              onPress={onRetry}
-              style={({pressed}) => [
-                styles.retryButton,
-                pressed && styles.retryButtonPressed,
-              ]}>
-              <Text style={styles.retryLabel}>다시 시도</Text>
-            </Pressable>
+            <View style={styles.retryWrap}>
+              <RetryButton
+                accessibilityLabel="프로필 다시 시도"
+                onPress={onRetry}
+              />
+            </View>
           </>
         )}
       </View>
@@ -87,8 +84,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center',
-    paddingBottom: 96,
-    paddingHorizontal: 32,
+    paddingHorizontal: 28,
   },
   header: {
     alignItems: 'center',
@@ -108,27 +104,12 @@ const styles = StyleSheet.create({
   message: {
     color: COLORS.textMuted,
     fontSize: 14,
-    lineHeight: 21,
-    marginTop: 10,
+    lineHeight: 22,
+    marginTop: 8,
     textAlign: 'center',
   },
-  retryButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.purpleDeep,
-    borderRadius: RADII.pill,
-    height: 48,
-    justifyContent: 'center',
-    marginTop: 24,
-    minWidth: 144,
-    paddingHorizontal: 28,
-  },
-  retryButtonPressed: {
-    opacity: 0.82,
-  },
-  retryLabel: {
-    color: COLORS.background,
-    fontSize: 15,
-    fontWeight: '700',
+  retryWrap: {
+    marginTop: 20,
   },
   screen: {
     backgroundColor: COLORS.background,
@@ -136,8 +117,10 @@ const styles = StyleSheet.create({
   },
   title: {
     color: COLORS.textStrong,
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 18,
+    fontSize: 19,
+    fontWeight: '800',
+    lineHeight: 27,
+    marginTop: 16,
+    textAlign: 'center',
   },
 });

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {RetryButton} from '../../../shared/components/RetryButton';
 import {formatAge, formatGender} from '../groupInfoModel';
 import {WEEKLY_STAMP_DAYS, type GroupMember} from '../types';
 
@@ -78,14 +79,10 @@ export function MemberProfileModal({
               <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
                 <Text style={styles.errorText}>{errorMessage}</Text>
                 {onRetry ? (
-                  <Pressable
+                  <RetryButton
                     accessibilityLabel="프로필 정보 다시 시도"
-                    accessibilityRole="button"
                     onPress={onRetry}
-                    style={styles.retryButton}
-                  >
-                    <Text style={styles.retryText}>다시 시도</Text>
-                  </Pressable>
+                  />
                 ) : null}
               </View>
             ) : null}
@@ -271,19 +268,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     textAlign: 'center',
-  },
-  retryButton: {
-    alignItems: 'center',
-    borderColor: COLORS.divider,
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    minHeight: 36,
-    paddingHorizontal: 16,
-  },
-  retryText: {
-    color: COLORS.textStrong,
-    fontSize: 13,
-    fontWeight: '700',
   },
   statusBlock: {
     alignItems: 'center',

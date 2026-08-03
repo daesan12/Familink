@@ -18,6 +18,7 @@ import {
 } from 'react-native-image-picker';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {PostImageCarousel} from '../components/PostImageCarousel';
 import {
   MAX_POST_BODY_LENGTH,
@@ -438,13 +439,13 @@ function UploadStatusBanner({
   };
 
   return (
-    <View accessibilityLiveRegion="polite" style={styles.uploadBanner}>
-      <Text style={styles.uploadText}>{labels[uploadState.status]}</Text>
-      {uploadState.status === 'failure' && onRetry ? (
-        <Pressable accessibilityRole="button" onPress={onRetry}>
-          <Text style={styles.retryUploadText}>다시 시도</Text>
-        </Pressable>
-      ) : null}
+    <View style={styles.uploadBannerWrap}>
+      <NoticeBanner
+        message={labels[uploadState.status]}
+        onRetry={
+          uploadState.status === 'failure' && onRetry ? onRetry : undefined
+        }
+      />
     </View>
   );
 }
@@ -523,11 +524,6 @@ const styles = StyleSheet.create({
   pressedButton: {
     backgroundColor: COLORS.lavender,
   },
-  retryUploadText: {
-    color: COLORS.purpleDeep,
-    fontSize: 13,
-    fontWeight: '700',
-  },
   submitButton: {
     alignItems: 'center',
     height: 44,
@@ -546,21 +542,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
-  uploadBanner: {
-    alignItems: 'center',
-    backgroundColor: COLORS.lemon,
-    borderCurve: 'continuous',
-    borderRadius: RADII.medium,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  uploadBannerWrap: {
     marginHorizontal: 20,
-    minHeight: 48,
-    paddingHorizontal: 14,
-  },
-  uploadText: {
-    color: COLORS.text,
-    flex: 1,
-    fontSize: 13,
   },
   videoDuration: {
     color: COLORS.textMuted,

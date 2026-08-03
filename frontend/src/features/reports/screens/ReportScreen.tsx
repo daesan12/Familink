@@ -14,6 +14,7 @@ import {
 
 import type { AppScreenProps } from "../../../app-shell";
 import { COLORS, RADII } from "../../../design/tokens";
+import { RetryButton } from "../../../shared/components/RetryButton";
 import { CallReportDetailModal } from "../components/CallReportDetailModal";
 import { CallReportRow } from "../components/CallReportRow";
 import { DailyReportCard } from "../components/DailyReportCard";
@@ -495,14 +496,13 @@ function ReportLoadState({
       <Text style={styles.loadStateTitle}>{title}</Text>
       <Text style={styles.loadStateDescription}>{description}</Text>
       {actionLabel && onAction ? (
-        <Pressable
-          accessibilityLabel={actionAccessibilityLabel}
-          accessibilityRole="button"
-          onPress={onAction}
-          style={styles.retryButton}
-        >
-          <Text style={styles.retryButtonText}>{actionLabel}</Text>
-        </Pressable>
+        <View style={styles.retryButtonWrap}>
+          <RetryButton
+            accessibilityLabel={actionAccessibilityLabel}
+            label={actionLabel}
+            onPress={onAction}
+          />
+        </View>
       ) : null}
     </View>
   );
@@ -877,19 +877,8 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 22,
   },
-  retryButton: {
-    alignItems: "center",
-    backgroundColor: COLORS.purpleDeep,
-    borderRadius: RADII.medium,
-    justifyContent: "center",
+  retryButtonWrap: {
     marginTop: 20,
-    minHeight: 44,
-    paddingHorizontal: 22,
-  },
-  retryButtonText: {
-    color: COLORS.background,
-    fontSize: 14,
-    fontWeight: "800",
   },
   screen: {
     backgroundColor: COLORS.background,

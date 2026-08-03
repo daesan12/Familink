@@ -1,4 +1,3 @@
-import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import Clipboard from '@react-native-clipboard/clipboard';
 import {useState} from 'react';
 import {
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {RetryButton} from '../../../shared/components/RetryButton';
 import {SubScreenHeader} from '../components/SubScreenHeader';
 import {useGroupInviteCode} from '../hooks/useGroupInviteCode';
 import type {GroupInviteCodeLoader} from '../api/groupMembershipApi';
@@ -61,15 +61,7 @@ export function GroupCodeScreen({
       ) : invite.status === 'error' ? (
         <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
           <Text style={styles.errorText}>{invite.message}</Text>
-          <Pressable
-            accessibilityLabel="다시 시도"
-            accessibilityRole="button"
-            onPress={invite.retry}
-            style={styles.retryButton}
-          >
-            <MaterialDesignIcons color={COLORS.text} name="refresh" size={18} />
-            <Text style={styles.retryText}>다시 시도</Text>
-          </Pressable>
+          <RetryButton onPress={invite.retry} />
         </View>
       ) : (
         <ScrollView
@@ -197,23 +189,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     marginTop: 8,
-  },
-  retryButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.divider,
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 8,
-    minHeight: 48,
-    paddingHorizontal: 18,
-  },
-  retryText: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: '700',
   },
   screen: {
     backgroundColor: COLORS.background,
