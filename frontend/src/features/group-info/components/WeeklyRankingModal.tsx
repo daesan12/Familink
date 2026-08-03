@@ -11,7 +11,8 @@ import {
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {avatarInitial, formatWeekRange, rankEntries} from '../rankingModel';
-import type {WeeklyRankingLoadState} from '../types';
+import type {GroupMember, WeeklyRankingLoadState} from '../types';
+import {GroupMemberAvatar} from './GroupMemberAvatar';
 
 interface WeeklyRankingModalProps {
   // 모달 노출 여부. 랭킹 카드를 눌러 연다.
@@ -20,6 +21,7 @@ interface WeeklyRankingModalProps {
   state: WeeklyRankingLoadState;
   onClose: () => void;
   onRetry: () => void;
+  members?: readonly GroupMember[];
 }
 
 // H-3 주간 효자 랭킹. 그룹정보의 "효자 랭킹 조회하기" 카드를 누르면 열린다.
@@ -30,6 +32,7 @@ export function WeeklyRankingModal({
   state,
   onClose,
   onRetry,
+  members = [],
 }: WeeklyRankingModalProps) {
   return (
     <Modal
@@ -69,7 +72,11 @@ export function WeeklyRankingModal({
               <Text style={styles.title}>주간 효자 랭킹</Text>
             </View>
 
-            <WeeklyRankingBody onRetry={onRetry} state={state} />
+            <WeeklyRankingBody
+              members={members}
+              onRetry={onRetry}
+              state={state}
+            />
           </Pressable>
         </Pressable>
       ) : null}
@@ -80,9 +87,11 @@ export function WeeklyRankingModal({
 function WeeklyRankingBody({
   state,
   onRetry,
+  members,
 }: {
   state: WeeklyRankingLoadState;
   onRetry: () => void;
+  members: readonly GroupMember[];
 }) {
   if (state.status === 'loading') {
     return (
@@ -142,11 +151,17 @@ function WeeklyRankingBody({
             >
               <Text style={styles.rank}>{entry.rank}</Text>
               <View style={styles.avatarWrap}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {avatarInitial(entry.displayName)}
-                  </Text>
-                </View>
+                <GroupMemberAvatar
+                  member={
+                    members.find(
+                      member => member.memberId === entry.memberId,
+                    ) ?? {
+                      avatarText: avatarInitial(entry.displayName),
+                      name: entry.displayName,
+                      profileImageUrl: null,
+                    }
+                  }
+                />
                 {entry.previousWeekWinner ? (
                   <View style={styles.crown}>
                     <MaterialDesignIcons
@@ -169,19 +184,6 @@ function WeeklyRankingBody({
 }
 
 const styles = StyleSheet.create({
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceMuted,
-    borderRadius: RADII.pill,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
-  },
-  avatarText: {
-    color: COLORS.textMuted,
-    fontSize: 14,
-    fontWeight: '700',
-  },
   avatarWrap: {
     height: 40,
     width: 40,

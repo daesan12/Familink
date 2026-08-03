@@ -200,7 +200,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-GROUPS-002 그룹 생성 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
 | 활성 API | API-GROUPS-003 초대 코드 가입 요청 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
 | 활성 API | API-GROUPS-004 그룹 상세 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
-| 활성 API | API-GROUPS-005 그룹 구성원 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
+| 활성 API | API-GROUPS-005 그룹 구성원 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [캘린더](./domains/CALENDAR.md) | 반영·확정 | nullable 다운로드용 서명 `profileImageUrl` 포함 |
 | 활성 API | API-GROUPS-006 그룹 정보 수정 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
 | 활성 API | API-GROUPS-007 초대 코드 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
 | 활성 API | API-GROUPS-008 가입 요청 목록 조회 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | 관리자 |

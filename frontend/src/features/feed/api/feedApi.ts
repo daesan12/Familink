@@ -296,6 +296,7 @@ function parsePostDetail(
 interface ParsedAuthor {
   displayName: string;
   memberId: string;
+  profileImageUrl: string | null;
 }
 
 interface ParsedMedia {
@@ -323,6 +324,7 @@ function toFeedPost(input: {
       avatarText: avatarText(input.author.displayName),
       id: input.author.memberId,
       name: input.author.displayName,
+      profileImageUrl: input.author.profileImageUrl,
     },
     body: input.body,
     commentCount: input.commentCount,
@@ -357,9 +359,17 @@ function parseAuthor(value: unknown): ParsedAuthor | null {
   }
   const memberId = parseId(value.memberId);
   const displayName = parseNonEmptyString(value.displayName);
-  return memberId !== null && displayName !== null
-    ? {displayName, memberId}
+  const profileImageUrl = parseNullableUrl(value.profileImageUrl);
+  return memberId !== null && displayName !== null && profileImageUrl !== undefined
+    ? {displayName, memberId, profileImageUrl}
     : null;
+}
+
+function parseNullableUrl(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return parseNonEmptyString(value) ?? undefined;
 }
 
 function parseMedia(value: unknown): readonly ParsedMedia[] | null {

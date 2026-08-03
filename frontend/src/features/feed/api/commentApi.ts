@@ -181,9 +181,17 @@ function parseAuthor(value: unknown): FeedMember | null {
   }
   const id = parsePositiveId(value.memberId);
   const name = parseNonEmptyString(value.displayName);
-  return id !== null && name !== null
-    ? {avatarText: avatarText(name), id, name}
+  const profileImageUrl = parseNullableUrl(value.profileImageUrl);
+  return id !== null && name !== null && profileImageUrl !== undefined
+    ? {avatarText: avatarText(name), id, name, profileImageUrl}
     : null;
+}
+
+function parseNullableUrl(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return parseNonEmptyString(value) ?? undefined;
 }
 
 function normalizeCommentBody(body: string): string {

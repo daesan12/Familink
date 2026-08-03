@@ -15,6 +15,7 @@ import {
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {CommentItem} from '../components/CommentItem';
+import {FeedAvatar} from '../components/FeedAvatar';
 import {PostActionsSheet} from '../components/PostActionsSheet';
 import {PostImageCarousel} from '../components/PostImageCarousel';
 import {
@@ -226,9 +227,7 @@ export function PostDetailScreen({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.authorRow}>
-          <View accessibilityElementsHidden style={styles.avatar}>
-            <Text style={styles.avatarText}>{post.author.avatarText}</Text>
-          </View>
+          <FeedAvatar member={post.author} />
           <View style={styles.authorText}>
             <Text style={styles.authorName}>{post.author.name}</Text>
             <Text style={styles.createdAt}>
@@ -335,11 +334,7 @@ export function PostDetailScreen({
             </View>
           ) : null}
           <View style={styles.composer}>
-            <View accessibilityElementsHidden style={styles.composerAvatar}>
-              <Text style={styles.composerAvatarText}>
-                {currentUser.avatarText}
-              </Text>
-            </View>
+            <FeedAvatar member={currentUser} size={38} />
             <TextInput
               accessibilityLabel={
                 editingComment ? '댓글 수정 입력' : '댓글 입력'
@@ -421,22 +416,6 @@ const styles = StyleSheet.create({
     gap: 1,
     marginLeft: 12,
   },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: '#F7F5FF',
-    borderColor: '#D1C9FF',
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  avatarText: {
-    color: '#C4BAFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
   backButton: {
     alignItems: 'center',
     backgroundColor: COLORS.lavender,
@@ -491,21 +470,6 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingLeft: 6,
     paddingRight: 4,
-  },
-  composerAvatar: {
-    alignItems: 'center',
-    backgroundColor: '#F7F5FF',
-    borderColor: '#D1C9FF',
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    height: 36,
-    justifyContent: 'center',
-    width: 36,
-  },
-  composerAvatarText: {
-    color: '#C4BAFF',
-    fontSize: 14,
-    fontWeight: '600',
   },
   composerSection: {
     backgroundColor: COLORS.background,

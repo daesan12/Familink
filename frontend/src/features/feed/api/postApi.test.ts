@@ -96,6 +96,24 @@ describe('postApi', () => {
       .mockResolvedValueOnce(
         success(
           {
+            uploads: [
+              {
+                expiresAt: '2026-08-01T00:00:00Z',
+                fileUrl: 'https://cdn.example.com/new-thumbnail.jpg',
+                headers: {
+                  'Content-Length': '4',
+                  'Content-Type': 'image/jpeg',
+                },
+                uploadUrl: 'https://s3.example.com/upload-thumbnail',
+              },
+            ],
+          },
+          201,
+        ),
+      )
+      .mockResolvedValueOnce(
+        success(
+          {
             createdAt: '2026-08-01T00:01:00Z',
             posts: [{groupId: 11, postId: 91}],
           },
@@ -148,13 +166,14 @@ describe('postApi', () => {
         },
       }),
     );
-    expect(postSpy.mock.calls[1]?.[1]).toEqual({
+    expect(postSpy.mock.calls[2]?.[1]).toEqual({
       content: '새 게시글',
       groupIds: [11],
       media: [
         {
           displayOrder: 0,
           fileUrl: 'https://cdn.example.com/new.jpg',
+          thumbnailUrl: 'https://cdn.example.com/new-thumbnail.jpg',
         },
       ],
       mediaType: 'IMAGE',
@@ -174,6 +193,21 @@ describe('postApi', () => {
                 fileUrl: 'https://cdn.example.com/new.jpg',
                 headers: {},
                 uploadUrl: 'https://s3.example.com/upload',
+              },
+            ],
+          },
+          201,
+        ),
+      )
+      .mockResolvedValueOnce(
+        success(
+          {
+            uploads: [
+              {
+                expiresAt: '2026-08-01T00:00:00Z',
+                fileUrl: 'https://cdn.example.com/new-thumbnail.jpg',
+                headers: {},
+                uploadUrl: 'https://s3.example.com/upload-thumbnail',
               },
             ],
           },
@@ -206,13 +240,17 @@ describe('postApi', () => {
         content: '새 게시글',
         media: [
           {displayOrder: 0, fileUrl: remoteImage.fileUrl},
-          {displayOrder: 1, fileUrl: 'https://cdn.example.com/new.jpg'},
+          {
+            displayOrder: 1,
+            fileUrl: 'https://cdn.example.com/new.jpg',
+            thumbnailUrl: 'https://cdn.example.com/new-thumbnail.jpg',
+          },
         ],
         mediaType: 'IMAGE',
       },
       expect.objectContaining({signal: undefined}),
     );
-    expect(postSpy).toHaveBeenCalledTimes(1);
+    expect(postSpy).toHaveBeenCalledTimes(2);
   });
 
   it('텍스트 게시글은 mediaType 없이 빈 미디어 배열로 생성한다', async () => {
@@ -247,7 +285,22 @@ describe('postApi', () => {
         }),
         undefined,
         undefined,
-        {transport: transport()},
+        {
+          mediaProcessor: {
+            preparePostOriginal: jest.fn().mockResolvedValue({
+              contentType: 'image/jpeg',
+              fileName: '',
+              uri: 'file://new.jpg',
+            }),
+            preparePostThumbnail: jest.fn().mockResolvedValue({
+              contentType: 'image/jpeg',
+              fileName: 'new-thumbnail.jpg',
+              uri: 'file://new.jpg',
+            }),
+            prepareProfileImage: jest.fn(),
+          },
+          transport: transport(),
+        },
       ),
     ).rejects.toMatchObject<Partial<ApiError>>({code: 'INVALID_REQUEST'});
     expect(postSpy).not.toHaveBeenCalled();

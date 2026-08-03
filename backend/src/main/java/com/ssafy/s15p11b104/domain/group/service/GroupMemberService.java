@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.group.dto.GroupMemberItemResponse;
 import com.ssafy.s15p11b104.domain.group.dto.GroupMemberListResponse;
 import com.ssafy.s15p11b104.domain.group.dto.ManagerUpdateRequest;
@@ -46,16 +47,19 @@ public class GroupMemberService {
 	private final MemberAliasRepository memberAliasRepository;
 	private final UserRepository userRepository;
 	private final ConstraintViolationTranslator constraintViolationTranslator;
+	private final MediaDownloadUrlProvider mediaDownloadUrlProvider;
 
 	public GroupMemberService(
 		GroupMemberRepository groupMemberRepository,
 		MemberAliasRepository memberAliasRepository,
 		UserRepository userRepository,
-		ConstraintViolationTranslator constraintViolationTranslator) {
+		ConstraintViolationTranslator constraintViolationTranslator,
+		MediaDownloadUrlProvider mediaDownloadUrlProvider) {
 		this.groupMemberRepository = groupMemberRepository;
 		this.memberAliasRepository = memberAliasRepository;
 		this.userRepository = userRepository;
 		this.constraintViolationTranslator = constraintViolationTranslator;
+		this.mediaDownloadUrlProvider = mediaDownloadUrlProvider;
 	}
 
 	/**
@@ -79,6 +83,7 @@ public class GroupMemberService {
 				member.getId(),
 				member.getUser().getId(),
 				displayName(aliases, member),
+				mediaDownloadUrlProvider.issueProfileImageDownloadUrl(member.getUser().getProfileImageUrl()),
 				member.getRole(),
 				member.isManager()))
 			.toList());
