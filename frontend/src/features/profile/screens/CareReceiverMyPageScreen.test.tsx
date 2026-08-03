@@ -399,6 +399,72 @@ test('현재 그룹과 멤버로 저장하고 서버 정규화 결과만 반영�
   expect(hasText(renderer, '관심사:서버 정규화 관심사')).toBe(true);
 });
 
+test('프로필 이미지 교체 후 재조회한 서명 URL을 화면에 표시한다', async () => {
+  const localAsset = {
+    contentType: 'image/webp',
+    fileName: 'profile.webp',
+    sizeBytes: 1024,
+    uri: 'content://profile.webp',
+  } as const;
+  const loadCurrentProfile = jest
+    .fn()
+    .mockResolvedValueOnce({
+      birthDate: '1959-05-20',
+      gender: 'male',
+      loginId: CARE_RECEIVER_PROFILE.loginId,
+      name: CARE_RECEIVER_PROFILE.name,
+      profileImageUrl: 'https://signed.example.com/old.webp',
+    })
+    .mockResolvedValueOnce({
+      birthDate: '1959-05-20',
+      gender: 'male',
+      loginId: CARE_RECEIVER_PROFILE.loginId,
+      name: CARE_RECEIVER_PROFILE.name,
+      profileImageUrl: 'https://signed.example.com/new.webp',
+    });
+  const updateCurrentProfile = jest.fn().mockResolvedValue({
+    id: '2',
+    name: CARE_RECEIVER_PROFILE.name,
+    updatedAt: '2026-08-01T00:00:00Z',
+  });
+  const profileGateway: ProfileGateway = {
+    loadCurrentProfile,
+    updateCurrentProfile,
+    uploadProfileImage: jest
+      .fn()
+      .mockResolvedValue('https://cdn.example.com/new.webp'),
+    withdrawCurrentUser: jest.fn(),
+  };
+  const renderer = render({profileGateway});
+  await TestRenderer.act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '프로필 편집'})
+      .props.onPress();
+  });
+  const editScreen = renderer.root.findByType(ProfileEditScreen);
+
+  await TestRenderer.act(async () => {
+    await editScreen.props.onSave(
+      {...CARE_RECEIVER_PROFILE, profileImageUrl: localAsset.uri},
+      {asset: localAsset, type: 'replace'},
+    );
+    editScreen.props.onBack();
+  });
+
+  expect(profileGateway.uploadProfileImage).toHaveBeenCalledWith(localAsset);
+  expect(updateCurrentProfile).toHaveBeenCalledWith({
+    profileImageUrl: 'https://cdn.example.com/new.webp',
+  });
+  expect(loadCurrentProfile).toHaveBeenCalledTimes(2);
+  expect(renderer.root.findByType(MyPageProfileCard).props).toMatchObject({
+    profileImageUrl: 'https://signed.example.com/new.webp',
+  });
+});
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (error: unknown) => void;

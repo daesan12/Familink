@@ -265,7 +265,13 @@ async function uploadNewMedia(
     return [];
   }
 
-  const files = media.map(toUploadFile);
+  const files: UploadFile[] = [];
+  for (const item of media) {
+    assertNotAborted(signal);
+    const blob = await transport.readFile(item.source.uri, signal);
+    assertNotAborted(signal);
+    files.push(toUploadFile(item, blob));
+  }
   const totalBytes = files.reduce((total, file) => total + file.sizeBytes, 0);
   let uploadedBytes = 0;
   onProgress?.(0);
@@ -293,21 +299,26 @@ async function uploadNewMedia(
   for (const [index, upload] of uploads.entries()) {
     assertNotAborted(signal);
     const file = files[index];
-    const blob = await transport.readFile(media[index].source.uri, signal);
-    assertNotAborted(signal);
-    await transport.put(upload.uploadUrl, blob, {
-      headers: upload.headers,
-      signal,
-      onUploadProgress: event => {
-        const eventLoaded =
-          typeof event.loaded === 'number'
-            ? Math.min(event.loaded, file.sizeBytes)
-            : 0;
-        onProgress?.(
-          Math.min(1, (uploadedBytes + eventLoaded) / totalBytes),
-        );
-      },
-    });
+    try {
+      await transport.put(upload.uploadUrl, file.blob, {
+        headers: upload.headers,
+        signal,
+        onUploadProgress: event => {
+          const eventLoaded =
+            typeof event.loaded === 'number'
+              ? Math.min(event.loaded, file.sizeBytes)
+              : 0;
+          onProgress?.(
+            Math.min(1, (uploadedBytes + eventLoaded) / totalBytes),
+          );
+        },
+      });
+    } catch (error) {
+      if (isAbortError(error) || signal?.aborted) {
+        throw error;
+      }
+      throw mediaUploadFailed(error);
+    }
     uploadedBytes += file.sizeBytes;
     onProgress?.(Math.min(1, uploadedBytes / totalBytes));
     uploaded.push({fileUrl: upload.fileUrl, localId: media[index].id});
@@ -318,15 +329,16 @@ async function uploadNewMedia(
 }
 
 interface UploadFile {
+  blob: Blob;
   contentType: string;
   fileName: string;
   sizeBytes: number;
 }
 
-function toUploadFile(media: LocalMedia): UploadFile {
+function toUploadFile(media: LocalMedia, blob: Blob): UploadFile {
   const contentType = normalizeContentType(media.contentType);
   const fileName = normalizeFileName(media.fileName);
-  const sizeBytes = media.fileSizeBytes;
+  const sizeBytes = blob.size;
   if (contentType === null || fileName === null || !isPositiveSafeInteger(sizeBytes)) {
     throw invalidRequest('미디어 파일명, MIME 타입, 크기 정보가 필요합니다.');
   }
@@ -340,7 +352,7 @@ function toUploadFile(media: LocalMedia): UploadFile {
     throw invalidRequest(mediaValidationMessage(reason));
   }
 
-  return {contentType, fileName, sizeBytes};
+  return {blob, contentType, fileName, sizeBytes};
 }
 
 function validateMediaSelection(
@@ -517,6 +529,18 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 
 function invalidRequest(message: string): ApiError {
   return new ApiError({code: 'INVALID_REQUEST', kind: 'invalidResponse', message});
+}
+
+function mediaUploadFailed(error: unknown): ApiError {
+  return new ApiError({
+    code: 'MEDIA_UPLOAD_FAILED',
+    kind: axios.isAxiosError(error) && error.response !== undefined
+      ? 'server'
+      : 'network',
+    message: '미디어 업로드에 실패했습니다. 다시 시도해 주세요.',
+    originalError: error,
+    status: axios.isAxiosError(error) ? error.response?.status : undefined,
+  });
 }
 
 function assertStatus(actual: number, expected: number): void {

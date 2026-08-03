@@ -10,12 +10,15 @@ public record PostAuthorResponse(
 	String profileImageUrl,
 	GroupRole role) {
 
-	public static PostAuthorResponse from(GroupMember member, String displayName) {
+	public static PostAuthorResponse from(
+		GroupMember member,
+		String displayName,
+		String profileImageUrl) {
 		return new PostAuthorResponse(
 			member.getId(),
 			member.getUser().getId(),
 			displayName,
-			member.getUser().getProfileImageUrl(),
+			profileImageUrl,
 			member.getRole());
 	}
 }

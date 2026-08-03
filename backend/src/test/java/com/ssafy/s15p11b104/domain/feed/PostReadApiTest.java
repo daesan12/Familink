@@ -172,6 +172,26 @@ class PostReadApiTest extends IntegrationTest {
 	}
 
 	@Test
+	void postAuthorProfileImageIsResolvedThroughProfileDownloadUrlProvider() throws Exception {
+		author.getUser().updateProfileImageUrl("https://cdn/profile-image/author.jpg");
+		userRepository.flush();
+		given(mediaDownloadUrlProvider.issueProfileImageDownloadUrl(
+			"https://cdn/profile-image/author.jpg"))
+			.willReturn("https://signed.example/author.jpg");
+
+		mockMvc.perform(get("/posts/{postId}", imagePost.getId())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.author.profileImageUrl")
+				.value("https://signed.example/author.jpg"));
+
+		verify(mediaDownloadUrlProvider).issueProfileImageDownloadUrl(
+			"https://cdn/profile-image/author.jpg");
+		assertThat(userRepository.findById(author.getUser().getId()).orElseThrow().getProfileImageUrl())
+			.isEqualTo("https://cdn/profile-image/author.jpg");
+	}
+
+	@Test
 	void listAndArchiveMediaUrlsAreResolvedThroughDownloadUrlProvider() throws Exception {
 		given(mediaDownloadUrlProvider.issueDownloadUrl(anyString()))
 			.willAnswer(invocation -> "https://signed.example/" + invocation.getArgument(0, String.class).substring(8));

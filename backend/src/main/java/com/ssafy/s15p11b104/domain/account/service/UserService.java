@@ -14,6 +14,7 @@ import com.ssafy.s15p11b104.domain.account.dto.ProfileUpdateRequest;
 import com.ssafy.s15p11b104.domain.account.dto.ProfileUpdateResponse;
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.file.service.S3MediaValidator;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
@@ -38,6 +39,7 @@ public class UserService {
 	private final AccessTokenBlacklist accessTokenBlacklist;
 	private final DeviceTokenRepository deviceTokenRepository;
 	private final S3MediaValidator s3MediaValidator;
+	private final MediaDownloadUrlProvider mediaDownloadUrlProvider;
 
 	UserService(
 		UserRepository userRepository,
@@ -46,7 +48,8 @@ public class UserService {
 		AccessTokenProvider accessTokenProvider,
 		AccessTokenBlacklist accessTokenBlacklist,
 		DeviceTokenRepository deviceTokenRepository,
-		S3MediaValidator s3MediaValidator
+		S3MediaValidator s3MediaValidator,
+		MediaDownloadUrlProvider mediaDownloadUrlProvider
 	) {
 		this.userRepository = userRepository;
 		this.groupMemberRepository = groupMemberRepository;
@@ -55,6 +58,7 @@ public class UserService {
 		this.accessTokenBlacklist = accessTokenBlacklist;
 		this.deviceTokenRepository = deviceTokenRepository;
 		this.s3MediaValidator = s3MediaValidator;
+		this.mediaDownloadUrlProvider = mediaDownloadUrlProvider;
 	}
 
 	/**
@@ -66,7 +70,10 @@ public class UserService {
 	 */
 	@Transactional(readOnly = true)
 	public ProfileResponse getMyProfile(Long userId) {
-		return ProfileResponse.from(getActiveUser(userId));
+		User user = getActiveUser(userId);
+		return ProfileResponse.from(
+			user,
+			mediaDownloadUrlProvider.issueProfileImageDownloadUrl(user.getProfileImageUrl()));
 	}
 
 	/**
