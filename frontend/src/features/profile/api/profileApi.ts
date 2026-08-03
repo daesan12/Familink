@@ -10,6 +10,10 @@ import {
   type ApiSuccess,
 } from '../../../shared/api';
 import {
+  BlobUploadError,
+  uploadBlobWithXhr,
+} from '../../../shared/api/blobUpload';
+import {
   hasInvalidFileNameCharacter,
   PROFILE_IMAGE_LIMITS,
 } from '../profileModel';
@@ -83,9 +87,8 @@ const defaultUploadTransport: ProfileUploadTransport = {
     return response.blob();
   },
   async put(uploadUrl, data, config) {
-    await axios.put(uploadUrl, data, {
+    await uploadBlobWithXhr(uploadUrl, data, {
       headers: config.headers,
-      transformRequest: value => value,
     });
   },
 };
@@ -369,12 +372,18 @@ function mediaUploadFailed(error: unknown): ApiError {
   return new ApiError({
     code: 'MEDIA_UPLOAD_FAILED',
     kind:
-      axios.isAxiosError(error) && error.response !== undefined
+      (axios.isAxiosError(error) && error.response !== undefined) ||
+      (error instanceof BlobUploadError && error.status !== undefined)
         ? 'server'
         : 'network',
     message: '프로필 이미지 업로드에 실패했습니다. 다시 시도해 주세요.',
     originalError: error,
-    status: axios.isAxiosError(error) ? error.response?.status : undefined,
+    status:
+      error instanceof BlobUploadError
+        ? error.status
+        : axios.isAxiosError(error)
+        ? error.response?.status
+        : undefined,
   });
 }
 
