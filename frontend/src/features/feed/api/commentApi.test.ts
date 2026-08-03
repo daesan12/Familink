@@ -42,7 +42,12 @@ describe('commentApi', () => {
     await expect(loadComments('91', 2, 10)).resolves.toEqual({
       comments: [
         {
-          author: {avatarText: 'Yu', id: '21', name: 'Yura'},
+          author: {
+            avatarText: 'Yu',
+            id: '21',
+            name: 'Yura',
+            profileImageUrl: null,
+          },
           body: '첫 댓글',
           createdAt: '2026-08-01T00:00:00Z',
           id: '11',

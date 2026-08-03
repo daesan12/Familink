@@ -24,6 +24,8 @@ export interface GroupMember {
   isManager: boolean;
   // 아바타 이미지 연동 전 자리표시자 텍스트.
   avatarText: string;
+  // API-GROUPS-005가 반환하는 조회용 서명 URL. 사진이 없으면 null이다.
+  profileImageUrl?: string | null;
   // 만 나이. 축소 프로필 팝업에 "만 N세"로 표시한다.
   age: number | null;
   // 성별.

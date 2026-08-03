@@ -887,6 +887,7 @@ export function GroupInfoScreen({
       />
 
       <WeeklyRankingModal
+        members={members}
         onClose={() => setIsRankingOpen(false)}
         onRetry={ranking.retry}
         state={ranking}

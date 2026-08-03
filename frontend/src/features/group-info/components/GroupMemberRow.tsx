@@ -9,6 +9,7 @@ import {
   resolveMemberDisplayName,
 } from '../groupInfoModel';
 import type {GroupMember} from '../types';
+import {GroupMemberAvatar} from './GroupMemberAvatar';
 import {RoleToggle} from './RoleToggle';
 
 interface GroupMemberRowProps {
@@ -49,8 +50,9 @@ export function GroupMemberRow({
         accessibilityLabel={`${member.name} 프로필 보기`}
         accessibilityRole="button"
         onPress={onOpenProfile}
-        style={styles.avatar}
-      />
+      >
+        <GroupMemberAvatar member={member} />
+      </Pressable>
 
       <View style={styles.info}>
         {isEditing ? (
@@ -139,12 +141,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     minWidth: 90,
     paddingVertical: 2,
-  },
-  avatar: {
-    backgroundColor: COLORS.surfaceMuted,
-    borderRadius: RADII.pill,
-    height: 44,
-    width: 44,
   },
   cancelButton: {
     alignItems: 'center',

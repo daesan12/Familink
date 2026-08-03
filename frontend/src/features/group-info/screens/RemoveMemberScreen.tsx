@@ -11,6 +11,7 @@ import {
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {SubScreenHeader} from '../components/SubScreenHeader';
+import {GroupMemberAvatar} from '../components/GroupMemberAvatar';
 import {getGroupManagementErrorMessage} from '../api/groupManagementApi';
 import {formatJoinedDate, removableMembers} from '../groupManagementModel';
 import type {GroupMember} from '../types';
@@ -142,9 +143,7 @@ function SelectStep({
               onPress={() => onSelect(member)}
               style={styles.row}
             >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{member.avatarText}</Text>
-              </View>
+              <GroupMemberAvatar member={member} />
               <View style={styles.rowText}>
                 <Text style={styles.name}>{member.name}</Text>
                 {member.alias ? (
@@ -194,9 +193,7 @@ function ConfirmStep({
         <Text style={styles.heading}>내보낼 구성원</Text>
 
         <View style={styles.memberCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{member.avatarText}</Text>
-          </View>
+          <GroupMemberAvatar member={member} />
           <View style={styles.rowText}>
             <Text style={styles.name}>{member.name}</Text>
             {cardSubtitle ? (
@@ -261,19 +258,6 @@ function ConfirmStep({
 }
 
 const styles = StyleSheet.create({
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceMuted,
-    borderRadius: RADII.pill,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  avatarText: {
-    color: COLORS.textMuted,
-    fontSize: 16,
-    fontWeight: '700',
-  },
   checkboxLabel: {
     color: COLORS.text,
     flex: 1,

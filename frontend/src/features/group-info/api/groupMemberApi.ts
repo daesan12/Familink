@@ -167,12 +167,19 @@ function parseMemberSummary(value: unknown): GroupMember | null {
   const memberId = parseId(value.memberId);
   const userId = parseId(value.userId);
   const role = parseServerGroupRole(value.role);
+  const profileImageUrl =
+    value.profileImageUrl === undefined || value.profileImageUrl === null
+      ? null
+      : isNonEmptyString(value.profileImageUrl)
+        ? value.profileImageUrl.trim()
+        : INVALID;
   if (
     memberId === null ||
     userId === null ||
     !isNonEmptyString(value.displayName) ||
     role === null ||
-    typeof value.isManager !== 'boolean'
+    typeof value.isManager !== 'boolean' ||
+    profileImageUrl === INVALID
   ) {
     return null;
   }
@@ -186,6 +193,7 @@ function parseMemberSummary(value: unknown): GroupMember | null {
     isManager: value.isManager,
     memberId,
     name: displayName,
+    profileImageUrl,
     role,
     userId,
   };

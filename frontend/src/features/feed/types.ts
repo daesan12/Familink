@@ -16,6 +16,7 @@ export interface FeedMember {
   avatarText: string;
   id: string;
   name: string;
+  profileImageUrl?: string | null;
 }
 
 export type FeedMediaType = 'IMAGE' | 'VIDEO';
