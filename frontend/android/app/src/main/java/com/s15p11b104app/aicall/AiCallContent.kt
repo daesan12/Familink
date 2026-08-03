@@ -14,7 +14,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,17 +25,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.CallEnd
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.Refresh
@@ -60,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -476,6 +483,7 @@ private fun PersonaSelectionScreen(
     onPreviewFailure: () -> Unit,
 ) {
   val selectedPersona = aiPersonas.firstOrNull { it.id == selectedPersonaId }
+  val featuredPersona = selectedPersona ?: aiPersonas.first()
   val applicationInfo = LocalContext.current.applicationInfo
   val isDebuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
 
@@ -483,39 +491,39 @@ private fun PersonaSelectionScreen(
       modifier =
           Modifier.fillMaxSize()
               .background(AiCallColors.Background)
-              .padding(horizontal = 20.dp, vertical = 16.dp),
+              .verticalScroll(rememberScrollState())
+              .padding(horizontal = 24.dp, vertical = 18.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
   ) {
     Text(
-        text = "AI 전화",
+        text = "오늘은 누구와\n이야기할까요?",
         color = AiCallColors.TextStrong,
-        fontSize = 26.sp,
+        fontSize = 28.sp,
         fontWeight = FontWeight.Bold,
+        lineHeight = 34.sp,
+        textAlign = TextAlign.Center,
     )
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(8.dp))
     Text(
-        text = "누구와 이야기할까요?",
-        color = AiCallColors.TextStrong,
-        fontSize = 20.sp,
-        fontWeight = FontWeight.SemiBold,
-    )
-    Text(
-        text = "사진을 누르면 대화 상대를 선택할 수 있어요.",
+        text = "아래 작은 사진을 눌러 대화 상대를 바꿔보세요.",
         color = AiCallColors.TextMuted,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         textAlign = TextAlign.Center,
     )
-    Spacer(modifier = Modifier.height(14.dp))
+    Spacer(modifier = Modifier.height(16.dp))
 
-    Column(
-        modifier = Modifier.weight(1f),
-        verticalArrangement = Arrangement.SpaceEvenly,
-    ) {
-      aiPersonas.chunked(3).forEach { rowPersonas ->
+    FeaturedPersona(
+        persona = featuredPersona,
+        selected = selectedPersona != null,
+    )
+    Spacer(modifier = Modifier.height(20.dp))
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+      aiPersonasForSelection.chunked(3).forEach { rowPersonas ->
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
           rowPersonas.forEach { persona ->
             PersonaItem(
@@ -529,67 +537,25 @@ private fun PersonaSelectionScreen(
       }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth().height(64.dp),
-        color =
-            if (selectedPersona == null) {
-              Color(0xFFF7F6FA)
-            } else {
-              AiCallColors.LavenderSurface
-            },
-        shape = RoundedCornerShape(18.dp),
-    ) {
-      Box(
-          modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp),
-          contentAlignment = Alignment.Center,
-      ) {
-        Text(
-            text =
-                selectedPersona?.let { "“${it.exampleUtterance}”" }
-                    ?: "먼저 이야기할 상대를 선택해 주세요.",
+    Spacer(modifier = Modifier.height(24.dp))
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+      Box(modifier = Modifier.size(104.dp), contentAlignment = Alignment.Center) {
+        StaticRadialGlow(
+            modifier = Modifier.fillMaxSize(),
             color =
                 if (selectedPersona == null) {
-                  AiCallColors.TextMuted
+                  Color.Transparent
                 } else {
-                  AiCallColors.TextStrong
+                  Color(0xFFCEC6FF)
                 },
-            fontSize = 14.sp,
-            fontWeight =
-                if (selectedPersona == null) {
-                  FontWeight.Normal
-                } else {
-                  FontWeight.Medium
-                },
-            lineHeight = 20.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
         )
-      }
-    }
-
-    Spacer(modifier = Modifier.height(12.dp))
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-      Box(
-          modifier =
-              if (selectedPersona != null) {
-                Modifier.shadow(
-                    elevation = 12.dp,
-                    shape = CircleShape,
-                    ambientColor = AiCallColors.BrandPurple.copy(alpha = 0.35f),
-                    spotColor = AiCallColors.BrandPurple.copy(alpha = 0.35f),
-                )
-              } else {
-                Modifier
-              },
-      ) {
         FilledIconButton(
             onClick = onStartCall,
             enabled = selectedPersona != null,
-            modifier = Modifier.size(74.dp).testTag("start-call"),
+            modifier = Modifier.size(80.dp).testTag("start-call"),
             colors =
                 IconButtonDefaults.filledIconButtonColors(
-                    containerColor = AiCallColors.BrandPurple,
+                    containerColor = Color(0xFF6C5CE7),
                     contentColor = Color.White,
                     disabledContainerColor = AiCallColors.Disabled,
                     disabledContentColor = Color.White,
@@ -598,11 +564,11 @@ private fun PersonaSelectionScreen(
           Icon(
               imageVector = Icons.Rounded.Call,
               contentDescription = "통화 시작",
-              modifier = Modifier.size(34.dp),
+              modifier = Modifier.size(38.dp),
           )
         }
       }
-      Spacer(modifier = Modifier.height(5.dp))
+      Spacer(modifier = Modifier.height(4.dp))
       Text(
           text = "통화 시작",
           color =
@@ -611,7 +577,7 @@ private fun PersonaSelectionScreen(
               } else {
                 AiCallColors.BrandPurplePressed
               },
-          fontSize = 14.sp,
+          fontSize = 16.sp,
           fontWeight = FontWeight.Bold,
       )
       if (isDebuggable && selectedPersona != null) {
@@ -631,7 +597,110 @@ private fun PersonaSelectionScreen(
         )
       }
     }
+    Spacer(modifier = Modifier.height(8.dp))
   }
+}
+
+@Composable
+private fun FeaturedPersona(
+    persona: AiPersona,
+    selected: Boolean,
+) {
+  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Box(modifier = Modifier.size(188.dp), contentAlignment = Alignment.Center) {
+      if (selected) {
+        StaticRadialGlow(
+            modifier = Modifier.fillMaxSize(),
+            color = Color(0xFFFFE8A8),
+        )
+      }
+      Box(
+          modifier =
+              Modifier.size(158.dp)
+                  .background(Color.White, CircleShape)
+                  .padding(6.dp)
+                  .clip(CircleShape),
+      ) {
+        Image(
+            painter = painterResource(persona.imageResource),
+            contentDescription = "${persona.displayName} 대표 사진",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+      }
+      if (selected) {
+        Box(
+            modifier =
+                Modifier.align(Alignment.BottomEnd)
+                    .offset(x = (-8).dp, y = (-8).dp)
+                    .size(50.dp)
+                    .background(Color.White, CircleShape)
+                    .padding(4.dp)
+                    .background(AiCallColors.BrandPurple, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+          Icon(
+              imageVector = Icons.Rounded.Check,
+              contentDescription = null,
+              tint = Color.White,
+              modifier = Modifier.size(28.dp),
+          )
+        }
+      }
+    }
+    Spacer(modifier = Modifier.height(6.dp))
+    Text(
+        text = persona.displayName,
+        modifier = Modifier.testTag("selected-persona-name"),
+        color = AiCallColors.TextStrong,
+        fontSize = 24.sp,
+        fontWeight = FontWeight.Bold,
+        lineHeight = 30.sp,
+        textAlign = TextAlign.Center,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Surface(
+        color = AiCallColors.LavenderSurface,
+        shape = RoundedCornerShape(50),
+    ) {
+      Text(
+          text = persona.toneTag,
+          modifier =
+              Modifier.testTag("selected-persona-tag")
+                  .padding(horizontal = 14.dp, vertical = 6.dp),
+          color = AiCallColors.BrandPurplePressed,
+          fontSize = 14.sp,
+          fontWeight = FontWeight.SemiBold,
+      )
+    }
+    Spacer(modifier = Modifier.height(10.dp))
+    Text(
+        text = persona.introduction,
+        modifier = Modifier.fillMaxWidth().testTag("selected-persona-introduction"),
+        color = AiCallColors.TextStrong,
+        fontSize = 14.sp,
+        lineHeight = 21.sp,
+        textAlign = TextAlign.Center,
+    )
+  }
+}
+
+@Composable
+private fun StaticRadialGlow(
+    modifier: Modifier = Modifier,
+    color: Color,
+    centerAlpha: Float = 0.58f,
+) {
+  Box(
+      modifier =
+          modifier.background(
+              brush =
+                  Brush.radialGradient(
+                      colors = listOf(color.copy(alpha = centerAlpha), Color.Transparent),
+                  ),
+              shape = CircleShape,
+          )
+  )
 }
 
 @Composable
@@ -641,11 +710,15 @@ private fun PersonaItem(
     selected: Boolean,
     onSelect: () -> Unit,
 ) {
+  val interactionSource = remember { MutableInteractionSource() }
+
   Column(
       modifier =
           modifier
               .selectable(
                   selected = selected,
+                  interactionSource = interactionSource,
+                  indication = null,
                   role = Role.RadioButton,
                   onClick = onSelect,
               )
@@ -654,40 +727,62 @@ private fun PersonaItem(
       horizontalAlignment = Alignment.CenterHorizontally,
   ) {
     Box(
-        modifier =
-            Modifier.size(92.dp)
-                .then(
-                    if (selected) {
-                      Modifier.shadow(
-                          elevation = 12.dp,
-                          shape = CircleShape,
-                          ambientColor = AiCallColors.BrandPurple.copy(alpha = 0.38f),
-                          spotColor = AiCallColors.BrandPurple.copy(alpha = 0.38f),
-                      )
-                    } else {
-                      Modifier
-                    }
-                )
-                .background(
-                    color =
-                        if (selected) {
-                          AiCallColors.Lavender
-                        } else {
-                          Color(0xFFF0EEF4)
-                        },
-                    shape = CircleShape,
-                )
-                .padding(if (selected) 5.dp else 2.dp),
+        modifier = Modifier.size(100.dp),
         contentAlignment = Alignment.Center,
     ) {
-      Image(
-          painter = painterResource(persona.imageResource),
-          contentDescription = null,
-          modifier = Modifier.fillMaxSize().clip(CircleShape),
-          contentScale = ContentScale.Crop,
-      )
+      if (selected) {
+        StaticRadialGlow(
+            modifier = Modifier.fillMaxSize().testTag("persona-selected-glow-${persona.id}"),
+            color = AiCallColors.BrandPurple,
+            centerAlpha = 0.24f,
+        )
+      }
+      Box(
+          modifier =
+              Modifier.size(82.dp)
+                  .background(Color(0xFFF0EEF4), CircleShape)
+                  .border(
+                      width = if (selected) 2.dp else 1.dp,
+                      color =
+                          if (selected) {
+                            AiCallColors.BrandPurple
+                          } else {
+                            Color(0xFFE7E4EC)
+                          },
+                      shape = CircleShape,
+                  )
+                  .padding(if (selected) 4.dp else 2.dp),
+          contentAlignment = Alignment.Center,
+      ) {
+        Image(
+            painter = painterResource(persona.imageResource),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize().clip(CircleShape),
+            contentScale = ContentScale.Crop,
+        )
+      }
+      if (selected) {
+        Box(
+            modifier =
+                Modifier.align(Alignment.BottomEnd)
+                    .offset(x = (-1).dp, y = (-1).dp)
+                    .size(28.dp)
+                    .background(Color.White, CircleShape)
+                    .padding(3.dp)
+                    .background(AiCallColors.BrandPurple, CircleShape)
+                    .testTag("persona-selected-check-${persona.id}"),
+            contentAlignment = Alignment.Center,
+        ) {
+          Icon(
+              imageVector = Icons.Rounded.Check,
+              contentDescription = null,
+              tint = Color.White,
+              modifier = Modifier.size(16.dp),
+          )
+        }
+      }
     }
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(7.dp))
     Text(
         text = persona.displayName,
         color =
@@ -696,9 +791,9 @@ private fun PersonaItem(
             } else {
               AiCallColors.TextStrong
             },
-        fontSize = 13.sp,
+        fontSize = 14.sp,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-        lineHeight = 17.sp,
+        lineHeight = 19.sp,
         maxLines = 2,
         minLines = 2,
         overflow = TextOverflow.Ellipsis,

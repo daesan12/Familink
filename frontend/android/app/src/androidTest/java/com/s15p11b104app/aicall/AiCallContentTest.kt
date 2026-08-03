@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -47,7 +48,49 @@ class AiCallContentTest {
     composeRule.onNodeWithTag("start-call").assertIsNotEnabled()
     composeRule.onNodeWithTag("persona-4").performClick().assertIsSelected()
     composeRule.onNodeWithTag("start-call").assertIsEnabled()
-    composeRule.onNodeWithText("“편하게 말씀해 주세요. 제가 듣고 있어요.”").assertIsDisplayed()
+    composeRule.onNodeWithText("차분한 비서 말투").assertIsDisplayed()
+    composeRule
+        .onNodeWithText(
+            "차분한 비서 말투로 필요한 내용을 쉽고 세심하게 안내해요. " +
+                "부담 없는 유머를 곁들여 편안하게 이야기를 이어가요."
+        )
+        .assertIsDisplayed()
+  }
+
+  @Test
+  fun 페르소나를_바꿀_때마다_이름과_태그와_소개글이_함께_바뀐다() {
+    var selectedPersonaId by mutableStateOf<Long?>(1)
+
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state = AiCallUiState(phase = AiCallPhase.Selecting, persona = null),
+            selectedPersonaId = selectedPersonaId,
+            onPersonaSelected = { selectedPersonaId = it },
+            onStartCall = {},
+            onToggleMute = {},
+            onToggleSpeaker = {},
+            onEndCall = {},
+            onConfirm = {},
+            onRetry = {},
+        )
+      }
+    }
+
+    aiPersonas.forEach { persona ->
+      composeRule.onNodeWithTag("persona-${persona.id}").performClick().assertIsSelected()
+      composeRule
+          .onNodeWithTag("persona-selected-glow-${persona.id}")
+          .assertIsDisplayed()
+      composeRule
+          .onNodeWithTag("persona-selected-check-${persona.id}")
+          .assertIsDisplayed()
+      composeRule.onNodeWithTag("selected-persona-name").assertTextEquals(persona.displayName)
+      composeRule.onNodeWithTag("selected-persona-tag").assertTextEquals(persona.toneTag)
+      composeRule
+          .onNodeWithTag("selected-persona-introduction")
+          .assertTextEquals(persona.introduction)
+    }
   }
 
   @Test
