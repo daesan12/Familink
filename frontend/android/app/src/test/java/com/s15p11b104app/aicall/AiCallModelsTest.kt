@@ -19,7 +19,7 @@ class AiCallModelsTest {
   @Test
   fun `페르소나 선택 화면은 관계별 세로 짝이 맞는 순서를 사용한다`() {
     assertEquals(
-        listOf("사랑스러운 아들", "여자 비서", "친구 복희", "사랑스러운 딸", "남자 비서", "친구 학수"),
+        listOf("듬직한 아들", "비서 민정", "친구 복희", "사랑스러운 딸", "비서 도윤", "친구 학수"),
         aiPersonasForSelection.map(AiPersona::displayName),
     )
   }

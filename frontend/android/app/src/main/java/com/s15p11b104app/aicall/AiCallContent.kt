@@ -1,6 +1,7 @@
 package com.s15p11b104app.aicall
 
 import android.Manifest
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -8,15 +9,26 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,11 +77,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -85,6 +99,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.s15p11b104app.R
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -484,8 +499,10 @@ private fun PersonaSelectionScreen(
 ) {
   val selectedPersona = aiPersonas.firstOrNull { it.id == selectedPersonaId }
   val featuredPersona = selectedPersona ?: aiPersonas.first()
-  val applicationInfo = LocalContext.current.applicationInfo
+  val context = LocalContext.current
+  val applicationInfo = context.applicationInfo
   val isDebuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+  val animationsEnabled = remember(context) { areSystemAnimationsEnabled(context) }
 
   Column(
       modifier =
@@ -505,7 +522,7 @@ private fun PersonaSelectionScreen(
     )
     Spacer(modifier = Modifier.height(8.dp))
     Text(
-        text = "아래 작은 사진을 눌러 대화 상대를 바꿔보세요.",
+        text = "아래 사진을 눌러 대화 상대를 골라보세요",
         color = AiCallColors.TextMuted,
         fontSize = 14.sp,
         lineHeight = 20.sp,
@@ -516,6 +533,7 @@ private fun PersonaSelectionScreen(
     FeaturedPersona(
         persona = featuredPersona,
         selected = selectedPersona != null,
+        animationsEnabled = animationsEnabled,
     )
     Spacer(modifier = Modifier.height(20.dp))
 
@@ -530,6 +548,7 @@ private fun PersonaSelectionScreen(
                 modifier = Modifier.weight(1f),
                 persona = persona,
                 selected = persona.id == selectedPersonaId,
+                animationsEnabled = animationsEnabled,
                 onSelect = { onPersonaSelected(persona.id) },
             )
           }
@@ -539,20 +558,40 @@ private fun PersonaSelectionScreen(
 
     Spacer(modifier = Modifier.height(24.dp))
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-      Box(modifier = Modifier.size(104.dp), contentAlignment = Alignment.Center) {
-        StaticRadialGlow(
-            modifier = Modifier.fillMaxSize(),
-            color =
-                if (selectedPersona == null) {
-                  Color.Transparent
-                } else {
-                  Color(0xFFCEC6FF)
-                },
-        )
+      val callInteractionSource = remember { MutableInteractionSource() }
+      val callPressed by callInteractionSource.collectIsPressedAsState()
+      val callScale by
+          animateFloatAsState(
+              targetValue = if (animationsEnabled && callPressed) 0.96f else 1f,
+              animationSpec =
+                  spring(
+                      dampingRatio = Spring.DampingRatioNoBouncy,
+                      stiffness = Spring.StiffnessMedium,
+                  ),
+              label = "call button press",
+          )
+
+      Box(
+          modifier = Modifier.size(104.dp).testTag("start-call-depth"),
+          contentAlignment = Alignment.Center,
+      ) {
         FilledIconButton(
             onClick = onStartCall,
             enabled = selectedPersona != null,
-            modifier = Modifier.size(80.dp).testTag("start-call"),
+            interactionSource = callInteractionSource,
+            modifier =
+                Modifier.size(80.dp)
+                    .graphicsLayer {
+                      scaleX = callScale
+                      scaleY = callScale
+                    }
+                    .shadow(
+                        elevation = if (selectedPersona != null) 12.dp else 0.dp,
+                        shape = CircleShape,
+                        ambientColor = Color.Black.copy(alpha = 0.12f),
+                        spotColor = Color.Black.copy(alpha = 0.18f),
+                    )
+                    .testTag("start-call"),
             colors =
                 IconButtonDefaults.filledIconButtonColors(
                     containerColor = Color(0xFF6C5CE7),
@@ -577,7 +616,7 @@ private fun PersonaSelectionScreen(
               } else {
                 AiCallColors.BrandPurplePressed
               },
-          fontSize = 16.sp,
+          fontSize = 20.sp,
           fontWeight = FontWeight.Bold,
       )
       if (isDebuggable && selectedPersona != null) {
@@ -605,18 +644,47 @@ private fun PersonaSelectionScreen(
 private fun FeaturedPersona(
     persona: AiPersona,
     selected: Boolean,
+    animationsEnabled: Boolean,
 ) {
-  Column(horizontalAlignment = Alignment.CenterHorizontally) {
-    Box(modifier = Modifier.size(188.dp), contentAlignment = Alignment.Center) {
-      if (selected) {
-        StaticRadialGlow(
-            modifier = Modifier.fillMaxSize(),
-            color = Color(0xFFFFE8A8),
-        )
+  val density = LocalDensity.current
+  val floatingProgress =
+      if (selected && animationsEnabled) {
+        val transition = rememberInfiniteTransition(label = "featured persona float")
+        transition
+            .animateFloat(
+                initialValue = -1f,
+                targetValue = 1f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(7_200, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse,
+                    ),
+                label = "featured persona vertical position",
+            )
+            .value
+      } else {
+        0f
       }
+  val floatingDistance = with(density) { 1.5.dp.toPx() }
+
+  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Box(
+        modifier =
+            Modifier.size(188.dp)
+                .graphicsLayer { translationY = floatingDistance * floatingProgress }
+                .testTag("featured-persona-depth"),
+        contentAlignment = Alignment.Center,
+    ) {
       Box(
           modifier =
               Modifier.size(158.dp)
+                  .shadow(
+                      elevation = if (selected) 18.dp else 9.dp,
+                      shape = CircleShape,
+                      ambientColor = Color.Black.copy(alpha = if (selected) 0.16f else 0.10f),
+                      spotColor = Color.Black.copy(alpha = if (selected) 0.20f else 0.12f),
+                  )
+                  .testTag("featured-persona-image")
                   .background(Color.White, CircleShape)
                   .padding(6.dp)
                   .clip(CircleShape),
@@ -634,6 +702,12 @@ private fun FeaturedPersona(
                 Modifier.align(Alignment.BottomEnd)
                     .offset(x = (-8).dp, y = (-8).dp)
                     .size(50.dp)
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = CircleShape,
+                        ambientColor = Color.Black.copy(alpha = 0.12f),
+                        spotColor = Color.Black.copy(alpha = 0.16f),
+                    )
                     .background(Color.White, CircleShape)
                     .padding(4.dp)
                     .background(AiCallColors.BrandPurple, CircleShape),
@@ -685,22 +759,16 @@ private fun FeaturedPersona(
   }
 }
 
-@Composable
-private fun StaticRadialGlow(
-    modifier: Modifier = Modifier,
-    color: Color,
-    centerAlpha: Float = 0.58f,
-) {
-  Box(
-      modifier =
-          modifier.background(
-              brush =
-                  Brush.radialGradient(
-                      colors = listOf(color.copy(alpha = centerAlpha), Color.Transparent),
-                  ),
-              shape = CircleShape,
-          )
-  )
+private fun areSystemAnimationsEnabled(context: Context): Boolean {
+  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    return ValueAnimator.areAnimatorsEnabled()
+  }
+
+  return Settings.Global.getFloat(
+      context.contentResolver,
+      Settings.Global.ANIMATOR_DURATION_SCALE,
+      1f,
+  ) > 0f
 }
 
 @Composable
@@ -708,9 +776,29 @@ private fun PersonaItem(
     modifier: Modifier,
     persona: AiPersona,
     selected: Boolean,
+    animationsEnabled: Boolean,
     onSelect: () -> Unit,
 ) {
   val interactionSource = remember { MutableInteractionSource() }
+  val pressed by interactionSource.collectIsPressedAsState()
+  val targetScale =
+      when {
+        !animationsEnabled -> 1f
+        pressed -> 0.96f
+        selected -> 1.03f
+        else -> 1f
+      }
+  val scale by
+      animateFloatAsState(
+          targetValue = targetScale,
+          animationSpec =
+              spring(
+                  dampingRatio = Spring.DampingRatioNoBouncy,
+                  stiffness = Spring.StiffnessMediumLow,
+              ),
+          label = "persona selection depth",
+      )
+  val lift = with(LocalDensity.current) { if (selected && animationsEnabled) (-2).dp.toPx() else 0f }
 
   Column(
       modifier =
@@ -727,19 +815,25 @@ private fun PersonaItem(
       horizontalAlignment = Alignment.CenterHorizontally,
   ) {
     Box(
-        modifier = Modifier.size(100.dp),
+        modifier =
+            Modifier.size(100.dp)
+                .graphicsLayer {
+                  scaleX = scale
+                  scaleY = scale
+                  translationY = lift
+                }
+                .testTag("persona-depth-${persona.id}"),
         contentAlignment = Alignment.Center,
     ) {
-      if (selected) {
-        StaticRadialGlow(
-            modifier = Modifier.fillMaxSize().testTag("persona-selected-glow-${persona.id}"),
-            color = AiCallColors.BrandPurple,
-            centerAlpha = 0.24f,
-        )
-      }
       Box(
           modifier =
               Modifier.size(82.dp)
+                  .shadow(
+                      elevation = if (selected) 7.dp else 2.dp,
+                      shape = CircleShape,
+                      ambientColor = Color.Black.copy(alpha = if (selected) 0.11f else 0.05f),
+                      spotColor = Color.Black.copy(alpha = if (selected) 0.15f else 0.07f),
+                  )
                   .background(Color(0xFFF0EEF4), CircleShape)
                   .border(
                       width = if (selected) 2.dp else 1.dp,
@@ -819,6 +913,11 @@ private fun ActiveCallScreen(
       modifier =
           Modifier.fillMaxSize()
               .background(AiCallColors.CallBackground)
+              .paint(
+                  painter = painterResource(R.drawable.ai_call_gradient_background),
+                  contentScale = ContentScale.Crop,
+              )
+              .testTag("call-gradient-background")
               .padding(horizontal = 24.dp, vertical = 22.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
   ) {
@@ -990,6 +1089,11 @@ private fun CallEndedScreen(
       modifier =
           Modifier.fillMaxSize()
               .background(AiCallColors.EndBackground)
+              .paint(
+                  painter = painterResource(R.drawable.ai_call_gradient_background),
+                  contentScale = ContentScale.Crop,
+              )
+              .testTag("call-gradient-background")
               .padding(horizontal = 30.dp, vertical = 32.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.Center,
@@ -1107,6 +1211,11 @@ private fun CallFailedScreen(
       modifier =
           Modifier.fillMaxSize()
               .background(AiCallColors.EndBackground)
+              .paint(
+                  painter = painterResource(R.drawable.ai_call_gradient_background),
+                  contentScale = ContentScale.Crop,
+              )
+              .testTag("call-gradient-background")
               .padding(horizontal = 30.dp, vertical = 32.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.Center,

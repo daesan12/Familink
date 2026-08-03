@@ -60,11 +60,11 @@ internal val aiPersonas =
     listOf(
         AiPersona(
             id = 1,
-            displayName = "사랑스러운 아들",
+            displayName = "듬직한 아들",
             callName = "아들",
-            toneTag = "다정한 가족 말투",
+            toneTag = "다정한 말투",
             introduction =
-                "다정한 아들 말투로 안부를 챙기고, 가벼운 농담으로 웃음을 더해요. " +
+                "다정한 말투로 안부를 챙기고\n" +
                     "편안한 존댓말로 천천히 이야기를 이어가요.",
             imageResource = R.drawable.persona_son,
         ),
@@ -72,29 +72,29 @@ internal val aiPersonas =
             id = 2,
             displayName = "사랑스러운 딸",
             callName = "딸",
-            toneTag = "세심한 가족 말투",
+            toneTag = "세심한 말투",
             introduction =
-                "세심한 딸 말투로 식사와 오늘 있었던 일을 살뜰히 챙겨요. " +
-                    "밝은 맞장구와 소소한 장난으로 기분 좋은 대화를 만들어요.",
+                "세심한 말투로 가족을 살뜰히 챙겨요.\n" +
+                    "밝은 맞장구로 기분 좋은 대화를 만들어요.",
             imageResource = R.drawable.persona_daughter,
         ),
         AiPersona(
             id = 3,
-            displayName = "남자 비서",
+            displayName = "비서 도윤",
             callName = "AI 비서 도윤",
-            toneTag = "침착한 비서 말투",
+            toneTag = "침착한 말투",
             introduction =
-                "침착한 비서 말투로 일정과 궁금한 일을 또박또박 정리해요. " +
-                    "딱딱하지 않은 재치로 편안하게 도와드려요.",
+                "침착한 말투로 일정과 궁금한 일을 또박또박 정리해요.\n" +
+                    "여유로운 재치로 즐거운 대화를 이끌어요.",
             imageResource = R.drawable.persona_assistant_male,
         ),
         AiPersona(
             id = 4,
-            displayName = "여자 비서",
+            displayName = "비서 민정",
             callName = "AI 비서 민정",
-            toneTag = "차분한 비서 말투",
+            toneTag = "차분한 말투",
             introduction =
-                "차분한 비서 말투로 필요한 내용을 쉽고 세심하게 안내해요. " +
+                "차분한 말투로 필요한 내용을 쉽고 꼼꼼하게 안내해요.\n" +
                     "부담 없는 유머를 곁들여 편안하게 이야기를 이어가요.",
             imageResource = R.drawable.persona_assistant_female,
         ),
@@ -102,20 +102,20 @@ internal val aiPersonas =
             id = 5,
             displayName = "친구 학수",
             callName = "학수",
-            toneTag = "유쾌한 경상도 말투",
+            toneTag = "유쾌한 말투",
             introduction =
-                "오랜 친구 학수처럼 편한 반말과 옅은 경상도 말투로 안부를 물어요. " +
-                    "구수한 농담과 추억 이야기로 웃음을 더해요.",
+                "오랜 친구처럼 편한 반말과 옅은 경상도 말투로\n" +
+                    "구수한 농담과 옛이야기를 건네며 웃음을 더해요.",
             imageResource = R.drawable.persona_friend_haksu,
         ),
         AiPersona(
             id = 6,
             displayName = "친구 복희",
             callName = "복희",
-            toneTag = "정겨운 전라도 말투",
+            toneTag = "정겨운 말투",
             introduction =
-                "오랜 친구 복희처럼 정겨운 반말과 옅은 전라도 말투로 맞장구쳐요. " +
-                    "따뜻한 수다와 재치 있는 농담으로 활기를 더해요.",
+                "오랜 친구처럼 정겨운 반말과 옅은 전라도 말투로\n" +
+                    "따뜻한 수다를 건네며 활기를 더해요",
             imageResource = R.drawable.persona_friend_bokhee,
         ),
     )
