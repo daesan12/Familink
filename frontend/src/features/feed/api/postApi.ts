@@ -1,4 +1,4 @@
-import axios, {type AxiosProgressEvent} from 'axios';
+import axios from 'axios';
 
 import {
   ApiError,
@@ -6,6 +6,10 @@ import {
   normalizeApiError,
   type ApiSuccess,
 } from '../../../shared/api';
+import {
+  BlobUploadError,
+  uploadBlobWithXhr,
+} from '../../../shared/api/blobUpload';
 import {parseApiEnvelope} from '../../group-info/api/groupApi';
 import {
   validatePickedMedia,
@@ -22,7 +26,7 @@ export type PostUploadProgress = (progress: number) => void;
 
 interface UploadRequestConfig {
   headers: Record<string, string>;
-  onUploadProgress?: (event: AxiosProgressEvent) => void;
+  onUploadProgress?: (event: {loaded: number; total?: number}) => void;
   signal?: AbortSignal;
 }
 
@@ -49,11 +53,10 @@ const defaultUploadTransport: PostUploadTransport = {
     return response.blob();
   },
   async put(uploadUrl, data, config) {
-    await axios.put(uploadUrl, data, {
+    await uploadBlobWithXhr(uploadUrl, data, {
       headers: config.headers,
-      onUploadProgress: config.onUploadProgress,
       signal: config.signal,
-      transformRequest: value => value,
+      onProgress: config.onUploadProgress,
     });
   },
 };
@@ -535,12 +538,19 @@ function invalidRequest(message: string): ApiError {
 function mediaUploadFailed(error: unknown): ApiError {
   return new ApiError({
     code: 'MEDIA_UPLOAD_FAILED',
-    kind: axios.isAxiosError(error) && error.response !== undefined
-      ? 'server'
-      : 'network',
+    kind:
+      (axios.isAxiosError(error) && error.response !== undefined) ||
+      (error instanceof BlobUploadError && error.status !== undefined)
+        ? 'server'
+        : 'network',
     message: '미디어 업로드에 실패했습니다. 다시 시도해 주세요.',
     originalError: error,
-    status: axios.isAxiosError(error) ? error.response?.status : undefined,
+    status:
+      error instanceof BlobUploadError
+        ? error.status
+        : axios.isAxiosError(error)
+        ? error.response?.status
+        : undefined,
   });
 }
 
