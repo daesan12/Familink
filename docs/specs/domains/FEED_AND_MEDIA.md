@@ -106,12 +106,18 @@
   - 게시글·댓글·반응 저장 트랜잭션 안에서 도메인 이벤트를 발행한다.
   - 수신자·자기 활동 제외·문구·중복 방지와 커밋 후 푸시는
     [알림 스펙](./NOTIFICATIONS.md)을 따른다.
-- 게시글 분석의 Gemini 요청은 SSAFY GMS 프록시를 사용한다.
+- 미디어가 없는 텍스트 게시글 분석은 SSAFY GMS 프록시를 사용한다.
   `GMS_API_KEY`는 `x-goog-api-key` 헤더로만 전달하고 URL 쿼리에 넣지 않는다.
-  기본 주소는
-  `https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com`이며
-  `GMS_API_BASE_URL`로 교체할 수 있다. 자동 테스트는 실제 프록시와 키를
-  사용하지 않는다.
+  기본 주소는 `https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com`이며
+  `GMS_API_BASE_URL`로 교체할 수 있다.
+- 이미지 또는 영상이 포함된 게시글 분석은 Google Gemini Developer API를 직접 사용한다.
+  `GEMINI_API_KEY`는 서버 비밀값으로만 주입하고 기본 주소는
+  `https://generativelanguage.googleapis.com`이다. 허용된 S3 미디어를 임시 파일로 내려받아
+  Gemini Files API에 업로드하고 처리 가능 상태를 확인한 뒤 분석한다. 성공, 실패, 시간 초과
+  모두에서 Gemini 파일과 로컬 임시 파일을 정리한다.
+- 미디어 분석에 Direct Gemini 키가 없거나 직접 호출이 실패해도 GMS로 자동 대체하지 않는다.
+  해당 게시글 분석만 실패 처리하며 텍스트 게시글, 통화 리포트, 일일 리포트의 GMS 경로에는
+  영향을 주지 않는다. 자동 테스트는 실제 GMS·Gemini 키를 사용하지 않는다.
 - Gemini 호출은 DB 트랜잭션 밖에서 수행한다. 대상 게시글 확인·claim·입력
   조회와 결과·실패 저장은 각각 짧은 트랜잭션으로 분리한다. 모든 Gemini
   작업은 최대 동시 실행 2개·대기열 20개의 공용 bounded executor를 사용하며,
