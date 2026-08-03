@@ -1,5 +1,11 @@
 import React from "react";
-import { AccessibilityInfo, Alert, Image, Modal } from "react-native";
+import {
+  AccessibilityInfo,
+  Alert,
+  AppState,
+  Image,
+  Modal,
+} from "react-native";
 import TestRenderer from "react-test-renderer";
 import { clearAllMockStorages } from "@react-native-async-storage/async-storage/jest";
 
@@ -655,6 +661,66 @@ test("로그인 후 서버 그룹 목록이 있으면 해당 그룹으로 앱 �
   expect(
     renderer.root.findByProps({ accessibilityRole: "tablist" })
   ).toBeTruthy();
+});
+
+test("포그라운드로 돌아오면 그룹 목록을 다시 조회해 바뀐 역할을 반영한다", async () => {
+  const appStateListener = jest.spyOn(AppState, "addEventListener");
+  const groupGateway = createGroupGateway();
+  const serverGroup = {
+    id: "101",
+    isManager: false,
+    memberCount: 2,
+    myMemberId: "201",
+    name: "서버 가족",
+    role: "guardian" as const,
+  };
+  groupGateway.loadGroups
+    .mockResolvedValueOnce({ groups: [serverGroup], joinRequests: [] })
+    .mockResolvedValueOnce({
+      groups: [{ ...serverGroup, role: "careReceiver" as const }],
+      joinRequests: [],
+    });
+  const { renderer } = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    groupGateway
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {});
+
+  expect(
+    renderer.root.findAllByProps({ children: "리포트" }).length
+  ).toBeGreaterThan(0);
+
+  await TestRenderer.act(async () => {
+    appStateListener.mock.calls
+      .filter(([eventType]) => eventType === "change")
+      .forEach(([, handler]) => handler("active"));
+    await flushAsyncWork();
+  });
+
+  expect(groupGateway.loadGroups).toHaveBeenCalledTimes(2);
+  expect(renderer.root.findAllByProps({ children: "리포트" })).toHaveLength(0);
+  expect(
+    renderer.root.findAllByProps({ children: "AI 전화" }).length
+  ).toBeGreaterThan(0);
+
+  // 백그라운드 전환에서는 재조회하지 않는다.
+  await TestRenderer.act(async () => {
+    appStateListener.mock.calls
+      .filter(([eventType]) => eventType === "change")
+      .forEach(([, handler]) => handler("background"));
+    await flushAsyncWork();
+  });
+
+  expect(groupGateway.loadGroups).toHaveBeenCalledTimes(2);
 });
 
 test("그룹 목록 조회 오류를 정상 빈 목록으로 표시하지 않는다", async () => {
