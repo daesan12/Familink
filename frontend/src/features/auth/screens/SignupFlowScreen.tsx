@@ -148,6 +148,10 @@ export function SignupFlowScreen({
     if (submittingRef.current) {
       return;
     }
+    // 가입이 이미 끝난 완료 단계에서는 되돌아갈 입력 단계가 없다.
+    if (step === 5) {
+      return;
+    }
     if (step === 1) {
       onCancel();
       return;
@@ -392,10 +396,7 @@ export function SignupFlowScreen({
             />
           )}
           {step === 5 && (
-            <CompleteStep
-              onBack={handleBack}
-              onComplete={() => onComplete(draft.loginId)}
-            />
+            <CompleteStep onComplete={() => onComplete(draft.loginId)} />
           )}
         </Animated.View>
       </KeyboardAvoidingView>
@@ -583,22 +584,44 @@ function PasswordStep({
   onNext,
 }: PasswordStepProps) {
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [passwordConfirmationVisible, setPasswordConfirmationVisible] =
+    useState(false);
   const canAttempt =
     isValidPassword(draft.password) &&
     draft.passwordConfirmation.length > 0;
   // 입력 중 규칙 위반 이유를 바로 안내해 "다음" 비활성의 원인을 알 수 있게 한다.
   const passwordViolation = getPasswordRuleViolation(draft.password);
 
-  const visibilityButton = (
+  const passwordVisibilityButton = (
     <Pressable
       accessibilityLabel={
-        passwordVisible ? '비밀번호 숨기기' : '비밀번호 표시'
+        passwordVisible
+          ? '회원가입 비밀번호 숨기기'
+          : '회원가입 비밀번호 표시'
       }
       hitSlop={10}
       onPress={() => setPasswordVisible(current => !current)}>
       <MaterialDesignIcons
         color={AUTH_COLORS.placeholder}
         name={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
+        size={22}
+      />
+    </Pressable>
+  );
+  const passwordConfirmationVisibilityButton = (
+    <Pressable
+      accessibilityLabel={
+        passwordConfirmationVisible
+          ? '회원가입 비밀번호 확인 숨기기'
+          : '회원가입 비밀번호 확인 표시'
+      }
+      hitSlop={10}
+      onPress={() => setPasswordConfirmationVisible(current => !current)}>
+      <MaterialDesignIcons
+        color={AUTH_COLORS.placeholder}
+        name={
+          passwordConfirmationVisible ? 'eye-off-outline' : 'eye-outline'
+        }
         size={22}
       />
     </Pressable>
@@ -628,7 +651,7 @@ function PasswordStep({
           onChangeText={onChangePassword}
           placeholder="영문·숫자 8 ~ 16자로 입력해주세요."
           secureTextEntry={!passwordVisible}
-          trailing={visibilityButton}
+          trailing={passwordVisibilityButton}
           value={draft.password}
         />
         {errorMessage !== undefined ? (
@@ -645,8 +668,8 @@ function PasswordStep({
           label="비밀번호 확인"
           maxLength={16}
           onChangeText={onChangeConfirmation}
-          secureTextEntry={!passwordVisible}
-          trailing={visibilityButton}
+          secureTextEntry={!passwordConfirmationVisible}
+          trailing={passwordConfirmationVisibilityButton}
           value={draft.passwordConfirmation}
         />
         {mismatch && (
@@ -813,19 +836,15 @@ function GenderCard({
 }
 
 interface CompleteStepProps {
-  onBack: () => void;
   onComplete: () => void;
 }
 
-function CompleteStep({onBack, onComplete}: CompleteStepProps) {
+function CompleteStep({onComplete}: CompleteStepProps) {
   return (
     <StepLayout
       button={<PrimaryButton label="완료" onPress={onComplete} />}>
-      <StepHeader
-        onBack={onBack}
-        step={5}
-        title={'회원가입이\n완료되었습니다!'}
-      />
+      {/* 가입이 끝난 단계이므로 이전 단계로 돌아가는 경로를 두지 않는다. */}
+      <StepHeader step={5} title={'회원가입이\n완료되었습니다!'} />
       <View style={styles.completeArtwork}>
         <FloatingIllustration
           containerStyle={styles.completeFloating}

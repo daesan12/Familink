@@ -1,8 +1,9 @@
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 
-import {COLORS, RADII} from '../../../design/tokens';
+import {COLORS} from '../../../design/tokens';
 import {formatRelativeTime} from '../time';
 import type {FeedPost, ReactionId} from '../types';
+import {FeedAvatar} from './FeedAvatar';
 import {PostImageCarousel} from './PostImageCarousel';
 import {ReactionBar, type ReactionAnchor} from './ReactionBar';
 
@@ -33,9 +34,7 @@ export function FeedItem({
   return (
     <View style={styles.container}>
       <View style={styles.authorRow}>
-        <View accessibilityElementsHidden style={styles.avatar}>
-          <Text style={styles.avatarText}>{post.author.avatarText}</Text>
-        </View>
+        <FeedAvatar member={post.author} />
         <View style={styles.authorText}>
           <Text style={styles.authorName}>{post.author.name}</Text>
           <Text style={styles.createdAt}>
@@ -93,22 +92,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 1,
     marginLeft: 12,
-  },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: '#F7F5FF',
-    borderColor: '#D1C9FF',
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  avatarText: {
-    color: '#C4BAFF',
-    fontSize: 16,
-    fontWeight: '600',
   },
   body: {
     color: COLORS.textStrong,

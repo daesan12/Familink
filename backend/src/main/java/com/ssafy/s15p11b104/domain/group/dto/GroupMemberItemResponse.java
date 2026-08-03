@@ -6,6 +6,7 @@ public record GroupMemberItemResponse(
 	Long memberId,
 	Long userId,
 	String displayName,
+	String profileImageUrl,
 	GroupRole role,
 	boolean isManager) {
 }

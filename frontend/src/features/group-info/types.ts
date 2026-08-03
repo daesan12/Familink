@@ -24,6 +24,8 @@ export interface GroupMember {
   isManager: boolean;
   // 아바타 이미지 연동 전 자리표시자 텍스트.
   avatarText: string;
+  // API-GROUPS-005가 반환하는 조회용 서명 URL. 사진이 없으면 null이다.
+  profileImageUrl?: string | null;
   // 만 나이. 축소 프로필 팝업에 "만 N세"로 표시한다.
   age: number | null;
   // 성별.
@@ -109,6 +111,15 @@ export type JoinRequestsLoadState =
   | {status: 'loading'}
   | {status: 'error'; message: string}
   | {status: 'success'; requests: readonly JoinRequest[]};
+
+// H-7 구성원 초대에 표시할 승인 대기 건수 상태.
+// API-GROUPS-008은 그룹 관리자만 호출할 수 있어, 조회하지 않은 'disabled'를
+// 조회 실패와 구분한다. 상태별 표시 문구는 groupInfoModel이 정한다.
+export type PendingJoinCountState =
+  | {status: 'disabled'}
+  | {status: 'loading'}
+  | {status: 'error'}
+  | {status: 'success'; count: number};
 
 // API-GROUPS-009 PATCH .../join-requests/{joinRequestId} 요청 결정.
 export type JoinRequestDecision = 'APPROVE' | 'REJECT';
