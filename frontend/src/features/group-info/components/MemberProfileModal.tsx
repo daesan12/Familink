@@ -1,6 +1,7 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -11,6 +12,8 @@ import {
 import {COLORS, RADII} from '../../../design/tokens';
 import {formatAge, formatGender} from '../groupInfoModel';
 import {WEEKLY_STAMP_DAYS, type GroupMember} from '../types';
+
+const CARNATION_IMAGE = require('../../../assets/images/carnation.png');
 
 interface MemberProfileModalProps {
   errorMessage?: string | null;
@@ -145,10 +148,10 @@ export function MemberProfileModal({
                     style={[styles.stamp, earned && styles.stampEarned]}
                   >
                     {earned ? (
-                      <MaterialDesignIcons
-                        color={COLORS.error}
-                        name="flower"
-                        size={18}
+                      <Image
+                        resizeMode="contain"
+                        source={CARNATION_IMAGE}
+                        style={styles.stampImage}
                       />
                     ) : null}
                   </View>
@@ -253,6 +256,11 @@ const styles = StyleSheet.create({
   },
   stampEarned: {
     backgroundColor: COLORS.lemon,
+  },
+  // 칸 크기가 단말 폭에 따라 달라지므로 마이페이지 도장판과 같은 80% 비율로 맞춘다.
+  stampImage: {
+    height: '80%',
+    width: '80%',
   },
   stampRow: {
     flexDirection: 'row',

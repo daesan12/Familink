@@ -1,7 +1,8 @@
-import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {StyleSheet, View} from 'react-native';
+import {Image, StyleSheet, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+
+const CARNATION_IMAGE = require('../../../assets/images/carnation.png');
 
 interface CarnationStampProps {
   filled: boolean;
@@ -10,14 +11,14 @@ interface CarnationStampProps {
   dimmed?: boolean;
 }
 
-// 효자 도장(카네이션) 한 칸. 채워지면 카네이션, 비면 회색 원.
-// NOTE: 첨부된 카네이션 PNG를 파일로 확보하지 못해(투명 배경 검증 불가) 아이콘 플레이스홀더로 대체한다.
+// 효자 도장(카네이션) 한 칸. 채워지면 카네이션 도장 이미지, 비면 회색 원.
 export function CarnationStamp({
   filled,
   size = 44,
   dimmed = false,
 }: CarnationStampProps) {
   const dimension = {borderRadius: size / 2, height: size, width: size};
+  const stampSize = Math.round(size * 0.8);
   return (
     <View
       importantForAccessibility="no-hide-descendants"
@@ -29,10 +30,10 @@ export function CarnationStamp({
       ]}
     >
       {filled ? (
-        <MaterialDesignIcons
-          color={COLORS.error}
-          name="flower"
-          size={Math.round(size * 0.62)}
+        <Image
+          resizeMode="contain"
+          source={CARNATION_IMAGE}
+          style={{height: stampSize, width: stampSize}}
         />
       ) : null}
     </View>
