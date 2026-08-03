@@ -98,7 +98,7 @@ describe('profileApi', () => {
   it('presigned 응답 헤더를 그대로 사용해 프로필 이미지를 업로드한다', async () => {
     const client = createClient();
     const uploadTransport = createUploadTransport();
-    const blob = {} as Blob;
+    const blob = {size: 2048} as Blob;
     client.post.mockResolvedValueOnce(
       success(
         {
@@ -108,6 +108,7 @@ describe('profileApi', () => {
               fileUrl:
                 'https://cdn.example.com/profile-image/profile-photo.jpg',
               headers: {
+                'Content-Length': '2048',
                 'Content-Type': 'image/jpeg',
                 'x-amz-meta-token': 'signed',
               },
@@ -137,7 +138,7 @@ describe('profileApi', () => {
         {
           contentType: 'image/jpeg',
           fileName: 'profile-photo.jpg',
-          sizeBytes: 1024,
+          sizeBytes: 2048,
         },
       ],
       purpose: 'profile-image',
@@ -150,6 +151,7 @@ describe('profileApi', () => {
       blob,
       {
         headers: {
+          'Content-Length': '2048',
           'Content-Type': 'image/jpeg',
           'x-amz-meta-token': 'signed',
         },
@@ -176,6 +178,7 @@ describe('profileApi', () => {
         201,
       ),
     );
+    uploadTransport.readFile.mockResolvedValueOnce({size: 1024} as Blob);
     const gateway = createProfileGateway({client, uploadTransport});
 
     await expect(
@@ -189,7 +192,9 @@ describe('profileApi', () => {
       code: 'INVALID_API_RESPONSE',
       kind: 'invalidResponse',
     });
-    expect(uploadTransport.readFile).not.toHaveBeenCalled();
+    expect(uploadTransport.readFile).toHaveBeenCalledWith(
+      'content://profile-photo',
+    );
     expect(uploadTransport.put).not.toHaveBeenCalled();
   });
 
@@ -211,13 +216,13 @@ describe('profileApi', () => {
   it('로컬 파일을 읽지 못하면 S3 업로드를 실행하지 않고 실패한다', async () => {
     const client = createClient();
     const uploadTransport = createUploadTransport();
-    client.post.mockResolvedValueOnce(profileImagePresignResponse());
     uploadTransport.readFile.mockRejectedValueOnce(new Error('read failed'));
     const gateway = createProfileGateway({client, uploadTransport});
 
-    await expect(gateway.uploadProfileImage(validProfileAsset())).rejects.toBeInstanceOf(
-      ApiError,
-    );
+    await expect(gateway.uploadProfileImage(validProfileAsset())).rejects.toMatchObject<
+      Partial<ApiError>
+    >({code: 'MEDIA_READ_FAILED'});
+    expect(client.post).not.toHaveBeenCalled();
     expect(uploadTransport.put).not.toHaveBeenCalled();
   });
 
@@ -225,14 +230,30 @@ describe('profileApi', () => {
     const client = createClient();
     const uploadTransport = createUploadTransport();
     client.post.mockResolvedValueOnce(profileImagePresignResponse());
-    uploadTransport.readFile.mockResolvedValueOnce({} as Blob);
-    uploadTransport.put.mockRejectedValueOnce(new Error('upload failed'));
+    uploadTransport.readFile.mockResolvedValueOnce({size: 1024} as Blob);
+    uploadTransport.put.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {data: '<Error><Code>AccessDenied</Code></Error>', status: 403},
+    });
     const gateway = createProfileGateway({client, uploadTransport});
 
-    await expect(gateway.uploadProfileImage(validProfileAsset())).rejects.toBeInstanceOf(
-      ApiError,
-    );
+    await expect(gateway.uploadProfileImage(validProfileAsset())).rejects.toMatchObject<
+      Partial<ApiError>
+    >({code: 'MEDIA_UPLOAD_FAILED', status: 403});
     expect(uploadTransport.put).toHaveBeenCalledTimes(1);
+  });
+
+  it('실제 Blob이 비어 있으면 presigned URL을 요청하지 않는다', async () => {
+    const client = createClient();
+    const uploadTransport = createUploadTransport();
+    uploadTransport.readFile.mockResolvedValueOnce({size: 0} as Blob);
+    const gateway = createProfileGateway({client, uploadTransport});
+
+    await expect(gateway.uploadProfileImage(validProfileAsset())).rejects.toMatchObject<
+      Partial<ApiError>
+    >({code: 'INVALID_REQUEST'});
+    expect(client.post).not.toHaveBeenCalled();
+    expect(uploadTransport.put).not.toHaveBeenCalled();
   });
 
   it('회원 탈퇴는 204 응답만 성공으로 처리한다', async () => {

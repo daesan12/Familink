@@ -2,6 +2,8 @@ package com.ssafy.s15p11b104.domain.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,10 +15,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.repository.FamilyGroupRepository;
+import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.notification.entity.Notification;
 import com.ssafy.s15p11b104.domain.notification.entity.NotificationType;
 
@@ -26,10 +30,18 @@ class NotificationApiTest extends NotificationApiIntegrationTestSupport {
 	@Autowired
 	private FamilyGroupRepository familyGroupRepository;
 
+	@MockitoBean
+	private MediaDownloadUrlProvider mediaDownloadUrlProvider;
+
 	@Test
 	void unreadCountAndListReturnOnlyTheAuthenticatedUsersNotificationsInFixedOrder() throws Exception {
 		TestUser receiver = createUser("receiver1", "수신자");
 		TestUser actor = createUser("actoruser", "행위자");
+		actor.entity().updateProfileImageUrl("https://cdn/profile-image/actor.jpg");
+		userRepository.saveAndFlush(actor.entity());
+		given(mediaDownloadUrlProvider.issueProfileImageDownloadUrl(
+			"https://cdn/profile-image/actor.jpg"))
+			.willReturn("https://signed.example/actor.jpg");
 		TestUser other = createUser("otheruser", "다른 사용자");
 		FamilyGroup group = familyGroupRepository.saveAndFlush(new FamilyGroup("우리 가족", "ABC123"));
 
@@ -80,11 +92,17 @@ class NotificationApiTest extends NotificationApiIntegrationTestSupport {
 			.andExpect(jsonPath("$.data.content[0].groupId").value(group.getId()))
 			.andExpect(jsonPath("$.data.content[0].actor.userId").value(actor.entity().getId()))
 			.andExpect(jsonPath("$.data.content[0].actor.name").value("행위자"))
-			.andExpect(jsonPath("$.data.content[0].actor.profileImageUrl").value(nullValue()))
+			.andExpect(jsonPath("$.data.content[0].actor.profileImageUrl")
+				.value("https://signed.example/actor.jpg"))
 			.andExpect(jsonPath("$.data.content[0].actor.memberId").doesNotExist())
 			.andExpect(jsonPath("$.data.content[0].actor.loginId").doesNotExist())
 			.andExpect(jsonPath("$.data.content[0].relatedJoinRequestId").value(nullValue()))
 			.andExpect(jsonPath("$.data.hasNext").value(false));
+
+		verify(mediaDownloadUrlProvider).issueProfileImageDownloadUrl(
+			"https://cdn/profile-image/actor.jpg");
+		assertThat(userRepository.findById(actor.entity().getId()).orElseThrow().getProfileImageUrl())
+			.isEqualTo("https://cdn/profile-image/actor.jpg");
 	}
 
 	@Test

@@ -107,6 +107,14 @@ export function createProfileGateway(
       assertProfileImageAsset(asset);
 
       try {
+        let blob: Blob;
+        try {
+          blob = await uploadTransport.readFile(asset.uri);
+        } catch (error) {
+          throw mediaReadFailed(error);
+        }
+        assertProfileImageBlob(blob);
+
         const response = await client.post<ApiSuccess<unknown>>(
           '/files/presigned-urls',
           {
@@ -114,7 +122,7 @@ export function createProfileGateway(
               {
                 contentType: asset.contentType,
                 fileName: asset.fileName,
-                sizeBytes: asset.sizeBytes,
+                sizeBytes: blob.size,
               },
             ],
             purpose: 'profile-image',
@@ -128,10 +136,13 @@ export function createProfileGateway(
           response.status,
           parseProfileImageUpload,
         );
-        const blob = await uploadTransport.readFile(asset.uri);
-        await uploadTransport.put(upload.uploadUrl, blob, {
-          headers: upload.headers,
-        });
+        try {
+          await uploadTransport.put(upload.uploadUrl, blob, {
+            headers: upload.headers,
+          });
+        } catch (error) {
+          throw mediaUploadFailed(error);
+        }
         return upload.fileUrl;
       } catch (error) {
         throw normalizeApiError(error);
@@ -169,6 +180,8 @@ export function getProfileSaveErrorMessage(error: unknown): string {
   switch (error.code) {
     case 'MEDIA_READ_FAILED':
       return '선택한 사진을 읽지 못했습니다. 다른 사진을 선택해 주세요.';
+    case 'MEDIA_UPLOAD_FAILED':
+      return '프로필 이미지 업로드에 실패했습니다. 다시 시도해 주세요.';
     case 'INVALID_REQUEST':
       return '선택한 사진 또는 입력 값을 확인해 주세요.';
     case 'UNAUTHORIZED':
@@ -308,9 +321,6 @@ function assertProfileImageAsset(asset: ProfileImageAsset): void {
   const allowedTypes: readonly string[] = PROFILE_IMAGE_LIMITS.allowedTypes;
   if (
     !allowedTypes.includes(asset.contentType) ||
-    asset.sizeBytes <= 0 ||
-    !Number.isSafeInteger(asset.sizeBytes) ||
-    asset.sizeBytes > PROFILE_IMAGE_LIMITS.maxSizeBytes ||
     asset.uri.trim().length === 0 ||
     asset.fileName.trim().length === 0 ||
     asset.fileName.length > 255 ||
@@ -323,6 +333,46 @@ function assertProfileImageAsset(asset: ProfileImageAsset): void {
       status: 400,
     });
   }
+}
+
+function assertProfileImageBlob(blob: Blob): void {
+  if (
+    !Number.isSafeInteger(blob.size) ||
+    blob.size <= 0 ||
+    blob.size > PROFILE_IMAGE_LIMITS.maxSizeBytes
+  ) {
+    throw new ApiError({
+      code: 'INVALID_REQUEST',
+      kind: 'server',
+      message: '프로필 이미지는 10MiB 이하의 비어 있지 않은 파일이어야 합니다.',
+      status: 400,
+    });
+  }
+}
+
+function mediaReadFailed(error: unknown): ApiError {
+  if (error instanceof ApiError) {
+    return error;
+  }
+  return new ApiError({
+    code: 'MEDIA_READ_FAILED',
+    kind: 'network',
+    message: '선택한 사진을 읽지 못했습니다.',
+    originalError: error,
+  });
+}
+
+function mediaUploadFailed(error: unknown): ApiError {
+  return new ApiError({
+    code: 'MEDIA_UPLOAD_FAILED',
+    kind:
+      axios.isAxiosError(error) && error.response !== undefined
+        ? 'server'
+        : 'network',
+    message: '프로필 이미지 업로드에 실패했습니다. 다시 시도해 주세요.',
+    originalError: error,
+    status: axios.isAxiosError(error) ? error.response?.status : undefined,
+  });
 }
 
 function readGender(value: unknown): Gender | null {

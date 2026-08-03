@@ -1,6 +1,8 @@
 package com.ssafy.s15p11b104.domain.feed;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -22,6 +24,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,6 +35,7 @@ import com.ssafy.s15p11b104.domain.feed.entity.Comment;
 import com.ssafy.s15p11b104.domain.feed.entity.Post;
 import com.ssafy.s15p11b104.domain.feed.repository.CommentRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
+import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
@@ -71,6 +75,9 @@ class CommentApiTest extends IntegrationTest {
 	@Autowired
 	private CommentRepository commentRepository;
 
+	@MockitoBean
+	private MediaDownloadUrlProvider mediaDownloadUrlProvider;
+
 	private FamilyGroup group;
 	private GroupMember author;
 	private GroupMember viewer;
@@ -105,6 +112,12 @@ class CommentApiTest extends IntegrationTest {
 
 	@Test
 	void activeMemberCanListAndCreateComments() throws Exception {
+		viewer.getUser().updateProfileImageUrl("https://cdn/profile-image/commenter.jpg");
+		userRepository.flush();
+		given(mediaDownloadUrlProvider.issueProfileImageDownloadUrl(
+			"https://cdn/profile-image/commenter.jpg"))
+			.willReturn("https://signed.example/commenter.jpg");
+
 		mockMvc.perform(post("/posts/{postId}/comments", post.getId())
 				.with(authenticatedAs(viewer.getUser().getId()))
 				.contentType(MediaType.APPLICATION_JSON)
@@ -121,8 +134,15 @@ class CommentApiTest extends IntegrationTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.content.length()").value(1))
 			.andExpect(jsonPath("$.data.content[0].author.memberId").value(viewer.getId()))
+			.andExpect(jsonPath("$.data.content[0].author.profileImageUrl")
+				.value("https://signed.example/commenter.jpg"))
 			.andExpect(jsonPath("$.data.content[0].content").value("새 댓글"))
 			.andExpect(jsonPath("$.data.content[0].updatedAt").isString());
+
+		verify(mediaDownloadUrlProvider).issueProfileImageDownloadUrl(
+			"https://cdn/profile-image/commenter.jpg");
+		assertThat(userRepository.findById(viewer.getUser().getId()).orElseThrow().getProfileImageUrl())
+			.isEqualTo("https://cdn/profile-image/commenter.jpg");
 	}
 
 	@Test

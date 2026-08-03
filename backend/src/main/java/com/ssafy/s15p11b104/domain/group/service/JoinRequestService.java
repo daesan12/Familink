@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.group.dto.JoinRequestCreateRequest;
 import com.ssafy.s15p11b104.domain.group.dto.JoinRequestCreateResponse;
 import com.ssafy.s15p11b104.domain.group.dto.JoinRequestDecisionRequest;
@@ -42,6 +43,7 @@ public class JoinRequestService {
 	private final UserRepository userRepository;
 	private final ConstraintViolationTranslator constraintViolationTranslator;
 	private final ApplicationEventPublisher eventPublisher;
+	private final MediaDownloadUrlProvider mediaDownloadUrlProvider;
 
 	public JoinRequestService(
 		FamilyGroupRepository familyGroupRepository,
@@ -49,13 +51,15 @@ public class JoinRequestService {
 		GroupJoinRequestRepository groupJoinRequestRepository,
 		UserRepository userRepository,
 		ConstraintViolationTranslator constraintViolationTranslator,
-		ApplicationEventPublisher eventPublisher) {
+		ApplicationEventPublisher eventPublisher,
+		MediaDownloadUrlProvider mediaDownloadUrlProvider) {
 		this.familyGroupRepository = familyGroupRepository;
 		this.groupMemberRepository = groupMemberRepository;
 		this.groupJoinRequestRepository = groupJoinRequestRepository;
 		this.userRepository = userRepository;
 		this.constraintViolationTranslator = constraintViolationTranslator;
 		this.eventPublisher = eventPublisher;
+		this.mediaDownloadUrlProvider = mediaDownloadUrlProvider;
 	}
 
 	/**
@@ -133,7 +137,8 @@ public class JoinRequestService {
 				request.getId(),
 				request.getApplicant().getId(),
 				request.getApplicant().getName(),
-				request.getApplicant().getProfileImageUrl(),
+				mediaDownloadUrlProvider.issueProfileImageDownloadUrl(
+					request.getApplicant().getProfileImageUrl()),
 				request.getStatus(),
 				request.getAssignedRole(),
 				request.getProcessedAt(),
