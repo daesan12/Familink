@@ -1,5 +1,5 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {Animated, Image, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
@@ -22,6 +22,7 @@ interface JoinRequestBase {
 
 export interface ApprovedJoinRequest extends JoinRequestBase {
   groupId: string;
+  myMemberId: string;
   role: CreateGroupInput['role'];
   status: 'APPROVED';
 }
@@ -39,6 +40,7 @@ export type PendingJoinRequest =
 interface GroupOnboardingScreenProps {
   // 그룹 전환에서 진입한 그룹 보유 사용자인지. 빈 상태 문구를 상황에 맞게 바꾼다.
   hasJoinedGroups?: boolean;
+  initialAction?: 'create' | 'join' | null;
   onBack: () => void;
   onCreateGroup: (
     input: CreateGroupInput,
@@ -54,6 +56,7 @@ interface GroupOnboardingScreenProps {
 
 export function GroupOnboardingScreen({
   hasJoinedGroups = false,
+  initialAction = null,
   onBack,
   onCreateGroup,
   onJoinByCode,
@@ -63,6 +66,18 @@ export function GroupOnboardingScreen({
   const entranceStyle = useScreenEntrance('group-onboarding');
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   const [joinGroupVisible, setJoinGroupVisible] = useState(false);
+  const completedActionRef = useRef<'create' | 'join' | null>(null);
+
+  useEffect(() => {
+    if (initialAction === 'create') {
+      completedActionRef.current = null;
+      setCreateGroupVisible(true);
+    }
+    if (initialAction === 'join') {
+      completedActionRef.current = null;
+      setJoinGroupVisible(true);
+    }
+  }, [initialAction]);
 
   useHardwareBack(() => {
     onBack();
@@ -160,13 +175,37 @@ export function GroupOnboardingScreen({
         </ScrollView>
 
         <CreateGroupSheet
-          onDismiss={() => setCreateGroupVisible(false)}
-          onSubmit={onCreateGroup}
+          onDismiss={() => {
+            setCreateGroupVisible(false);
+            if (
+              initialAction === 'create' &&
+              completedActionRef.current !== 'create'
+            ) {
+              onBack();
+            }
+            completedActionRef.current = null;
+          }}
+          onSubmit={async (input, signal) => {
+            await onCreateGroup(input, signal);
+            completedActionRef.current = 'create';
+          }}
           visible={createGroupVisible}
         />
         <JoinGroupSheet
-          onDismiss={() => setJoinGroupVisible(false)}
-          onSubmit={onJoinByCode}
+          onDismiss={() => {
+            setJoinGroupVisible(false);
+            if (
+              initialAction === 'join' &&
+              completedActionRef.current !== 'join'
+            ) {
+              onBack();
+            }
+            completedActionRef.current = null;
+          }}
+          onSubmit={async (inviteCode, signal) => {
+            await onJoinByCode(inviteCode, signal);
+            completedActionRef.current = 'join';
+          }}
           visible={joinGroupVisible}
         />
       </Animated.View>

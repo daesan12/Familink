@@ -182,6 +182,14 @@ export function AppShell({
       initialGroupStillExists
     ) {
       setCurrentGroupId(initialGroupId);
+      // 삭제·탈퇴한 그룹의 하위 화면을 다음 그룹에 그대로 보여주면 삭제된
+      // 그룹 정보가 남은 것처럼 보인다. 대체 그룹은 피드에서 새로 시작한다.
+      setActiveRoute('feed');
+      setIsScreenFullscreen(false);
+      setIsScreenHeaderVisible(true);
+      setIsGroupMenuOpen(false);
+      setOpenPostId(null);
+      setOpenPostRequestId(0);
     }
   }, [currentGroupId, groups, initialGroupId]);
 

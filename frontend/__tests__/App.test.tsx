@@ -13,6 +13,8 @@ import App from "../App";
 import { AppShell } from "../src/app-shell";
 import { InvalidCredentialsError } from "../src/features/auth/api/mockAuthGateway";
 import { LoginBottomSheet } from "../src/features/auth/components/LoginBottomSheet";
+import { CreateGroupSheet } from "../src/features/auth/components/CreateGroupSheet";
+import { JoinGroupSheet } from "../src/features/auth/components/JoinGroupSheet";
 import {
   type AuthRestoreResult,
   type AuthSessionCoordinator,
@@ -798,6 +800,13 @@ test("새 그룹을 만들면 입력한 그룹으로 앱 셸에 진입한다", a
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
+        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+      })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
         accessibilityHint: "우리 가족만의 공간을 시작해요",
       })
       .props.onPress();
@@ -1021,7 +1030,7 @@ test("피보호자 그룹 생성 시 관심사 설정 건너뛰기는 API를 호
   expect(renderer!.root.findByProps({ children: "API 가족" })).toBeTruthy();
 });
 
-test("관심사 초기 조회 실패 시 기존 목록을 지우는 저장을 보내지 않는다", async () => {
+test("승인 카드로 진입한 피보호자는 관심사 화면을 거치지 않고 피드로 이동한다", async () => {
   const groupGateway = createGroupGateway();
   groupGateway.loadGroups.mockResolvedValue({
     groups: [
@@ -1037,7 +1046,7 @@ test("관심사 초기 조회 실패 시 기존 목록을 지우는 저장을 �
     joinRequests: [],
   });
   const interestGateway = {
-    loadInterests: jest.fn().mockRejectedValue(new Error("network")),
+    loadInterests: jest.fn(),
     replaceInterests: jest.fn().mockResolvedValue({
       memberId: "member-manager",
       interests: [],
@@ -1054,6 +1063,7 @@ test("관심사 초기 조회 실패 시 기존 목록을 지우는 저장을 �
             groupId: "approved-care-group",
             groupName: "돌봄 가족",
             id: "approved-request",
+            myMemberId: "member-manager",
             role: "careReceiver",
             status: "APPROVED",
           },
@@ -1072,86 +1082,11 @@ test("관심사 초기 조회 실패 시 기존 목록을 지우는 저장을 �
     await Promise.resolve();
     await Promise.resolve();
   });
-  await TestRenderer.act(async () => {
-    await renderer!.root
-      .findByProps({ accessibilityLabel: "관심사 저장하고 다음" })
-      .props.onPress();
-  });
 
-  expect(interestGateway.loadInterests).toHaveBeenCalledWith(
-    "approved-care-group",
-    "member-manager",
-  );
+  expect(renderer!.root.findByType(AppShell)).toBeTruthy();
+  expect(renderer!.root.findByProps({accessibilityLabel: "피드 탭"})).toBeTruthy();
+  expect(interestGateway.loadInterests).not.toHaveBeenCalled();
   expect(interestGateway.replaceInterests).not.toHaveBeenCalled();
-});
-
-test("관심사 조회 중 화면을 나가면 늦은 실패 알림을 표시하지 않는다", async () => {
-  const groupGateway = createGroupGateway();
-  groupGateway.loadGroups.mockResolvedValue({
-    groups: [
-      {
-        id: "approved-care-group",
-        name: "돌봄 가족",
-        role: "careReceiver",
-        isManager: false,
-        memberCount: 1,
-        myMemberId: "member-manager",
-      },
-    ],
-    joinRequests: [],
-  });
-  let rejectLoad: (error: Error) => void = () => undefined;
-  const pendingLoad = new Promise<never>((_, reject) => {
-    rejectLoad = reject;
-  });
-  const interestGateway = {
-    loadInterests: jest.fn().mockReturnValue(pendingLoad),
-    replaceInterests: jest.fn().mockResolvedValue({
-      memberId: "member-manager",
-      interests: [],
-    }),
-  };
-  const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
-  let renderer: TestRenderer.ReactTestRenderer;
-
-  await TestRenderer.act(() => {
-    renderer = TestRenderer.create(
-      <App
-        groupGateway={groupGateway}
-        initialJoinRequests={[
-          {
-            groupId: "approved-care-group",
-            groupName: "돌봄 가족",
-            id: "approved-request",
-            role: "careReceiver",
-            status: "APPROVED",
-          },
-        ]}
-        initialRootRoute="groupOnboarding"
-        interestGateway={interestGateway}
-      />
-    );
-  });
-  mountedRenderers.push(renderer!);
-
-  await TestRenderer.act(async () => {
-    await renderer!.root
-      .findByProps({ accessibilityLabel: "돌봄 가족 열기" })
-      .props.onPress();
-    await Promise.resolve();
-  });
-  await TestRenderer.act(() => {
-    renderer!.root
-      .findByProps({ accessibilityLabel: "관심사 설정 건너뛰기" })
-      .props.onPress();
-  });
-  await TestRenderer.act(async () => {
-    rejectLoad(new Error("network"));
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-
-  expect(alertSpy).not.toHaveBeenCalled();
 });
 
 test("초대 코드 참여 요청을 보내면 승인 대기 카드를 표시한다", async () => {
@@ -1248,6 +1183,279 @@ test("기본 그룹 게이트웨이로 초대 코드 가입 요청과 상태 재
   );
   expect(groupGateway.loadGroups).toHaveBeenCalled();
   expect(renderer!.root.findByProps({ children: "API 가족" })).toBeTruthy();
+});
+
+test("가입 대기 화면을 열어 둔 채 승인되면 승인 카드로 전환한다", async () => {
+  const groupGateway = createGroupGateway();
+  groupGateway.requestJoinByCode = jest.fn().mockResolvedValue({
+    groupId: "approved-while-open",
+    groupName: "승인 가족",
+    joinRequestId: "request-approved",
+    status: "PENDING_ADMIN",
+  });
+  groupGateway.loadGroups.mockResolvedValueOnce({
+    groups: [
+      {
+        id: "approved-while-open",
+        isManager: false,
+        memberCount: 2,
+        myMemberId: "member-approved",
+        name: "승인 가족",
+        role: "guardian",
+      },
+    ],
+    joinRequests: [
+      {
+        groupId: "approved-while-open",
+        groupName: "승인 가족",
+        joinRequestId: "request-approved",
+        processedAt: "2026-08-03T00:00:00Z",
+        requestedAt: "2026-08-02T00:00:00Z",
+        status: "APPROVED",
+      },
+    ],
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App initialRootRoute="groupOnboarding" groupGateway={groupGateway} />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+      })
+      .props.onPress();
+  });
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({accessibilityLabel: "6자리 초대 코드"})
+      .props.onChangeText("ab12c3");
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({accessibilityLabel: "참여 요청 보내기"})
+      .props.onPress();
+  });
+
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: "승인 가족 열기"}),
+  ).toBeTruthy();
+  expect(JSON.stringify(renderer!.toJSON())).toContain("가입이 승인되었어요");
+});
+
+test("저장된 가입 요청은 재실행 후 승인 카드로 복원하고 입장 뒤 제거한다", async () => {
+  let storedIds = ["request-restored"];
+  const joinRequestStore = {
+    load: jest.fn(async (userId: number) =>
+      userId === 7 ? [...storedIds] : [],
+    ),
+    save: jest.fn(async (_userId: number, requestIds: readonly string[]) => {
+      storedIds = [...requestIds];
+    }),
+  };
+  const groupGateway = createGroupGateway();
+  groupGateway.loadGroups.mockResolvedValue({
+    groups: [
+      {
+        id: "restored-group",
+        isManager: false,
+        memberCount: 2,
+        myMemberId: "restored-member",
+        name: "복원 가족",
+        role: "guardian",
+      },
+    ],
+    joinRequests: [
+      {
+        groupId: "restored-group",
+        groupName: "복원 가족",
+        joinRequestId: "request-restored",
+        processedAt: "2026-08-03T00:00:00Z",
+        requestedAt: "2026-08-02T00:00:00Z",
+        status: "APPROVED",
+      },
+    ],
+  });
+  const authSession = createAuthSessionCoordinator({
+    status: "authenticated",
+    user: {id: 7, name: "복원 사용자"},
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        authSession={authSession}
+        groupGateway={groupGateway}
+        initialShellRoute="archive"
+        joinRequestStore={joinRequestStore}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+  await resolveAuthRestore(authSession);
+
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: "복원 가족 열기"}),
+  ).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: "복원 가족 열기"})
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  expect(storedIds).toEqual([]);
+  expect(renderer!.root.findByType(AppShell).props.initialRoute).toBe("feed");
+  expect(groupGateway.loadGroups).toHaveBeenCalled();
+});
+
+test("저장소에 없는 과거 승인 요청은 재실행 시 새 카드로 표시하지 않는다", async () => {
+  const groupGateway = createGroupGateway();
+  groupGateway.loadGroups.mockResolvedValue({
+    groups: [
+      {
+        id: "historical-group",
+        isManager: false,
+        memberCount: 2,
+        myMemberId: "historical-member",
+        name: "과거 가족",
+        role: "guardian",
+      },
+    ],
+    joinRequests: [
+      {
+        groupId: "historical-group",
+        groupName: "과거 가족",
+        joinRequestId: "historical-request",
+        processedAt: "2026-08-01T00:00:00Z",
+        requestedAt: "2026-07-31T00:00:00Z",
+        status: "APPROVED",
+      },
+    ],
+  });
+  const authSession = createAuthSessionCoordinator({
+    status: "authenticated",
+    user: {id: 7, name: "복원 사용자"},
+  });
+  const joinRequestStore = {
+    load: jest.fn().mockResolvedValue([]),
+    save: jest.fn().mockResolvedValue(undefined),
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        authSession={authSession}
+        groupGateway={groupGateway}
+        joinRequestStore={joinRequestStore}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+  await resolveAuthRestore(authSession);
+
+  expect(renderer!.root.findByType(AppShell)).toBeTruthy();
+  expect(
+    renderer!.root.findAllByProps({accessibilityLabel: "과거 가족 열기"}),
+  ).toHaveLength(0);
+});
+
+test("실제 3초 폴링은 그룹 요약이 함께 보일 때 승인 카드로 전환한다", async () => {
+  jest.useFakeTimers();
+  try {
+    const pendingSnapshot = {
+      groups: [],
+      joinRequests: [
+        {
+          groupId: "polled-group",
+          groupName: "폴링 가족",
+          joinRequestId: "request-polled",
+          processedAt: null,
+          requestedAt: "2026-08-02T00:00:00Z",
+          status: "PENDING_ADMIN" as const,
+        },
+      ],
+    };
+    const approvedWithoutGroup = {
+      groups: [],
+      joinRequests: [
+        {
+          ...pendingSnapshot.joinRequests[0],
+          processedAt: "2026-08-03T00:00:00Z",
+          status: "APPROVED" as const,
+        },
+      ],
+    };
+    const approvedWithGroup = {
+      groups: [
+        {
+          id: "polled-group",
+          isManager: false,
+          memberCount: 2,
+          myMemberId: "polled-member",
+          name: "폴링 가족",
+          role: "guardian" as const,
+        },
+      ],
+      joinRequests: approvedWithoutGroup.joinRequests,
+    };
+    const groupGateway = createGroupGateway();
+    groupGateway.loadGroups
+      .mockResolvedValueOnce(pendingSnapshot)
+      .mockResolvedValueOnce(pendingSnapshot)
+      .mockResolvedValueOnce(approvedWithoutGroup)
+      .mockResolvedValueOnce(approvedWithGroup);
+    const authSession = createAuthSessionCoordinator({
+      status: "authenticated",
+      user: {id: 7, name: "폴링 사용자"},
+    });
+    const joinRequestStore = {
+      load: jest.fn().mockResolvedValue(["request-polled"]),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    let renderer: TestRenderer.ReactTestRenderer;
+
+    await TestRenderer.act(() => {
+      renderer = TestRenderer.create(
+        <App
+          authSession={authSession}
+          groupGateway={groupGateway}
+          joinRequestStore={joinRequestStore}
+        />,
+      );
+    });
+    mountedRenderers.push(renderer!);
+    await resolveAuthRestore(authSession);
+    await TestRenderer.act(flushAsyncWork);
+
+    await TestRenderer.act(async () => {
+      jest.advanceTimersByTime(3_000);
+      await flushAsyncWork();
+    });
+    expect(
+      renderer!.root.findAllByProps({accessibilityLabel: "폴링 가족 열기"}),
+    ).toHaveLength(0);
+    expect(JSON.stringify(renderer!.toJSON())).toContain("승인 요청 대기");
+
+    await TestRenderer.act(async () => {
+      jest.advanceTimersByTime(3_000);
+      await flushAsyncWork();
+    });
+    expect(
+      renderer!.root.findByProps({accessibilityLabel: "폴링 가족 열기"}),
+    ).toBeTruthy();
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test("가입 요청 뒤 그룹 재조회 중 화면이 종료되면 늦은 결과를 읽지 않는다", async () => {
@@ -1410,7 +1618,7 @@ test("가입 게이트웨이가 없으면 코드 오류 대신 후속 연동을 
   alertSpy.mockRestore();
 });
 
-test("앱 셸에서 그룹 연결 화면을 열었다가 기존 앱 셸로 돌아온다", async () => {
+test("피드의 생성·참여 버튼은 시트를 바로 열고 취소하면 피드로 돌아온다", async () => {
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(() => {
@@ -1426,17 +1634,29 @@ test("앱 셸에서 그룹 연결 화면을 열었다가 기존 앱 셸로 돌�
   expect(
     renderer!.root.findByProps({ children: "가족과\n연결해볼까요?" })
   ).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({ accessibilityLabel: "6자리 초대 코드" })
+  ).toBeTruthy();
 
   await TestRenderer.act(() => {
-    renderer!.root
-      .findByProps({ accessibilityLabel: "A-10으로 돌아가기" })
-      .props.onPress();
+    renderer!.root.findByType(JoinGroupSheet).props.onDismiss();
   });
 
   expect(renderer!.root.findByType(AppShell)).toBeTruthy();
+  expect(renderer!.root.findByType(AppShell).props.initialRoute).toBe("feed");
   expect(
     renderer!.root.findByProps({ children: "참여 중인 그룹이 없어요" })
   ).toBeTruthy();
+
+  await TestRenderer.act(() => {
+    renderer!.root.findByType(AppShell).props.onCreateGroup();
+  });
+  expect(renderer!.root.findByType(CreateGroupSheet).props.visible).toBe(true);
+
+  await TestRenderer.act(() => {
+    renderer!.root.findByType(CreateGroupSheet).props.onDismiss();
+  });
+  expect(renderer!.root.findByType(AppShell).props.initialRoute).toBe("feed");
 });
 
 test("승인된 피보호자는 지정된 역할로 그룹에 진입한다", async () => {
@@ -1455,6 +1675,7 @@ test("승인된 피보호자는 지정된 역할로 그룹에 진입한다", asy
             groupId: "approved-care-group",
             groupName: "돌봄 가족",
             id: "approved-request",
+            myMemberId: "member-manager",
             role: "careReceiver",
             status: "APPROVED",
           },
@@ -1474,16 +1695,8 @@ test("승인된 피보호자는 지정된 역할로 그룹에 진입한다", asy
       .props.onPress();
   });
 
-  expect(
-    renderer!.root.findByProps({ children: "관심사를 선택해주세요" })
-  ).toBeTruthy();
-
-  await TestRenderer.act(() => {
-    renderer!.root
-      .findByProps({ accessibilityLabel: "관심사 설정 건너뛰기" })
-      .props.onPress();
-  });
-
+  expect(renderer!.root.findByType(AppShell)).toBeTruthy();
+  expect(renderer!.root.findByProps({accessibilityLabel: "피드 탭"})).toBeTruthy();
   expect(renderer!.root.findByProps({ children: "돌봄 가족" })).toBeTruthy();
   expect(renderer!.root.findAllByProps({ children: "리포트" })).toHaveLength(0);
   expect(groupStore.save).toHaveBeenCalledWith("approved-care-group");
@@ -1674,6 +1887,87 @@ test("그룹 이름 변경 API가 성공하면 현재 그룹 이름도 갱신한
       .props.onPress();
   });
   expect(renderer!.root.findByProps({ children: "새 가족" })).toBeTruthy();
+});
+
+test("현재 사용자의 역할 변경 성공은 하단 탭 권한을 즉시 갱신한다", async () => {
+  const groupGateway = createGroupGateway();
+  groupGateway.getGroupDetail.mockResolvedValue({
+    careReceiverCount: 0,
+    guardianCount: 1,
+    id: "role-group",
+    isManager: true,
+    managerMemberId: "member-self",
+    memberCount: 1,
+    name: "역할 가족",
+  });
+  const groupMemberGateway: jest.Mocked<GroupMemberGateway> = {
+    loadMemberProfile: jest.fn(),
+    loadMembers: jest.fn().mockResolvedValue([
+      {
+        age: null,
+        alias: null,
+        avatarText: "나",
+        gender: null,
+        isManager: true,
+        memberId: "member-self",
+        name: "나",
+        role: "guardian",
+        userId: "1",
+      },
+    ]),
+    updateMemberAlias: jest.fn(),
+    updateMemberRole: jest.fn().mockResolvedValue({
+      groupId: "role-group",
+      memberId: "member-self",
+      role: "careReceiver",
+    }),
+  };
+  const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <App
+        groupGateway={groupGateway}
+        groupMemberGateway={groupMemberGateway}
+        groups={[
+          {
+            id: "role-group",
+            myMemberId: "member-self",
+            name: "역할 가족",
+            role: "guardian",
+          },
+        ]}
+        initialGroupId="role-group"
+        initialRootRoute="appShell"
+      />,
+    );
+    await flushAsyncWork();
+  });
+  mountedRenderers.push(renderer!);
+  expect(renderer!.root.findAllByProps({children: "리포트"}).length).toBeGreaterThan(0);
+
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({accessibilityLabel: "그룹정보 탭"}).props.onPress();
+    await flushAsyncWork();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root.findByProps({accessibilityLabel: "나 피보호자"}).props.onPress();
+  });
+  const changeAction = alertSpy.mock.calls.at(-1)?.[2]?.find(
+    action => action.text === "변경",
+  );
+  await TestRenderer.act(async () => {
+    changeAction?.onPress?.();
+    await flushAsyncWork();
+  });
+
+  expect(groupMemberGateway.updateMemberRole).toHaveBeenCalledWith(
+    "role-group",
+    "member-self",
+    "careReceiver",
+  );
+  expect(renderer!.root.findAllByProps({children: "리포트"})).toHaveLength(0);
 });
 
 test("로그아웃 확인 후 로컬 세션을 지우고 A-1로 돌아온다", async () => {
