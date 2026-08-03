@@ -54,10 +54,13 @@ function payload(
   };
 }
 
-function transport(put = jest.fn()): PostUploadTransport {
+function transport(
+  put = jest.fn().mockResolvedValue(undefined),
+  blob = {size: 4} as Blob,
+): PostUploadTransport {
   return {
-    readFile: jest.fn().mockResolvedValue({size: 4} as Blob),
-    put: put.mockResolvedValue(undefined),
+    readFile: jest.fn().mockResolvedValue(blob),
+    put,
   };
 }
 
@@ -67,6 +70,8 @@ describe('postApi', () => {
   });
 
   it('presigned URL의 헤더를 그대로 사용해 업로드하고 생성 요청을 보낸다', async () => {
+    const blob = {size: 4} as Blob;
+    const mediaWithStaleSize = {...localImage, fileSizeBytes: 999};
     const postSpy = jest
       .spyOn(apiClient, 'post')
       .mockResolvedValueOnce(
@@ -76,7 +81,11 @@ describe('postApi', () => {
               {
                 expiresAt: '2026-08-01T00:00:00Z',
                 fileUrl: 'https://cdn.example.com/new.jpg',
-                headers: {'x-amz-meta-token': 'signed', 'Content-Type': 'image/jpeg'},
+                headers: {
+                  'Content-Length': '4',
+                  'Content-Type': 'image/jpeg',
+                  'x-amz-meta-token': 'signed',
+                },
                 uploadUrl: 'https://s3.example.com/upload',
               },
             ],
@@ -95,7 +104,7 @@ describe('postApi', () => {
       );
     const progress: number[] = [];
     const put = jest.fn();
-    const uploadTransport = transport(put);
+    const uploadTransport = transport(put, blob);
     put.mockImplementation(async (_url, _blob, config) => {
       config.onUploadProgress?.({loaded: 2, total: 4} as never);
     });
@@ -103,7 +112,10 @@ describe('postApi', () => {
     await expect(
       submitPost(
         '11',
-        payload({newMedia: [localImage], orderedMedia: [localImage]}),
+        payload({
+          newMedia: [mediaWithStaleSize],
+          orderedMedia: [mediaWithStaleSize],
+        }),
         value => progress.push(value),
         undefined,
         {transport: uploadTransport},
@@ -127,9 +139,13 @@ describe('postApi', () => {
     });
     expect(put).toHaveBeenCalledWith(
       'https://s3.example.com/upload',
-      expect.anything(),
+      blob,
       expect.objectContaining({
-        headers: {'x-amz-meta-token': 'signed', 'Content-Type': 'image/jpeg'},
+        headers: {
+          'Content-Length': '4',
+          'Content-Type': 'image/jpeg',
+          'x-amz-meta-token': 'signed',
+        },
       }),
     );
     expect(postSpy.mock.calls[1]?.[1]).toEqual({
@@ -219,15 +235,15 @@ describe('postApi', () => {
     );
   });
 
-  it('미디어 메타데이터가 없으면 업로드하지 않고 명시적 오류를 반환한다', async () => {
+  it('미디어 파일명이나 MIME 정보가 없으면 업로드하지 않고 명시적 오류를 반환한다', async () => {
     const postSpy = jest.spyOn(apiClient, 'post');
 
     await expect(
       submitPost(
         '11',
         payload({
-          newMedia: [{...localImage, fileSizeBytes: undefined}],
-          orderedMedia: [{...localImage, fileSizeBytes: undefined}],
+          newMedia: [{...localImage, fileName: undefined}],
+          orderedMedia: [{...localImage, fileName: undefined}],
         }),
         undefined,
         undefined,
@@ -235,6 +251,60 @@ describe('postApi', () => {
       ),
     ).rejects.toMatchObject<Partial<ApiError>>({code: 'INVALID_REQUEST'});
     expect(postSpy).not.toHaveBeenCalled();
+  });
+
+  it('실제 Blob이 비어 있으면 presigned URL을 요청하지 않는다', async () => {
+    const postSpy = jest.spyOn(apiClient, 'post');
+
+    await expect(
+      submitPost(
+        '11',
+        payload({newMedia: [localImage], orderedMedia: [localImage]}),
+        undefined,
+        undefined,
+        {transport: transport(jest.fn(), {size: 0} as Blob)},
+      ),
+    ).rejects.toMatchObject<Partial<ApiError>>({code: 'INVALID_REQUEST'});
+    expect(postSpy).not.toHaveBeenCalled();
+  });
+
+  it('S3가 XML 오류를 반환해도 미디어 업로드 오류로 정규화한다', async () => {
+    jest.spyOn(apiClient, 'post').mockResolvedValueOnce(
+      success(
+        {
+          uploads: [
+            {
+              expiresAt: '2026-08-01T00:00:00Z',
+              fileUrl: 'https://cdn.example.com/new.jpg',
+              headers: {
+                'Content-Length': '4',
+                'Content-Type': 'image/jpeg',
+              },
+              uploadUrl: 'https://s3.example.com/upload',
+            },
+          ],
+        },
+        201,
+      ),
+    );
+    const put = jest.fn().mockRejectedValue({
+      isAxiosError: true,
+      response: {data: '<Error><Code>AccessDenied</Code></Error>', status: 403},
+    });
+
+    await expect(
+      submitPost(
+        '11',
+        payload({newMedia: [localImage], orderedMedia: [localImage]}),
+        undefined,
+        undefined,
+        {transport: transport(put)},
+      ),
+    ).rejects.toMatchObject<Partial<ApiError>>({
+      code: 'MEDIA_UPLOAD_FAILED',
+      message: '미디어 업로드에 실패했습니다. 다시 시도해 주세요.',
+      status: 403,
+    });
   });
 
   it('취소된 업로드는 UPLOAD_CANCELLED로 식별할 수 있다', async () => {
