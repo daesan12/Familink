@@ -1,5 +1,6 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {useEffect, useState} from 'react';
+import Video from 'react-native-video';
 import {
   ActivityIndicator,
   FlatList,
@@ -21,6 +22,7 @@ const NEXT_IMAGE_PEEK = 28;
 
 export interface CarouselImage {
   accessibilityLabel?: string;
+  fileUrl?: string;
   hasPoster?: boolean;
   id: string;
   mediaType?: 'IMAGE' | 'VIDEO';
@@ -29,12 +31,14 @@ export interface CarouselImage {
 
 interface PostImageCarouselProps {
   images: readonly CarouselImage[];
+  isVisible?: boolean;
   onImagePress?: () => void;
   onRemove?: (imageId: string) => void;
 }
 
 export function PostImageCarousel({
   images,
+  isVisible = true,
   onImagePress,
   onRemove,
 }: PostImageCarouselProps) {
@@ -98,6 +102,7 @@ export function PostImageCarousel({
           <FeedImageFrame
             height={imageHeight}
             image={item}
+            isVisible={isVisible}
             onPress={onImagePress}
             onRemove={onRemove}
             width={imageWidth}
@@ -132,6 +137,7 @@ function CarouselSeparator() {
 interface FeedImageFrameProps {
   height: number;
   image: CarouselImage;
+  isVisible: boolean;
   onPress?: () => void;
   onRemove?: (imageId: string) => void;
   width: number;
@@ -140,6 +146,7 @@ interface FeedImageFrameProps {
 function FeedImageFrame({
   height,
   image,
+  isVisible,
   onPress,
   onRemove,
   width,
@@ -148,8 +155,55 @@ function FeedImageFrame({
     'loading',
   );
   const [retryCount, setRetryCount] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   const isVideo = image.mediaType === 'VIDEO';
   const hasPoster = !isVideo || image.hasPoster !== false;
+  const canPlayVideo =
+    isVisible &&
+    isVideo &&
+    image.fileUrl !== undefined &&
+    image.fileUrl.trim().length > 0;
+
+  useEffect(() => {
+    setIsPlaying(false);
+    setVideoError(false);
+  }, [image.fileUrl, image.id]);
+
+  useEffect(() => {
+    if (!isVisible) {
+      setIsPlaying(false);
+    }
+  }, [isVisible]);
+
+  if (isPlaying && canPlayVideo) {
+    return (
+      <View style={[styles.imageFrame, {height, width}]}>
+        <Video
+          controls
+          onEnd={() => setIsPlaying(false)}
+          onError={() => {
+            setIsPlaying(false);
+            setVideoError(true);
+          }}
+          resizeMode="contain"
+          source={{uri: image.fileUrl}}
+          style={[styles.videoPlayer, {height, width}]}
+          testID="post-video-player"
+        />
+      </View>
+    );
+  }
+
+  const handleMediaPress = () => {
+    if (canPlayVideo) {
+      setVideoError(false);
+      setIsPlaying(true);
+      return;
+    }
+
+    onPress?.();
+  };
 
   return (
     <View style={[styles.imageFrame, {height, width}]}>
@@ -182,10 +236,17 @@ function FeedImageFrame({
       ) : null}
 
       <Pressable
-        accessibilityHint={onPress ? '게시글 상세 화면으로 이동합니다' : undefined}
-        accessibilityRole={onPress ? 'button' : undefined}
-        disabled={!onPress}
-        onPress={onPress}
+        accessibilityHint={
+          canPlayVideo
+            ? '현재 화면에서 동영상을 재생합니다'
+            : onPress
+              ? '게시글 상세 화면으로 이동합니다'
+              : undefined
+        }
+        accessibilityLabel={canPlayVideo ? '동영상 재생' : undefined}
+        accessibilityRole={canPlayVideo || onPress ? 'button' : undefined}
+        disabled={!canPlayVideo && !onPress}
+        onPress={handleMediaPress}
       >
         {hasPoster ? (
           <Image
@@ -221,6 +282,18 @@ function FeedImageFrame({
           </View>
         ) : null}
       </Pressable>
+
+      {videoError ? (
+        <View
+          accessibilityLiveRegion="polite"
+          pointerEvents="none"
+          style={styles.videoError}
+        >
+          <Text style={styles.videoErrorText}>
+            영상을 재생할 수 없어요. 다시 시도해 주세요.
+          </Text>
+        </View>
+      ) : null}
 
       {onRemove ? (
         <Pressable
@@ -343,5 +416,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.imageOverlay,
     justifyContent: 'center',
+  },
+  videoError: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.68)',
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    paddingHorizontal: 24,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  videoErrorText: {
+    color: COLORS.background,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  videoPlayer: {
+    backgroundColor: COLORS.textStrong,
   },
 });

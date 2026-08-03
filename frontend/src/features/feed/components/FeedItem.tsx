@@ -10,6 +10,7 @@ import {ReactionBar, type ReactionAnchor} from './ReactionBar';
 interface FeedItemProps {
   canInteract: boolean;
   commentCount: number;
+  isVisible: boolean;
   isReactionPickerOpen: boolean;
   onPress: (postId: string) => void;
   onToggleReactionPicker: (
@@ -23,6 +24,7 @@ interface FeedItemProps {
 export function FeedItem({
   canInteract,
   commentCount,
+  isVisible,
   isReactionPickerOpen,
   onPress,
   onToggleReactionPicker,
@@ -51,7 +53,11 @@ export function FeedItem({
       >
         <Text style={styles.body}>{post.body}</Text>
       </Pressable>
-      <PostImageCarousel images={post.images} onImagePress={handlePress} />
+      <PostImageCarousel
+        images={post.images}
+        isVisible={isVisible}
+        onImagePress={handlePress}
+      />
 
       <View style={styles.metaRow}>
         <ReactionBar

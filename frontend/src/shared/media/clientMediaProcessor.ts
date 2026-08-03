@@ -14,8 +14,13 @@ export interface MediaSource {
 export interface ProcessedMediaAsset {
   contentType: string;
   fileName: string;
+  sizeBytes?: number;
   temporaryUris?: readonly string[];
   uri: string;
+}
+
+interface LocalFileStat {
+  size: unknown;
 }
 
 export interface ClientMediaProcessor {
@@ -37,9 +42,11 @@ export const clientMediaProcessor: ClientMediaProcessor = {
 
   async preparePostOriginal(source) {
     if (source.kind === 'video') {
+      const stat = await statLocalFile(source.uri);
       return {
         contentType: source.contentType ?? 'video/mp4',
         fileName: source.fileName ?? 'post-video.mp4',
+        sizeBytes: normalizeFileSize(stat.size),
         temporaryUris: [],
         uri: source.uri,
       };
@@ -107,13 +114,35 @@ async function compressImage(
     quality: options.quality,
     returnableOutputType: 'uri',
   });
+  const stat = await statLocalFile(compressedUri);
 
   return {
     contentType: JPEG_CONTENT_TYPE,
     fileName: toJpegFileName(fileName, options.fallbackName, options.suffix),
+    sizeBytes: normalizeFileSize(stat.size),
     temporaryUris: [compressedUri],
     uri: compressedUri,
   };
+}
+
+async function statLocalFile(uri: string): Promise<LocalFileStat> {
+  const path = toLocalFilePath(uri);
+  if (path === null) {
+    throw new Error('Media processing requires a local file');
+  }
+  return RNFS.stat(path);
+}
+
+function normalizeFileSize(value: unknown): number {
+  const size = typeof value === 'string' ? Number(value) : value;
+  if (
+    typeof size !== 'number' ||
+    !Number.isSafeInteger(size) ||
+    size <= 0
+  ) {
+    throw new Error('Media file size is unavailable');
+  }
+  return size;
 }
 
 async function deleteTemporaryFile(uri: string): Promise<void> {

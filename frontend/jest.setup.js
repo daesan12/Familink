@@ -44,6 +44,12 @@ jest.mock('react-native-fs', () => ({
   __esModule: true,
   default: {
     exists: jest.fn().mockResolvedValue(true),
+    stat: jest.fn().mockResolvedValue({size: 4}),
+    stopUpload: jest.fn(),
     unlink: jest.fn().mockResolvedValue(undefined),
+    uploadFiles: jest.fn(() => ({
+      jobId: 1,
+      promise: Promise.resolve({body: '', headers: {}, jobId: 1, statusCode: 200}),
+    })),
   },
 }));

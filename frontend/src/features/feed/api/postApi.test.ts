@@ -41,6 +41,16 @@ const localImage: LocalMedia = {
   sourceType: 'local',
 };
 
+const localVideo: LocalMedia = {
+  contentType: 'video/mp4',
+  durationSeconds: 30,
+  fileName: 'large.mp4',
+  id: 'local-video-1',
+  kind: 'video',
+  source: {uri: 'content://large.mp4'},
+  sourceType: 'local',
+};
+
 function payload(
   overrides: Partial<PostSubmitPayload> = {},
 ): PostSubmitPayload {
@@ -56,12 +66,8 @@ function payload(
 
 function transport(
   put = jest.fn().mockResolvedValue(undefined),
-  blob = {size: 4} as Blob,
 ): PostUploadTransport {
-  return {
-    readFile: jest.fn().mockResolvedValue(blob),
-    put,
-  };
+  return {put};
 }
 
 describe('postApi', () => {
@@ -70,7 +76,6 @@ describe('postApi', () => {
   });
 
   it('presigned URL의 헤더를 그대로 사용해 업로드하고 생성 요청을 보낸다', async () => {
-    const blob = {size: 4} as Blob;
     const mediaWithStaleSize = {...localImage, fileSizeBytes: 999};
     const postSpy = jest
       .spyOn(apiClient, 'post')
@@ -122,8 +127,8 @@ describe('postApi', () => {
       );
     const progress: number[] = [];
     const put = jest.fn();
-    const uploadTransport = transport(put, blob);
-    put.mockImplementation(async (_url, _blob, config) => {
+    const uploadTransport = transport(put);
+    put.mockImplementation(async (_url, _file, config) => {
       config.onUploadProgress?.({loaded: 2, total: 4} as never);
     });
 
@@ -157,7 +162,12 @@ describe('postApi', () => {
     });
     expect(put).toHaveBeenCalledWith(
       'https://s3.example.com/upload',
-      blob,
+      {
+        contentType: 'image/jpeg',
+        fileName: 'new.jpg',
+        sizeBytes: 4,
+        uri: 'file://new.jpg',
+      },
       expect.objectContaining({
         headers: {
           'Content-Length': '4',
@@ -306,7 +316,7 @@ describe('postApi', () => {
     expect(postSpy).not.toHaveBeenCalled();
   });
 
-  it('실제 Blob이 비어 있으면 presigned URL을 요청하지 않는다', async () => {
+  it('처리된 파일 크기가 0이면 presigned URL을 요청하지 않는다', async () => {
     const postSpy = jest.spyOn(apiClient, 'post');
 
     await expect(
@@ -315,9 +325,53 @@ describe('postApi', () => {
         payload({newMedia: [localImage], orderedMedia: [localImage]}),
         undefined,
         undefined,
-        {transport: transport(jest.fn(), {size: 0} as Blob)},
+        {
+          mediaProcessor: {
+            preparePostOriginal: jest.fn().mockResolvedValue({
+              contentType: 'image/jpeg',
+              fileName: 'new.jpg',
+              sizeBytes: 0,
+              uri: 'file://new.jpg',
+            }),
+            preparePostThumbnail: jest.fn(),
+            prepareProfileImage: jest.fn(),
+          },
+          transport: transport(),
+        },
       ),
     ).rejects.toMatchObject<Partial<ApiError>>({code: 'INVALID_REQUEST'});
+    expect(postSpy).not.toHaveBeenCalled();
+  });
+
+  it('100MiB 초과 영상은 Blob을 읽거나 썸네일을 만들기 전에 거부한다', async () => {
+    const postSpy = jest.spyOn(apiClient, 'post');
+    const uploadTransport = transport();
+    const preparePostThumbnail = jest.fn();
+
+    await expect(
+      submitPost(
+        '11',
+        payload({newMedia: [localVideo], orderedMedia: [localVideo]}),
+        undefined,
+        undefined,
+        {
+          mediaProcessor: {
+            preparePostOriginal: jest.fn().mockResolvedValue({
+              contentType: 'video/mp4',
+              fileName: 'large.mp4',
+              sizeBytes: 100 * 1024 * 1024 + 1,
+              uri: 'content://large.mp4',
+            }),
+            preparePostThumbnail,
+            prepareProfileImage: jest.fn(),
+          },
+          transport: uploadTransport,
+        },
+      ),
+    ).rejects.toMatchObject<Partial<ApiError>>({code: 'INVALID_REQUEST'});
+
+    expect(preparePostThumbnail).not.toHaveBeenCalled();
+    expect(uploadTransport.put).not.toHaveBeenCalled();
     expect(postSpy).not.toHaveBeenCalled();
   });
 
