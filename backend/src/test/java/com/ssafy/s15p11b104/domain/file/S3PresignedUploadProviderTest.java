@@ -43,22 +43,24 @@ class S3PresignedUploadProviderTest {
 	}
 
 	@Test
-	void signsContentLengthAndContentType() {
+	void signsContentTypeWithoutContentLength() {
 		UploadResponse response = provider.issue("post-media",
 			new FileUploadRequest("photo.jpg", "image/jpeg", 1024L));
 
 		List<String> signedHeaders = signedHeaders(response.uploadUrl());
-		assertThat(signedHeaders).contains("content-length", "content-type");
+		assertThat(signedHeaders)
+			.contains("content-type")
+			.doesNotContain("content-length");
 	}
 
 	@Test
-	void returnsContentLengthHeader() {
+	void returnsOnlyContentTypeHeader() {
 		UploadResponse response = provider.issue("post-media",
 			new FileUploadRequest("photo.jpg", "image/jpeg", 1024L));
 
 		assertThat(response.headers())
-			.containsEntry("Content-Type", "image/jpeg")
-			.containsEntry("Content-Length", "1024");
+			.hasSize(1)
+			.containsEntry("Content-Type", "image/jpeg");
 	}
 
 	@Test
