@@ -8,17 +8,45 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
 import com.ssafy.s15p11b104.global.ai.gemini.GeminiClientException;
 import com.ssafy.s15p11b104.global.ai.gemini.GeminiFailureType;
+import com.ssafy.s15p11b104.domain.feed.entity.MediaType;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 class GoogleGeminiGatewayTest {
+
+	@Test
+	void routesTextToGmsAndMediaToDirectGeminiWithoutFallback() {
+		AtomicInteger gmsCalls = new AtomicInteger();
+		AtomicInteger directCalls = new AtomicInteger();
+		GoogleGeminiGateway gateway = new GoogleGeminiGateway(
+			request -> {
+				gmsCalls.incrementAndGet();
+				return "{\"summary\":\"text\"}";
+			},
+			request -> {
+				directCalls.incrementAndGet();
+				return "{\"summary\":\"media\"}";
+			});
+
+		String textResponse = gateway.generate(new GeminiRequest("text-model", "text", List.of()));
+		String mediaResponse = gateway.generate(new GeminiRequest(
+			"media-model",
+			"media",
+			List.of(new PostContentMedia(MediaType.IMAGE, "https://bucket/photo.jpg", "image/jpeg"))));
+
+		assertThat(textResponse).isEqualTo("{\"summary\":\"text\"}");
+		assertThat(mediaResponse).isEqualTo("{\"summary\":\"media\"}");
+		assertThat(gmsCalls).hasValue(1);
+		assertThat(directCalls).hasValue(1);
+	}
 
 	@Test
 	void preservesRetryMetadataWithoutExposingUpstreamDetails() {

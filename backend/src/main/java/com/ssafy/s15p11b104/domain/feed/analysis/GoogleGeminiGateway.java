@@ -24,27 +24,41 @@ public class GoogleGeminiGateway implements GeminiGateway {
 		.build();
 
 	private final GeminiClient geminiClient;
+	private final DirectGeminiMediaClient directGeminiMediaClient;
 
 	@Autowired
-	public GoogleGeminiGateway(GeminiClient geminiClient) {
+	public GoogleGeminiGateway(
+		GeminiClient geminiClient,
+		DirectGeminiMediaClient directGeminiMediaClient
+	) {
 		this.geminiClient = geminiClient;
+		this.directGeminiMediaClient = directGeminiMediaClient;
 	}
 
 	public GoogleGeminiGateway(String apiKey, String baseUrl) {
-		this(new GoogleGeminiClient(apiKey, baseUrl));
+		this(new GoogleGeminiClient(apiKey, baseUrl), request -> new GoogleGeminiClient(apiKey, baseUrl)
+			.generate(request));
+	}
+
+	GoogleGeminiGateway(GeminiClient geminiClient) {
+		this(geminiClient, geminiClient::generate);
 	}
 
 	@Override
 	public String generate(GeminiRequest request) {
 		try {
-			return geminiClient.generate(new GeminiGenerationRequest(
+			GeminiGenerationRequest generationRequest = new GeminiGenerationRequest(
 				request.model(),
 				request.prompt(),
 				request.media().stream()
 					.map(media -> new GeminiMedia(media.uri(), media.mimeType()))
 					.toList(),
 				RESPONSE_SCHEMA
-			));
+			);
+			if (request.media().isEmpty()) {
+				return geminiClient.generate(generationRequest);
+			}
+			return directGeminiMediaClient.generate(generationRequest);
 		} catch (GeminiClientException exception) {
 			throw new GeminiGatewayException(
 				exception.getMessage(),

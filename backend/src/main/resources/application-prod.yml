@@ -84,6 +84,12 @@ gemini:
   analysis:
     api-key: ${GMS_API_KEY:}
     base-url: ${GMS_API_BASE_URL:https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com}
+    direct-media-enabled: ${GEMINI_DIRECT_MEDIA_ENABLED:true}
+    direct-api-key: ${GEMINI_API_KEY:}
+    direct-base-url: ${GEMINI_API_BASE_URL:https://generativelanguage.googleapis.com}
+    media-download-timeout: ${GEMINI_MEDIA_DOWNLOAD_TIMEOUT:60s}
+    media-ready-timeout: ${GEMINI_MEDIA_READY_TIMEOUT:120s}
+    media-poll-interval: ${GEMINI_MEDIA_POLL_INTERVAL:1s}
     text-model: ${GEMINI_TEXT_MODEL:gemini-2.5-flash-lite}
     multimodal-model: ${GEMINI_MULTIMODAL_MODEL:gemini-3.5-flash}
   call-report:
