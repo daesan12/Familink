@@ -588,7 +588,7 @@ function ReportPage({
         >
           <MaterialDesignIcons
             color={COLORS.textStrong}
-            name="calendar-month-outline"
+            name="calendar-blank-outline"
             size={26}
           />
         </Pressable>

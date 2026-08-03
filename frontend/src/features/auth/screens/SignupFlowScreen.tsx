@@ -733,7 +733,7 @@ function BirthDateStep({
             </Text>
             <MaterialDesignIcons
               color={AUTH_COLORS.primary}
-              name="calendar-month-outline"
+              name="calendar-blank-outline"
               size={25}
             />
           </View>
