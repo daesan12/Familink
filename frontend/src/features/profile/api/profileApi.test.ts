@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 import {ApiError} from '../../../shared/api';
 import {
   createProfileGateway,
@@ -30,6 +32,52 @@ function createUploadTransport(): jest.Mocked<ProfileUploadTransport> {
 }
 
 describe('profileApi', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('keeps the Blob body unchanged in the default Axios upload transport', async () => {
+    const client = createClient();
+    const blob = {size: 2048} as Blob;
+    client.post.mockResolvedValueOnce(
+      success(
+        {
+          uploads: [
+            {
+              expiresAt: '2026-08-01T08:10:00Z',
+              fileUrl:
+                'https://cdn.example.com/profile-image/profile-photo.jpg',
+              headers: {'Content-Type': 'image/jpeg'},
+              uploadUrl: 'https://s3.example.com/signed-upload',
+            },
+          ],
+        },
+        201,
+      ),
+    );
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      blob: jest.fn().mockResolvedValue(blob),
+      ok: true,
+    } as unknown as Response);
+    const putSpy = jest.spyOn(axios, 'put').mockResolvedValueOnce({} as never);
+    const gateway = createProfileGateway({client});
+
+    await gateway.uploadProfileImage({
+      contentType: 'image/jpeg',
+      fileName: 'profile-photo.jpg',
+      sizeBytes: 1024,
+      uri: 'content://profile-photo',
+    });
+
+    const config = putSpy.mock.calls[0]?.[2];
+    const transformRequest = config?.transformRequest;
+    expect(transformRequest).toEqual(expect.any(Function));
+    if (typeof transformRequest !== 'function') {
+      throw new Error('Axios transformRequest must preserve the upload Blob');
+    }
+    expect(transformRequest.call({} as never, blob, {} as never)).toBe(blob);
+  });
+
   it('관리자 위임이 필요한 탈퇴 오류를 사용자 안내로 변환한다', () => {
     const error = new ApiError({
       code: 'MANAGER_TRANSFER_REQUIRED',

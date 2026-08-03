@@ -53,6 +53,7 @@ const defaultUploadTransport: PostUploadTransport = {
       headers: config.headers,
       onUploadProgress: config.onUploadProgress,
       signal: config.signal,
+      transformRequest: value => value,
     });
   },
 };
