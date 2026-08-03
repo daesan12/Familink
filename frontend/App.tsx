@@ -314,6 +314,7 @@ function ConnectedArchiveScreen(screenProps: AppScreenProps) {
 }
 
 function ConnectedFeedScreen(screenProps: AppScreenProps) {
+  const integration = useContext(GroupInfoIntegrationContext);
   const currentMemberId = (
     screenProps.currentGroup as typeof screenProps.currentGroup & {
       myMemberId?: string;
@@ -374,6 +375,26 @@ function ConnectedFeedScreen(screenProps: AppScreenProps) {
       onUpdateComment={usesDevelopmentFixture ? undefined : input =>
         updateComment(input.commentId, input.body)}
       pageLoader={usesDevelopmentFixture ? undefined : loadFeedPage}
+      membersLoader={
+        usesDevelopmentFixture || integration === null
+          ? undefined
+          : integration.members.loadMembers
+      }
+      memberProfileLoader={
+        usesDevelopmentFixture || integration === null
+          ? undefined
+          : integration.members.loadMemberProfile
+      }
+      memberCarnationLoader={
+        usesDevelopmentFixture || integration === null
+          ? undefined
+          : integration.carnationGateway.loadMemberCarnations
+      }
+      rankingLoader={
+        usesDevelopmentFixture || integration === null
+          ? undefined
+          : integration.carnationGateway.loadWeeklyRanking
+      }
     />
   );
 }

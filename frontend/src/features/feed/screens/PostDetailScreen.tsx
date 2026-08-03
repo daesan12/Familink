@@ -50,6 +50,7 @@ interface PostDetailScreenProps {
   onLoadMoreComments?: () => void;
   onMenuPress: () => void;
   onOpenNotifications?: () => void;
+  onPressAuthor?: (author: FeedMember) => void;
   onScrollBeginDrag: () => void;
   onToggleReactionPicker: (
     postId: string,
@@ -78,6 +79,7 @@ export function PostDetailScreen({
   onLoadMoreComments,
   onMenuPress,
   onOpenNotifications,
+  onPressAuthor,
   onScrollBeginDrag,
   onToggleReactionPicker,
   onRetryComments,
@@ -226,9 +228,20 @@ export function PostDetailScreen({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.authorRow}>
-          <View accessibilityElementsHidden style={styles.avatar}>
-            <Text style={styles.avatarText}>{post.author.avatarText}</Text>
-          </View>
+          {onPressAuthor === undefined ? (
+            <View accessibilityElementsHidden style={styles.avatar}>
+              <Text style={styles.avatarText}>{post.author.avatarText}</Text>
+            </View>
+          ) : (
+            <Pressable
+              accessibilityLabel={`${post.author.name}님의 프로필 보기`}
+              accessibilityRole="button"
+              onPress={() => onPressAuthor(post.author)}
+              style={styles.avatar}
+            >
+              <Text style={styles.avatarText}>{post.author.avatarText}</Text>
+            </Pressable>
+          )}
           <View style={styles.authorText}>
             <Text style={styles.authorName}>{post.author.name}</Text>
             <Text style={styles.createdAt}>

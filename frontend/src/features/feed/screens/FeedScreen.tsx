@@ -15,6 +15,13 @@ import {
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
+import {
+  MemberProfilePopup,
+  type GroupMembersLoader,
+  type MemberCarnationLoader,
+  type MemberProfileLoader,
+  type WeeklyRankingLoader,
+} from '../../group-info';
 import type {
   FeedLoader,
   FeedPageLoader,
@@ -90,6 +97,12 @@ export interface FeedScreenProps extends AppScreenProps {
     input: UpdateCommentInput,
   ) => Promise<UpdatedComment | void> | UpdatedComment | void;
   commentsLoader?: CommentPageLoader;
+  // 작성자 아바타 터치 시 그룹정보와 동일한 축소 프로필 팝업을 띄우기 위한
+  // 구성원 조회 로더. membersLoader가 없으면 아바타는 기존처럼 터치되지 않는다.
+  membersLoader?: GroupMembersLoader;
+  memberProfileLoader?: MemberProfileLoader;
+  memberCarnationLoader?: MemberCarnationLoader;
+  rankingLoader?: WeeklyRankingLoader;
 }
 
 interface ComposerState {
@@ -131,6 +144,10 @@ export function FeedScreen({
   openPostId,
   openPostRequestId = 0,
   pageLoader,
+  membersLoader,
+  memberProfileLoader,
+  memberCarnationLoader,
+  rankingLoader,
 }: FeedScreenProps) {
   const feed = useFeed(
     currentGroup.id,
@@ -158,6 +175,29 @@ export function FeedScreen({
     posts,
     resolvedInitialComments,
   );
+  // 프로필 팝업이 열린 작성자. 구성원 조회 로더가 없으면 아바타를 눌러도 열지 않는다.
+  const [profileAuthor, setProfileAuthor] = useState<FeedMember | null>(null);
+  const handlePressAuthor =
+    membersLoader === undefined
+      ? undefined
+      : (author: FeedMember) => setProfileAuthor(author);
+  const authorProfilePopup =
+    membersLoader !== undefined && profileAuthor !== null ? (
+      <MemberProfilePopup
+        groupId={currentGroup.id}
+        initialMember={{
+          avatarText: profileAuthor.avatarText,
+          memberId: profileAuthor.id,
+          name: profileAuthor.name,
+        }}
+        memberCarnationLoader={memberCarnationLoader}
+        memberId={profileAuthor.id}
+        memberProfileLoader={memberProfileLoader}
+        membersLoader={membersLoader}
+        onClose={() => setProfileAuthor(null)}
+        rankingLoader={rankingLoader}
+      />
+    ) : null;
   const interactionsRef = useRef(interactions);
   interactionsRef.current = interactions;
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -842,6 +882,7 @@ export function FeedScreen({
           }}
           onMenuPress={() => setMenuPostId(selectedPost.id)}
           onOpenNotifications={onOpenNotifications}
+          onPressAuthor={handlePressAuthor}
           onScrollBeginDrag={closeReactionPicker}
           onRetryComments={() => {
             if (selectedPostId !== null) {
@@ -876,6 +917,7 @@ export function FeedScreen({
           selectedReactionId={selectedReactionId}
           visible={openReactionPicker?.postId === selectedPost.id}
         />
+        {authorProfilePopup}
       </View>
     );
   }
@@ -916,6 +958,7 @@ export function FeedScreen({
                 openReactionPicker?.postId === item.id
               }
               onPress={handleOpenPost}
+              onPressAuthor={handlePressAuthor}
               onToggleReactionPicker={handleToggleReactionPicker}
               post={{...item, reactions}}
               selectedReactionId={
@@ -951,6 +994,7 @@ export function FeedScreen({
         }
         visible={openReactionPicker !== null}
       />
+      {authorProfilePopup}
     </View>
   );
 }
