@@ -1,6 +1,10 @@
 import type {GroupRole} from '../../app-shell';
 
-import type {GroupMember, MemberGender} from './types';
+import type {
+  GroupMember,
+  MemberGender,
+  PendingJoinCountState,
+} from './types';
 
 // 개인화 호칭 최대 길이. H-2 입력창의 글자 수 카운터(0/10) 기준이다.
 export const ALIAS_MAX_LENGTH = 10;
@@ -32,6 +36,23 @@ export function countMembersByRole(members: readonly GroupMember[]): {
 export function formatMemberCounts(members: readonly GroupMember[]): string {
   const {careReceiverCount, guardianCount} = countMembersByRole(members);
   return `피보호자 ${careReceiverCount}명, 보호자 ${guardianCount}명`;
+}
+
+// H-7 '가입 승인 대기' 행의 설명 문구를 만든다. 건수를 알 수 없을 때
+// 0건으로 보이면 대기 요청이 없는 것과 구분되지 않으므로 이유를 문구로 밝힌다.
+export function formatPendingJoinDescription(
+  state: PendingJoinCountState,
+): string {
+  switch (state.status) {
+    case 'success':
+      return `승인 요청 ${state.count}건`;
+    case 'loading':
+      return '승인 요청 불러오는 중';
+    case 'error':
+      return '건수를 불러오지 못했어요';
+    case 'disabled':
+      return '관리자만 확인할 수 있어요';
+  }
 }
 
 // 입력값을 최대 길이로 자른다. TextInput maxLength와 별개로 로직에서도 보장한다.

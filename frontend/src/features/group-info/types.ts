@@ -110,6 +110,15 @@ export type JoinRequestsLoadState =
   | {status: 'error'; message: string}
   | {status: 'success'; requests: readonly JoinRequest[]};
 
+// H-7 구성원 초대에 표시할 승인 대기 건수 상태.
+// API-GROUPS-008은 그룹 관리자만 호출할 수 있어, 조회하지 않은 'disabled'를
+// 조회 실패와 구분한다. 상태별 표시 문구는 groupInfoModel이 정한다.
+export type PendingJoinCountState =
+  | {status: 'disabled'}
+  | {status: 'loading'}
+  | {status: 'error'}
+  | {status: 'success'; count: number};
+
 // API-GROUPS-009 PATCH .../join-requests/{joinRequestId} 요청 결정.
 export type JoinRequestDecision = 'APPROVE' | 'REJECT';
 

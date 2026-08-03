@@ -926,6 +926,141 @@ test('가입 승인 대기 카드를 누르면 승인 화면으로 이동한다'
   expect(hasText(renderer!, '승인 요청 1건')).toBe(true);
   expect(hasText(renderer!, '손수호')).toBe(true);
 });
+
+// 승인 대기 건수 목업. 건수 필드를 내려주는 조회 API가 없어 대기 요청 목록으로 센다.
+const PENDING_JOIN_REQUEST = {
+  applicantName: '손수호',
+  applicantUserId: 'u-1',
+  assignedRole: null,
+  createdAt: '2026-07-30T09:12:00Z',
+  joinRequestId: 'jr-1',
+  processedAt: null,
+  profileImageUrl: null,
+  status: 'PENDING_ADMIN' as const,
+};
+
+function pendingJoinRequest(suffix: string) {
+  return {
+    ...PENDING_JOIN_REQUEST,
+    applicantUserId: `u-${suffix}`,
+    joinRequestId: `jr-${suffix}`,
+  };
+}
+
+test('관리자에게는 목업 prop이 아니라 실제 대기 요청 건수를 표시한다', async () => {
+  const joinRequestsLoader = jest.fn().mockResolvedValue([
+    pendingJoinRequest('1'),
+    pendingJoinRequest('2'),
+    pendingJoinRequest('3'),
+    // 처리된 요청은 대기 건수에서 빠진다.
+    {
+      ...pendingJoinRequest('4'),
+      assignedRole: 'guardian' as const,
+      processedAt: '2026-07-31T02:00:00Z',
+      status: 'APPROVED' as const,
+    },
+  ]);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        joinRequestsLoader={joinRequestsLoader}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(joinRequestsLoader).toHaveBeenCalledWith('group-1');
+  expect(hasText(renderer!, '승인 요청 3건')).toBe(true);
+  expect(hasText(renderer!, '승인 요청 2건')).toBe(false);
+});
+
+test('관리자가 아니면 건수를 조회하지 않고 조회 권한을 안내한다', async () => {
+  const joinRequestsLoader = jest.fn().mockResolvedValue([]);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-dad"
+        initialMembers={MEMBERS}
+        joinRequestsLoader={joinRequestsLoader}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  // API-GROUPS-008은 관리자만 호출할 수 있어 확정 실패 요청을 보내지 않는다.
+  expect(joinRequestsLoader).not.toHaveBeenCalled();
+  expect(hasText(renderer!, '관리자만 확인할 수 있어요')).toBe(true);
+});
+
+test('건수 조회에 실패하면 0건 대신 실패를 알린다', async () => {
+  const joinRequestsLoader = jest.fn().mockRejectedValue(new Error('offline'));
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        joinRequestsLoader={joinRequestsLoader}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(hasText(renderer!, '건수를 불러오지 못했어요')).toBe(true);
+});
+
+test('가입 승인 대기에서 돌아오면 처리 결과가 건수에 반영된다', async () => {
+  let pending = [pendingJoinRequest('1'), pendingJoinRequest('2')];
+  const joinRequestsLoader = jest.fn(() => Promise.resolve(pending));
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        joinRequestsLoader={joinRequestsLoader}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+  expect(hasText(renderer!, '승인 요청 2건')).toBe(true);
+
+  // 승인 화면에서 한 건을 처리하고 돌아온 상황.
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '가입 승인 대기'})
+      .props.onPress();
+  });
+  pending = [pendingJoinRequest('2')];
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '뒤로 가기'})
+      .props.onPress();
+  });
+
+  expect(hasText(renderer!, '승인 요청 1건')).toBe(true);
+});
+
 test('하위 화면에서 돌아오면 구성원 목록과 그룹 상세를 다시 조회한다', async () => {
   const membersLoader = jest.fn().mockResolvedValue([
     {
