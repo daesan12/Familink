@@ -14,6 +14,11 @@ import {
   uploadBlobWithXhr,
 } from '../../../shared/api/blobUpload';
 import {
+  clientMediaProcessor,
+  type ClientMediaProcessor,
+  type ProcessedMediaAsset,
+} from '../../../shared/media/clientMediaProcessor';
+import {
   hasInvalidFileNameCharacter,
   PROFILE_IMAGE_LIMITS,
 } from '../profileModel';
@@ -70,6 +75,7 @@ export interface ProfileGatewayOptions {
   authSession?: ApiAuthSession;
   baseUrl?: string;
   client?: ProfileHttpClient;
+  mediaProcessor?: ClientMediaProcessor;
   uploadTransport?: ProfileUploadTransport;
 }
 
@@ -102,6 +108,7 @@ export function createProfileGateway(
       ? apiClient
       : createApiClient(options.baseUrl, options.authSession));
   const uploadTransport = options.uploadTransport ?? defaultUploadTransport;
+  const mediaProcessor = options.mediaProcessor ?? clientMediaProcessor;
 
   return {
     async loadCurrentProfile() {
@@ -111,11 +118,24 @@ export function createProfileGateway(
 
     async uploadProfileImage(asset) {
       assertProfileImageAsset(asset);
+      const processedAssets: ProcessedMediaAsset[] = [];
 
       try {
+        let processedAsset: ProcessedMediaAsset;
+        try {
+          processedAsset = await mediaProcessor.prepareProfileImage({
+            contentType: asset.contentType,
+            fileName: asset.fileName,
+            kind: 'image',
+            uri: asset.uri,
+          });
+          processedAssets.push(processedAsset);
+        } catch (error) {
+          throw mediaReadFailed(error);
+        }
         let blob: Blob;
         try {
-          blob = await uploadTransport.readFile(asset.uri);
+          blob = await uploadTransport.readFile(processedAsset.uri);
         } catch (error) {
           throw mediaReadFailed(error);
         }
@@ -126,8 +146,8 @@ export function createProfileGateway(
           {
             files: [
               {
-                contentType: asset.contentType,
-                fileName: asset.fileName,
+                contentType: processedAsset.contentType,
+                fileName: processedAsset.fileName,
                 sizeBytes: blob.size,
               },
             ],
@@ -152,6 +172,8 @@ export function createProfileGateway(
         return upload.fileUrl;
       } catch (error) {
         throw normalizeApiError(error);
+      } finally {
+        await clearTemporaryMediaFiles(mediaProcessor, processedAssets);
       }
     },
 
@@ -174,6 +196,17 @@ export function createProfileGateway(
       }
     },
   };
+}
+
+async function clearTemporaryMediaFiles(
+  mediaProcessor: ClientMediaProcessor,
+  assets: readonly ProcessedMediaAsset[],
+): Promise<void> {
+  try {
+    await mediaProcessor.clearTemporaryFiles?.(assets);
+  } catch {
+    // 캐시 정리 실패가 프로필 저장 결과를 실패로 바꾸지 않게 한다.
+  }
 }
 
 export const profileGateway = createProfileGateway();

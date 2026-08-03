@@ -123,9 +123,7 @@
   어디까지인가.
 - 삭제 버튼을 작성자·그룹 관리자에게만 노출하기 위해
   `API-CALENDAR-001`에 `creatorMemberId` 또는 `canDelete`를 추가할 것인가.
-- 작성자·참여자 사진을 위해 `API-GROUPS-005` 구성원 항목에
-  `profileImageUrl`을 추가할 것인가, 일정 상세가 표시용 구성원 정보를
-  직접 반환하게 할 것인가.
+- 일정 상세가 작성자·참여자의 표시용 구성원 정보를 직접 반환하게 할 것인가.
 
 ## 결정 및 반영
 
@@ -141,3 +139,16 @@
 - 반영 문서: `docs/specs/domains/CALENDAR.md`,
   `docs/specs/UI_AND_NAVIGATION.md`
 - 반영 커밋: `147d3d5`
+
+### 2026-08-03 추가 결정
+
+- 결정: 사용자가 `API-GROUPS-005` 구성원 항목에 nullable
+  `profileImageUrl`을 추가하는 안을 명시적으로 승인했다. 비공개 S3의 원본
+  URL은 DB에 유지하고 API 응답에는 다운로드용 서명 URL을 반환한다.
+- 결정자: 사용자
+- 결정일: 2026-08-03
+- 반영 문서: `docs/specs/contracts/API.md`,
+  `docs/specs/domains/GROUPS_AND_MEMBERSHIP.md`,
+  `docs/specs/domains/CALENDAR.md`, `docs/specs/COVERAGE.md`
+- 반영 범위: `profileImageUrl` 결정만 승인되었으며 이 변경 제안의 나머지
+  미결정 질문은 계속 보류한다.

@@ -27,6 +27,7 @@ import {
   canManageRoles as canManageRolesFor,
   clampAliasInput,
   formatMemberCounts,
+  formatPendingJoinDescription,
   isAliasSaveable,
   resolveMemberDisplayName,
 } from '../groupInfoModel';
@@ -52,6 +53,7 @@ import type {
   MemberProfileLoader,
   MemberRoleUpdater,
 } from '../api/groupMemberApi';
+import {usePendingJoinCount} from '../hooks/usePendingJoinCount';
 import {useWeeklyRanking} from '../hooks/useWeeklyRanking';
 import type {GroupMember} from '../types';
 import {ChangeManagerScreen} from './ChangeManagerScreen';
@@ -408,7 +410,20 @@ export function GroupInfoScreen({
   const viewerMemberId = scoped.currentMemberId;
   const canManageRoles =
     groupDetail?.isManager ?? canManageRolesFor(members, viewerMemberId);
-  const waitingCount = scoped.pendingJoinCount;
+  // 승인 대기 건수는 관리자만 조회할 수 있는 대기 요청 목록에서 센다.
+  // 멤버십이 바뀔 수 있는 하위 화면에서 돌아오면 membersReloadCount가 올라가
+  // 승인·거절 결과가 건수에 반영된다.
+  const pendingJoinCountState = usePendingJoinCount(
+    currentGroup.id,
+    joinRequestsLoader,
+    canManageRoles,
+    membersReloadCount,
+  );
+  // 로더를 주입하지 않은 개발용 목업 화면은 기존 목업 건수를 그대로 쓴다.
+  const waitingDescription =
+    joinRequestsLoader === undefined
+      ? `승인 요청 ${scoped.pendingJoinCount}건`
+      : formatPendingJoinDescription(pendingJoinCountState);
   const resolvedGroupName = groupDetail?.name ?? currentGroup.name;
   const resolvedMemberCount = groupDetail?.memberCount ?? members.length;
   const memberCounts = groupDetail
@@ -669,7 +684,7 @@ export function GroupInfoScreen({
       onPress: () => setSubScreen('groupCode'),
     },
     {
-      description: `승인 요청 ${waitingCount}건`,
+      description: waitingDescription,
       key: 'join-requests',
       label: '가입 승인 대기',
       onPress: () => setSubScreen('joinApproval'),
@@ -872,6 +887,7 @@ export function GroupInfoScreen({
       />
 
       <WeeklyRankingModal
+        members={members}
         onClose={() => setIsRankingOpen(false)}
         onRetry={ranking.retry}
         state={ranking}

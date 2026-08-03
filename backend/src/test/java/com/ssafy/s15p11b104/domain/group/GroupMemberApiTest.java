@@ -116,6 +116,7 @@ class GroupMemberApiTest extends IntegrationTest {
 			.andExpect(jsonPath("$.data.members[0].memberId").value(managerMember.getId()))
 			.andExpect(jsonPath("$.data.members[0].userId").value(managerUser.getId()))
 			.andExpect(jsonPath("$.data.members[0].displayName").value("관리자"))
+			.andExpect(jsonPath("$.data.members[0].profileImageUrl").isEmpty())
 			.andExpect(jsonPath("$.data.members[0].role").value("GUARDIAN"))
 			.andExpect(jsonPath("$.data.members[0].isManager").value(true))
 			.andExpect(jsonPath("$.data.members[1].memberId").value(guardianMember.getId()))
