@@ -148,6 +148,10 @@ export function SignupFlowScreen({
     if (submittingRef.current) {
       return;
     }
+    // 가입이 이미 끝난 완료 단계에서는 되돌아갈 입력 단계가 없다.
+    if (step === 5) {
+      return;
+    }
     if (step === 1) {
       onCancel();
       return;
@@ -392,10 +396,7 @@ export function SignupFlowScreen({
             />
           )}
           {step === 5 && (
-            <CompleteStep
-              onBack={handleBack}
-              onComplete={() => onComplete(draft.loginId)}
-            />
+            <CompleteStep onComplete={() => onComplete(draft.loginId)} />
           )}
         </Animated.View>
       </KeyboardAvoidingView>
@@ -835,19 +836,15 @@ function GenderCard({
 }
 
 interface CompleteStepProps {
-  onBack: () => void;
   onComplete: () => void;
 }
 
-function CompleteStep({onBack, onComplete}: CompleteStepProps) {
+function CompleteStep({onComplete}: CompleteStepProps) {
   return (
     <StepLayout
       button={<PrimaryButton label="완료" onPress={onComplete} />}>
-      <StepHeader
-        onBack={onBack}
-        step={5}
-        title={'회원가입이\n완료되었습니다!'}
-      />
+      {/* 가입이 끝난 단계이므로 이전 단계로 돌아가는 경로를 두지 않는다. */}
+      <StepHeader step={5} title={'회원가입이\n완료되었습니다!'} />
       <View style={styles.completeArtwork}>
         <FloatingIllustration
           containerStyle={styles.completeFloating}

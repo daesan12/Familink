@@ -4,11 +4,15 @@ import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {AUTH_COLORS} from '../theme';
 import type {SignupStep} from '../types';
 
+// 뒤로가기 버튼과 그 자리를 대신하는 여백이 같은 크기여야 단계마다 진행바가 같은 위치에 놓인다.
+const BACK_BUTTON_SIZE = 40;
+
 interface StepHeaderProps {
   backDisabled?: boolean;
   step: SignupStep;
   title: string;
-  onBack: () => void;
+  // 돌아갈 단계가 없는 단계에서는 넘기지 않아 버튼 자체를 숨긴다.
+  onBack?: () => void;
 }
 
 export function StepHeader({
@@ -20,23 +24,28 @@ export function StepHeader({
   return (
     <>
       <View style={styles.topRow}>
-        <Pressable
-          accessibilityLabel="이전 단계"
-          accessibilityRole="button"
-          accessibilityState={{disabled: backDisabled}}
-          disabled={backDisabled}
-          hitSlop={8}
-          onPress={onBack}
-          style={[
-            styles.backButton,
-            backDisabled && styles.backButtonDisabled,
-          ]}>
-          <MaterialDesignIcons
-            name="chevron-left"
-            size={28}
-            color={AUTH_COLORS.primaryDeep}
-          />
-        </Pressable>
+        {onBack === undefined ? (
+          // 진행바와 단계 표시가 다른 단계와 같은 위치에 놓이도록 자리만 유지한다.
+          <View style={styles.backButtonPlaceholder} />
+        ) : (
+          <Pressable
+            accessibilityLabel="이전 단계"
+            accessibilityRole="button"
+            accessibilityState={{disabled: backDisabled}}
+            disabled={backDisabled}
+            hitSlop={8}
+            onPress={onBack}
+            style={[
+              styles.backButton,
+              backDisabled && styles.backButtonDisabled,
+            ]}>
+            <MaterialDesignIcons
+              name="chevron-left"
+              size={28}
+              color={AUTH_COLORS.primaryDeep}
+            />
+          </Pressable>
+        )}
         <View style={styles.progressTrack}>
           <View style={[styles.progressValue, {width: `${step * 20}%`}]} />
         </View>
@@ -61,14 +70,18 @@ const styles = StyleSheet.create({
   backButton: {
     alignItems: 'center',
     backgroundColor: AUTH_COLORS.primarySoft,
-    borderRadius: 20,
+    borderRadius: BACK_BUTTON_SIZE / 2,
     boxShadow: '0px 4px 10px rgba(143, 125, 245, 0.18)',
-    height: 40,
+    height: BACK_BUTTON_SIZE,
     justifyContent: 'center',
-    width: 40,
+    width: BACK_BUTTON_SIZE,
   },
   backButtonDisabled: {
     opacity: 0.6,
+  },
+  backButtonPlaceholder: {
+    height: BACK_BUTTON_SIZE,
+    width: BACK_BUTTON_SIZE,
   },
   progressTrack: {
     backgroundColor: AUTH_COLORS.track,
