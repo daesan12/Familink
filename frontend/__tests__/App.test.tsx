@@ -10,7 +10,7 @@ import TestRenderer from "react-test-renderer";
 import { clearAllMockStorages } from "@react-native-async-storage/async-storage/jest";
 
 import App from "../App";
-import { AppShell } from "../src/app-shell";
+import { AppShell, type AppScreenProps } from "../src/app-shell";
 import { InvalidCredentialsError } from "../src/features/auth/api/mockAuthGateway";
 import { LoginBottomSheet } from "../src/features/auth/components/LoginBottomSheet";
 import { CreateGroupSheet } from "../src/features/auth/components/CreateGroupSheet";
@@ -3269,10 +3269,12 @@ test("아카이브 화면에서 피드 탭을 누르면 재탭이 아니라 피�
 
 test("AI 전화 탭은 다시 눌러도 재마운트하지 않는다", async () => {
   const mountLog: number[] = [];
-  function AiCallProbe() {
+  function AiCallProbe({ onHeaderVisibilityChange }: AppScreenProps) {
     React.useEffect(() => {
       mountLog.push(1);
-    }, []);
+      onHeaderVisibilityChange?.(false);
+      return () => onHeaderVisibilityChange?.(true);
+    }, [onHeaderVisibilityChange]);
     return null;
   }
   let renderer: TestRenderer.ReactTestRenderer;
@@ -3293,15 +3295,24 @@ test("AI 전화 탭은 다시 눌러도 재마운트하지 않는다", async () 
   mountedRenderers.push(renderer!);
 
   expect(mountLog).toHaveLength(1);
+  expect(
+    renderer!.root.findAllByProps({ testID: "app-shell-header" }),
+  ).toHaveLength(0);
 
   // 통화 선택 상태를 잃지 않도록 AI 전화는 재탭 새로고침에서 제외한다.
   await TestRenderer.act(() => {
-    renderer!.root
-      .findByProps({ accessibilityLabel: "AI 전화 탭" })
-      .props.onPress();
+    const aiCallTab = renderer!.root.findByProps({
+      accessibilityLabel: "AI 전화 탭",
+    });
+    aiCallTab.props.onPress();
+    aiCallTab.props.onPress();
+    aiCallTab.props.onPress();
   });
 
   expect(mountLog).toHaveLength(1);
+  expect(
+    renderer!.root.findAllByProps({ testID: "app-shell-header" }),
+  ).toHaveLength(0);
 });
 
 test("캘린더 헤더는 일정 추가 버튼과 그룹 전환만 표시한다", async () => {
