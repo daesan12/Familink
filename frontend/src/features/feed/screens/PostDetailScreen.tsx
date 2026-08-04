@@ -334,7 +334,6 @@ export function PostDetailScreen({
             </View>
           ) : null}
           <View style={styles.composer}>
-            <FeedAvatar member={currentUser} size={38} />
             <TextInput
               accessibilityLabel={
                 editingComment ? '댓글 수정 입력' : '댓글 입력'
