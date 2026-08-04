@@ -18,6 +18,9 @@ jest.mock('react-native-image-picker', () => ({
 jest.mock('../../auth', () => {
   const ReactModule = require('react');
   const {Pressable} = require('react-native');
+  // 인라인 검증 문구와 이름 길이 규칙은 회원가입과 같은 구현을 공유해야 하므로 실제 모듈을 쓴다.
+  const {ValidationMessage} = require('../../auth/components/ValidationMessage');
+  const {isValidName, SIGNUP_LIMITS} = require('../../auth/validation');
   return {
     DatePickerSheet: ({
       visible,
@@ -32,6 +35,9 @@ jest.mock('../../auth', () => {
             onPress: () => onConfirm('1999-08-15'),
           })
         : null,
+    isValidName,
+    SIGNUP_LIMITS,
+    ValidationMessage,
   };
 });
 
@@ -71,6 +77,22 @@ function render(
   return renderer!;
 }
 
+// 변경사항이 없으면 저장이 막히므로, 저장 흐름을 검증하는 테스트는 먼저 이름을 바꾼다.
+function editName(renderer: TestRenderer.ReactTestRenderer, value: string) {
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '이름 입력'})
+      .props.onChangeText(value);
+  });
+}
+
+function nameErrorMessages(renderer: TestRenderer.ReactTestRenderer): string[] {
+  return renderer.root
+    .findAllByType(Text)
+    .map(node => node.props.children)
+    .filter((child): child is string => typeof child === 'string');
+}
+
 test('저장 중 시스템 Back은 화면을 닫지 않고 소비한다', async () => {
   let hardwareBackHandler: (() => boolean) | undefined;
   const addEventListener = jest
@@ -85,6 +107,7 @@ test('저장 중 시스템 Back은 화면을 닫지 않고 소비한다', async 
   });
   const onBack = jest.fn();
   const renderer = render(jest.fn(() => savePromise), onBack);
+  editName(renderer, '이종철2');
 
   try {
     TestRenderer.act(() => {
@@ -231,6 +254,141 @@ test('생년월일 스크롤 선택기에서 확정하면 표시가 바뀐다', 
   expect(shows).toBe(true);
 });
 
+test('이름을 모두 지우면 회원가입과 같은 안내 문구를 placeholder로 보여준다', () => {
+  const renderer = render(jest.fn().mockResolvedValue(undefined));
+  const input = renderer.root.findByProps({accessibilityLabel: '이름 입력'});
+
+  TestRenderer.act(() => {
+    input.props.onChangeText('');
+  });
+
+  const nameInput = renderer.root.findByProps({accessibilityLabel: '이름 입력'});
+  expect(nameInput.props.value).toBe('');
+  expect(nameInput.props.placeholder).toBe('이름은 2 ~ 10자로 입력해주세요.');
+});
+
+test('이름을 비운 채 저장하면 OS 팝업 없이 입력칸 아래에 안내한다', () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const onSave = jest.fn().mockResolvedValue(undefined);
+  const onBack = jest.fn();
+  const renderer = render(onSave, onBack);
+
+  try {
+    editName(renderer, '');
+    TestRenderer.act(() => {
+      renderer.root
+        .findByProps({accessibilityLabel: '프로필 저장'})
+        .props.onPress();
+    });
+
+    expect(nameErrorMessages(renderer)).toContain('빈 칸을 채워주세요.');
+    expect(onSave).not.toHaveBeenCalled();
+    expect(onBack).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+  } finally {
+    alertSpy.mockRestore();
+  }
+});
+
+test('이름이 2자 미만이면 회원가입과 같은 문구로 저장을 막는다', () => {
+  const onSave = jest.fn().mockResolvedValue(undefined);
+  const renderer = render(onSave);
+
+  editName(renderer, '이');
+  TestRenderer.act(() => {
+    renderer.root.findByProps({accessibilityLabel: '프로필 저장'}).props.onPress();
+  });
+
+  expect(nameErrorMessages(renderer)).toContain('이름은 2 ~ 10자로 입력해주세요.');
+  expect(onSave).not.toHaveBeenCalled();
+});
+
+test('10자를 넘겨 입력하면 10자에서 멈추고 즉시 안내한다', () => {
+  const renderer = render(jest.fn().mockResolvedValue(undefined));
+
+  editName(renderer, '가나다라마바사아자차카');
+
+  const input = renderer.root.findByProps({accessibilityLabel: '이름 입력'});
+  expect(input.props.value).toBe('가나다라마바사아자차');
+  expect(nameErrorMessages(renderer)).toContain('이름은 2 ~ 10자로 입력해주세요.');
+});
+
+test('10자 이내 입력은 안내 없이 그대로 반영한다', () => {
+  const renderer = render(jest.fn().mockResolvedValue(undefined));
+
+  editName(renderer, '가나다라마바사아자차');
+
+  const input = renderer.root.findByProps({accessibilityLabel: '이름 입력'});
+  expect(input.props.value).toBe('가나다라마바사아자차');
+  expect(nameErrorMessages(renderer)).not.toContain(
+    '이름은 2 ~ 10자로 입력해주세요.',
+  );
+});
+
+test('프로필 이미지 아래 + 버튼도 사진 선택을 연다', async () => {
+  const renderer = render(jest.fn().mockResolvedValue(undefined));
+  mockLaunchImageLibrary.mockResolvedValueOnce({didCancel: true});
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({accessibilityLabel: '프로필 이미지 추가'})
+      .props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(mockLaunchImageLibrary).toHaveBeenCalledTimes(1);
+});
+
+test('변경사항이 없으면 저장을 막고 동일한 이름임을 안내한다', () => {
+  const onSave = jest.fn().mockResolvedValue(undefined);
+  const onBack = jest.fn();
+  const renderer = render(onSave, onBack);
+
+  TestRenderer.act(() => {
+    renderer.root.findByProps({accessibilityLabel: '프로필 저장'}).props.onPress();
+  });
+
+  expect(nameErrorMessages(renderer)).toContain('기존과 동일한 이름입니다.');
+  expect(onSave).not.toHaveBeenCalled();
+  expect(onBack).not.toHaveBeenCalled();
+});
+
+test('이름은 그대로여도 다른 항목을 바꾸면 저장할 수 있다', () => {
+  const onSave = jest.fn().mockResolvedValue(undefined);
+  const renderer = render(onSave);
+
+  TestRenderer.act(() => {
+    renderer.root.findByProps({accessibilityLabel: '성별 선택'}).props.onPress();
+  });
+  TestRenderer.act(() => {
+    renderer.root.findByProps({accessibilityLabel: '성별 여자'}).props.onPress();
+  });
+  TestRenderer.act(() => {
+    renderer.root.findByProps({accessibilityLabel: '프로필 저장'}).props.onPress();
+  });
+
+  expect(onSave).toHaveBeenCalledWith(
+    expect.objectContaining({gender: 'female', name: GUARDIAN_PROFILE.name}),
+    {type: 'unchanged'},
+  );
+});
+
+test('안내가 뜬 뒤 이름을 고치면 문구가 사라진다', () => {
+  const renderer = render(jest.fn().mockResolvedValue(undefined));
+
+  editName(renderer, '이');
+  TestRenderer.act(() => {
+    renderer.root.findByProps({accessibilityLabel: '프로필 저장'}).props.onPress();
+  });
+  expect(nameErrorMessages(renderer)).toContain('이름은 2 ~ 10자로 입력해주세요.');
+
+  editName(renderer, '이종철2');
+
+  expect(nameErrorMessages(renderer)).not.toContain(
+    '이름은 2 ~ 10자로 입력해주세요.',
+  );
+});
+
 test('저장 성공 후 편집한 이름을 전달하고 뒤로 돌아간다', async () => {
   const onSave = jest.fn().mockResolvedValue(undefined);
   const onBack = jest.fn();
@@ -327,6 +485,7 @@ test('허용되지 않은 사진은 안내하고 기존 이미지 변경 상태�
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const onSave = jest.fn().mockResolvedValue(undefined);
   const renderer = render(onSave);
+  editName(renderer, '이종철2');
   mockLaunchImageLibrary.mockResolvedValueOnce({
     assets: [
       {
@@ -478,6 +637,7 @@ test('저장 중에는 연속 저장을 한 번만 실행한다', async () => {
   });
   const onSave = jest.fn(() => savePromise);
   const renderer = render(onSave);
+  editName(renderer, '이종철2');
 
   TestRenderer.act(() => {
     const saveButton = renderer.root.findByProps({
@@ -508,6 +668,7 @@ test('저장 실패 시 화면과 입력을 유지하고 다시 저장할 수 �
     )
     .mockResolvedValueOnce(undefined);
   const renderer = render(onSave, onBack);
+  editName(renderer, '이종철2');
 
   try {
     await TestRenderer.act(async () => {
