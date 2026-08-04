@@ -182,6 +182,21 @@ class EventReminderIntegrationTest extends IntegrationTest {
 	}
 
 	@Test
+	void doesNotExpandReminderToWholeGroupWhenLastExplicitParticipantLinkIsDeleted() {
+		Long eventId = persistAllDayEvent("참여자 없는 약속");
+		persistParticipants(eventId, memberMember);
+		eventParticipantRepository.deleteAllByGroupIdAndMemberId(group.getId(), memberMember.getId());
+		entityManager.flush();
+		entityManager.clear();
+		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
+
+		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE);
+
+		assertThat(calendarEventRepository.findById(eventId).orElseThrow().isParticipantsSpecified()).isTrue();
+		assertThat(notificationRepository.findAll()).isEmpty();
+	}
+
+	@Test
 	void skipsDayBeforeReminderWhenEventChangedAfterItsDueTime() {
 		Long eventId = persistAllDayEvent("당일 등록");
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.plusSeconds(1));
@@ -395,6 +410,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 
 	private void persistParticipants(Long eventId, GroupMember... members) {
 		CalendarEvent event = calendarEventRepository.findById(eventId).orElseThrow();
+		event.changeParticipantScope(true);
 		for (GroupMember member : members) {
 			eventParticipantRepository.save(new EventParticipant(event, member));
 		}

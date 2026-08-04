@@ -16,6 +16,7 @@ import com.ssafy.s15p11b104.domain.account.dto.ProfileUpdateRequest;
 import com.ssafy.s15p11b104.domain.account.dto.ProfileUpdateResponse;
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.calendar.repository.EventParticipantRepository;
 import com.ssafy.s15p11b104.domain.file.event.ProfileImageDeleteRequestedEvent;
 import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.file.service.S3MediaValidator;
@@ -37,6 +38,7 @@ public class UserService {
 
 	private final UserRepository userRepository;
 	private final GroupMemberRepository groupMemberRepository;
+	private final EventParticipantRepository eventParticipantRepository;
 	private final RefreshTokenStore refreshTokenStore;
 	private final AccessTokenProvider accessTokenProvider;
 	private final AccessTokenBlacklist accessTokenBlacklist;
@@ -48,6 +50,7 @@ public class UserService {
 	UserService(
 		UserRepository userRepository,
 		GroupMemberRepository groupMemberRepository,
+		EventParticipantRepository eventParticipantRepository,
 		RefreshTokenStore refreshTokenStore,
 		AccessTokenProvider accessTokenProvider,
 		AccessTokenBlacklist accessTokenBlacklist,
@@ -58,6 +61,7 @@ public class UserService {
 	) {
 		this.userRepository = userRepository;
 		this.groupMemberRepository = groupMemberRepository;
+		this.eventParticipantRepository = eventParticipantRepository;
 		this.refreshTokenStore = refreshTokenStore;
 		this.accessTokenProvider = accessTokenProvider;
 		this.accessTokenBlacklist = accessTokenBlacklist;
@@ -169,6 +173,8 @@ public class UserService {
 
 		Instant now = Instant.now();
 		activeMemberships.forEach(membership -> membership.leave(now));
+		activeMemberships.forEach(membership -> eventParticipantRepository.deleteAllByGroupIdAndMemberId(
+			membership.getGroup().getId(), membership.getId()));
 		deviceTokenRepository.deactivateAllByUserId(account.getId(), now);
 		account.withdraw(now);
 

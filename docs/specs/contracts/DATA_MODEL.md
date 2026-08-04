@@ -176,6 +176,7 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   `last_editor_member_id -> group_members.id`
 - 컬럼: `title VARCHAR(20)`, `event_date DATE`, `end_date DATE`, `created_at`,
   `updated_at`, `reminder_schedule_updated_at TIMESTAMPTZ` NOT NULL;
+  `participants_specified BOOLEAN` NOT NULL;
   `description VARCHAR(50) NULL`,
   `start_at TIMESTAMPTZ NULL`, `end_at TIMESTAMPTZ NULL`
 - `reminder_schedule_updated_at`은 일정 등록 시각 또는 날짜·시각 쌍을 마지막으로
@@ -193,6 +194,9 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   `event_date`·`end_date`를 서버가 `start_at`·`end_at`의 `Asia/Seoul`
   날짜로 파생하는 단일 경로로 보장한다.
 - 삭제는 하드 삭제이며 참여자를 함께 정리한다.
+- `participants_specified`는 사용자가 참여자를 명시적으로 지정한 일정인지
+  나타낸다. 지정 참여자가 모두 이탈해 연결 행이 0개가 되어도 true를
+  유지하며, 사용자가 일정 편집에서 참여자를 모두 해제할 때 false가 된다.
 
 ### `event_participants`
 
@@ -200,6 +204,10 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - FK: `event_id -> calendar_events.id`,
   `group_member_id -> group_members.id`
 - Unique: `(event_id, group_member_id)`
+- Index: `(group_member_id)` — 멤버십 이탈 시 모든 일정 참여자 연결을
+  범위 제한해 삭제하는 데 사용한다.
+- 그룹 나가기·관리자 내보내기·회원 탈퇴 시 해당 멤버십을 참조하는 행을
+  같은 트랜잭션에서 삭제한다. 재가입은 삭제된 행을 복원하지 않는다.
 - 일정 알림은 `notifications`에 저장한다.
 
 ## AI 통화·리포트
@@ -416,8 +424,10 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 
 - 회원 탈퇴: 개인정보를 익명화하고 `withdrawn_at`을 기록하며 같은
   트랜잭션에서 사용자의 모든 `device_tokens`를 비활성화한다. 게시글·댓글·
-  일정과 과거 그룹 관계는 보존한다.
-- 그룹 나가기·내보내기: `group_members.left_at`을 기록한다.
+  일정과 과거 그룹 관계는 보존하되 종료되는 멤버십의
+  `event_participants`는 삭제한다.
+- 그룹 나가기·내보내기: `group_members.left_at`을 기록하고 해당 멤버십의
+  `event_participants`를 같은 트랜잭션에서 삭제한다.
 - 그룹 삭제: 관리자이면서 다른 활성 구성원이 없을 때만 하드 삭제할 수 있다.
   Spring Boot는 한 트랜잭션에서 `member_interests`, `member_aliases`, `posts`,
   `calendar_events`, `call_sessions`, `daily_reports`, `carnations`,

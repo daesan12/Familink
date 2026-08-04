@@ -28,6 +28,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.entity.UserGender;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.calendar.entity.CalendarEvent;
+import com.ssafy.s15p11b104.domain.calendar.entity.EventParticipant;
 import com.ssafy.s15p11b104.domain.feed.entity.Post;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupJoinRequest;
@@ -78,6 +80,8 @@ class GroupApiTest extends IntegrationTest {
 
 	@BeforeEach
 	void setUp() {
+		entityManager.createNativeQuery("DELETE FROM event_participants").executeUpdate();
+		entityManager.createNativeQuery("DELETE FROM calendar_events").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM member_interests").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM member_aliases").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM posts").executeUpdate();
@@ -398,6 +402,7 @@ class GroupApiTest extends IntegrationTest {
 
 	@Test
 	void memberCanLeaveGroupKeepingMembershipHistory() throws Exception {
+		Long eventId = persistEventWithParticipants(careReceiverMember, managerMember);
 		entityManager.persist(new MemberAlias(
 			entityManager.find(FamilyGroup.class, group.getId()),
 			entityManager.find(GroupMember.class, managerMember.getId()),
@@ -424,6 +429,8 @@ class GroupApiTest extends IntegrationTest {
 		assertThat(groupMemberRepository.findAllActiveByGroupId(group.getId()))
 			.extracting(GroupMember::getId)
 			.containsExactly(managerMember.getId());
+		assertThat(entityManager.find(CalendarEvent.class, eventId)).isNotNull();
+		assertThat(participantMemberIds(eventId)).containsExactly(managerMember.getId());
 
 		assertThat(countByGroup("member_aliases", group.getId())).isEqualTo(1);
 		assertThat(countByGroup("posts", group.getId())).isEqualTo(1);
@@ -472,6 +479,8 @@ class GroupApiTest extends IntegrationTest {
 
 	@Test
 	void leftMemberIsReactivatedOnRejoinApprovalWithoutDuplicateRow() throws Exception {
+		Long eventId = persistEventWithParticipants(careReceiverMember, managerMember);
+
 		mockMvc.perform(delete("/groups/" + group.getId() + "/leave")
 				.with(authenticatedAs(memberUser.getId())))
 			.andExpect(status().isNoContent());
@@ -496,6 +505,7 @@ class GroupApiTest extends IntegrationTest {
 		assertThat(reactivated.getLeftAt()).isNull();
 		assertThat(reactivated.getRole()).isEqualTo(GroupRole.GUARDIAN);
 		assertThat(countMembershipRows(group.getId(), memberUser.getId())).isEqualTo(1);
+		assertThat(participantMemberIds(eventId)).containsExactly(managerMember.getId());
 	}
 
 	@Test
@@ -508,6 +518,33 @@ class GroupApiTest extends IntegrationTest {
 			.andExpect(status().isUnauthorized());
 		mockMvc.perform(delete("/groups/" + group.getId() + "/leave"))
 			.andExpect(status().isUnauthorized());
+	}
+
+	private Long persistEventWithParticipants(GroupMember... participants) {
+		FamilyGroup managedGroup = entityManager.find(FamilyGroup.class, group.getId());
+		GroupMember creator = entityManager.find(GroupMember.class, managerMember.getId());
+		CalendarEvent event = new CalendarEvent(
+			managedGroup, creator, "가족 일정", null, LocalDate.now(), LocalDate.now(), null, null);
+		event.changeParticipantScope(true);
+		entityManager.persist(event);
+		for (GroupMember participant : participants) {
+			entityManager.persist(new EventParticipant(
+				event, entityManager.find(GroupMember.class, participant.getId())));
+		}
+		entityManager.flush();
+		entityManager.clear();
+		return event.getId();
+	}
+
+	private List<Long> participantMemberIds(Long eventId) {
+		return entityManager.createQuery("""
+			select participant.groupMember.id
+			from EventParticipant participant
+			where participant.event.id = :eventId
+			order by participant.groupMember.id
+			""", Long.class)
+			.setParameter("eventId", eventId)
+			.getResultList();
 	}
 
 	private long countMembershipRows(Long groupId, Long userId) {
