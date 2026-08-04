@@ -578,6 +578,8 @@ function ReportPage({
   return (
     <View style={[styles.page, { width }]}>
       <View style={styles.header}>
+        {/* 캘린더 버튼과 같은 폭의 스페이서로 제목을 정확히 가운데에 둔다. */}
+        <View style={styles.headerSpacer} />
         <Text style={styles.title}>{page.displayName} 님의 통화 리포트</Text>
         <Pressable
           accessibilityHint="생성된 일간 리포트 날짜를 월별로 확인합니다"
@@ -725,6 +727,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     height: 44,
     justifyContent: "center",
+    width: 44,
+  },
+  headerSpacer: {
     width: 44,
   },
   callList: {
@@ -890,5 +895,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "800",
     lineHeight: 28,
+    textAlign: "center",
   },
 });

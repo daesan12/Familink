@@ -1,3 +1,4 @@
+import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
 import { StyleSheet, Text, View } from "react-native";
 
 import { COLORS, RADII } from "../../../design/tokens";
@@ -18,7 +19,11 @@ export function DailyReportCard({ report }: DailyReportCardProps) {
           accessibilityLabel={`기분 ${report.emotion.label}`}
           style={styles.emotionBadge}
         >
-          <Text style={styles.emoji}>{report.emotion.emoji}</Text>
+          <MaterialDesignIcons
+            color={COLORS.purpleDeep}
+            name={report.emotion.icon}
+            size={32}
+          />
         </View>
         <View style={styles.headingCopy}>
           <Text style={styles.eyebrow}>일간 리포트</Text>
@@ -67,10 +72,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "800",
     lineHeight: 24,
-  },
-  emoji: {
-    fontSize: 29,
-    lineHeight: 36,
   },
   eyebrow: {
     color: COLORS.purpleDeep,
