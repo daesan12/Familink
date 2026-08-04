@@ -22,7 +22,7 @@ Thumbs.db
 # Local evidence and temporary files
 .evidence/
 tmp/
-
+backend/bin
 # Local KDT retrospective drafts
 /kdt-retrospectives/
 
