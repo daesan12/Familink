@@ -1,7 +1,6 @@
 import {useState} from 'react';
 import {
   ActivityIndicator,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -12,6 +11,7 @@ import {
 
 import type {GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import {RetryButton} from '../../../shared/components/RetryButton';
 import {SubScreenHeader} from '../components/SubScreenHeader';
 import {useJoinRequests} from '../hooks/useJoinRequests';
@@ -133,7 +133,7 @@ export function JoinApprovalScreen({
               <View key={request.joinRequestId} style={styles.requestCard}>
                 <View style={styles.applicantRow}>
                   {request.profileImageUrl ? (
-                    <Image
+                    <CachedRemoteImage
                       source={{uri: request.profileImageUrl}}
                       style={styles.avatar}
                     />

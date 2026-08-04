@@ -1,7 +1,8 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import type {Gender} from '../types';
 import {formatGenderLabel} from '../profileModel';
 
@@ -54,7 +55,7 @@ export function MyPageProfileCard({
             />
           </View>
         ) : null}
-        <Image
+        <CachedRemoteImage
           accessibilityIgnoresInvertColors
           source={
             profileImageUrl ? {uri: profileImageUrl} : PROFILE_PLACEHOLDER

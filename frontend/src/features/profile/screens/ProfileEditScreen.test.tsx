@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert, BackHandler, Image, Text} from 'react-native';
+import {Alert, BackHandler, Text} from 'react-native';
 import {launchImageLibrary} from 'react-native-image-picker';
 import TestRenderer from 'react-test-renderer';
 
@@ -8,6 +8,7 @@ import {mockHardwareBack} from '../../../shared/testing/hardwareBack';
 import {GUARDIAN_PROFILE} from '../fixtures/profileFixtures';
 import type {GuardianProfile, ProfileImageChange} from '../types';
 import {ProfileEditScreen} from './ProfileEditScreen';
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
 jest.mock('react-native-image-picker', () => ({
@@ -275,7 +276,7 @@ test('선택한 프로필 이미지를 미리보기하고 저장할 때 교체 �
 
   expect(
     renderer.root.findByProps({accessibilityLabel: '프로필 이미지 변경'})
-      .findByType(Image).props.source,
+      .findByType(CachedRemoteImage).props.source,
   ).toEqual({uri: 'content://selected-profile'});
 
   await TestRenderer.act(async () => {
@@ -405,7 +406,7 @@ test('사진 선택을 취소하면 현재 미리보기를 유지한다', async 
 
   expect(
     renderer.root.findByProps({accessibilityLabel: '프로필 이미지 변경'})
-      .findByType(Image).props.source,
+      .findByType(CachedRemoteImage).props.source,
   ).toEqual({uri: profile.profileImageUrl});
 });
 

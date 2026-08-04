@@ -3,7 +3,6 @@ import MaterialDesignIcons from "@react-native-vector-icons/material-design-icon
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,6 +16,7 @@ import {
 
 import { COLORS, RADII } from "../../../design/tokens";
 import { useHardwareBack } from "../../../shared/hooks/useHardwareBack";
+import { CachedRemoteImage } from "../../../shared/media/CachedRemoteImage";
 import {
   createCalendarEventDraft,
   createCalendarEventDraftFromDetail,
@@ -445,7 +445,7 @@ function PersonChip({
 }) {
   return (
     <View style={styles.personChip}>
-      <Image
+      <CachedRemoteImage
         accessibilityLabel={`${name} 프로필 사진`}
         source={imageUrl ? { uri: imageUrl } : PROFILE_PLACEHOLDER}
         style={styles.avatar}

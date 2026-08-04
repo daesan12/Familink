@@ -2,6 +2,7 @@ import {useEffect, useState} from 'react';
 import {Image, StyleSheet, View} from 'react-native';
 
 import {RADII} from '../../../design/tokens';
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import type {FeedMember} from '../types';
 
 const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
@@ -21,7 +22,7 @@ export function FeedAvatar({member, size = 44}: FeedAvatarProps) {
   const frameStyle = {height: size, width: size};
   if (member.profileImageUrl && !failed) {
     return (
-      <Image
+      <CachedRemoteImage
         accessibilityIgnoresInvertColors
         onError={() => setFailed(true)}
         source={{uri: member.profileImageUrl}}

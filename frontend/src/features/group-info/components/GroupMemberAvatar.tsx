@@ -2,6 +2,7 @@ import {useState} from 'react';
 import {Image, StyleSheet, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import type {GroupMember} from '../types';
 
 const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
@@ -25,7 +26,7 @@ export function GroupMemberAvatar({
       style={[styles.container, {height: size, width: size}]}
     >
       {showImage ? (
-        <Image
+        <CachedRemoteImage
           onError={() => setFailedUrl(imageUrl)}
           resizeMode="cover"
           source={{uri: imageUrl}}

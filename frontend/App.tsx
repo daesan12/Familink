@@ -111,6 +111,7 @@ import {
   type ProfileGateway,
 } from "./src/features/profile";
 import { API_BASE_URL, ApiError } from "./src/shared/api";
+import { imageDiskCache } from "./src/shared/media/imageDiskCache";
 
 type RootRoute =
   | "welcome"
@@ -1274,6 +1275,7 @@ export default function App({
     } catch (error) {
       failure ??= error;
     } finally {
+      await imageDiskCache.clearAll().catch(() => undefined);
       clearAuthenticationState();
       setAuthenticationResolved(true);
     }
@@ -1375,6 +1377,7 @@ export default function App({
       } catch (error) {
         localCleanupFailure = error;
       }
+      await imageDiskCache.clearAll().catch(() => undefined);
 
       activeDeviceTokenRef.current = null;
       activeDeviceTokenSessionVersionRef.current = null;

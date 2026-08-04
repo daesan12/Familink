@@ -24,6 +24,15 @@ jest.mock('react-native-keychain', () => ({
   }),
 }));
 
+jest.mock('@react-native-async-storage/async-storage', () => {
+  const storageMock = require('@react-native-async-storage/async-storage/jest');
+  return {
+    __esModule: true,
+    ...storageMock,
+    default: storageMock.default,
+  };
+});
+
 jest.mock('react-native-compressor', () => ({
   Image: {
     compress: jest.fn(uri => Promise.resolve(uri)),
@@ -43,7 +52,14 @@ jest.mock('react-native-compressor', () => ({
 jest.mock('react-native-fs', () => ({
   __esModule: true,
   default: {
+    CachesDirectoryPath: '/cache',
+    downloadFile: jest.fn(({toFile}) => ({
+      jobId: 1,
+      promise: Promise.resolve({bytesWritten: 4, jobId: 1, statusCode: 200}),
+    })),
     exists: jest.fn().mockResolvedValue(true),
+    mkdir: jest.fn().mockResolvedValue(undefined),
+    moveFile: jest.fn().mockResolvedValue(undefined),
     stat: jest.fn().mockResolvedValue({size: 4}),
     stopUpload: jest.fn(),
     unlink: jest.fn().mockResolvedValue(undefined),
