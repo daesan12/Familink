@@ -1,6 +1,7 @@
 import {useRef, useState} from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Pressable,
   StyleSheet,
   Text,
@@ -56,7 +57,7 @@ export function RenameGroupScreen({
   };
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView behavior="padding" style={styles.screen}>
       <SubScreenHeader onBack={onBack} title="그룹명 변경" />
 
       <View style={styles.content}>
@@ -88,7 +89,7 @@ export function RenameGroupScreen({
           <Text style={styles.submitButtonText}>변경하기</Text>
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

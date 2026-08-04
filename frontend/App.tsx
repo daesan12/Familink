@@ -8,7 +8,10 @@ import {
   useState,
 } from "react";
 import { Alert, AppState, StatusBar } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  initialWindowMetrics,
+} from "react-native-safe-area-context";
 
 import { AppShell, currentGroupStore } from "./src/app-shell";
 import type {
@@ -1913,10 +1916,11 @@ export default function App({
 
   return (
     <GroupInfoIntegrationContext.Provider value={groupInfoIntegration}>
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <NotificationGatewayProvider gateway={resolvedNotificationGateway}>
           <CalendarGatewayProvider gateway={resolvedCalendarGateway}>
-            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            {/* edge-to-edge에서는 상태바 배경색 지정이 무시되므로 barStyle만 사용한다. */}
+            <StatusBar barStyle="dark-content" />
             {route === "welcome" && (
               <>
                 <WelcomeScreen

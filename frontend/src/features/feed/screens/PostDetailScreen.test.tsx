@@ -11,6 +11,16 @@ import {PostActionsSheet} from '../components/PostActionsSheet';
 import {PostDetailScreen} from './PostDetailScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
+jest.mock('react-native-safe-area-context', () => {
+  const {View} = jest.requireActual('react-native');
+
+  return {
+    SafeAreaProvider: View,
+    SafeAreaView: View,
+    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
+  };
+});
+
 
 const currentUser: FeedMember = {
   avatarText: '다',

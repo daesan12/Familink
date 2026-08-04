@@ -5,6 +5,7 @@ import {
   Alert,
   BackHandler,
   Image,
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -238,7 +239,7 @@ export function PostComposerScreen({
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView behavior="padding" style={styles.container}>
       <View style={styles.header}>
         <BackButton
           accessibilityLabel="게시글 작성 닫기"
@@ -366,7 +367,7 @@ export function PostComposerScreen({
           uploadState={uploadState}
         />
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

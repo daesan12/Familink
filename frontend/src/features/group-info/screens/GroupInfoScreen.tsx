@@ -3,6 +3,7 @@ import {useEffect, useRef, useState} from 'react';
 import {
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -863,7 +864,7 @@ export function GroupInfoScreen({
   }
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView behavior="padding" style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title}>그룹 정보</Text>
       </View>
@@ -966,7 +967,7 @@ export function GroupInfoScreen({
         onDeleteGroup={handleDeleteGroup}
         visible={isDeleteOpen}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

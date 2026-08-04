@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {COLORS, RADII} from '../../../design/tokens';
 
@@ -34,6 +35,7 @@ export function PostActionsSheet({
   onEdit,
 }: PostActionsSheetProps) {
   const {height: windowHeight} = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [isModalVisible, setIsModalVisible] = useState(isOpen);
   const translateY = useRef(new Animated.Value(windowHeight)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -129,7 +131,11 @@ export function PostActionsSheet({
           style={styles.dismissArea}
         />
         <Animated.View
-          style={[styles.sheet, {transform: [{translateY}]}]}
+          style={[
+            styles.sheet,
+            {paddingBottom: 12 + insets.bottom},
+            {transform: [{translateY}]},
+          ]}
           {...panResponder.panHandlers}
         >
           <View accessibilityElementsHidden style={styles.handle} />
@@ -224,7 +230,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: RADII.sheet,
     borderWidth: 1,
     boxShadow: '0 -4px 16px rgba(18, 23, 41, 0.12)',
-    paddingBottom: 12,
     paddingTop: 10,
   },
 });
