@@ -17,6 +17,20 @@ class AiCallModelsTest {
   }
 
   @Test
+  fun `페르소나 선택 화면은 관계별 세로 짝이 맞는 순서를 사용한다`() {
+    assertEquals(
+        listOf("듬직한 아들", "비서 민정", "친구 복희", "사랑스러운 딸", "비서 도윤", "친구 학수"),
+        aiPersonasForSelection.map(AiPersona::displayName),
+    )
+  }
+
+  @Test
+  fun `각 페르소나는 서로 다른 말투 태그와 소개글을 가진다`() {
+    assertEquals(6, aiPersonas.map(AiPersona::toneTag).distinct().size)
+    assertEquals(6, aiPersonas.map(AiPersona::introduction).distinct().size)
+  }
+
+  @Test
   fun `종료 서버 응답 전에는 종료 중 상태를 유지한다`() = runBlocking {
     val serverResponse = CompletableDeferred<Unit>()
     var phase = AiCallPhase.Ending

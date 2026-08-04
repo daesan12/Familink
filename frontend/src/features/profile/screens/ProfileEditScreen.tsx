@@ -3,7 +3,6 @@ import {useRef, useState, type ReactNode} from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +15,7 @@ import {launchImageLibrary} from 'react-native-image-picker';
 import {DatePickerSheet} from '../../auth';
 import {COLORS, RADII} from '../../../design/tokens';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import {
   getProfileSaveErrorMessage,
   getProfileWithdrawErrorMessage,
@@ -67,6 +67,11 @@ export function ProfileEditScreen<T extends BaseProfile>({
 
   useHardwareBack(() => {
     if (isSaving) {
+      return true;
+    }
+    // 성별 드롭다운은 Modal이 아니라 뒤로가기가 JS로 내려온다. 화면을 닫기 전에 먼저 접는다.
+    if (isGenderOpen) {
+      setIsGenderOpen(false);
       return true;
     }
     onBack();
@@ -187,12 +192,12 @@ export function ProfileEditScreen<T extends BaseProfile>({
           disabled={isSaving}
           hitSlop={8}
           onPress={onBack}
-          style={styles.headerButton}
+          style={styles.backButton}
         >
           <MaterialDesignIcons
             color={COLORS.purpleDeep}
             name="chevron-left"
-            size={22}
+            size={28}
           />
         </Pressable>
         <Text style={styles.headerTitle}>프로필 편집</Text>
@@ -231,7 +236,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
             onPress={handlePickProfileImage}
             style={styles.avatarButton}
           >
-            <Image
+            <CachedRemoteImage
               accessibilityIgnoresInvertColors
               resizeMode="cover"
               source={
@@ -532,6 +537,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 56,
     paddingHorizontal: 16,
+  },
+  backButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.lavenderSurface,
+    borderRadius: RADII.pill,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
   },
   headerButton: {
     alignItems: 'center',

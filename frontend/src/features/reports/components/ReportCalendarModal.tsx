@@ -9,6 +9,7 @@ import {
 } from "react-native";
 
 import { COLORS, RADII } from "../../../design/tokens";
+import { RetryButton } from "../../../shared/components/RetryButton";
 
 export type ReportCalendarStatus = "loading" | "ready" | "error";
 
@@ -190,13 +191,7 @@ function CalendarStatus({
       <MaterialDesignIcons color={COLORS.purpleDeep} name={icon} size={30} />
       <Text style={styles.statusText}>{message}</Text>
       {actionLabel && onAction ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={onAction}
-          style={styles.retryButton}
-        >
-          <Text style={styles.retryButtonText}>{actionLabel}</Text>
-        </Pressable>
+        <RetryButton label={actionLabel} onPress={onAction} />
       ) : null}
     </View>
   );
@@ -312,19 +307,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     paddingHorizontal: 16,
-  },
-  retryButton: {
-    alignItems: "center",
-    backgroundColor: COLORS.purpleDeep,
-    borderRadius: RADII.medium,
-    justifyContent: "center",
-    minHeight: 42,
-    paddingHorizontal: 20,
-  },
-  retryButtonText: {
-    color: COLORS.background,
-    fontSize: 14,
-    fontWeight: "800",
   },
   selectedDay: {
     backgroundColor: COLORS.textSubtle,

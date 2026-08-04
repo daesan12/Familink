@@ -1,6 +1,7 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -9,9 +10,12 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {RetryButton} from '../../../shared/components/RetryButton';
 import {formatAge, formatGender} from '../groupInfoModel';
 import {WEEKLY_STAMP_DAYS, type GroupMember} from '../types';
 import {GroupMemberAvatar} from './GroupMemberAvatar';
+
+const CARNATION_IMAGE = require('../../../assets/images/carnation.png');
 
 interface MemberProfileModalProps {
   errorMessage?: string | null;
@@ -76,14 +80,10 @@ export function MemberProfileModal({
               <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
                 <Text style={styles.errorText}>{errorMessage}</Text>
                 {onRetry ? (
-                  <Pressable
+                  <RetryButton
                     accessibilityLabel="프로필 정보 다시 시도"
-                    accessibilityRole="button"
                     onPress={onRetry}
-                    style={styles.retryButton}
-                  >
-                    <Text style={styles.retryText}>다시 시도</Text>
-                  </Pressable>
+                  />
                 ) : null}
               </View>
             ) : null}
@@ -146,10 +146,10 @@ export function MemberProfileModal({
                     style={[styles.stamp, earned && styles.stampEarned]}
                   >
                     {earned ? (
-                      <MaterialDesignIcons
-                        color={COLORS.error}
-                        name="flower"
-                        size={18}
+                      <Image
+                        resizeMode="contain"
+                        source={CARNATION_IMAGE}
+                        style={styles.stampImage}
                       />
                     ) : null}
                   </View>
@@ -249,6 +249,11 @@ const styles = StyleSheet.create({
   stampEarned: {
     backgroundColor: COLORS.lemon,
   },
+  // 칸 크기가 단말 폭에 따라 달라지므로 마이페이지 도장판과 같은 80% 비율로 맞춘다.
+  stampImage: {
+    height: '80%',
+    width: '80%',
+  },
   stampRow: {
     flexDirection: 'row',
     gap: 6,
@@ -258,19 +263,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     textAlign: 'center',
-  },
-  retryButton: {
-    alignItems: 'center',
-    borderColor: COLORS.divider,
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    minHeight: 36,
-    paddingHorizontal: 16,
-  },
-  retryText: {
-    color: COLORS.textStrong,
-    fontSize: 13,
-    fontWeight: '700',
   },
   statusBlock: {
     alignItems: 'center',

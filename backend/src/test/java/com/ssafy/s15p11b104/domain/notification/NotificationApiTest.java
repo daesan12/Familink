@@ -19,7 +19,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
+import com.ssafy.s15p11b104.domain.group.entity.GroupJoinRequest;
+import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
+import com.ssafy.s15p11b104.domain.group.entity.JoinRequestStatus;
 import com.ssafy.s15p11b104.domain.group.repository.FamilyGroupRepository;
+import com.ssafy.s15p11b104.domain.group.repository.GroupJoinRequestRepository;
 import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.notification.entity.Notification;
 import com.ssafy.s15p11b104.domain.notification.entity.NotificationType;
@@ -29,6 +33,9 @@ class NotificationApiTest extends NotificationApiIntegrationTestSupport {
 
 	@Autowired
 	private FamilyGroupRepository familyGroupRepository;
+
+	@Autowired
+	private GroupJoinRequestRepository groupJoinRequestRepository;
 
 	@MockitoBean
 	private MediaDownloadUrlProvider mediaDownloadUrlProvider;
@@ -97,12 +104,96 @@ class NotificationApiTest extends NotificationApiIntegrationTestSupport {
 			.andExpect(jsonPath("$.data.content[0].actor.memberId").doesNotExist())
 			.andExpect(jsonPath("$.data.content[0].actor.loginId").doesNotExist())
 			.andExpect(jsonPath("$.data.content[0].relatedJoinRequestId").value(nullValue()))
+			.andExpect(jsonPath("$.data.content[0].relatedJoinRequestStatus").value(nullValue()))
 			.andExpect(jsonPath("$.data.hasNext").value(false));
 
 		verify(mediaDownloadUrlProvider).issueProfileImageDownloadUrl(
 			"https://cdn/profile-image/actor.jpg");
 		assertThat(userRepository.findById(actor.entity().getId()).orElseThrow().getProfileImageUrl())
 			.isEqualTo("https://cdn/profile-image/actor.jpg");
+	}
+
+	@Test
+	void listReturnsTheCurrentJoinRequestStatusForDecisionNotifications() throws Exception {
+		TestUser receiver = createUser("statusreceiver", "관리자");
+		TestUser applicant = createUser("statusapplicant", "신청자");
+		FamilyGroup group = familyGroupRepository.saveAndFlush(new FamilyGroup("상태 그룹", "STA123"));
+		GroupJoinRequest joinRequest = groupJoinRequestRepository.saveAndFlush(
+			new GroupJoinRequest(group, applicant.entity(), JoinRequestStatus.PENDING_ADMIN));
+		Notification notification = notificationRepository.saveAndFlush(new Notification(
+			receiver.entity(),
+			applicant.entity(),
+			group,
+			NotificationType.GROUP_JOIN_REQUEST,
+			"가입 요청",
+			"가입 요청이 도착했어요."));
+		jdbcTemplate.update(
+			"update notifications set related_join_request_id = ? where id = ?",
+			joinRequest.getId(),
+			notification.getId());
+
+		mockMvc.perform(authorized(getRequest("/notifications"), receiver))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.content[0].relatedJoinRequestId")
+				.value(joinRequest.getId()))
+			.andExpect(jsonPath("$.data.content[0].relatedJoinRequestStatus")
+				.value("PENDING_ADMIN"));
+
+		joinRequest.approve(GroupRole.GUARDIAN, Instant.parse("2026-08-03T00:00:00Z"));
+		groupJoinRequestRepository.saveAndFlush(joinRequest);
+
+		mockMvc.perform(authorized(getRequest("/notifications"), receiver))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.content[0].relatedJoinRequestStatus")
+				.value("APPROVED"));
+
+		GroupJoinRequest rejectedRequest = groupJoinRequestRepository.saveAndFlush(
+			new GroupJoinRequest(group, applicant.entity(), JoinRequestStatus.PENDING_ADMIN));
+		rejectedRequest.reject(Instant.parse("2026-08-03T00:01:00Z"));
+		groupJoinRequestRepository.saveAndFlush(rejectedRequest);
+		Notification rejectedNotification = notificationRepository.saveAndFlush(new Notification(
+			receiver.entity(),
+			applicant.entity(),
+			group,
+			NotificationType.GROUP_JOIN_REQUEST,
+			"가입 요청 거절",
+			"가입 요청이 거절되었습니다."));
+		jdbcTemplate.update(
+			"update notifications set related_join_request_id = ? where id = ?",
+			rejectedRequest.getId(),
+			rejectedNotification.getId());
+
+		mockMvc.perform(authorized(getRequest("/notifications"), receiver))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.content[0].relatedJoinRequestStatus")
+				.value("REJECTED"));
+	}
+
+	@Test
+	void listDoesNotExposeJoinRequestStatusForOtherNotificationTypes() throws Exception {
+		TestUser receiver = createUser("otherstatrecv", "수신자");
+		TestUser applicant = createUser("otherstatapp", "신청자");
+		FamilyGroup group = familyGroupRepository.saveAndFlush(new FamilyGroup("관계 그룹", "REL123"));
+		GroupJoinRequest joinRequest = groupJoinRequestRepository.saveAndFlush(
+			new GroupJoinRequest(group, applicant.entity(), JoinRequestStatus.PENDING_ADMIN));
+		Notification notification = notificationRepository.saveAndFlush(new Notification(
+			receiver.entity(),
+			applicant.entity(),
+			group,
+			NotificationType.NEW_POST,
+			"새 게시글",
+			"가입 요청과 무관한 알림입니다."));
+		jdbcTemplate.update(
+			"update notifications set related_join_request_id = ? where id = ?",
+			joinRequest.getId(),
+			notification.getId());
+
+		mockMvc.perform(authorized(getRequest("/notifications"), receiver))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.content[0].relatedJoinRequestId")
+				.value(joinRequest.getId()))
+			.andExpect(jsonPath("$.data.content[0].relatedJoinRequestStatus")
+				.value(nullValue()));
 	}
 
 	@Test

@@ -1,7 +1,8 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import type {Gender} from '../types';
 import {formatGenderLabel} from '../profileModel';
 
@@ -38,7 +39,7 @@ export function MyPageProfileCard({
         style={styles.moreButton}
       >
         <MaterialDesignIcons
-          color={COLORS.textMuted}
+          color={COLORS.purpleDeep}
           name="dots-vertical"
           size={22}
         />
@@ -48,13 +49,13 @@ export function MyPageProfileCard({
         {hasCrown ? (
           <View style={styles.crown}>
             <MaterialDesignIcons
-              color={COLORS.textMuted}
+              color={COLORS.purpleDeep}
               name="crown"
               size={30}
             />
           </View>
         ) : null}
-        <Image
+        <CachedRemoteImage
           accessibilityIgnoresInvertColors
           source={
             profileImageUrl ? {uri: profileImageUrl} : PROFILE_PLACEHOLDER
@@ -97,7 +98,7 @@ const styles = StyleSheet.create({
   },
   card: {
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: COLORS.lavenderSurface,
     borderCurve: 'continuous',
     borderRadius: RADII.medium,
     flexDirection: 'row',
@@ -151,7 +152,7 @@ const styles = StyleSheet.create({
   },
   rankBadge: {
     alignItems: 'center',
-    backgroundColor: COLORS.textMuted,
+    backgroundColor: COLORS.purpleDeep,
     borderRadius: RADII.pill,
     height: 22,
     justifyContent: 'center',

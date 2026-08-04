@@ -1,8 +1,11 @@
 import {useState} from 'react';
-import {Image, StyleSheet, Text, View} from 'react-native';
+import {Image, StyleSheet, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import type {GroupMember} from '../types';
+
+const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
 
 interface GroupMemberAvatarProps {
   member: Pick<GroupMember, 'avatarText' | 'name' | 'profileImageUrl'>;
@@ -23,16 +26,18 @@ export function GroupMemberAvatar({
       style={[styles.container, {height: size, width: size}]}
     >
       {showImage ? (
-        <Image
+        <CachedRemoteImage
           onError={() => setFailedUrl(imageUrl)}
           resizeMode="cover"
           source={{uri: imageUrl}}
           style={styles.image}
         />
       ) : (
-        <Text style={[styles.fallbackText, {fontSize: Math.max(13, size * 0.36)}]}>
-          {member.avatarText}
-        </Text>
+        <Image
+          accessibilityIgnoresInvertColors
+          source={PROFILE_PLACEHOLDER}
+          style={styles.image}
+        />
       )}
     </View>
   );
@@ -45,10 +50,6 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
     justifyContent: 'center',
     overflow: 'hidden',
-  },
-  fallbackText: {
-    color: COLORS.textMuted,
-    fontWeight: '800',
   },
   image: {
     height: '100%',

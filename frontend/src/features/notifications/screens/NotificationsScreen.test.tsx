@@ -10,9 +10,9 @@ import {
 import type {AppNotification, NotificationGateway} from '../types';
 import {NotificationsScreen} from './NotificationsScreen';
 
+jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
 jest.mock('lucide-react-native/icons/bell-off', () => 'BellOff');
 jest.mock('lucide-react-native/icons/check', () => 'Check');
-jest.mock('lucide-react-native/icons/chevron-left', () => 'ChevronLeft');
 jest.mock('lucide-react-native/icons/x', () => 'X');
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
@@ -164,7 +164,7 @@ test('그룹 요청 승인과 거부 팝업을 표시한다', async () => {
 
   expect(
     renderer!.root.findAllByProps({
-      accessibilityLabel: '수호님의 그룹 승인 요청, 방금',
+      accessibilityLabel: '그룹 요청 승인',
     }),
   ).toHaveLength(0);
 });
@@ -350,7 +350,7 @@ test('그룹 요청 거부는 가입 요청 API 처리 후 알림을 정리한�
   ).toBe(true);
   expect(
     renderer!.root.findAllByProps({
-      accessibilityLabel: '수호님의 그룹 승인 요청, 방금',
+      accessibilityLabel: '그룹 요청 승인',
     }),
   ).toHaveLength(0);
 });
@@ -404,7 +404,7 @@ test('그룹 요청 승인은 역할 선택 후 APPROVE로 처리한다', async 
   expect(gateway.markRead).toHaveBeenCalledWith('group-request-suho');
   expect(
     renderer!.root.findAllByProps({
-      accessibilityLabel: '수호님의 그룹 승인 요청, 방금',
+      accessibilityLabel: '그룹 요청 승인',
     }),
   ).toHaveLength(0);
 });
@@ -467,6 +467,59 @@ test('가입 요청 처리 실패 시 알림을 보존하고 오류 문구를 �
   ).toBe(false);
 });
 
+test.each(['APPROVED', 'REJECTED'] as const)(
+  '재진입해도 %s 가입 요청은 처리 버튼과 API 재호출을 노출하지 않는다',
+  async status => {
+    const processedNotification = {
+      ...DEVELOPMENT_NOTIFICATIONS[0],
+      isRead: true,
+      relatedJoinRequestStatus: status,
+      requestKind: undefined,
+    };
+    const gateway = createDecisionGateway();
+    gateway.loadPage.mockResolvedValue({
+      hasNext: false,
+      notifications: [processedNotification],
+    });
+    const processJoinRequest = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
+
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        <NotificationsScreen
+          {...baseProps}
+          gateway={gateway}
+          currentUserId={7}
+          processJoinRequest={processJoinRequest}
+        />,
+      );
+      await Promise.resolve();
+    });
+    await TestRenderer.act(() => renderer!.unmount());
+
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        <NotificationsScreen
+          {...baseProps}
+          gateway={gateway}
+          currentUserId={7}
+          processJoinRequest={processJoinRequest}
+        />,
+      );
+      await Promise.resolve();
+    });
+    mountedRenderers.push(renderer!);
+
+    expect(
+      renderer!.root.findAllByProps({accessibilityLabel: '그룹 요청 승인'}),
+    ).toHaveLength(0);
+    expect(
+      renderer!.root.findAllByProps({accessibilityLabel: '그룹 요청 거부'}),
+    ).toHaveLength(0);
+    expect(processJoinRequest).not.toHaveBeenCalled();
+  },
+);
+
 test('이미 처리된 요청 409는 문구를 보여주고 알림을 정리한다', async () => {
   const gateway = createDecisionGateway();
   const processJoinRequest = jest.fn().mockRejectedValue(
@@ -501,7 +554,7 @@ test('이미 처리된 요청 409는 문구를 보여주고 알림을 정리한�
 
   expect(
     renderer!.root.findAllByProps({
-      accessibilityLabel: '수호님의 그룹 승인 요청, 방금',
+      accessibilityLabel: '그룹 요청 승인',
     }),
   ).toHaveLength(0);
   expect(
@@ -592,7 +645,7 @@ test('처리 성공 후 읽음 동기화가 실패해도 알림 정리를 유지
   expect(gateway.markRead).toHaveBeenCalledWith('group-request-suho');
   expect(
     renderer!.root.findAllByProps({
-      accessibilityLabel: '수호님의 그룹 승인 요청, 방금',
+      accessibilityLabel: '그룹 요청 승인',
     }),
   ).toHaveLength(0);
 });

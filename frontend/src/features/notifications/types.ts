@@ -7,6 +7,11 @@ export type NotificationType =
   | 'DAILY_REPORT'
   | 'GROUP_JOIN_REQUEST';
 
+export type NotificationJoinRequestStatus =
+  | 'PENDING_ADMIN'
+  | 'APPROVED'
+  | 'REJECTED';
+
 export interface AppNotification {
   // 알림을 발생시킨 사용자 이름. 가입 요청 알림의 역할 지정 팝업에 표시한다.
   actorName?: string;
@@ -22,6 +27,7 @@ export interface AppNotification {
   relatedDailyReportId?: string;
   relatedEventId?: string;
   relatedJoinRequestId?: string;
+  relatedJoinRequestStatus: NotificationJoinRequestStatus | null;
   requestKind?: 'groupJoin';
   title: string;
   type: NotificationType;

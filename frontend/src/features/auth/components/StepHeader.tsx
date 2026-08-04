@@ -1,6 +1,7 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 
+import {COLORS} from '../../../design/tokens';
 import {AUTH_COLORS} from '../theme';
 import type {SignupStep} from '../types';
 
@@ -42,7 +43,7 @@ export function StepHeader({
             <MaterialDesignIcons
               name="chevron-left"
               size={28}
-              color={AUTH_COLORS.primaryDeep}
+              color={COLORS.purpleDeep}
             />
           </Pressable>
         )}
@@ -69,7 +70,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignItems: 'center',
-    backgroundColor: AUTH_COLORS.primarySoft,
+    backgroundColor: COLORS.lavenderSurface,
     borderRadius: BACK_BUTTON_SIZE / 2,
     boxShadow: '0px 4px 10px rgba(143, 125, 245, 0.18)',
     height: BACK_BUTTON_SIZE,
