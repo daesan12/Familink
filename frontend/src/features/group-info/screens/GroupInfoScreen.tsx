@@ -20,6 +20,7 @@ import {
   type GroupMenuItem,
 } from '../components/GroupMenuSection';
 import {GroupMemberRow} from '../components/GroupMemberRow';
+import {ManagerAccessNoticeModal} from '../components/ManagerAccessNoticeModal';
 import {MemberProfileModal} from '../components/MemberProfileModal';
 import {WeeklyRankingModal} from '../components/WeeklyRankingModal';
 import {
@@ -157,6 +158,8 @@ export function GroupInfoScreen({
   const [aliasDraft, setAliasDraft] = useState('');
   const [profileMemberId, setProfileMemberId] = useState<string | null>(null);
   const [isRankingOpen, setIsRankingOpen] = useState(false);
+  const [isManagerAccessNoticeOpen, setIsManagerAccessNoticeOpen] =
+    useState(false);
   const [subScreen, setSubScreen] = useState<SubScreen | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [scopedGroupId, setScopedGroupId] = useState(currentGroup.id);
@@ -404,14 +407,21 @@ export function GroupInfoScreen({
     setProfileLoadState('idle');
     setProfileLoadError(null);
     setIsRankingOpen(false);
+    setIsManagerAccessNoticeOpen(false);
     setSubScreen(null);
     setIsDeleteOpen(false);
     setGroupDetail(null);
   }
 
   const viewerMemberId = scoped.currentMemberId;
+  const viewerMembership = members.find(
+    member => member.memberId === viewerMemberId,
+  );
   const canManageRoles =
-    groupDetail?.isManager ?? canManageRolesFor(members, viewerMemberId);
+    viewerMembership?.isManager ??
+    groupDetail?.isManager ??
+    (membersLoadState === 'loading' ? currentGroup.isManager : undefined) ??
+    canManageRolesFor(members, viewerMemberId);
   // 승인 대기 건수는 관리자만 조회할 수 있는 대기 요청 목록에서 센다.
   // 멤버십이 바뀔 수 있는 하위 화면에서 돌아오면 membersReloadCount가 올라가
   // 승인·거절 결과가 건수에 반영된다.
@@ -681,6 +691,16 @@ export function GroupInfoScreen({
     setDetailReloadCount(count => count + 1);
   };
 
+  // 관리자 전용 진입점은 한 곳에서 검사해 화면별 권한 문구와 분기가 어긋나지 않게 한다.
+  const openManagerOnly = (open: () => void) => {
+    if (!canManageRoles) {
+      setSubScreen(null);
+      setIsManagerAccessNoticeOpen(true);
+      return;
+    }
+    open();
+  };
+
   const profileMemberBase =
     members.find(member => member.memberId === profileMemberId) ?? null;
   const profileMember =
@@ -730,7 +750,7 @@ export function GroupInfoScreen({
       description: waitingDescription,
       key: 'join-requests',
       label: '가입 승인 대기',
-      onPress: () => setSubScreen('joinApproval'),
+      onPress: () => openManagerOnly(() => setSubScreen('joinApproval')),
     },
   ];
 
@@ -739,13 +759,13 @@ export function GroupInfoScreen({
       description: '관리자 권한을 다른 구성원에게 넘깁니다',
       key: 'change-manager',
       label: '그룹관리자 변경',
-      onPress: () => setSubScreen('changeManager'),
+      onPress: () => openManagerOnly(() => setSubScreen('changeManager')),
     },
     {
       description: '그룹 연결을 해제합니다',
       key: 'remove-member',
       label: '구성원 내보내기',
-      onPress: () => setSubScreen('removeMember'),
+      onPress: () => openManagerOnly(() => setSubScreen('removeMember')),
     },
     {
       description: '그룹을 떠납니다',
@@ -763,13 +783,13 @@ export function GroupInfoScreen({
       description: '전체 구성원에게 영향을 줍니다',
       key: 'delete-group',
       label: '그룹 삭제',
-      onPress: () => setIsDeleteOpen(true),
+      onPress: () => openManagerOnly(() => setIsDeleteOpen(true)),
     },
     {
       description: '그룹의 이름을 변경합니다',
       key: 'rename-group',
       label: '그룹명 변경',
-      onPress: () => setSubScreen('renameGroup'),
+      onPress: () => openManagerOnly(() => setSubScreen('renameGroup')),
     },
   ];
 
@@ -803,7 +823,9 @@ export function GroupInfoScreen({
         managerName={resolveManagerName(members)}
         memberCount={resolvedMemberCount}
         onBack={closeSubScreen}
-        onGoToChangeManager={() => setSubScreen('changeManager')}
+        onGoToChangeManager={() =>
+          openManagerOnly(() => setSubScreen('changeManager'))
+        }
         onLeaveGroup={handleLeaveGroup}
       />
     );
@@ -931,6 +953,11 @@ export function GroupInfoScreen({
         onRetry={ranking.retry}
         state={ranking}
         visible={isRankingOpen}
+      />
+
+      <ManagerAccessNoticeModal
+        onClose={() => setIsManagerAccessNoticeOpen(false)}
+        visible={isManagerAccessNoticeOpen}
       />
 
       <DeleteGroupModal
