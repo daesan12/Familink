@@ -21,6 +21,7 @@ import { SignupFlowScreen } from "../src/features/auth/screens/SignupFlowScreen"
 import { SignedInWelcomeScreen } from "../src/features/auth/screens/SignedInWelcomeScreen";
 import type { AuthGateway } from "../src/features/auth/types";
 import { ApiError } from "../src/shared/api";
+import { imageDiskCache } from "../src/shared/media/imageDiskCache";
 import type {
   FamilyGroupGateway,
   GroupMemberGateway,
@@ -69,6 +70,15 @@ jest.mock("lucide-react-native/icons/x", () => "Icon");
 jest.mock("react-native-image-picker", () => ({
   launchImageLibrary: jest.fn(),
 }));
+jest.mock("../src/shared/media/imageDiskCache", () => ({
+  imageDiskCache: {
+    clearAll: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
+beforeEach(() => {
+  jest.mocked(imageDiskCache.clearAll).mockClear();
+});
 
 jest.mock("react-native-safe-area-context", () => {
   const { View } = jest.requireActual("react-native");
@@ -1727,6 +1737,7 @@ test("로그아웃 확인 후 로컬 세션을 지우고 A-1로 돌아온다", a
 
   expect(authGateway.logout).toHaveBeenCalledTimes(1);
   expect(authSession.clearLocalSession).toHaveBeenCalledTimes(1);
+  expect(imageDiskCache.clearAll).toHaveBeenCalledTimes(1);
   expect(
     renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })
   ).toBeTruthy();
@@ -1848,6 +1859,7 @@ test("회원탈퇴 204 성공 후 로그아웃 API 없이 로컬 상태를 지�
   expect(profileGateway.withdrawCurrentUser).toHaveBeenCalledTimes(1);
   expect(authGateway.logout).not.toHaveBeenCalled();
   expect(authSession.clearLocalSession).toHaveBeenCalledTimes(1);
+  expect(imageDiskCache.clearAll).toHaveBeenCalledTimes(1);
   expect(notificationGateway.deactivateDeviceToken).not.toHaveBeenCalled();
   expect(renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })).toBeTruthy();
 });

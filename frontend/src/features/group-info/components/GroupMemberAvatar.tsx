@@ -1,7 +1,8 @@
 import {useState} from 'react';
-import {Image, StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, Text, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import type {GroupMember} from '../types';
 
 interface GroupMemberAvatarProps {
@@ -23,7 +24,7 @@ export function GroupMemberAvatar({
       style={[styles.container, {height: size, width: size}]}
     >
       {showImage ? (
-        <Image
+        <CachedRemoteImage
           onError={() => setFailedUrl(imageUrl)}
           resizeMode="cover"
           source={{uri: imageUrl}}

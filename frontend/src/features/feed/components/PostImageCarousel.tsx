@@ -4,7 +4,6 @@ import Video from 'react-native-video';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -16,6 +15,7 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 
 const IMAGE_GAP = 10;
 const NEXT_IMAGE_PEEK = 28;
@@ -249,7 +249,7 @@ function FeedImageFrame({
         onPress={handleMediaPress}
       >
         {hasPoster ? (
-          <Image
+          <CachedRemoteImage
             accessibilityLabel={image.accessibilityLabel}
             accessibilityRole="image"
             key={`${image.id}-${retryCount}`}

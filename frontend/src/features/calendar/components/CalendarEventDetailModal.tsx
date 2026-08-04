@@ -1,7 +1,6 @@
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
 import {
   ActivityIndicator,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -11,6 +10,7 @@ import {
 } from "react-native";
 
 import { COLORS, RADII } from "../../../design/tokens";
+import { CachedRemoteImage } from "../../../shared/media/CachedRemoteImage";
 import { formatEventDateRange, formatEventTime } from "../calendarModel";
 import type { CalendarEventDetail, CalendarMember } from "../types";
 
@@ -231,7 +231,7 @@ function PeopleSection({
             const member = members.find((item) => item.memberId === memberId);
             return (
               <View key={memberId} style={styles.personChip}>
-                <Image
+                <CachedRemoteImage
                   accessibilityLabel={
                     member
                       ? `${member.displayName} 프로필 사진`

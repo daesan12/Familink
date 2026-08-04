@@ -1,7 +1,8 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import type {ArchivePost} from '../types';
 
 interface ArchiveMediaTileProps {
@@ -34,7 +35,7 @@ export function ArchiveMediaTile({onPress, post}: ArchiveMediaTileProps) {
       ) : (
         <>
           {post.thumbnail ? (
-            <Image
+            <CachedRemoteImage
               resizeMode="cover"
               source={post.thumbnail}
               style={styles.thumbnail}

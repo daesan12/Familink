@@ -5,6 +5,8 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -49,6 +51,7 @@ import jakarta.persistence.EntityManager;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 
 /**
  * 본인 프로필 조회·수정과 회원 탈퇴 API를 검증한다.
@@ -64,6 +67,7 @@ class UserApiTest extends IntegrationTest {
 	private static final String PASSWORD = "password123";
 	private static final String PROFILE_IMAGE_URL = "https://cdn/profile-image/profile.png";
 	private static final String PROFILE_IMAGE_JSON = "\"" + PROFILE_IMAGE_URL + "\"";
+	private static final String REPLACEMENT_PROFILE_IMAGE_URL = "https://cdn/profile-image/replacement.png";
 	private static final String SIGNUP_BODY = """
 		{
 		  "loginId": "testuser",
@@ -282,7 +286,29 @@ class UserApiTest extends IntegrationTest {
 		updateProfileImage(session, "null");
 
 		assertThat(userRepository.findById(session.userId()).orElseThrow().getProfileImageUrl()).isNull();
-		verifyNoInteractions(s3Client);
+		verify(s3Client).deleteObject(any(DeleteObjectRequest.class));
+	}
+
+	@Test
+	void updateDoesNotDeleteProfileImageWhenCanonicalUrlIsUnchanged() throws Exception {
+		Session session = signupAndLogin();
+		updateProfileImage(session, PROFILE_IMAGE_JSON);
+		clearInvocations(s3Client);
+
+		updateProfileImage(session, PROFILE_IMAGE_JSON);
+
+		verify(s3Client, never()).deleteObject(any(DeleteObjectRequest.class));
+	}
+
+	@Test
+	void updateDeletesPreviousProfileImageWhenCanonicalUrlChanges() throws Exception {
+		Session session = signupAndLogin();
+		updateProfileImage(session, PROFILE_IMAGE_JSON);
+		clearInvocations(s3Client);
+
+		updateProfileImage(session, "\"" + REPLACEMENT_PROFILE_IMAGE_URL + "\"");
+
+		verify(s3Client).deleteObject(any(DeleteObjectRequest.class));
 	}
 
 	@Test
@@ -416,6 +442,18 @@ class UserApiTest extends IntegrationTest {
 		assertThat(withdrawn.getBirthDate()).isNull();
 		assertThat(withdrawn.getGender()).isNull();
 		assertThat(withdrawn.getProfileImageUrl()).isNull();
+	}
+
+	@Test
+	void withdrawalDeletesPreviousProfileImage() throws Exception {
+		Session session = signupAndLogin();
+		updateProfileImage(session, PROFILE_IMAGE_JSON);
+		clearInvocations(s3Client);
+
+		mockMvc.perform(authorized(delete(PATH), session))
+			.andExpect(status().isNoContent());
+
+		verify(s3Client).deleteObject(any(DeleteObjectRequest.class));
 	}
 
 	@Test

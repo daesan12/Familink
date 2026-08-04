@@ -3,7 +3,6 @@ import {useRef, useState, type ReactNode} from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +15,7 @@ import {launchImageLibrary} from 'react-native-image-picker';
 import {DatePickerSheet} from '../../auth';
 import {COLORS, RADII} from '../../../design/tokens';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import {
   getProfileSaveErrorMessage,
   getProfileWithdrawErrorMessage,
@@ -231,7 +231,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
             onPress={handlePickProfileImage}
             style={styles.avatarButton}
           >
-            <Image
+            <CachedRemoteImage
               accessibilityIgnoresInvertColors
               resizeMode="cover"
               source={

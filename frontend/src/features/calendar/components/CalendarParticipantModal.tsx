@@ -1,6 +1,5 @@
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
 import {
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -10,6 +9,7 @@ import {
 } from "react-native";
 
 import { COLORS, RADII } from "../../../design/tokens";
+import { CachedRemoteImage } from "../../../shared/media/CachedRemoteImage";
 import type { CalendarMember } from "../types";
 
 const PROFILE_PLACEHOLDER = require("../../../assets/images/profile-placeholder.png");
@@ -91,7 +91,7 @@ export function CalendarParticipantModal({
                       pressed && styles.pressed,
                     ]}
                   >
-                    <Image
+                    <CachedRemoteImage
                       source={
                         member.profileImageUrl
                           ? { uri: member.profileImageUrl }
