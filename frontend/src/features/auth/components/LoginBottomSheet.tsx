@@ -7,12 +7,12 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {ApiError} from '../../../shared/api';
 import type {LoginCredentials} from '../types';
@@ -54,6 +54,7 @@ export function LoginBottomSheet({
   const [loginError, setLoginError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const insets = useSafeAreaInsets();
   const submittingRef = useRef(false);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const sheetTranslateY = useRef(new Animated.Value(32)).current;
@@ -189,7 +190,7 @@ export function LoginBottomSheet({
           style={StyleSheet.absoluteFill}
         />
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior="padding"
           pointerEvents="box-none"
           style={styles.keyboardArea}>
           <Animated.View
@@ -198,7 +199,10 @@ export function LoginBottomSheet({
               {transform: [{translateY: sheetTranslateY}]},
             ]}>
             <ScrollView
-              contentContainerStyle={styles.content}
+              contentContainerStyle={[
+                styles.content,
+                {paddingBottom: Math.max(insets.bottom, 24)},
+              ]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
               <AnimatedPressable
@@ -347,7 +351,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    paddingBottom: 24,
     paddingHorizontal: AUTH_LAYOUT.horizontalPadding,
     paddingTop: 22,
   },

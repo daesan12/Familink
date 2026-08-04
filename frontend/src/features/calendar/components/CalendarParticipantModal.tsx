@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS, RADII } from "../../../design/tokens";
 import { CachedRemoteImage } from "../../../shared/media/CachedRemoteImage";
@@ -29,6 +30,7 @@ export function CalendarParticipantModal({
   selectedMemberIds,
   visible,
 }: CalendarParticipantModalProps) {
+  const insets = useSafeAreaInsets();
   const toggleMember = (memberId: string) => {
     onChange(
       selectedMemberIds.includes(memberId)
@@ -51,7 +53,7 @@ export function CalendarParticipantModal({
           onPress={onClose}
           style={styles.dim}
         />
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
             <Text accessibilityRole="header" style={styles.title}>

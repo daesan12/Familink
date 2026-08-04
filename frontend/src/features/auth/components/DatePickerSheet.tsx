@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {AUTH_COLORS} from '../theme';
 
@@ -140,8 +141,12 @@ export function DatePickerSheet({
   const initial = parseDate(value || initialValue || '');
   const [selected, setSelected] = useState<DateParts>(initial);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const insets = useSafeAreaInsets();
+  const sheetHeight = 342 + insets.bottom;
+  // 숨김 위치는 시트 전체 높이보다 커야 첫/마지막 프레임에 하단이 노출되지 않는다.
+  const hiddenOffset = sheetHeight + 18;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(360)).current;
+  const translateY = useRef(new Animated.Value(hiddenOffset)).current;
   const dismissingRef = useRef(false);
   const today = useMemo(() => new Date(), []);
 
@@ -172,7 +177,7 @@ export function DatePickerSheet({
       dismissingRef.current = false;
       setSelected(parseDate(value || initialValue || ''));
       backdropOpacity.setValue(0);
-      translateY.setValue(reduceMotion ? 0 : 360);
+      translateY.setValue(reduceMotion ? 0 : hiddenOffset);
       Animated.parallel([
         Animated.timing(backdropOpacity, {
           toValue: 1,
@@ -188,7 +193,15 @@ export function DatePickerSheet({
         }),
       ]).start();
     }
-  }, [backdropOpacity, initialValue, reduceMotion, translateY, value, visible]);
+  }, [
+    backdropOpacity,
+    hiddenOffset,
+    initialValue,
+    reduceMotion,
+    translateY,
+    value,
+    visible,
+  ]);
 
   const updatePart = (part: keyof DateParts, nextValue: number) => {
     setSelected(current => {
@@ -226,7 +239,7 @@ export function DatePickerSheet({
         useNativeDriver: true,
       }),
       Animated.timing(translateY, {
-        toValue: reduceMotion ? 0 : 360,
+        toValue: reduceMotion ? 0 : hiddenOffset,
         duration: reduceMotion ? 0 : 220,
         easing: EXIT_EASING,
         useNativeDriver: true,
@@ -265,7 +278,15 @@ export function DatePickerSheet({
           onPress={() => dismiss(onCancel)}
           style={StyleSheet.absoluteFill}
         />
-        <Animated.View style={[styles.sheet, {transform: [{translateY}]}]}>
+        <Animated.View
+          style={[
+            styles.sheet,
+            {
+              height: sheetHeight,
+              paddingBottom: insets.bottom,
+            },
+            {transform: [{translateY}]},
+          ]}>
           <View style={styles.handle} />
           <View style={styles.actions}>
             <Pressable hitSlop={12} onPress={() => dismiss(onCancel)}>
@@ -321,7 +342,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     borderWidth: 1,
     elevation: 12,
-    height: 342,
     paddingHorizontal: 24,
   },
   handle: {
