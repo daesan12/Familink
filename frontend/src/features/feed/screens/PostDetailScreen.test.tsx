@@ -77,6 +77,7 @@ async function renderScreen(
         onDeleteComment={jest.fn()}
         onMenuPress={jest.fn()}
         onScrollBeginDrag={jest.fn()}
+        onSelectReaction={jest.fn()}
         onToggleReactionPicker={jest.fn()}
         onUpdateComment={jest.fn()}
         post={post}

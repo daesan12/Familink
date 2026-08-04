@@ -6,7 +6,10 @@ import java.util.EnumSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
@@ -28,6 +31,8 @@ import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 @Service
 public class CallSessionService {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(CallSessionService.class);
+
 	private static final Set<CallStatus> ACTIVE_STATUSES = EnumSet.of(
 		CallStatus.CONNECTING,
 		CallStatus.IN_PROGRESS
@@ -44,6 +49,7 @@ public class CallSessionService {
 	private final CallReportGenerationDispatcher callReportGenerationDispatcher;
 	private final CallTranscriptService callTranscriptService;
 	private final CallSessionLeaseService callSessionLeaseService;
+	private final CallTeardownExecutor callTeardownExecutor;
 	private final TransactionTemplate transactionTemplate;
 	private final Clock clock;
 
@@ -59,6 +65,7 @@ public class CallSessionService {
 		CallReportGenerationDispatcher callReportGenerationDispatcher,
 		CallTranscriptService callTranscriptService,
 		CallSessionLeaseService callSessionLeaseService,
+		CallTeardownExecutor callTeardownExecutor,
 		TransactionTemplate transactionTemplate,
 		Clock clock
 	) {
@@ -73,6 +80,7 @@ public class CallSessionService {
 		this.callReportGenerationDispatcher = callReportGenerationDispatcher;
 		this.callTranscriptService = callTranscriptService;
 		this.callSessionLeaseService = callSessionLeaseService;
+		this.callTeardownExecutor = callTeardownExecutor;
 		this.transactionTemplate = transactionTemplate;
 		this.clock = clock;
 	}
@@ -142,29 +150,118 @@ public class CallSessionService {
 		return new CallSessionIdResponse(callSessionId);
 	}
 
+	/**
+	 * 통화 종료를 접수한다.
+	 *
+	 * <p>종료 상태와 종료 시각을 확정하고 Sideband 소유권을 가져오는 것까지만 요청 스레드에서
+	 * 수행하고, OpenAI hangup·남은 이벤트 drain·전사 마감·리포트 접수는 응답 뒤로 넘긴다.
+	 * 사용자는 이 뒷정리를 기다릴 이유가 없고, 계약도 비동기 접수({@code 202})다.
+	 */
 	public CallSessionIdResponse end(Long callSessionId, CallTerminationType terminationType) {
 		CallActor actor = callActorResolver.resolve();
 		Instant now = clock.instant();
-		TerminationResult result = Objects.requireNonNull(transactionTemplate.execute(status -> {
-			CallSession session = findOwnedSessionForUpdate(callSessionId, actor);
-			callSessionLeaseService.recoverIfExpired(session, now);
-			CallStatus previousStatus = session.getStatus();
-			try {
-				applyTermination(session, terminationType, now);
-			} catch (IllegalStateException exception) {
-				throw CallApiException.invalidCallStatus();
-			}
-			boolean finalizationRequired = ACTIVE_STATUSES.contains(previousStatus)
-				&& !ACTIVE_STATUSES.contains(session.getStatus());
-			return new TerminationResult(session.getId(), finalizationRequired);
-		}));
-		boolean drained = hangUp(callSessionId);
-		boolean reportGenerationRequired = result.finalizationRequired()
-			&& callTranscriptService.finalizeSession(result.callSessionId(), drained);
-		if (reportGenerationRequired) {
-			callReportGenerationDispatcher.dispatch(result.callSessionId());
+		// claim은 소켓을 맵에서 꺼내 오므로 트랜잭션이 커밋에 실패하면 회수할 경로가 없다.
+		// 반환값에만 의존하지 않고 여기에 담아 두었다가 실패 시 직접 정리한다.
+		AtomicReference<SidebandSessionManager.ClosingSideband> claimedSideband =
+			new AtomicReference<>();
+		TerminationResult result;
+		try {
+			result = Objects.requireNonNull(transactionTemplate.execute(status -> {
+				CallSession session = findOwnedSessionForUpdate(callSessionId, actor);
+				callSessionLeaseService.recoverIfExpired(session, now);
+				CallStatus previousStatus = session.getStatus();
+				try {
+					applyTermination(session, terminationType, now);
+				} catch (IllegalStateException exception) {
+					throw CallApiException.invalidCallStatus();
+				}
+				boolean finalizationRequired = ACTIVE_STATUSES.contains(previousStatus)
+					&& !ACTIVE_STATUSES.contains(session.getStatus());
+				// 커밋 전에 소유권을 가져와 정상 종료 예정으로 표시한다. 커밋 후로 미루면 그 틈에
+				// 도착한 remote close가 예상치 못한 단절로 처리돼 소켓이 먼저 정리되고, 뒤늦은
+				// 뒷정리가 drain 실패로 판정한다.
+				claimedSideband.set(sidebandSessionManager.claimClose(callSessionId));
+				return new TerminationResult(
+					session.getId(),
+					finalizationRequired,
+					claimedSideband.get()
+				);
+			}));
+		} catch (RuntimeException exception) {
+			releaseClaimedSideband(callSessionId, claimedSideband.get());
+			throw exception;
+		}
+		if (result.closingSideband() != null) {
+			callTeardownExecutor.execute(() -> tearDownClaimedSession(
+				result.callSessionId(),
+				result.closingSideband(),
+				result.finalizationRequired()
+			));
 		}
 		return new CallSessionIdResponse(result.callSessionId());
+	}
+
+	/**
+	 * 소유권을 가져온 통화의 뒷정리를 수행한다.
+	 *
+	 * <p>순서를 바꾸지 않는다. {@code finishClose}가 전사 핸들러를 닫은 뒤에 마감해야
+	 * 마감 이후 유입된 이벤트로 무결성이 오염되지 않는다. 실패해도 보상 마감을 시도하지
+	 * 않는다. drain 실패로 마감하면 세션이 복구 불가능한 상태가 된다.
+	 */
+	private void tearDownClaimedSession(
+		Long callSessionId,
+		SidebandSessionManager.ClosingSideband closingSideband,
+		boolean finalizationRequired
+	) {
+		try {
+			boolean drained;
+			// 소켓 해제는 유일한 회수 지점이므로 앞 단계가 실패해도 반드시 수행한다.
+			try {
+				realtimeGateway.hangUp(closingSideband.callId());
+			} finally {
+				drained = closingSideband.finishClose();
+			}
+			boolean reportGenerationRequired = finalizationRequired
+				&& callTranscriptService.finalizeSession(callSessionId, drained);
+			if (reportGenerationRequired) {
+				callReportGenerationDispatcher.dispatch(callSessionId);
+			}
+		} catch (RuntimeException exception) {
+			LOGGER.error(
+				"통화 종료 뒷정리에 실패했습니다. callSessionId={}, errorType={}",
+				callSessionId,
+				exception.getClass().getSimpleName()
+			);
+		}
+	}
+
+	/**
+	 * 종료 상태를 확정하지 못한 채 이미 가져온 Sideband 소유권을 되돌린다.
+	 *
+	 * <p>세션은 롤백돼 그대로 활성 상태이지만 소켓은 이미 맵에서 빠졌고 정상 종료 예정으로
+	 * 표시돼 remote close로도 회수되지 않는다. 그대로 두면 소켓과 전사 핸들러가 남아 lease
+	 * 갱신 대상에서도 사라지므로, 여기서 닫아 준다.
+	 */
+	private void releaseClaimedSideband(
+		Long callSessionId,
+		SidebandSessionManager.ClosingSideband closingSideband
+	) {
+		if (closingSideband == null) {
+			return;
+		}
+		try {
+			try {
+				realtimeGateway.hangUp(closingSideband.callId());
+			} finally {
+				closingSideband.finishClose();
+			}
+		} catch (RuntimeException exception) {
+			LOGGER.error(
+				"종료 실패 후 Sideband 세션을 정리하지 못했습니다. callSessionId={}, errorType={}",
+				callSessionId,
+				exception.getClass().getSimpleName()
+			);
+		}
 	}
 
 	private void applyTermination(CallSession session, CallTerminationType terminationType, Instant now) {
@@ -250,9 +347,14 @@ public class CallSessionService {
 	}
 
 	private boolean hangUp(Long callSessionId) {
-		String openAiCallId = sidebandSessionManager.prepareClose(callSessionId);
-		realtimeGateway.hangUp(openAiCallId);
-		return sidebandSessionManager.finishClose(callSessionId);
+		SidebandSessionManager.ClosingSideband closingSideband =
+			sidebandSessionManager.claimClose(callSessionId);
+		if (closingSideband == null) {
+			realtimeGateway.hangUp(null);
+			return false;
+		}
+		realtimeGateway.hangUp(closingSideband.callId());
+		return closingSideband.finishClose();
 	}
 
 	private void validateSdp(String sdpOffer) {
@@ -277,7 +379,11 @@ public class CallSessionService {
 	) {
 	}
 
-	private record TerminationResult(Long callSessionId, boolean finalizationRequired) {
+	private record TerminationResult(
+		Long callSessionId,
+		boolean finalizationRequired,
+		SidebandSessionManager.ClosingSideband closingSideband
+	) {
 	}
 
 	private record ConnectionResultOutcome(boolean accepted, boolean finalizationRequired) {

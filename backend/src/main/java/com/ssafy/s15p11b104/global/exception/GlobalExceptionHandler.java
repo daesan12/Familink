@@ -28,7 +28,10 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(BusinessException.class)
 	ResponseEntity<ApiErrorResponse> handleBusinessException(BusinessException exception) {
-		return toResponse(exception.getErrorCode(), List.of());
+		List<FieldError> errors = exception.getField() == null || exception.getDetailMessage() == null
+			? List.of()
+			: List.of(new FieldError(exception.getField(), exception.getDetailMessage()));
+		return toResponse(exception.getErrorCode(), errors);
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)

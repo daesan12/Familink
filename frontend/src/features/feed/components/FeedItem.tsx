@@ -14,6 +14,7 @@ interface FeedItemProps {
   isReactionPickerOpen: boolean;
   onPress: (postId: string) => void;
   onPressAuthor?: (author: FeedMember) => void;
+  onSelectReaction: (postId: string, reactionId: ReactionId) => void;
   onToggleReactionPicker: (
     postId: string,
     anchor: ReactionAnchor,
@@ -29,6 +30,7 @@ export function FeedItem({
   isReactionPickerOpen,
   onPress,
   onPressAuthor,
+  onSelectReaction,
   onToggleReactionPicker,
   post,
   selectedReactionId,
@@ -66,15 +68,18 @@ export function FeedItem({
         <Text style={styles.body}>{post.body}</Text>
       </Pressable>
       <PostImageCarousel
+        enableFullscreen
         images={post.images}
         isVisible={isVisible}
-        onImagePress={handlePress}
       />
 
       <View style={styles.metaRow}>
         <ReactionBar
           canReact={canInteract}
           isPickerOpen={isReactionPickerOpen}
+          onSelectReaction={reactionId =>
+            onSelectReaction(post.id, reactionId)
+          }
           onTogglePicker={anchor =>
             onToggleReactionPicker(post.id, anchor)
           }

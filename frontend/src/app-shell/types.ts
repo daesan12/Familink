@@ -16,6 +16,9 @@ export type AppRoute =
 
 export interface FamilyGroup {
   id: string;
+  // 그룹 목록 API가 제공하는 현재 사용자의 관리자 여부.
+  // 개발용 fixture처럼 값이 없으면 그룹 상세·구성원 정보로 판정한다.
+  isManager?: boolean;
   myMemberId?: string;
   name: string;
   role: GroupRole;

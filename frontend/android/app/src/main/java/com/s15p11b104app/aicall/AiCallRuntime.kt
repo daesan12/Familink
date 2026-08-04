@@ -12,6 +12,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.cancellation.CancellationException
 
 internal class AiCallRuntime(
@@ -29,26 +30,28 @@ internal class AiCallRuntime(
               onConnectionLost = connectionLostCallback,
           )
         },
+    private val mediaContext: CoroutineContext = Dispatchers.IO,
 ) {
 
-  private data class EndRequest(
-      val terminationType: AiCallTerminationType,
-      val allowCurrentTokenFallback: Boolean,
-  )
-
   private data class EndDispatch(
-      val request: EndRequest,
+      val terminationType: AiCallTerminationType,
       val callSessionId: Long,
   )
 
   private val stateLock = Any()
   private val disposalScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+  // Never cancelled, unlike disposalScope: dispose() cancels that scope when it
+  // returns, which would abort a teardown launched moments earlier and leak the
+  // microphone and the WebRTC factory for the rest of the process.
+  private val mediaScope = CoroutineScope(SupervisorJob() + mediaContext)
   private val disposed = AtomicBoolean(false)
   private var startJob: Job? = null
-  private var pendingEndRequest: EndRequest? = null
+  private var pendingEndTermination: AiCallTerminationType? = null
   private var endRequestSent = false
   private var endCompletion: CompletableDeferred<Unit>? = null
   private var webRtcSession: AiCallMediaSession? = null
+  private var pendingMediaClose: Job? = null
 
   var callSessionId: Long? = null
     private set
@@ -71,7 +74,7 @@ internal class AiCallRuntime(
       }
       startJob = currentJob
       callSessionId = null
-      pendingEndRequest = null
+      pendingEndTermination = null
       endRequestSent = false
       endCompletion = null
     }
@@ -89,9 +92,32 @@ internal class AiCallRuntime(
           throw exception
         }
 
+    // Audio routing and the audio device module are process-wide, so a previous
+    // session must finish releasing them before the next one claims them. Otherwise
+    // the old teardown restores the audio mode the new call just set, or the new
+    // audio device module fails to acquire the microphone.
+    //
+    // This is a suspension point, so cancelling the start job resumes here with a
+    // CancellationException. It must release startJob and complete a pending end the
+    // same way the other pre-session failures do; otherwise end() waits forever on an
+    // endCompletion nobody can finish.
+    try {
+      awaitPendingMediaClose()
+    } catch (exception: Throwable) {
+      synchronized(stateLock) {
+        if (startJob === currentJob) {
+          startJob = null
+        }
+      }
+      completePendingEndWithoutServerSession()
+      throw exception
+    }
+
     val session =
         try {
-          mediaSessionFactory(context, onCaptionUpdate, onConnectionLost)
+          withContext(mediaContext) {
+            mediaSessionFactory(context, onCaptionUpdate, onConnectionLost)
+          }
         } catch (exception: Throwable) {
           synchronized(stateLock) {
             if (startJob === currentJob) {
@@ -103,7 +129,7 @@ internal class AiCallRuntime(
         }
     val ownsSession =
         synchronized(stateLock) {
-          if (startJob === currentJob && pendingEndRequest == null && webRtcSession == null) {
+          if (startJob === currentJob && pendingEndTermination == null && webRtcSession == null) {
             webRtcSession = session
             true
           } else {
@@ -111,7 +137,7 @@ internal class AiCallRuntime(
           }
         }
     if (!ownsSession) {
-      session.close()
+      closeInBackground(session)
       throw CancellationException("The AI call was ended while media was initializing.")
     }
 
@@ -188,19 +214,15 @@ internal class AiCallRuntime(
   }
 
   suspend fun end(terminationType: AiCallTerminationType) {
-    requestEnd(terminationType, allowCurrentTokenFallback = false)
+    requestEnd(terminationType)
   }
 
-  private suspend fun requestEnd(
-      terminationType: AiCallTerminationType,
-      allowCurrentTokenFallback: Boolean,
-  ) {
-    val request = EndRequest(terminationType, allowCurrentTokenFallback)
+  private suspend fun requestEnd(terminationType: AiCallTerminationType) {
     val completion: CompletableDeferred<Unit>
     val activeStartJob: Job?
     val existingSessionId: Long?
     synchronized(stateLock) {
-      pendingEndRequest = request
+      pendingEndTermination = terminationType
       completion = endCompletion ?: CompletableDeferred<Unit>().also { endCompletion = it }
       activeStartJob = startJob
       existingSessionId = callSessionId
@@ -231,10 +253,7 @@ internal class AiCallRuntime(
     }
     disposalScope.launch {
       try {
-        requestEnd(
-            AiCallTerminationType.UserRequested,
-            allowCurrentTokenFallback = true,
-        )
+        requestEnd(AiCallTerminationType.UserRequested)
       } catch (_: Throwable) {
         close()
       } finally {
@@ -256,7 +275,38 @@ internal class AiCallRuntime(
         synchronized(stateLock) {
           webRtcSession.also { webRtcSession = null }
         }
-    session?.close()
+    closeInBackground(session)
+  }
+
+  /**
+   * Hands WebRTC teardown to [mediaContext] and returns immediately. Disposing the peer
+   * connection, the factory and the audio device module blocks until their native
+   * threads join, so doing it on the caller's thread stalls the end-of-call screen
+   * change. Teardowns are chained so two sessions never release the shared audio route
+   * and audio device module at the same time.
+   */
+  private fun closeInBackground(session: AiCallMediaSession?) {
+    if (session == null) {
+      return
+    }
+    // Reading the previous teardown and publishing this one must be one step. Split
+    // across two locks, two concurrent closes can both chain onto the same predecessor
+    // and release the shared audio route and audio device module at the same time.
+    synchronized(stateLock) {
+      val previousClose = pendingMediaClose
+      pendingMediaClose =
+          mediaScope.launch {
+            previousClose?.join()
+            // mediaScope has no exception handler, so an escaping failure would reach
+            // the thread's default handler and take the process down. Teardown is
+            // best effort: native disposal and audio route restoration can throw.
+            runCatching { session.close() }
+          }
+    }
+  }
+
+  private suspend fun awaitPendingMediaClose() {
+    synchronized(stateLock) { pendingMediaClose }?.join()
   }
 
   private suspend fun abortIfEnding(session: AiCallMediaSession) {
@@ -279,7 +329,7 @@ internal class AiCallRuntime(
           }
         }
     if (shouldClose) {
-      session.close()
+      closeInBackground(session)
     }
   }
 
@@ -289,33 +339,31 @@ internal class AiCallRuntime(
           if (endRequestSent) {
             null
           } else {
-            val request = pendingEndRequest
+            val terminationType = pendingEndTermination
             val sessionId = callSessionId
-            if (request == null || sessionId == null) {
+            if (terminationType == null || sessionId == null) {
               null
             } else {
               endRequestSent = true
-              EndDispatch(request, sessionId)
+              EndDispatch(terminationType, sessionId)
             }
           }
         } ?: return
 
     val completion = synchronized(stateLock) { endCompletion }
     try {
+      // Reuse the token already held for this call instead of forcing a refresh. A
+      // refresh costs a bridge round trip plus /auth/reissue, and on the disposal
+      // path the bridge is already detached so nobody answers it and the request
+      // burns the provider timeout before /end can be sent. An actually expired
+      // token still works: endCallSession retries once on 401 with a fresh token.
       val token =
-          try {
-            accessTokenProvider.refreshAccessToken()
-          } catch (exception: Throwable) {
-            if (!dispatch.request.allowCurrentTokenFallback) {
-              throw exception
-            }
-            accessTokenProvider.currentAccessToken()?.takeIf { it.isNotBlank() }
-                ?: throw exception
-          }
+          accessTokenProvider.currentAccessToken()?.takeIf { it.isNotBlank() }
+              ?: accessTokenProvider.refreshAccessToken()
       sessionClient.endCallSession(
           accessToken = token,
           callSessionId = dispatch.callSessionId,
-          terminationType = dispatch.request.terminationType,
+          terminationType = dispatch.terminationType,
       )
       synchronized(stateLock) { completion?.complete(Unit) }
     } catch (exception: Throwable) {
@@ -331,14 +379,14 @@ internal class AiCallRuntime(
   }
 
   private fun hasPendingEndRequest(): Boolean = synchronized(stateLock) {
-    pendingEndRequest != null
+    pendingEndTermination != null
   }
 
   private fun currentCallSessionId(): Long? = synchronized(stateLock) { callSessionId }
 
   private fun completePendingEndWithoutServerSession() {
     synchronized(stateLock) {
-      if (pendingEndRequest != null && !endRequestSent && callSessionId == null) {
+      if (pendingEndTermination != null && !endRequestSent && callSessionId == null) {
         endRequestSent = true
         endCompletion?.complete(Unit)
       }

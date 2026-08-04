@@ -2,6 +2,8 @@ package com.ssafy.s15p11b104.domain.call.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -58,9 +60,17 @@ class CallReportGenerationIntegrationTest extends IntegrationTest {
 	@MockitoBean
 	private GeminiClient geminiClient;
 
+	@MockitoBean
+	private CallTeardownExecutor callTeardownExecutor;
+
 	@BeforeEach
 	void setUp() {
 		cleanFixture();
+		// 종료 응답 이후의 뒷정리를 호출 스레드에서 실행해 전사 마감 결과를 그대로 검증한다.
+		doAnswer(invocation -> {
+			invocation.getArgument(0, Runnable.class).run();
+			return null;
+		}).when(callTeardownExecutor).execute(any());
 	}
 
 	@AfterEach
@@ -72,8 +82,11 @@ class CallReportGenerationIntegrationTest extends IntegrationTest {
 	void createsOneReportFromActualSidebandTranscriptsAfterNormalCallEnd() {
 		Fixture fixture = insertFixture(CallStatus.IN_PROGRESS);
 		when(callActorResolver.resolve()).thenReturn(new CallActor(fixture.memberId()));
-		when(sidebandSessionManager.prepareClose(fixture.callSessionId())).thenReturn("call_report_test");
-		when(sidebandSessionManager.finishClose(fixture.callSessionId())).thenReturn(true);
+		SidebandSessionManager.ClosingSideband closingSideband =
+			mock(SidebandSessionManager.ClosingSideband.class);
+		when(closingSideband.callId()).thenReturn("call_report_test");
+		when(closingSideband.finishClose()).thenReturn(true);
+		when(sidebandSessionManager.claimClose(fixture.callSessionId())).thenReturn(closingSideband);
 		when(geminiClient.generate(any())).thenReturn("""
 			{
 			  "summary":"시장에 다녀온 이야기와 가족에 대한 그리움을 나눴습니다.",
@@ -170,7 +183,7 @@ class CallReportGenerationIntegrationTest extends IntegrationTest {
 		assertThat(requestCaptor.getValue().prompt().indexOf("[1][USER]"))
 			.isLessThan(requestCaptor.getValue().prompt().indexOf("[2][ASSISTANT]"));
 		verify(realtimeGateway, times(2)).hangUp("call_report_test");
-		verify(sidebandSessionManager, times(2)).finishClose(fixture.callSessionId());
+		verify(closingSideband, times(2)).finishClose();
 	}
 
 	@Test

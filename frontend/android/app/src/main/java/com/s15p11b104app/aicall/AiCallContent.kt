@@ -6,7 +6,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -397,15 +396,6 @@ internal fun AiCallRoute(
           startCall(selectedPersona.id)
         }
       },
-      onPreviewFailure = {
-        if (selectedPersona != null) {
-          failedEndPhase = null
-          failureReason = AiCallFailureReason.Connection
-          durationSeconds = 0
-          phase = AiCallPhase.Failed
-          onCallResult(AiCallResult.Failed.wireValue)
-        }
-      },
       onToggleMute = {
         isMuted = !isMuted
         callRuntime?.setMicrophoneEnabled(!isMuted)
@@ -445,7 +435,6 @@ internal fun AiCallContent(
     selectedPersonaId: Long?,
     onPersonaSelected: (Long) -> Unit,
     onStartCall: () -> Unit,
-    onPreviewFailure: () -> Unit = {},
     onToggleMute: () -> Unit,
     onToggleSpeaker: () -> Unit,
     onEndCall: () -> Unit,
@@ -458,7 +447,6 @@ internal fun AiCallContent(
             selectedPersonaId = selectedPersonaId,
             onPersonaSelected = onPersonaSelected,
             onStartCall = onStartCall,
-            onPreviewFailure = onPreviewFailure,
         )
 
     AiCallPhase.Connecting,
@@ -495,13 +483,10 @@ private fun PersonaSelectionScreen(
     selectedPersonaId: Long?,
     onPersonaSelected: (Long) -> Unit,
     onStartCall: () -> Unit,
-    onPreviewFailure: () -> Unit,
 ) {
   val selectedPersona = aiPersonas.firstOrNull { it.id == selectedPersonaId }
   val featuredPersona = selectedPersona ?: aiPersonas.first()
   val context = LocalContext.current
-  val applicationInfo = context.applicationInfo
-  val isDebuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
   val animationsEnabled = remember(context) { areSystemAnimationsEnabled(context) }
 
   Column(
@@ -619,22 +604,6 @@ private fun PersonaSelectionScreen(
           fontSize = 20.sp,
           fontWeight = FontWeight.Bold,
       )
-      if (isDebuggable && selectedPersona != null) {
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = "연결 실패 화면 확인",
-            color = AiCallColors.TextMuted,
-            fontSize = 12.sp,
-            modifier =
-                Modifier.clip(RoundedCornerShape(10.dp))
-                    .clickable(
-                        role = Role.Button,
-                        onClick = onPreviewFailure,
-                    )
-                    .testTag("preview-connection-failure")
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
-        )
-      }
     }
     Spacer(modifier = Modifier.height(8.dp))
   }

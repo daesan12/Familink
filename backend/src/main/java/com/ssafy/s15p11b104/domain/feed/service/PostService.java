@@ -216,7 +216,7 @@ public class PostService {
 			s3MediaValidator.validate(mediaType, item.fileUrl());
 			if (item.thumbnailUrl() != null) {
 				validateMediaUrl(item.thumbnailUrl());
-				s3MediaValidator.validate(MediaType.IMAGE, item.thumbnailUrl());
+				s3MediaValidator.validateThumbnail(item.thumbnailUrl());
 			}
 		}
 	}

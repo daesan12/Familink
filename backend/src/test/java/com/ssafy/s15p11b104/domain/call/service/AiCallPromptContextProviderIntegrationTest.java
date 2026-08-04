@@ -107,6 +107,40 @@ class AiCallPromptContextProviderIntegrationTest extends IntegrationTest {
 	}
 
 	@Test
+	void excludesCareReceiverOwnPostsBeforeApplyingPostLimit() {
+		Long groupId = insertGroup("본인제외", "SELF01");
+		Long careReceiverId = insertMember(
+			groupId,
+			insertUser("self_receiver", "피보호자"),
+			"CARE_RECEIVER"
+		);
+		Long familyMemberId = insertMember(
+			groupId,
+			insertUser("self_daughter", "민지"),
+			"GUARDIAN"
+		);
+
+		insertSuccessfulPost(groupId, familyMemberId, "가족 게시물", KST_DAY_START);
+		for (int index = 1; index <= 10; index++) {
+			insertSuccessfulPost(
+				groupId,
+				careReceiverId,
+				"본인 게시물 " + index,
+				KST_DAY_START.plusSeconds(3600L * index)
+			);
+		}
+
+		AiCallPromptContext context = promptContextProvider.load(loadMember(careReceiverId)).promptContext();
+
+		assertThat(context.todayPosts())
+			.extracting(
+				AiCallPromptContext.TodayPostContext::authorDisplayName,
+				AiCallPromptContext.TodayPostContext::summary
+			)
+			.containsExactly(tuple("민지", "가족 게시물"));
+	}
+
+	@Test
 	void loadsFamilyMemberNamesAndCareReceiverSpecificDisplayNames() {
 		Long groupId = insertGroup("가족표시명", "NAME01");
 		Long careReceiverId = insertMember(

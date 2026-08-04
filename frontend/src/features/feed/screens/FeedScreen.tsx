@@ -892,6 +892,7 @@ export function FeedScreen({
               loadCommentsPage(selectedPostId, 0, true);
             }
           }}
+          onSelectReaction={handleSelectReaction}
           onToggleReactionPicker={handleToggleReactionPicker}
           onUpdateComment={handleUpdateComment}
           post={selectedPost}
@@ -964,6 +965,7 @@ export function FeedScreen({
               }
               onPress={handleOpenPost}
               onPressAuthor={handlePressAuthor}
+              onSelectReaction={handleSelectReaction}
               onToggleReactionPicker={handleToggleReactionPicker}
               post={{...item, reactions}}
               selectedReactionId={

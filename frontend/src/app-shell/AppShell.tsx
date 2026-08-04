@@ -437,6 +437,9 @@ export function AppShell({
         <BottomTabBar
           activeRoute={resolvedRoute === 'archive' ? 'feed' : resolvedRoute}
           onSelect={route => {
+            if (route === resolvedRoute && route === 'aiCall') {
+              return;
+            }
             setIsScreenHeaderVisible(true);
             setOpenPostId(null);
             // 같은 화면의 탭을 다시 누르면 재마운트해 최신 데이터를 다시 조회한다.

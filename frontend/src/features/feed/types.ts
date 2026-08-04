@@ -29,6 +29,7 @@ export interface FeedImage {
   mediaType?: FeedMediaType;
   source: ImageSourcePropType;
   thumbnailUrl?: string | null;
+  viewerSource?: ImageSourcePropType;
 }
 
 export interface FeedReaction {

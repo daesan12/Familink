@@ -160,6 +160,11 @@ internal class AiCallWebRtcSession(
   private val connectionReady = CompletableDeferred<Unit>()
   private val iceGatheringReady = CompletableDeferred<Unit>()
   private val closed = AtomicBoolean(false)
+
+  // Teardown runs off the caller's thread, so it can overlap an SDP operation that a
+  // cancelled start coroutine is still finishing. Every native touch takes this lock
+  // and rechecks [closed] so a call can never land on a disposed peer connection.
+  private val nativeLock = Any()
   private val connectionStateController =
       AiCallConnectionStateController(
           handler = mainHandler,
@@ -224,11 +229,13 @@ internal class AiCallWebRtcSession(
     val connection = peerConnection ?: error("WebRTC peer connection is unavailable")
     val offer =
         awaitSessionDescription { observer ->
-          connection.createOffer(observer, offerConstraints())
+          withNativeAccess { connection.createOffer(observer, offerConstraints()) }
         }
-    awaitSdpOperation { observer -> connection.setLocalDescription(observer, offer) }
+    awaitSdpOperation { observer ->
+      withNativeAccess { connection.setLocalDescription(observer, offer) }
+    }
     awaitIceGatheringComplete()
-    return connection.localDescription?.description ?: offer.description
+    return withNativeAccess { connection.localDescription?.description } ?: offer.description
   }
 
   override suspend fun setRemoteAnswer(sdpAnswer: String) {
@@ -237,10 +244,12 @@ internal class AiCallWebRtcSession(
       throw AiCallConnectionException("The server returned an empty SDP answer.")
     }
     awaitSdpOperation { observer ->
-      connection.setRemoteDescription(
-          observer,
-          SessionDescription(SessionDescription.Type.ANSWER, sdpAnswer),
-      )
+      withNativeAccess {
+        connection.setRemoteDescription(
+            observer,
+            SessionDescription(SessionDescription.Type.ANSWER, sdpAnswer),
+        )
+      }
     }
   }
 
@@ -253,11 +262,19 @@ internal class AiCallWebRtcSession(
   }
 
   override fun setMicrophoneEnabled(enabled: Boolean) {
-    audioTrack?.setEnabled(enabled)
+    synchronized(nativeLock) {
+      if (!closed.get()) {
+        audioTrack?.setEnabled(enabled)
+      }
+    }
   }
 
   override fun setSpeakerEnabled(enabled: Boolean) {
-    audioManager?.isSpeakerphoneOn = enabled
+    synchronized(nativeLock) {
+      if (!closed.get()) {
+        audioManager?.isSpeakerphoneOn = enabled
+      }
+    }
   }
 
   override fun close() {
@@ -271,21 +288,36 @@ internal class AiCallWebRtcSession(
     if (!iceGatheringReady.isCompleted) {
       iceGatheringReady.completeExceptionally(AiCallConnectionException("WebRTC call closed."))
     }
-    dataChannel?.dispose()
-    dataChannel = null
-    peerConnection?.close()
-    peerConnection?.dispose()
-    peerConnection = null
-    audioTrack?.dispose()
-    audioTrack = null
-    audioSource?.dispose()
-    audioSource = null
-    factory?.dispose()
-    factory = null
-    audioDeviceModule?.release()
-    audioDeviceModule = null
-    restoreAudioRoute()
+    synchronized(nativeLock) {
+      dataChannel?.dispose()
+      dataChannel = null
+      peerConnection?.close()
+      peerConnection?.dispose()
+      peerConnection = null
+      audioTrack?.dispose()
+      audioTrack = null
+      audioSource?.dispose()
+      audioSource = null
+      factory?.dispose()
+      factory = null
+      audioDeviceModule?.release()
+      audioDeviceModule = null
+      restoreAudioRoute()
+    }
   }
+
+  /**
+   * Runs a native peer connection call while teardown is excluded, and refuses it once
+   * the session is closed so a cancelled start coroutine cannot resume into disposed
+   * native objects.
+   */
+  private inline fun <T> withNativeAccess(block: () -> T): T =
+      synchronized(nativeLock) {
+        if (closed.get()) {
+          throw AiCallConnectionException("WebRTC call closed.")
+        }
+        block()
+      }
 
   private fun createPeerConnectionObserver(): PeerConnection.Observer =
       object : PeerConnection.Observer {
@@ -334,7 +366,13 @@ internal class AiCallWebRtcSession(
         override fun onAddTrack(
             receiver: org.webrtc.RtpReceiver?,
             mediaStreams: Array<out org.webrtc.MediaStream>?,
-        ) = Unit
+        ) {
+          // Safe without [nativeLock]: teardown drains the signaling thread inside
+          // peerConnection.close() before disposal, so this cannot touch a freed track.
+          // Taking the lock here would deadlock instead, because close() holds it while
+          // waiting for this very thread.
+          (receiver?.track() as? AudioTrack)?.setVolume(REMOTE_AUDIO_GAIN)
+        }
 
         override fun onConnectionChange(newState: PeerConnection.PeerConnectionState?) {
           when (newState) {
@@ -403,7 +441,8 @@ internal class AiCallWebRtcSession(
 
   private suspend fun awaitIceGatheringComplete() {
     val connection = peerConnection ?: error("WebRTC peer connection is unavailable")
-    if (connection.iceGatheringState() == PeerConnection.IceGatheringState.COMPLETE) {
+    if (withNativeAccess { connection.iceGatheringState() }
+        == PeerConnection.IceGatheringState.COMPLETE) {
       return
     }
     try {
@@ -499,5 +538,9 @@ internal class AiCallWebRtcSession(
     private const val DATA_CHANNEL_LABEL = "oai-events"
     private const val DEFAULT_STUN_SERVER = "stun:stun.l.google.com:19302"
     private const val ICE_GATHERING_TIMEOUT_MILLIS = 10_000L
+
+    // Playback multiplier for the model's voice. Above 1.0 amplifies; loud passages start
+    // clipping well before the 10.0 ceiling WebRTC allows.
+    private const val REMOTE_AUDIO_GAIN = 1.5
   }
 }

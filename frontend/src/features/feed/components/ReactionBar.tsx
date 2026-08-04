@@ -15,6 +15,7 @@ export interface ReactionAnchor {
 interface ReactionBarProps {
   canReact: boolean;
   isPickerOpen: boolean;
+  onSelectReaction: (reactionId: ReactionId) => void;
   onTogglePicker: (anchor: ReactionAnchor) => void;
   reactions: readonly FeedReaction[];
   selectedReactionId: ReactionId | null;
@@ -23,6 +24,7 @@ interface ReactionBarProps {
 export function ReactionBar({
   canReact,
   isPickerOpen,
+  onSelectReaction,
   onTogglePicker,
   reactions,
   selectedReactionId,
@@ -50,14 +52,8 @@ export function ReactionBar({
         .map(reaction => {
           const isSelected = reaction.id === selectedReactionId;
 
-          return (
-            <View
-              accessibilityLabel={`${reaction.label} 반응 ${reaction.count}개${
-                isSelected ? ', 내가 선택함' : ''
-              }`}
-              key={reaction.id}
-              style={[styles.chip, isSelected && styles.selectedChip]}
-            >
+          const chipContent = (
+            <>
               <Text style={styles.emoji}>{reaction.emoji}</Text>
               <Text
                 style={[
@@ -67,6 +63,32 @@ export function ReactionBar({
               >
                 {reaction.count}
               </Text>
+            </>
+          );
+
+          if (canReact && isSelected) {
+            return (
+              <Pressable
+                accessibilityHint="다시 누르면 이 반응이 취소됩니다."
+                accessibilityLabel={`${reaction.label} 반응 ${reaction.count}개, 내가 선택함`}
+                accessibilityRole="button"
+                hitSlop={8}
+                key={reaction.id}
+                onPress={() => onSelectReaction(reaction.id)}
+                style={[styles.chip, styles.selectedChip]}
+              >
+                {chipContent}
+              </Pressable>
+            );
+          }
+
+          return (
+            <View
+              accessibilityLabel={`${reaction.label} 반응 ${reaction.count}개`}
+              key={reaction.id}
+              style={styles.chip}
+            >
+              {chipContent}
             </View>
           );
         })}

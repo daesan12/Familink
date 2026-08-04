@@ -17,6 +17,7 @@ import {
 import {COLORS, RADII} from '../../../design/tokens';
 import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import {RetryButton} from '../../../shared/components/RetryButton';
+import {PostImageViewer} from './PostImageViewer';
 
 const IMAGE_GAP = 10;
 const NEXT_IMAGE_PEEK = 28;
@@ -28,9 +29,11 @@ export interface CarouselImage {
   id: string;
   mediaType?: 'IMAGE' | 'VIDEO';
   source: ImageSourcePropType;
+  viewerSource?: ImageSourcePropType;
 }
 
 interface PostImageCarouselProps {
+  enableFullscreen?: boolean;
   images: readonly CarouselImage[];
   isVisible?: boolean;
   onImagePress?: () => void;
@@ -38,6 +41,7 @@ interface PostImageCarouselProps {
 }
 
 export function PostImageCarousel({
+  enableFullscreen = false,
   images,
   isVisible = true,
   onImagePress,
@@ -56,6 +60,7 @@ export function PostImageCarousel({
   const imageHeight = Math.round(containerWidth * 0.632);
   const snapInterval = imageWidth + (usesPeekLayout ? IMAGE_GAP : 0);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setActiveIndex(index => Math.min(index, Math.max(images.length - 1, 0)));
@@ -99,13 +104,18 @@ export function PostImageCarousel({
         keyExtractor={image => image.id}
         nestedScrollEnabled
         onMomentumScrollEnd={handleMomentumScrollEnd}
-        renderItem={({item}) => (
+        renderItem={({index, item}) => (
           <FeedImageFrame
             height={imageHeight}
             image={item}
             isVisible={isVisible}
-            onPress={onImagePress}
+            onPress={
+              enableFullscreen && item.mediaType !== 'VIDEO'
+                ? () => setViewerIndex(index)
+                : onImagePress
+            }
             onRemove={onRemove}
+            opensFullscreen={enableFullscreen && item.mediaType !== 'VIDEO'}
             width={imageWidth}
           />
         )}
@@ -127,6 +137,17 @@ export function PostImageCarousel({
           ))}
         </View>
       ) : null}
+
+      <PostImageViewer
+        images={images.map(image => ({
+          accessibilityLabel: image.accessibilityLabel,
+          id: image.id,
+          source: image.viewerSource ?? image.source,
+        }))}
+        initialIndex={viewerIndex ?? 0}
+        onClose={() => setViewerIndex(null)}
+        visible={viewerIndex !== null}
+      />
     </View>
   );
 }
@@ -141,6 +162,7 @@ interface FeedImageFrameProps {
   isVisible: boolean;
   onPress?: () => void;
   onRemove?: (imageId: string) => void;
+  opensFullscreen: boolean;
   width: number;
 }
 
@@ -150,6 +172,7 @@ function FeedImageFrame({
   isVisible,
   onPress,
   onRemove,
+  opensFullscreen,
   width,
 }: FeedImageFrameProps) {
   const [loadState, setLoadState] = useState<'loading' | 'loaded' | 'error'>(
@@ -231,11 +254,19 @@ function FeedImageFrame({
         accessibilityHint={
           canPlayVideo
             ? '현재 화면에서 동영상을 재생합니다'
+            : opensFullscreen
+              ? '전체 화면에서 사진을 봅니다'
             : onPress
               ? '게시글 상세 화면으로 이동합니다'
               : undefined
         }
-        accessibilityLabel={canPlayVideo ? '동영상 재생' : undefined}
+        accessibilityLabel={
+          canPlayVideo
+            ? '동영상 재생'
+            : opensFullscreen
+              ? '게시글 사진 전체보기'
+              : undefined
+        }
         accessibilityRole={canPlayVideo || onPress ? 'button' : undefined}
         disabled={!canPlayVideo && !onPress}
         onPress={handleMediaPress}

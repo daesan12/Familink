@@ -12,7 +12,12 @@ import {
 } from 'react-native';
 import {launchImageLibrary} from 'react-native-image-picker';
 
-import {DatePickerSheet} from '../../auth';
+import {
+  DatePickerSheet,
+  isValidName,
+  SIGNUP_LIMITS,
+  ValidationMessage,
+} from '../../auth';
 import {COLORS, RADII} from '../../../design/tokens';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
@@ -32,6 +37,11 @@ import {
 import type {BaseProfile, Gender, ProfileImageChange} from '../types';
 
 const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
+
+// 이름 검증 문구. OS 팝업이 아니라 회원가입처럼 입력칸 아래 인라인으로 보여준다.
+const NAME_EMPTY_MESSAGE = '빈 칸을 채워주세요.';
+const NAME_LENGTH_MESSAGE = '이름은 2 ~ 10자로 입력해주세요.';
+const NAME_UNCHANGED_MESSAGE = '기존과 동일한 이름입니다.';
 
 interface ProfileEditScreenProps<T extends BaseProfile> {
   profile: T;
@@ -63,6 +73,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
   const [isGenderOpen, setIsGenderOpen] = useState(false);
   const [isDateOpen, setIsDateOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
   const savingRef = useRef(false);
 
   useHardwareBack(() => {
@@ -85,18 +96,46 @@ export function ProfileEditScreen<T extends BaseProfile>({
         ? null
         : profile.profileImageUrl;
 
+  // 이름 외 항목만 바꿔도 저장할 수 있어야 하므로 변경 여부는 화면 전체를 기준으로 판단한다.
+  const hasChanges = (trimmedName: string) =>
+    trimmedName !== profile.name ||
+    gender !== profile.gender ||
+    birthDate !== profile.birthDate ||
+    imageChange.type !== 'unchanged';
+
+  const getNameError = (trimmedName: string): string | null => {
+    if (trimmedName === '') {
+      return NAME_EMPTY_MESSAGE;
+    }
+    if (!isValidName(trimmedName)) {
+      return NAME_LENGTH_MESSAGE;
+    }
+    if (!hasChanges(trimmedName)) {
+      return NAME_UNCHANGED_MESSAGE;
+    }
+    return null;
+  };
+
   const handleSave = async () => {
     if (savingRef.current) {
       return;
     }
 
+    const trimmedName = name.trim();
+    const currentNameError = getNameError(trimmedName);
+    if (currentNameError !== null) {
+      setNameError(currentNameError);
+      return;
+    }
+
     savingRef.current = true;
+    setNameError(null);
     setIsGenderOpen(false);
     setIsDateOpen(false);
     setIsSaving(true);
     const nextProfile = {
       ...profile,
-      name: name.trim() === '' ? profile.name : name.trim(),
+      name: trimmedName,
       gender,
       birthDate,
       profileImageUrl: previewImageUrl,
@@ -156,6 +195,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
         return;
       }
       setImageChange({asset: parsed.asset, type: 'replace'});
+      setNameError(null);
     } catch {
       Alert.alert(
         '프로필 사진을 선택할 수 없어요.',
@@ -174,7 +214,20 @@ export function ProfileEditScreen<T extends BaseProfile>({
     if (year && month && day) {
       setBirthDate(formatDisplayDate(year, month, day));
     }
+    setNameError(null);
     setIsDateOpen(false);
+  };
+
+  // maxLength로 조용히 잘라내면 사용자가 이유를 모른다. 상한을 넘기는 순간 안내까지 띄운다.
+  const handleChangeName = (value: string) => {
+    const characters = Array.from(value);
+    if (characters.length > SIGNUP_LIMITS.nameMax) {
+      setName(characters.slice(0, SIGNUP_LIMITS.nameMax).join(''));
+      setNameError(NAME_LENGTH_MESSAGE);
+      return;
+    }
+    setName(value);
+    setNameError(null);
   };
 
   const toggleGender = () => {
@@ -254,13 +307,14 @@ export function ProfileEditScreen<T extends BaseProfile>({
               accessibilityState={{disabled: isSaving}}
               disabled={isSaving}
               hitSlop={8}
-              onPress={() =>
+              onPress={() => {
                 setImageChange(
                   profile.profileImageUrl
                     ? {type: 'remove'}
                     : {type: 'unchanged'},
-                )
-              }
+                );
+                setNameError(null);
+              }}
               style={styles.avatarRemoveButton}
             >
               <MaterialDesignIcons
@@ -270,18 +324,39 @@ export function ProfileEditScreen<T extends BaseProfile>({
               />
             </Pressable>
           ) : null}
+          {/* 사진을 터치해야 바뀌는 걸 모를 수 있어 아래쪽에 + 버튼을 함께 둔다. */}
+          <Pressable
+            accessibilityLabel="프로필 이미지 추가"
+            accessibilityRole="button"
+            accessibilityState={{disabled: isSaving}}
+            disabled={isSaving}
+            hitSlop={8}
+            onPress={handlePickProfileImage}
+            style={styles.avatarAddButton}
+          >
+            <MaterialDesignIcons
+              color={COLORS.background}
+              name="plus"
+              size={20}
+            />
+          </Pressable>
         </View>
 
         <Field label="이름">
           <TextInput
             accessibilityLabel="이름 입력"
             editable={!isSaving}
-            onChangeText={setName}
-            placeholder="이름"
+            onChangeText={handleChangeName}
+            placeholder="이름은 2 ~ 10자로 입력해주세요."
             placeholderTextColor={COLORS.textSubtle}
             style={styles.textInput}
             value={name}
           />
+          {nameError !== null ? (
+            <View style={styles.nameError}>
+              <ValidationMessage message={nameError} variant="error" />
+            </View>
+          ) : null}
         </Field>
 
         <Field label="아이디">
@@ -446,6 +521,20 @@ const styles = StyleSheet.create({
     height: 110,
     width: 110,
   },
+  avatarAddButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.textStrong,
+    borderColor: COLORS.background,
+    borderRadius: RADII.pill,
+    borderWidth: 2,
+    // 원의 우하단(약 4시 방향) 테두리에 걸치도록 둔다.
+    bottom: 0,
+    height: 34,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 0,
+    width: 34,
+  },
   avatarButton: {
     borderRadius: RADII.pill,
   },
@@ -558,6 +647,9 @@ const styles = StyleSheet.create({
     color: COLORS.textStrong,
     fontSize: 18,
     fontWeight: '700',
+  },
+  nameError: {
+    marginTop: 6,
   },
   readOnlyBox: {
     backgroundColor: COLORS.surfaceMuted,

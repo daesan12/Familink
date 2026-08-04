@@ -68,8 +68,8 @@ export const clientMediaProcessor: ClientMediaProcessor = {
     try {
       const thumbnail = await compressImage(thumbnailSource, source.fileName, {
         fallbackName: 'post-thumbnail.jpg',
-        maxSize: 640,
-        quality: 0.72,
+        maxSize: 1280,
+        quality: 0.82,
         suffix: '-thumbnail',
       });
       return {

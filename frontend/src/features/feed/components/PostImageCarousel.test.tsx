@@ -1,5 +1,6 @@
 import {act, create, type ReactTestRenderer} from 'react-test-renderer';
 
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import {PostImageCarousel} from './PostImageCarousel';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => {
@@ -79,6 +80,58 @@ describe('PostImageCarousel', () => {
 
     expect(() =>
       renderer!.root.findByProps({testID: 'post-video-player'}),
+    ).toThrow();
+
+    act(() => renderer!.unmount());
+  });
+
+  it('사진을 누르면 전체보기 모달을 열고 닫는다', () => {
+    let renderer: ReactTestRenderer;
+
+    act(() => {
+      renderer = create(
+        <PostImageCarousel
+          enableFullscreen
+          images={[
+            {
+              fileUrl: 'file:///photo.jpg',
+              id: 'image-1',
+              mediaType: 'IMAGE',
+              source: {uri: 'file:///thumbnail.jpg'},
+              viewerSource: {uri: 'file:///photo.jpg'},
+            },
+          ]}
+        />,
+      );
+    });
+
+    expect(renderer!.root.findByType(CachedRemoteImage).props.source).toEqual({
+      uri: 'file:///thumbnail.jpg',
+    });
+
+    act(() => {
+      renderer!.root
+        .findByProps({accessibilityLabel: '게시글 사진 전체보기'})
+        .props.onPress();
+    });
+
+    expect(
+      renderer!.root.findByProps({accessibilityLabel: '사진 전체보기 닫기'}),
+    ).toBeTruthy();
+    expect(
+      renderer!.root
+        .findAllByType(CachedRemoteImage)
+        .some(image => image.props.source.uri === 'file:///photo.jpg'),
+    ).toBe(true);
+
+    act(() => {
+      renderer!.root
+        .findByProps({accessibilityLabel: '사진 전체보기 닫기'})
+        .props.onPress();
+    });
+
+    expect(() =>
+      renderer!.root.findByProps({accessibilityLabel: '사진 전체보기 닫기'}),
     ).toThrow();
 
     act(() => renderer!.unmount());
