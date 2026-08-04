@@ -73,7 +73,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-042 개인정보 및 AI 통화 동의 | [공통](./COMMON.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·미결정 유지 | 동의 문구·필수/선택·재동의 미결정 |
 | 요구사항 | REQ-043 현재 그룹 표시 및 그룹 전환 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
 | 요구사항 | REQ-044 무그룹 사용자 진입 및 요청 상태 확인 | [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
-| 요구사항 | REQ-045 AI 통화 시작 시 당일 게시글 맥락 주입 | [AI 통화](./domains/AI_CALL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | Tool Calling 아님; Spring Boot가 초기화 시 주입 |
+| 요구사항 | REQ-045 AI 통화 시작 시 당일 게시글 맥락 주입 | [AI 통화](./domains/AI_CALL.md), [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | Tool Calling 아님; Spring Boot가 초기화 시 주입; 피보호자 본인 작성 게시글 제외 후 최신 최대 10건 |
 | 요구사항 | REQ-046 특정 인물 최신 게시글 요약 조회 Tool | [AI 통화](./domains/AI_CALL.md) | 반영·확정 |  |
 | 요구사항 | REQ-047 대화 주제 관련 게시글 검색 Tool | [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 확장 분류만 확정, 계약은 미결정 |
 | 요구사항 | REQ-048 보호자 전달 메모 통화 후처리 | [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영·확정 | 통화 중 Tool이 아님 |
