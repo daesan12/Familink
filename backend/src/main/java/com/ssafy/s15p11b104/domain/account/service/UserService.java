@@ -2,7 +2,9 @@ package com.ssafy.s15p11b104.domain.account.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +16,7 @@ import com.ssafy.s15p11b104.domain.account.dto.ProfileUpdateRequest;
 import com.ssafy.s15p11b104.domain.account.dto.ProfileUpdateResponse;
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.file.event.ProfileImageDeleteRequestedEvent;
 import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.file.service.S3MediaValidator;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
@@ -40,6 +43,7 @@ public class UserService {
 	private final DeviceTokenRepository deviceTokenRepository;
 	private final S3MediaValidator s3MediaValidator;
 	private final MediaDownloadUrlProvider mediaDownloadUrlProvider;
+	private final ApplicationEventPublisher eventPublisher;
 
 	UserService(
 		UserRepository userRepository,
@@ -49,7 +53,8 @@ public class UserService {
 		AccessTokenBlacklist accessTokenBlacklist,
 		DeviceTokenRepository deviceTokenRepository,
 		S3MediaValidator s3MediaValidator,
-		MediaDownloadUrlProvider mediaDownloadUrlProvider
+		MediaDownloadUrlProvider mediaDownloadUrlProvider,
+		ApplicationEventPublisher eventPublisher
 	) {
 		this.userRepository = userRepository;
 		this.groupMemberRepository = groupMemberRepository;
@@ -59,6 +64,7 @@ public class UserService {
 		this.deviceTokenRepository = deviceTokenRepository;
 		this.s3MediaValidator = s3MediaValidator;
 		this.mediaDownloadUrlProvider = mediaDownloadUrlProvider;
+		this.eventPublisher = eventPublisher;
 	}
 
 	/**
@@ -98,6 +104,7 @@ public class UserService {
 	@Transactional
 	public ProfileUpdateResponse updateMyProfile(Long userId, ProfileUpdateRequest request) {
 		User user = getActiveUserForUpdate(userId);
+		String previousProfileImageUrl = user.getProfileImageUrl();
 
 		String newLoginId = request.loginId();
 		if (newLoginId != null && !newLoginId.equals(user.getLoginId())
@@ -114,7 +121,13 @@ public class UserService {
 		}
 
 		try {
-			return ProfileUpdateResponse.from(userRepository.saveAndFlush(user));
+			ProfileUpdateResponse response = ProfileUpdateResponse.from(userRepository.saveAndFlush(user));
+			if (request.profileImageUrlProvided()
+				&& previousProfileImageUrl != null
+				&& !Objects.equals(previousProfileImageUrl, request.profileImageUrl())) {
+				eventPublisher.publishEvent(new ProfileImageDeleteRequestedEvent(previousProfileImageUrl));
+			}
+			return response;
 		} catch (DataIntegrityViolationException exception) {
 			throw new BusinessException(ErrorCode.LOGIN_ID_DUPLICATED);
 		}
@@ -146,6 +159,7 @@ public class UserService {
 	@Transactional
 	public void withdraw(AuthenticatedUser user) {
 		User account = getActiveUserForUpdate(user.id());
+		String previousProfileImageUrl = account.getProfileImageUrl();
 
 		List<GroupMember> activeMemberships = groupMemberRepository
 			.findAllActiveForUpdateByUserId(account.getId());
@@ -162,6 +176,9 @@ public class UserService {
 		blockIssuedAccessTokens(account.getId());
 		accessTokenProvider.verify(user.accessToken())
 			.ifPresent(payload -> accessTokenBlacklist.register(user.accessToken(), payload.expiresAt()));
+		if (previousProfileImageUrl != null) {
+			eventPublisher.publishEvent(new ProfileImageDeleteRequestedEvent(previousProfileImageUrl));
+		}
 	}
 
 	/**

@@ -4,7 +4,7 @@ export const DEVELOPMENT_REPORT_PAGES: readonly CareReceiverReportPage[] = [
   {
     displayName: "손수호",
     latestDailyReport: {
-      emotion: { emoji: "😊", label: "기쁨" },
+      emotion: { icon: "emoticon-happy-outline", label: "기쁨" },
       guardianMessageSummary:
         "오랜만에 가족들과 함께 식사하고 싶다고 말씀하셨어요.",
       id: "daily-report-sooho-2026-07-17",
@@ -38,7 +38,7 @@ export const DEVELOPMENT_REPORT_PAGES: readonly CareReceiverReportPage[] = [
   {
     displayName: "김말순",
     latestDailyReport: {
-      emotion: { emoji: "😌", label: "평온" },
+      emotion: { icon: "emoticon-neutral-outline", label: "평온" },
       guardianMessageSummary: null,
       id: "daily-report-malsoon-2026-07-16",
       reportDate: "2026-07-16",

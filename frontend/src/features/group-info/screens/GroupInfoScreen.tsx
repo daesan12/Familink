@@ -12,6 +12,7 @@ import {
 
 import type {AppScreenProps, GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {RetryButton} from '../../../shared/components/RetryButton';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {DeleteGroupModal} from '../components/DeleteGroupModal';
 import {
@@ -240,7 +241,7 @@ export function GroupInfoScreen({
         }
         setMembersLoadState('error');
         setMembersLoadError(
-          '구성원 정보를 불러오지 못했습니다. 네트워크와 그룹 권한을 확인해 주세요.',
+          '구성원 정보를 불러오지 못했습니다.\n네트워크와 그룹 권한을 확인해 주세요.',
         );
       });
 
@@ -879,14 +880,10 @@ export function GroupInfoScreen({
           ) : membersLoadState === 'error' ? (
             <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
               <Text style={styles.errorText}>{membersLoadError}</Text>
-              <Pressable
+              <RetryButton
                 accessibilityLabel="구성원 정보 다시 시도"
-                accessibilityRole="button"
                 onPress={() => setMembersReloadCount(count => count + 1)}
-                style={styles.retryButton}
-              >
-                <Text style={styles.retryText}>다시 시도</Text>
-              </Pressable>
+              />
             </View>
           ) : members.length === 0 ? (
             <Text style={styles.emptyMembersText}>현재 구성원이 없습니다.</Text>
@@ -988,6 +985,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   header: {
+    alignItems: 'center',
     borderBottomColor: COLORS.divider,
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingBottom: 14,
@@ -1028,7 +1026,7 @@ const styles = StyleSheet.create({
   },
   rankingCard: {
     alignItems: 'center',
-    backgroundColor: COLORS.textMuted,
+    backgroundColor: COLORS.lavenderSurface,
     borderCurve: 'continuous',
     borderRadius: RADII.medium,
     flexDirection: 'row',
@@ -1038,14 +1036,14 @@ const styles = StyleSheet.create({
   },
   rankingChevron: {
     alignItems: 'center',
-    backgroundColor: COLORS.overlay,
+    backgroundColor: COLORS.purpleDeep,
     borderRadius: RADII.pill,
     height: 32,
     justifyContent: 'center',
     width: 32,
   },
   rankingText: {
-    color: COLORS.background,
+    color: COLORS.purpleDeep,
     fontSize: 17,
     fontWeight: '700',
     lineHeight: 24,
@@ -1053,19 +1051,6 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: COLORS.background,
     flex: 1,
-  },
-  retryButton: {
-    alignItems: 'center',
-    borderColor: COLORS.divider,
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    minHeight: 40,
-    paddingHorizontal: 16,
-  },
-  retryText: {
-    color: COLORS.textStrong,
-    fontSize: 13,
-    fontWeight: '700',
   },
   statusBlock: {
     alignItems: 'center',
@@ -1075,7 +1060,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: COLORS.textStrong,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
   },
 });

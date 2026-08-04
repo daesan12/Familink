@@ -1,7 +1,7 @@
-import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, Text, View} from 'react-native';
 
-import {COLORS, RADII} from '../../../design/tokens';
+import {COLORS} from '../../../design/tokens';
+import {BackButton} from '../../../shared/components/BackButton';
 
 interface SubScreenHeaderProps {
   title: string;
@@ -12,19 +12,7 @@ interface SubScreenHeaderProps {
 export function SubScreenHeader({title, onBack}: SubScreenHeaderProps) {
   return (
     <View style={styles.header}>
-      <Pressable
-        accessibilityLabel="뒤로 가기"
-        accessibilityRole="button"
-        hitSlop={8}
-        onPress={onBack}
-        style={styles.backButton}
-      >
-        <MaterialDesignIcons
-          color={COLORS.textStrong}
-          name="chevron-left"
-          size={24}
-        />
-      </Pressable>
+      <BackButton onPress={onBack} style={styles.backButton} />
       <Text style={styles.title}>{title}</Text>
     </View>
   );
@@ -32,14 +20,8 @@ export function SubScreenHeader({title, onBack}: SubScreenHeaderProps) {
 
 const styles = StyleSheet.create({
   backButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceMuted,
-    borderRadius: RADII.pill,
-    height: 36,
-    justifyContent: 'center',
     left: 20,
     position: 'absolute',
-    width: 36,
     zIndex: 1,
   },
   header: {

@@ -111,6 +111,7 @@ import {
   type ProfileGateway,
 } from "./src/features/profile";
 import { API_BASE_URL, ApiError } from "./src/shared/api";
+import { imageDiskCache } from "./src/shared/media/imageDiskCache";
 
 type RootRoute =
   | "welcome"
@@ -442,6 +443,7 @@ function ConnectedArchiveScreen(screenProps: AppScreenProps) {
 }
 
 function ConnectedFeedScreen(screenProps: AppScreenProps) {
+  const integration = useContext(GroupInfoIntegrationContext);
   const currentMemberId = (
     screenProps.currentGroup as typeof screenProps.currentGroup & {
       myMemberId?: string;
@@ -502,6 +504,26 @@ function ConnectedFeedScreen(screenProps: AppScreenProps) {
       onUpdateComment={usesDevelopmentFixture ? undefined : input =>
         updateComment(input.commentId, input.body)}
       pageLoader={usesDevelopmentFixture ? undefined : loadFeedPage}
+      membersLoader={
+        usesDevelopmentFixture || integration === null
+          ? undefined
+          : integration.members.loadMembers
+      }
+      memberProfileLoader={
+        usesDevelopmentFixture || integration === null
+          ? undefined
+          : integration.members.loadMemberProfile
+      }
+      memberCarnationLoader={
+        usesDevelopmentFixture || integration === null
+          ? undefined
+          : integration.carnationGateway.loadMemberCarnations
+      }
+      rankingLoader={
+        usesDevelopmentFixture || integration === null
+          ? undefined
+          : integration.carnationGateway.loadWeeklyRanking
+      }
     />
   );
 }
@@ -556,6 +578,14 @@ function createReportScreenRenderer(
   return function ConfiguredReportScreen(screenProps) {
     const configuredTargets =
       reportTargetsByGroup?.[screenProps.currentGroup.id];
+    // 개발 목업 그룹은 서버 조회 없이 리포트 fixture를 그대로 보여준다
+    // (피드·보관함의 개발 그룹 처리와 같은 방식).
+    const usesDevelopmentFixture =
+      __DEV__ && screenProps.currentGroup.id.startsWith("development-");
+
+    if (usesDevelopmentFixture) {
+      return <ReportScreen {...screenProps} />;
+    }
 
     return (
       <ReportScreen
@@ -1245,6 +1275,7 @@ export default function App({
     } catch (error) {
       failure ??= error;
     } finally {
+      await imageDiskCache.clearAll().catch(() => undefined);
       clearAuthenticationState();
       setAuthenticationResolved(true);
     }
@@ -1346,6 +1377,7 @@ export default function App({
       } catch (error) {
         localCleanupFailure = error;
       }
+      await imageDiskCache.clearAll().catch(() => undefined);
 
       activeDeviceTokenRef.current = null;
       activeDeviceTokenSessionVersionRef.current = null;

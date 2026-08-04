@@ -36,7 +36,7 @@ function createLatestOnlyPage(): CareReceiverReportPage {
   return {
     displayName: "김말순",
     latestDailyReport: {
-      emotion: { emoji: "😌", label: "평온" },
+      emotion: { icon: "emoticon-neutral-outline", label: "평온" },
       guardianMessageSummary: null,
       id: "daily-latest",
       reportDate: "2026-07-16",

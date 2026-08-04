@@ -1,6 +1,7 @@
 package com.s15p11b104app.aicall
 
 import android.Manifest
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -8,13 +9,26 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,17 +37,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.CallEnd
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.Refresh
@@ -59,10 +77,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -78,6 +99,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.s15p11b104app.R
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -476,52 +498,57 @@ private fun PersonaSelectionScreen(
     onPreviewFailure: () -> Unit,
 ) {
   val selectedPersona = aiPersonas.firstOrNull { it.id == selectedPersonaId }
-  val applicationInfo = LocalContext.current.applicationInfo
+  val featuredPersona = selectedPersona ?: aiPersonas.first()
+  val context = LocalContext.current
+  val applicationInfo = context.applicationInfo
   val isDebuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+  val animationsEnabled = remember(context) { areSystemAnimationsEnabled(context) }
 
   Column(
       modifier =
           Modifier.fillMaxSize()
               .background(AiCallColors.Background)
-              .padding(horizontal = 20.dp, vertical = 16.dp),
+              .verticalScroll(rememberScrollState())
+              .padding(horizontal = 24.dp, vertical = 18.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
   ) {
     Text(
-        text = "AI 전화",
+        text = "오늘은 누구와\n이야기할까요?",
         color = AiCallColors.TextStrong,
-        fontSize = 26.sp,
+        fontSize = 28.sp,
         fontWeight = FontWeight.Bold,
+        lineHeight = 34.sp,
+        textAlign = TextAlign.Center,
     )
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(8.dp))
     Text(
-        text = "누구와 이야기할까요?",
-        color = AiCallColors.TextStrong,
-        fontSize = 20.sp,
-        fontWeight = FontWeight.SemiBold,
-    )
-    Text(
-        text = "사진을 누르면 대화 상대를 선택할 수 있어요.",
+        text = "아래 사진을 눌러 대화 상대를 골라보세요",
         color = AiCallColors.TextMuted,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         textAlign = TextAlign.Center,
     )
-    Spacer(modifier = Modifier.height(14.dp))
+    Spacer(modifier = Modifier.height(16.dp))
 
-    Column(
-        modifier = Modifier.weight(1f),
-        verticalArrangement = Arrangement.SpaceEvenly,
-    ) {
-      aiPersonas.chunked(3).forEach { rowPersonas ->
+    FeaturedPersona(
+        persona = featuredPersona,
+        selected = selectedPersona != null,
+        animationsEnabled = animationsEnabled,
+    )
+    Spacer(modifier = Modifier.height(20.dp))
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+      aiPersonasForSelection.chunked(3).forEach { rowPersonas ->
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
           rowPersonas.forEach { persona ->
             PersonaItem(
                 modifier = Modifier.weight(1f),
                 persona = persona,
                 selected = persona.id == selectedPersonaId,
+                animationsEnabled = animationsEnabled,
                 onSelect = { onPersonaSelected(persona.id) },
             )
           }
@@ -529,67 +556,45 @@ private fun PersonaSelectionScreen(
       }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth().height(64.dp),
-        color =
-            if (selectedPersona == null) {
-              Color(0xFFF7F6FA)
-            } else {
-              AiCallColors.LavenderSurface
-            },
-        shape = RoundedCornerShape(18.dp),
-    ) {
-      Box(
-          modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp),
-          contentAlignment = Alignment.Center,
-      ) {
-        Text(
-            text =
-                selectedPersona?.let { "“${it.exampleUtterance}”" }
-                    ?: "먼저 이야기할 상대를 선택해 주세요.",
-            color =
-                if (selectedPersona == null) {
-                  AiCallColors.TextMuted
-                } else {
-                  AiCallColors.TextStrong
-                },
-            fontSize = 14.sp,
-            fontWeight =
-                if (selectedPersona == null) {
-                  FontWeight.Normal
-                } else {
-                  FontWeight.Medium
-                },
-            lineHeight = 20.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-        )
-      }
-    }
-
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(24.dp))
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+      val callInteractionSource = remember { MutableInteractionSource() }
+      val callPressed by callInteractionSource.collectIsPressedAsState()
+      val callScale by
+          animateFloatAsState(
+              targetValue = if (animationsEnabled && callPressed) 0.96f else 1f,
+              animationSpec =
+                  spring(
+                      dampingRatio = Spring.DampingRatioNoBouncy,
+                      stiffness = Spring.StiffnessMedium,
+                  ),
+              label = "call button press",
+          )
+
       Box(
-          modifier =
-              if (selectedPersona != null) {
-                Modifier.shadow(
-                    elevation = 12.dp,
-                    shape = CircleShape,
-                    ambientColor = AiCallColors.BrandPurple.copy(alpha = 0.35f),
-                    spotColor = AiCallColors.BrandPurple.copy(alpha = 0.35f),
-                )
-              } else {
-                Modifier
-              },
+          modifier = Modifier.size(104.dp).testTag("start-call-depth"),
+          contentAlignment = Alignment.Center,
       ) {
         FilledIconButton(
             onClick = onStartCall,
             enabled = selectedPersona != null,
-            modifier = Modifier.size(74.dp).testTag("start-call"),
+            interactionSource = callInteractionSource,
+            modifier =
+                Modifier.size(80.dp)
+                    .graphicsLayer {
+                      scaleX = callScale
+                      scaleY = callScale
+                    }
+                    .shadow(
+                        elevation = if (selectedPersona != null) 12.dp else 0.dp,
+                        shape = CircleShape,
+                        ambientColor = Color.Black.copy(alpha = 0.12f),
+                        spotColor = Color.Black.copy(alpha = 0.18f),
+                    )
+                    .testTag("start-call"),
             colors =
                 IconButtonDefaults.filledIconButtonColors(
-                    containerColor = AiCallColors.BrandPurple,
+                    containerColor = Color(0xFF6C5CE7),
                     contentColor = Color.White,
                     disabledContainerColor = AiCallColors.Disabled,
                     disabledContentColor = Color.White,
@@ -598,11 +603,11 @@ private fun PersonaSelectionScreen(
           Icon(
               imageVector = Icons.Rounded.Call,
               contentDescription = "통화 시작",
-              modifier = Modifier.size(34.dp),
+              modifier = Modifier.size(38.dp),
           )
         }
       }
-      Spacer(modifier = Modifier.height(5.dp))
+      Spacer(modifier = Modifier.height(4.dp))
       Text(
           text = "통화 시작",
           color =
@@ -611,7 +616,7 @@ private fun PersonaSelectionScreen(
               } else {
                 AiCallColors.BrandPurplePressed
               },
-          fontSize = 14.sp,
+          fontSize = 20.sp,
           fontWeight = FontWeight.Bold,
       )
       if (isDebuggable && selectedPersona != null) {
@@ -631,7 +636,139 @@ private fun PersonaSelectionScreen(
         )
       }
     }
+    Spacer(modifier = Modifier.height(8.dp))
   }
+}
+
+@Composable
+private fun FeaturedPersona(
+    persona: AiPersona,
+    selected: Boolean,
+    animationsEnabled: Boolean,
+) {
+  val density = LocalDensity.current
+  val floatingProgress =
+      if (selected && animationsEnabled) {
+        val transition = rememberInfiniteTransition(label = "featured persona float")
+        transition
+            .animateFloat(
+                initialValue = -1f,
+                targetValue = 1f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(7_200, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse,
+                    ),
+                label = "featured persona vertical position",
+            )
+            .value
+      } else {
+        0f
+      }
+  val floatingDistance = with(density) { 1.5.dp.toPx() }
+
+  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Box(
+        modifier =
+            Modifier.size(188.dp)
+                .graphicsLayer { translationY = floatingDistance * floatingProgress }
+                .testTag("featured-persona-depth"),
+        contentAlignment = Alignment.Center,
+    ) {
+      Box(
+          modifier =
+              Modifier.size(158.dp)
+                  .shadow(
+                      elevation = if (selected) 18.dp else 9.dp,
+                      shape = CircleShape,
+                      ambientColor = Color.Black.copy(alpha = if (selected) 0.16f else 0.10f),
+                      spotColor = Color.Black.copy(alpha = if (selected) 0.20f else 0.12f),
+                  )
+                  .testTag("featured-persona-image")
+                  .background(Color.White, CircleShape)
+                  .padding(6.dp)
+                  .clip(CircleShape),
+      ) {
+        Image(
+            painter = painterResource(persona.imageResource),
+            contentDescription = "${persona.displayName} 대표 사진",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+      }
+      if (selected) {
+        Box(
+            modifier =
+                Modifier.align(Alignment.BottomEnd)
+                    .offset(x = (-8).dp, y = (-8).dp)
+                    .size(50.dp)
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = CircleShape,
+                        ambientColor = Color.Black.copy(alpha = 0.12f),
+                        spotColor = Color.Black.copy(alpha = 0.16f),
+                    )
+                    .background(Color.White, CircleShape)
+                    .padding(4.dp)
+                    .background(AiCallColors.BrandPurple, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+          Icon(
+              imageVector = Icons.Rounded.Check,
+              contentDescription = null,
+              tint = Color.White,
+              modifier = Modifier.size(28.dp),
+          )
+        }
+      }
+    }
+    Spacer(modifier = Modifier.height(6.dp))
+    Text(
+        text = persona.displayName,
+        modifier = Modifier.testTag("selected-persona-name"),
+        color = AiCallColors.TextStrong,
+        fontSize = 24.sp,
+        fontWeight = FontWeight.Bold,
+        lineHeight = 30.sp,
+        textAlign = TextAlign.Center,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Surface(
+        color = AiCallColors.LavenderSurface,
+        shape = RoundedCornerShape(50),
+    ) {
+      Text(
+          text = persona.toneTag,
+          modifier =
+              Modifier.testTag("selected-persona-tag")
+                  .padding(horizontal = 14.dp, vertical = 6.dp),
+          color = AiCallColors.BrandPurplePressed,
+          fontSize = 14.sp,
+          fontWeight = FontWeight.SemiBold,
+      )
+    }
+    Spacer(modifier = Modifier.height(10.dp))
+    Text(
+        text = persona.introduction,
+        modifier = Modifier.fillMaxWidth().testTag("selected-persona-introduction"),
+        color = AiCallColors.TextStrong,
+        fontSize = 14.sp,
+        lineHeight = 21.sp,
+        textAlign = TextAlign.Center,
+    )
+  }
+}
+
+private fun areSystemAnimationsEnabled(context: Context): Boolean {
+  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    return ValueAnimator.areAnimatorsEnabled()
+  }
+
+  return Settings.Global.getFloat(
+      context.contentResolver,
+      Settings.Global.ANIMATOR_DURATION_SCALE,
+      1f,
+  ) > 0f
 }
 
 @Composable
@@ -639,13 +776,37 @@ private fun PersonaItem(
     modifier: Modifier,
     persona: AiPersona,
     selected: Boolean,
+    animationsEnabled: Boolean,
     onSelect: () -> Unit,
 ) {
+  val interactionSource = remember { MutableInteractionSource() }
+  val pressed by interactionSource.collectIsPressedAsState()
+  val targetScale =
+      when {
+        !animationsEnabled -> 1f
+        pressed -> 0.96f
+        selected -> 1.03f
+        else -> 1f
+      }
+  val scale by
+      animateFloatAsState(
+          targetValue = targetScale,
+          animationSpec =
+              spring(
+                  dampingRatio = Spring.DampingRatioNoBouncy,
+                  stiffness = Spring.StiffnessMediumLow,
+              ),
+          label = "persona selection depth",
+      )
+  val lift = with(LocalDensity.current) { if (selected && animationsEnabled) (-2).dp.toPx() else 0f }
+
   Column(
       modifier =
           modifier
               .selectable(
                   selected = selected,
+                  interactionSource = interactionSource,
+                  indication = null,
                   role = Role.RadioButton,
                   onClick = onSelect,
               )
@@ -655,39 +816,67 @@ private fun PersonaItem(
   ) {
     Box(
         modifier =
-            Modifier.size(92.dp)
-                .then(
-                    if (selected) {
-                      Modifier.shadow(
-                          elevation = 12.dp,
-                          shape = CircleShape,
-                          ambientColor = AiCallColors.BrandPurple.copy(alpha = 0.38f),
-                          spotColor = AiCallColors.BrandPurple.copy(alpha = 0.38f),
-                      )
-                    } else {
-                      Modifier
-                    }
-                )
-                .background(
-                    color =
-                        if (selected) {
-                          AiCallColors.Lavender
-                        } else {
-                          Color(0xFFF0EEF4)
-                        },
-                    shape = CircleShape,
-                )
-                .padding(if (selected) 5.dp else 2.dp),
+            Modifier.size(100.dp)
+                .graphicsLayer {
+                  scaleX = scale
+                  scaleY = scale
+                  translationY = lift
+                }
+                .testTag("persona-depth-${persona.id}"),
         contentAlignment = Alignment.Center,
     ) {
-      Image(
-          painter = painterResource(persona.imageResource),
-          contentDescription = null,
-          modifier = Modifier.fillMaxSize().clip(CircleShape),
-          contentScale = ContentScale.Crop,
-      )
+      Box(
+          modifier =
+              Modifier.size(82.dp)
+                  .shadow(
+                      elevation = if (selected) 7.dp else 2.dp,
+                      shape = CircleShape,
+                      ambientColor = Color.Black.copy(alpha = if (selected) 0.11f else 0.05f),
+                      spotColor = Color.Black.copy(alpha = if (selected) 0.15f else 0.07f),
+                  )
+                  .background(Color(0xFFF0EEF4), CircleShape)
+                  .border(
+                      width = if (selected) 2.dp else 1.dp,
+                      color =
+                          if (selected) {
+                            AiCallColors.BrandPurple
+                          } else {
+                            Color(0xFFE7E4EC)
+                          },
+                      shape = CircleShape,
+                  )
+                  .padding(if (selected) 4.dp else 2.dp),
+          contentAlignment = Alignment.Center,
+      ) {
+        Image(
+            painter = painterResource(persona.imageResource),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize().clip(CircleShape),
+            contentScale = ContentScale.Crop,
+        )
+      }
+      if (selected) {
+        Box(
+            modifier =
+                Modifier.align(Alignment.BottomEnd)
+                    .offset(x = (-1).dp, y = (-1).dp)
+                    .size(28.dp)
+                    .background(Color.White, CircleShape)
+                    .padding(3.dp)
+                    .background(AiCallColors.BrandPurple, CircleShape)
+                    .testTag("persona-selected-check-${persona.id}"),
+            contentAlignment = Alignment.Center,
+        ) {
+          Icon(
+              imageVector = Icons.Rounded.Check,
+              contentDescription = null,
+              tint = Color.White,
+              modifier = Modifier.size(16.dp),
+          )
+        }
+      }
     }
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(7.dp))
     Text(
         text = persona.displayName,
         color =
@@ -696,9 +885,9 @@ private fun PersonaItem(
             } else {
               AiCallColors.TextStrong
             },
-        fontSize = 13.sp,
+        fontSize = 14.sp,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-        lineHeight = 17.sp,
+        lineHeight = 19.sp,
         maxLines = 2,
         minLines = 2,
         overflow = TextOverflow.Ellipsis,
@@ -724,6 +913,11 @@ private fun ActiveCallScreen(
       modifier =
           Modifier.fillMaxSize()
               .background(AiCallColors.CallBackground)
+              .paint(
+                  painter = painterResource(R.drawable.ai_call_gradient_background),
+                  contentScale = ContentScale.Crop,
+              )
+              .testTag("call-gradient-background")
               .padding(horizontal = 24.dp, vertical = 22.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
   ) {
@@ -895,6 +1089,11 @@ private fun CallEndedScreen(
       modifier =
           Modifier.fillMaxSize()
               .background(AiCallColors.EndBackground)
+              .paint(
+                  painter = painterResource(R.drawable.ai_call_gradient_background),
+                  contentScale = ContentScale.Crop,
+              )
+              .testTag("call-gradient-background")
               .padding(horizontal = 30.dp, vertical = 32.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.Center,
@@ -1012,6 +1211,11 @@ private fun CallFailedScreen(
       modifier =
           Modifier.fillMaxSize()
               .background(AiCallColors.EndBackground)
+              .paint(
+                  painter = painterResource(R.drawable.ai_call_gradient_background),
+                  contentScale = ContentScale.Crop,
+              )
+              .testTag("call-gradient-background")
               .padding(horizontal = 30.dp, vertical = 32.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.Center,

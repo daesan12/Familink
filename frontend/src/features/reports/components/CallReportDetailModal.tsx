@@ -10,6 +10,7 @@ import {
 } from "react-native";
 
 import { COLORS, RADII } from "../../../design/tokens";
+import { RetryButton } from "../../../shared/components/RetryButton";
 import type { CallReportDetailState } from "../types";
 
 interface CallReportDetailModalProps {
@@ -139,13 +140,7 @@ function DetailStatus({
       <Text style={styles.statusTitle}>{title}</Text>
       <Text style={styles.statusDescription}>{description}</Text>
       {actionLabel && onAction ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={onAction}
-          style={styles.retryButton}
-        >
-          <Text style={styles.retryButtonText}>{actionLabel}</Text>
-        </Pressable>
+        <RetryButton label={actionLabel} onPress={onAction} />
       ) : null}
     </View>
   );
@@ -198,20 +193,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     paddingHorizontal: 18,
-  },
-  retryButton: {
-    alignItems: "center",
-    backgroundColor: COLORS.purpleDeep,
-    borderRadius: RADII.medium,
-    justifyContent: "center",
-    marginTop: 18,
-    minHeight: 44,
-    paddingHorizontal: 22,
-  },
-  retryButtonText: {
-    color: COLORS.background,
-    fontSize: 14,
-    fontWeight: "800",
   },
   sectionTitle: {
     color: COLORS.textStrong,

@@ -14,6 +14,12 @@
       ]
     },
     {
+      "Sid": "DeleteProfileImageObjects",
+      "Effect": "Allow",
+      "Action": "s3:DeleteObject",
+      "Resource": "arn:aws:s3:::s15p11b104-media-580779787807-ap-northeast-2-an/profile-image/*"
+    },
+    {
       "Sid": "ReadProductionParameters",
       "Effect": "Allow",
       "Action": [

@@ -171,8 +171,8 @@ class NotificationApiTest extends NotificationApiIntegrationTestSupport {
 
 	@Test
 	void listDoesNotExposeJoinRequestStatusForOtherNotificationTypes() throws Exception {
-		TestUser receiver = createUser("otherstatusreceiver", "수신자");
-		TestUser applicant = createUser("otherstatusapplicant", "신청자");
+		TestUser receiver = createUser("otherstatrecv", "수신자");
+		TestUser applicant = createUser("otherstatapp", "신청자");
 		FamilyGroup group = familyGroupRepository.saveAndFlush(new FamilyGroup("관계 그룹", "REL123"));
 		GroupJoinRequest joinRequest = groupJoinRequestRepository.saveAndFlush(
 			new GroupJoinRequest(group, applicant.entity(), JoinRequestStatus.PENDING_ADMIN));

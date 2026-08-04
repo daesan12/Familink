@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {SubScreenHeader} from '../components/SubScreenHeader';
 import {getGroupManagementErrorMessage} from '../api/groupManagementApi';
 
@@ -109,11 +110,7 @@ export function LeaveGroupScreen({
             <Text style={styles.noticeLinkText}>그룹관리자 변경하기 ›</Text>
           </Pressable>
         </View>
-        {errorMessage ? (
-          <Text accessibilityRole="alert" style={styles.errorText}>
-            {errorMessage}
-          </Text>
-        ) : null}
+        {errorMessage ? <NoticeBanner message={errorMessage} /> : null}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -154,11 +151,6 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 20,
     paddingTop: 8,
-  },
-  errorText: {
-    color: COLORS.error,
-    fontSize: 14,
-    lineHeight: 20,
   },
   footer: {
     borderTopColor: COLORS.divider,

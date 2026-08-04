@@ -283,16 +283,7 @@ export function AppShell({
       resolvedRoute !== 'profile' ? (
         <View style={styles.header} testID="app-shell-header">
           {resolvedRoute === 'calendar' ? (
-            <CurrentGroupSwitcher
-              currentGroup={currentGroup}
-              groups={groups}
-              isOpen={isGroupMenuOpen}
-              onClose={() => setIsGroupMenuOpen(false)}
-              onCreateGroup={onCreateGroup}
-              onJoinGroup={onJoinGroup}
-              onSelect={handleGroupSelect}
-              onToggle={() => setIsGroupMenuOpen(isOpen => !isOpen)}
-            />
+            <View style={styles.headerSide} />
           ) : resolvedRoute === 'feed' ? (
             <View style={styles.headerActions}>
               <Pressable
@@ -305,20 +296,6 @@ export function AppShell({
                   color={COLORS.textStrong}
                   name="folder"
                   size={27}
-                />
-              </Pressable>
-              <Pressable
-                accessibilityLabel="새 게시글 작성"
-                accessibilityRole="button"
-                onPress={() =>
-                  setCreatePostRequestId(requestId => requestId + 1)
-                }
-                style={styles.headerIconButton}
-              >
-                <MaterialDesignIcons
-                  color={COLORS.textStrong}
-                  name="plus"
-                  size={29}
                 />
               </Pressable>
             </View>
@@ -355,7 +332,20 @@ export function AppShell({
               onToggle={() => setIsGroupMenuOpen(isOpen => !isOpen)}
             />
           )}
-          {resolvedRoute === 'calendar' ? null : resolvedRoute === 'feed' ? (
+          {resolvedRoute === 'calendar' ? (
+            <View style={styles.headerCenterAbsolute}>
+              <CurrentGroupSwitcher
+                currentGroup={currentGroup}
+                groups={groups}
+                isOpen={isGroupMenuOpen}
+                onClose={() => setIsGroupMenuOpen(false)}
+                onCreateGroup={onCreateGroup}
+                onJoinGroup={onJoinGroup}
+                onSelect={handleGroupSelect}
+                onToggle={() => setIsGroupMenuOpen(isOpen => !isOpen)}
+              />
+            </View>
+          ) : resolvedRoute === 'feed' ? (
             <Pressable
               accessibilityLabel="알림"
               accessibilityRole="button"
@@ -422,6 +412,25 @@ export function AppShell({
             </Text>
           </View>
         )}
+        {resolvedRoute === 'feed' &&
+        !isScreenFullscreen &&
+        isScreenHeaderVisible ? (
+          <Pressable
+            accessibilityLabel="새 게시글 작성"
+            accessibilityRole="button"
+            onPress={() => setCreatePostRequestId(requestId => requestId + 1)}
+            style={({ pressed }) => [
+              styles.feedFab,
+              pressed && styles.feedFabPressed,
+            ]}
+          >
+            <MaterialDesignIcons
+              color={COLORS.background}
+              name="plus"
+              size={32}
+            />
+          </Pressable>
+        ) : null}
       </View>
 
       {!isScreenFullscreen ? (
@@ -478,6 +487,25 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  feedFab: {
+    alignItems: 'center',
+    backgroundColor: COLORS.purple,
+    borderRadius: 30,
+    bottom: 24,
+    elevation: 6,
+    height: 60,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 20,
+    shadowColor: COLORS.textStrong,
+    shadowOffset: {height: 4, width: 0},
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    width: 60,
+  },
+  feedFabPressed: {
+    opacity: 0.85,
+  },
   emptyContainer: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -516,6 +544,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     width: 80,
+  },
+  headerCenterAbsolute: {
+    alignItems: 'center',
+    bottom: 8,
+    justifyContent: 'center',
+    left: 80,
+    position: 'absolute',
+    right: 80,
+    top: 8,
   },
   headerIconButton: {
     alignItems: 'center',

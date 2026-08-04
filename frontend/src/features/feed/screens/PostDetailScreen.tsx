@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {BackButton} from '../../../shared/components/BackButton';
 import {CommentItem} from '../components/CommentItem';
 import {FeedAvatar} from '../components/FeedAvatar';
 import {PostActionsSheet} from '../components/PostActionsSheet';
@@ -51,6 +52,7 @@ interface PostDetailScreenProps {
   onLoadMoreComments?: () => void;
   onMenuPress: () => void;
   onOpenNotifications?: () => void;
+  onPressAuthor?: (author: FeedMember) => void;
   onScrollBeginDrag: () => void;
   onToggleReactionPicker: (
     postId: string,
@@ -79,6 +81,7 @@ export function PostDetailScreen({
   onLoadMoreComments,
   onMenuPress,
   onOpenNotifications,
+  onPressAuthor,
   onScrollBeginDrag,
   onToggleReactionPicker,
   onRetryComments,
@@ -185,18 +188,7 @@ export function PostDetailScreen({
       style={styles.container}
     >
       <View style={styles.header}>
-        <Pressable
-          accessibilityLabel="피드로 돌아가기"
-          accessibilityRole="button"
-          onPress={onBack}
-          style={styles.backButton}
-        >
-          <MaterialDesignIcons
-            color={COLORS.background}
-            name="chevron-left"
-            size={28}
-          />
-        </Pressable>
+        <BackButton accessibilityLabel="피드로 돌아가기" onPress={onBack} />
         <Text numberOfLines={1} style={styles.title}>
           {currentGroupName}
         </Text>
@@ -227,7 +219,17 @@ export function PostDetailScreen({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.authorRow}>
-          <FeedAvatar member={post.author} />
+          {onPressAuthor === undefined ? (
+            <FeedAvatar member={post.author} />
+          ) : (
+            <Pressable
+              accessibilityLabel={`${post.author.name}님의 프로필 보기`}
+              accessibilityRole="button"
+              onPress={() => onPressAuthor(post.author)}
+            >
+              <FeedAvatar member={post.author} />
+            </Pressable>
+          )}
           <View style={styles.authorText}>
             <Text style={styles.authorName}>{post.author.name}</Text>
             <Text style={styles.createdAt}>
@@ -334,7 +336,6 @@ export function PostDetailScreen({
             </View>
           ) : null}
           <View style={styles.composer}>
-            <FeedAvatar member={currentUser} size={38} />
             <TextInput
               accessibilityLabel={
                 editingComment ? '댓글 수정 입력' : '댓글 입력'
@@ -415,15 +416,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 1,
     marginLeft: 12,
-  },
-  backButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.lavender,
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
   },
   body: {
     color: COLORS.textStrong,

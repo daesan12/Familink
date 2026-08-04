@@ -23,6 +23,7 @@ import { SignupFlowScreen } from "../src/features/auth/screens/SignupFlowScreen"
 import { SignedInWelcomeScreen } from "../src/features/auth/screens/SignedInWelcomeScreen";
 import type { AuthGateway } from "../src/features/auth/types";
 import { ApiError } from "../src/shared/api";
+import { imageDiskCache } from "../src/shared/media/imageDiskCache";
 import type {
   FamilyGroupGateway,
   GroupMemberGateway,
@@ -71,6 +72,15 @@ jest.mock("lucide-react-native/icons/x", () => "Icon");
 jest.mock("react-native-image-picker", () => ({
   launchImageLibrary: jest.fn(),
 }));
+jest.mock("../src/shared/media/imageDiskCache", () => ({
+  imageDiskCache: {
+    clearAll: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
+beforeEach(() => {
+  jest.mocked(imageDiskCache.clearAll).mockClear();
+});
 
 jest.mock("react-native-safe-area-context", () => {
   const { View } = jest.requireActual("react-native");
@@ -2021,6 +2031,7 @@ test("로그아웃 확인 후 로컬 세션을 지우고 A-1로 돌아온다", a
 
   expect(authGateway.logout).toHaveBeenCalledTimes(1);
   expect(authSession.clearLocalSession).toHaveBeenCalledTimes(1);
+  expect(imageDiskCache.clearAll).toHaveBeenCalledTimes(1);
   expect(
     renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })
   ).toBeTruthy();
@@ -2142,6 +2153,7 @@ test("회원탈퇴 204 성공 후 로그아웃 API 없이 로컬 상태를 지�
   expect(profileGateway.withdrawCurrentUser).toHaveBeenCalledTimes(1);
   expect(authGateway.logout).not.toHaveBeenCalled();
   expect(authSession.clearLocalSession).toHaveBeenCalledTimes(1);
+  expect(imageDiskCache.clearAll).toHaveBeenCalledTimes(1);
   expect(notificationGateway.deactivateDeviceToken).not.toHaveBeenCalled();
   expect(renderer.root.findByProps({ accessibilityLabel: "로그인 시작" })).toBeTruthy();
 });
@@ -3100,6 +3112,29 @@ test("앱 셸을 명시하면 개발 그룹과 하단 탭을 표시한다", asyn
   ).toBeTruthy();
 
   mountedRenderers.push(renderer!);
+});
+
+test("새 게시글 작성 버튼은 피드에서만 플로팅 버튼으로 표시한다", async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(<App initialRootRoute="appShell" />);
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(
+    renderer!.root.findByProps({ accessibilityLabel: "새 게시글 작성" })
+  ).toBeTruthy();
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "일정 탭" })
+      .props.onPress();
+  });
+
+  expect(
+    renderer!.root.findAllByProps({ accessibilityLabel: "새 게시글 작성" })
+  ).toHaveLength(0);
 });
 
 test("앱 셸 진입 시 알림 미읽음 개수를 벨 배지에 표시한다", async () => {

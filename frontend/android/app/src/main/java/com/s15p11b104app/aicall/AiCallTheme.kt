@@ -17,8 +17,8 @@ internal object AiCallColors {
   val EndBackground = Color(0xFF3A3848)
   val Lavender = Color(0xFFE2DEFF)
   val LavenderSurface = Color(0xFFF3F1FF)
-  val OnDark = Color(0xFFF9F8FC)
-  val OnDarkMuted = Color(0xFFBDBAC8)
+  val OnDark = Color(0xFFFFFFFF)
+  val OnDarkMuted = Color(0xFFFFFFFF)
   val TextMuted = Color(0xFF777482)
   val TextStrong = Color(0xFF42404A)
 }
