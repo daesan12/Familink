@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
+import com.ssafy.s15p11b104.domain.account.entity.UserGender;
+
 class PersonaCatalogTest {
 
 	private final PersonaCatalog personaCatalog = new PersonaCatalog();
@@ -28,6 +30,25 @@ class PersonaCatalogTest {
 			);
 		assertThat(personaCatalog.getAll())
 			.allSatisfy(persona -> assertThat(persona.samplePhrases()).hasSize(2));
+	}
+
+	@Test
+	void keepsPersonalityFreeOfAiLabel() {
+		assertThat(personaCatalog.getAll())
+			.allSatisfy(persona -> assertThat(persona.personality())
+				.doesNotContain("AI")
+				.endsWith("말동무입니다."));
+	}
+
+	@Test
+	void keepsSamplePhrasesWithinSpokenLengthLimit() {
+		for (UserGender gender : UserGender.values()) {
+			assertThat(personaCatalog.getAll())
+				.allSatisfy(persona -> assertThat(persona.renderedSamplePhrases(gender))
+					.allSatisfy(samplePhrase -> assertThat(samplePhrase.length())
+						.as("%s 예시 발화 \"%s\"는 프롬프트의 25자 상한을 지켜야 한다", persona.name(), samplePhrase)
+						.isLessThanOrEqualTo(25)));
+		}
 	}
 
 	@Test
