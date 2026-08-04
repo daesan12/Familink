@@ -3,6 +3,14 @@
 > 상태: 일부 확정
 > 기준: 2026-07-31, Notion 활성 API 명세 59건과 승인된 모바일 인증 세션·알림 API 응답 계약
 
+## Hardening 계약 추가 (S15P11B104-251,252,253,254,262)
+
+- `POST /auth/login`은 로그인 ID·요청 출처별로 15분 동안 실패 5회를 허용한다. 실패 누적 시 1초부터 지수 backoff를 적용하고 최대 300초 동안 `429 LOGIN_RATE_LIMITED`와 `Retry-After`(초)를 반환한다. 성공 로그인 시 해당 제한 상태를 초기화한다. `loginId`는 최대 15자, `password`는 최대 16자까지 검증한다.
+- 활성 Refresh Token이 이미 있으면 `POST /auth/login`은 기존 토큰을 유지한 채 `409 ACTIVE_SESSION_EXISTS`를 반환한다. 로그아웃·폐기·만료 후에는 다시 로그인할 수 있다.
+- 피드·댓글 목록과 보관함은 `page`(기본 0), `size`(기본 20, 1~100)를 사용한다. 음수 page, 범위를 벗어난 size, `sort` query는 `400 INVALID_REQUEST`다. 정렬은 서버가 고정한다.
+- 보관함 응답은 기존 `dates[]`를 유지하면서 최상위 `hasNext`를 추가한다.
+- 게시글 생성의 `groupIds`는 최대 10개다. 초과 시 `400 INVALID_REQUEST`다.
+
 이 문서는 제품 구현에서 사용하는 유일한 로컬 API 계약이다. 아래 목록에는
 Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 요청,
 성공 결과와 원본에 명시된 오류를 옮겼다.
@@ -170,7 +178,7 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 | `API-FILES-001` | `POST /files/presigned-urls` | Spring Boot · Access Token 로그인 사용자 | `purpose`, `files[{fileName,contentType,sizeBytes}]` | `201`: `uploads[{uploadUrl,fileUrl,headers,expiresAt}]` | `400 INVALID_REQUEST` |
 | `API-POSTS-001` | `GET /groups/{groupId}/posts` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 선택 query `page`, `size` | `200`: `content[{id,author,content,media,reactionCounts,myReaction,commentCount,createdAt}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-POSTS-002` | `GET /posts/{postId}` | Spring Boot · 해당 그룹 활성 구성원 | path `postId` | `200`: `id`, `groupId`, `author`, `content`, `media`, `reactions`, `commentCount`, `createdAt`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
-| `API-POSTS-003` | `GET /groups/{groupId}/archive` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 선택 query `date`, `type`, `memberId`(`group_members.id`) | `200`: `dates[{date,items[{postId,type,thumbnailUrl,contentPreview}]}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-POSTS-003` | `GET /groups/{groupId}/archive` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 선택 query `date`, `type`, `memberId`(`group_members.id`), `page`, `size` | `200`: `dates[{date,items[{postId,type,thumbnailUrl,contentPreview}]}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-POSTS-004` | `POST /posts` | Spring Boot · 대상 그룹의 활성 구성원 | `groupIds[]`, `content`, `mediaType`, `media[{fileUrl,thumbnailUrl,displayOrder}]` | `201`: `posts[{postId,groupId}]`, `createdAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-POSTS-005` | `PATCH /posts/{postId}` | Spring Boot · 작성자 본인 | `content`, `mediaType`, `media[{fileUrl,thumbnailUrl?,displayOrder}]` | `200`: `id`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-POSTS-007` | `DELETE /posts/{postId}` | Spring Boot · 작성자 본인 | path `postId` | `204 No Content` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |

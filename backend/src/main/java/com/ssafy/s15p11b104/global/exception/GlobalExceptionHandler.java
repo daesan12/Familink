@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -31,7 +32,11 @@ public class GlobalExceptionHandler {
 		List<FieldError> errors = exception.getField() == null || exception.getDetailMessage() == null
 			? List.of()
 			: List.of(new FieldError(exception.getField(), exception.getDetailMessage()));
-		return toResponse(exception.getErrorCode(), errors);
+		HttpHeaders headers = new HttpHeaders();
+		if (exception.getRetryAfterSeconds() != null) {
+			headers.set("Retry-After", String.valueOf(exception.getRetryAfterSeconds()));
+		}
+		return toResponse(exception.getErrorCode(), errors, headers);
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)
@@ -68,6 +73,11 @@ public class GlobalExceptionHandler {
 	}
 
 	private ResponseEntity<ApiErrorResponse> toResponse(ErrorCode errorCode, List<FieldError> errors) {
-		return ResponseEntity.status(errorCode.getStatus()).body(ApiErrorResponse.of(errorCode, errors));
+		return toResponse(errorCode, errors, new HttpHeaders());
+	}
+
+	private ResponseEntity<ApiErrorResponse> toResponse(
+		ErrorCode errorCode, List<FieldError> errors, HttpHeaders headers) {
+		return ResponseEntity.status(errorCode.getStatus()).headers(headers).body(ApiErrorResponse.of(errorCode, errors));
 	}
 }

@@ -6,6 +6,8 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.List;
@@ -15,6 +17,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -97,21 +100,34 @@ public class EventReminderService {
 		Instant windowStart = now.minusSeconds(3600);
 		LocalDate firstEventDate = LocalDate.ofInstant(windowStart, BUSINESS_ZONE).plusDays(1);
 		LocalDate lastEventDate = LocalDate.ofInstant(now, BUSINESS_ZONE).plusDays(1);
-		List<CalendarEvent> candidates = calendarEventRepository.findReminderCandidates(
-			windowStart.plusSeconds(3600),
-			now.plusSeconds(3600),
-			firstEventDate,
-			lastEventDate);
-
-		for (CalendarEvent event : candidates) {
-			createIfDue(event, ReminderSlot.DAY_BEFORE, dayBeforeDueAt(event), windowStart, now);
-			if (event.getStartAt() != null) {
-				createIfDue(
-					event,
-					ReminderSlot.HOUR_BEFORE,
-					event.getStartAt().minusSeconds(3600),
-					windowStart,
-					now);
+		Long afterId = 0L;
+		while (true) {
+			List<CalendarEvent> candidates = calendarEventRepository.findReminderCandidatesAfterId(
+				windowStart.plusSeconds(3600), now.plusSeconds(3600), firstEventDate, lastEventDate,
+				afterId, PageRequest.of(0, 100));
+			if (candidates.isEmpty()) {
+				break;
+			}
+			Map<Long, List<GroupMember>> activeMembersByGroup = groupMemberRepository
+				.findAllActiveByGroupIds(candidates.stream().map(event -> event.getGroup().getId()).collect(Collectors.toSet()))
+				.stream().collect(Collectors.groupingBy(member -> member.getGroup().getId()));
+			Map<Long, Set<Long>> participantIdsByEvent = new HashMap<>();
+			if (!candidates.isEmpty()) {
+				eventParticipantRepository.findMemberIdsByEventIds(candidates.stream().map(CalendarEvent::getId).toList())
+					.forEach(row -> participantIdsByEvent
+						.computeIfAbsent((Long)row[0], ignored -> new HashSet<>()).add((Long)row[1]));
+			}
+			for (CalendarEvent event : candidates) {
+				createIfDue(event, ReminderSlot.DAY_BEFORE, dayBeforeDueAt(event), windowStart, now,
+					activeMembersByGroup, participantIdsByEvent);
+				if (event.getStartAt() != null) {
+					createIfDue(event, ReminderSlot.HOUR_BEFORE, event.getStartAt().minusSeconds(3600), windowStart, now,
+						activeMembersByGroup, participantIdsByEvent);
+				}
+			}
+			afterId = candidates.get(candidates.size() - 1).getId();
+			if (candidates.size() < 100) {
+				break;
 			}
 		}
 	}
@@ -121,7 +137,9 @@ public class EventReminderService {
 		ReminderSlot slot,
 		Instant dueAt,
 		Instant windowStart,
-		Instant now
+		Instant now,
+		Map<Long, List<GroupMember>> activeMembersByGroup,
+		Map<Long, Set<Long>> participantIdsByEvent
 	) {
 		if (dueAt.isBefore(windowStart)
 			|| dueAt.isAfter(now)
@@ -133,9 +151,8 @@ public class EventReminderService {
 			return;
 		}
 
-		List<GroupMember> activeMembers = groupMemberRepository.findAllActiveByGroupId(event.getGroup().getId());
-		Set<Long> participantIds = eventParticipantRepository.findMemberIdsByEventId(event.getId()).stream()
-			.collect(Collectors.toSet());
+		List<GroupMember> activeMembers = activeMembersByGroup.getOrDefault(event.getGroup().getId(), List.of());
+		Set<Long> participantIds = participantIdsByEvent.getOrDefault(event.getId(), Set.of());
 		List<GroupMember> receivers = participantIds.isEmpty()
 			? activeMembers
 			: activeMembers.stream().filter(member -> participantIds.contains(member.getId())).toList();

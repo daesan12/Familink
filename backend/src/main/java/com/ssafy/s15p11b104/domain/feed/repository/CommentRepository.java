@@ -19,7 +19,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 		join fetch comment.authorMember author
 		join fetch author.user
 		where comment.post.id = :postId
-		order by comment.createdAt asc
+		order by comment.createdAt asc, comment.id asc
 		""", countQuery = """
 		select count(comment)
 		from Comment comment

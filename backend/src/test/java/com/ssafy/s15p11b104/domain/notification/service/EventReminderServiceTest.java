@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
 
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.calendar.entity.CalendarEvent;
@@ -60,14 +61,14 @@ class EventReminderServiceTest {
 			Instant.parse("2026-07-31T23:00:00Z"));
 		GroupMember first = member(11L, 101L);
 		GroupMember second = member(12L, 102L);
-		when(calendarEventRepository.findReminderCandidates(
+		when(calendarEventRepository.findReminderCandidatesAfterId(
 			NOW,
 			NOW.plusSeconds(3600),
 			LocalDate.of(2026, 8, 2),
-			LocalDate.of(2026, 8, 2)))
+			LocalDate.of(2026, 8, 2), 0L, PageRequest.of(0, 100)))
 			.thenReturn(List.of(event));
-		when(groupMemberRepository.findAllActiveByGroupId(10L)).thenReturn(List.of(first, second));
-		when(eventParticipantRepository.findMemberIdsByEventId(20L)).thenReturn(List.of());
+		when(groupMemberRepository.findAllActiveByGroupIds(java.util.Set.of(10L))).thenReturn(List.of(first, second));
+		when(eventParticipantRepository.findMemberIdsByEventIds(List.of(20L))).thenReturn(List.of());
 
 		reminderService.createDueReminders(NOW);
 
@@ -93,14 +94,15 @@ class EventReminderServiceTest {
 			Instant.parse("2026-07-31T23:00:00Z"));
 		GroupMember first = member(11L, 101L);
 		GroupMember second = member(12L, 102L);
-		when(calendarEventRepository.findReminderCandidates(
+		when(calendarEventRepository.findReminderCandidatesAfterId(
 			NOW,
 			NOW.plusSeconds(3600),
 			LocalDate.of(2026, 8, 2),
-			LocalDate.of(2026, 8, 2)))
+			LocalDate.of(2026, 8, 2), 0L, PageRequest.of(0, 100)))
 			.thenReturn(List.of(event));
-		when(groupMemberRepository.findAllActiveByGroupId(10L)).thenReturn(List.of(first, second));
-		when(eventParticipantRepository.findMemberIdsByEventId(20L)).thenReturn(List.of(12L));
+		when(groupMemberRepository.findAllActiveByGroupIds(java.util.Set.of(10L))).thenReturn(List.of(first, second));
+		when(eventParticipantRepository.findMemberIdsByEventIds(List.of(20L)))
+			.thenReturn(java.util.Collections.singletonList(new Object[] {20L, 12L}));
 
 		reminderService.createDueReminders(NOW);
 
@@ -121,11 +123,11 @@ class EventReminderServiceTest {
 			LocalDate.of(2026, 8, 1),
 			Instant.parse("2026-08-01T01:00:00Z"),
 			Instant.parse("2026-08-01T00:10:00Z"));
-		when(calendarEventRepository.findReminderCandidates(
+		when(calendarEventRepository.findReminderCandidatesAfterId(
 			NOW,
 			NOW.plusSeconds(3600),
 			LocalDate.of(2026, 8, 2),
-			LocalDate.of(2026, 8, 2)))
+			LocalDate.of(2026, 8, 2), 0L, PageRequest.of(0, 100)))
 			.thenReturn(List.of(event));
 
 		reminderService.createDueReminders(NOW);
@@ -160,6 +162,8 @@ class EventReminderServiceTest {
 	private GroupMember member(Long memberId, Long userId) {
 		GroupMember member = mock(GroupMember.class);
 		User user = mock(User.class);
+		FamilyGroup group = group(10L);
+		lenient().when(member.getGroup()).thenReturn(group);
 		lenient().when(member.getId()).thenReturn(memberId);
 		lenient().when(member.getUser()).thenReturn(user);
 		lenient().when(user.getId()).thenReturn(userId);

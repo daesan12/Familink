@@ -20,6 +20,7 @@ import com.ssafy.s15p11b104.global.security.AccessTokenBlacklist;
 import com.ssafy.s15p11b104.global.security.AccessTokenProvider;
 import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
 import com.ssafy.s15p11b104.global.security.RefreshTokenStore;
+import com.ssafy.s15p11b104.global.security.LoginAttemptRateLimiter;
 
 /**
  * 로그인 ID 확인, 회원가입, 로그인, 토큰 재발급, 로그아웃을 처리한다.
@@ -34,19 +35,22 @@ public class AuthService {
 	private final AccessTokenProvider accessTokenProvider;
 	private final RefreshTokenStore refreshTokenStore;
 	private final AccessTokenBlacklist accessTokenBlacklist;
+	private final LoginAttemptRateLimiter loginAttemptRateLimiter;
 
 	AuthService(
 		UserRepository userRepository,
 		PasswordEncoder passwordEncoder,
 		AccessTokenProvider accessTokenProvider,
 		RefreshTokenStore refreshTokenStore,
-		AccessTokenBlacklist accessTokenBlacklist
+		AccessTokenBlacklist accessTokenBlacklist,
+		LoginAttemptRateLimiter loginAttemptRateLimiter
 	) {
 		this.userRepository = userRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.accessTokenProvider = accessTokenProvider;
 		this.refreshTokenStore = refreshTokenStore;
 		this.accessTokenBlacklist = accessTokenBlacklist;
+		this.loginAttemptRateLimiter = loginAttemptRateLimiter;
 	}
 
 	/**
@@ -96,19 +100,33 @@ public class AuthService {
 	 */
 	@Transactional(readOnly = true)
 	public LoginResponse login(LoginRequest request) {
+		return login(request, "unknown");
+	}
+
+	@Transactional(readOnly = true)
+	public LoginResponse login(LoginRequest request, String requestSource) {
+		loginAttemptRateLimiter.ensureAllowed(request.loginId(), requestSource);
 		User user = userRepository.findByLoginIdAndWithdrawnAtIsNull(request.loginId())
-			.orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
+			.orElseThrow(() -> invalidCredentials(request, requestSource));
 
 		if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-			throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+			throw invalidCredentials(request, requestSource);
 		}
+		loginAttemptRateLimiter.clear(request.loginId(), requestSource);
+		String refreshToken = refreshTokenStore.issueIfAbsent(user.getId())
+			.orElseThrow(() -> new BusinessException(ErrorCode.ACTIVE_SESSION_EXISTS));
 
 		return new LoginResponse(
 			TOKEN_TYPE,
 			accessTokenProvider.issue(user.getId()),
 			accessTokenProvider.getValidityInSeconds(),
-			refreshTokenStore.issue(user.getId()),
+			refreshToken,
 			new LoginResponse.LoginUser(user.getId(), user.getName()));
+	}
+
+	private BusinessException invalidCredentials(LoginRequest request, String requestSource) {
+		loginAttemptRateLimiter.recordFailure(request.loginId(), requestSource);
+		return new BusinessException(ErrorCode.INVALID_CREDENTIALS);
 	}
 
 	/**

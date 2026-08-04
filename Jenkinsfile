@@ -10,10 +10,16 @@ def sendMattermost(String event, String color, String detail = '') {
                 endpoint: env.MATTERMOST_ENDPOINT,
                 failOnError: false,
                 color: color,
-                message: """[Familink] ${event}
-- branch: ${env.BRANCH_NAME ?: 'unknown'}
-- commit: ${env.GIT_COMMIT ?: 'unknown'}
-- build: <${env.BUILD_URL}|#${env.BUILD_NUMBER}>${detail ? "\n- detail: ${detail}" : ''}"""
+                message: """### ${event}
+
+**🤖🚀 Familink CI/CD 알림 🚀🤖**
+
+- **🌿 브랜치**: `${env.BRANCH_NAME ?: '알 수 없음'}`
+- **🧾 커밋**: `${env.GIT_COMMIT ?: '알 수 없음'}`
+- **🏗️ 빌드**: [Jenkins #${env.BUILD_NUMBER}](${env.BUILD_URL})
+${detail ? "\n> **상세**: ${detail}" : ''}
+
+_📣 배포 상태는 Jenkins 결과를 기준으로 확인해 주세요. 🐳☕_"""
             )
         }
     } catch (Exception ignored) {
@@ -116,7 +122,7 @@ pipeline {
             steps {
                 script {
                     env.DEPLOY_TARGET = 'staging'
-                    sendMattermost('staging deployment started', '#439FE0', "image ${env.IMAGE_TAG}")
+                    sendMattermost('🚀🛫📦 스테이징 배포 출발합니다 기대하세요 😎', '#439FE0', "이미지 `${env.IMAGE_TAG}` 📦🐳")
                 }
                 withCredentials([
                     file(
@@ -142,7 +148,7 @@ pipeline {
                 }
                 script {
                     env.DEPLOY_EVENT_REPORTED = 'true'
-                    sendMattermost('staging deployment succeeded', 'good', "image ${env.IMAGE_TAG}")
+                    sendMattermost('🎉✅🥳🐳 스테이징 배포 성공 굿굿 🦸✨', 'good', "이미지 `${env.IMAGE_TAG}` 📦✨")
                 }
             }
         }
@@ -154,7 +160,7 @@ pipeline {
             steps {
                 script {
                     env.DEPLOY_TARGET = 'production'
-                    sendMattermost('production deployment started', '#439FE0', "image ${env.IMAGE_TAG}")
+                    sendMattermost('🚀🔥🛫 운영 배포 시작합니다 기대가 됩니다 ㅎㅎ 😎🍿', '#439FE0', "이미지 `${env.IMAGE_TAG}` 📦🐳")
                 }
                 withCredentials([
                     usernamePassword(
@@ -191,24 +197,24 @@ pipeline {
 
                         if (deployResult == 42) {
                             env.DEPLOY_EVENT_REPORTED = 'true'
-                            sendMattermost('production health check failed; rollback succeeded', 'warning', "image ${env.IMAGE_TAG}")
+                            sendMattermost('⚠️🩺😵‍💫 헬스체크 실패 ㅠㅠㅠㅠ · 🛟🔙 롤백 성공 😮‍💨', 'warning', "복구 이미지로 되돌렸습니다. 대상 이미지 `${env.IMAGE_TAG}` 🐳")
                             error('Production deployment failed and the previous image was restored.')
                         }
                         if (deployResult == 43) {
                             env.DEPLOY_EVENT_REPORTED = 'true'
-                            sendMattermost('production deployment and rollback failed', 'danger', "image ${env.IMAGE_TAG}")
+                            sendMattermost('🚨💀☠️🪦 운영 배포·롤백 모두 실패 죽으러갑니다 💩🔥🤡', 'danger', "즉시 로그와 EC2 상태를 확인해 주세요. 이미지 `${env.IMAGE_TAG}` 😭")
                             error('Production deployment failed and rollback also failed.')
                         }
                         if (deployResult != 0) {
                             env.DEPLOY_EVENT_REPORTED = 'true'
-                            sendMattermost('production deployment failed', 'danger', "image ${env.IMAGE_TAG}")
+                            sendMattermost('🚨💩🤦 운영 배포 실패 망했습니다 😵‍💫', 'danger', "SSM 배포가 실패했습니다. 이미지 `${env.IMAGE_TAG}` 🐒")
                             error("Production SSM deployment failed with exit code ${deployResult}.")
                         }
                     }
                 }
                 script {
                     env.DEPLOY_EVENT_REPORTED = 'true'
-                    sendMattermost('production deployment succeeded', 'good', "image ${env.IMAGE_TAG}")
+                    sendMattermost('🎉✅🥳🐳 운영 배포 성공 앙 너무 좋아요~ ^^ 🦸✨', 'good', "이미지 `${env.IMAGE_TAG}`가 정상 반영되었습니다. 🚀📦")
                 }
             }
         }
@@ -222,9 +228,9 @@ pipeline {
             script {
                 if (env.DEPLOY_EVENT_REPORTED != 'true') {
                     String event = env.DEPLOY_TARGET
-                        ? "${env.DEPLOY_TARGET} deployment or health check failed"
-                        : 'pipeline failed before deployment'
-                    sendMattermost(event, 'danger', "result ${currentBuild.currentResult}")
+                        ? "🚨💩 ${env.DEPLOY_TARGET} 배포 또는 헬스체크 실패 화난다!!!!!!!!!! 🤬🔥"
+                        : '🧪💥🤦‍♂️ 배포 전 파이프라인 실패 똥망 💩🤡'
+                    sendMattermost(event, 'danger', "결과: `${currentBuild.currentResult}` 💥📉")
                 }
             }
         }

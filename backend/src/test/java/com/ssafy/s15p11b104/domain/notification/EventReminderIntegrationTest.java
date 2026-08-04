@@ -301,10 +301,10 @@ class EventReminderIntegrationTest extends IntegrationTest {
 	// --- 일정 수정 후 재생성 ---
 
 	/**
-	 * 시작 날짜를 미래로 옮기면 지난 시점의 알림은 사라지고 새 시점에 다시 만들어진다.
+	 * 시작 날짜를 미래로 옮겨도 기존 알림 ledger는 삭제하지 않고, 같은 슬롯을 중복 생성하지 않는다.
 	 */
 	@Test
-	void remindsAgainAtTheNewDueTimeAfterEventDateMovesForward() {
+	void keepsExistingReminderWhenEventDateMovesForward() {
 		Long eventId = persistAllDayEvent("병원 방문");
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
 		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE);
@@ -317,7 +317,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 			managerUser.getId());
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
 
-		assertThat(eventReminders()).isEmpty();
+		assertThat(eventReminders()).hasSize(2);
 
 		Instant justAfterMovedDueAt = movedDate.minusDays(1)
 			.atTime(9, 0, 30)

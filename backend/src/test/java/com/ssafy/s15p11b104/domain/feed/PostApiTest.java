@@ -151,6 +151,20 @@ class PostApiTest extends IntegrationTest {
 	}
 
 	@Test
+	void moreThanTenGroupIdsAreRejectedBeforePersistence() throws Exception {
+		List<Long> tooManyGroupIds = java.util.Collections.nCopies(11, group.getId());
+
+		mockMvc.perform(post("/posts")
+				.with(authenticatedAs(authorMember.getUser().getId()))
+				.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+				.content(createJson(tooManyGroupIds, "그룹 상한", null, List.of())))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+		assertThat(postRepository.count()).isZero();
+	}
+
+	@Test
 	void authorCanUpdateAndReplaceMedia() throws Exception {
 		Post post = postRepository.save(new Post(group, authorMember, "이전 글"));
 		postMediaRepository.save(new PostMedia(post, MediaType.IMAGE, "https://cdn/old.jpg", 0, null));
