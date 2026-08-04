@@ -449,6 +449,14 @@ function createReportScreenRenderer(
   return function ConfiguredReportScreen(screenProps) {
     const configuredTargets =
       reportTargetsByGroup?.[screenProps.currentGroup.id];
+    // 개발 목업 그룹은 서버 조회 없이 리포트 fixture를 그대로 보여준다
+    // (피드·보관함의 개발 그룹 처리와 같은 방식).
+    const usesDevelopmentFixture =
+      __DEV__ && screenProps.currentGroup.id.startsWith("development-");
+
+    if (usesDevelopmentFixture) {
+      return <ReportScreen {...screenProps} />;
+    }
 
     return (
       <ReportScreen

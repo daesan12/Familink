@@ -491,6 +491,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   header: {
+    alignItems: 'center',
     borderBottomColor: COLORS.divider,
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingBottom: 14,
@@ -499,7 +500,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: COLORS.textStrong,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
   },
   requestStateContent: {

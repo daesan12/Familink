@@ -927,6 +927,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   header: {
+    alignItems: 'center',
     borderBottomColor: COLORS.divider,
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingBottom: 14,
@@ -1001,7 +1002,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: COLORS.textStrong,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
   },
 });
