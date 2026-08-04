@@ -47,16 +47,24 @@ public class S3MediaValidator {
 	}
 
 	public void validate(MediaType mediaType, String mediaUrl) {
-		String key = keyResolver.resolve(mediaUrl).orElseThrow(this::invalidMedia);
-		validateObject(mediaType, key);
+		String key = keyResolver.resolve(mediaUrl)
+			.orElseThrow(() -> invalidMedia("media.fileUrl", "올바른 업로드 파일 주소가 아닙니다."));
+		validateObject(mediaType, key, "media.fileUrl");
+	}
+
+	public void validateThumbnail(String thumbnailUrl) {
+		String key = keyResolver.resolve(thumbnailUrl)
+			.orElseThrow(() -> invalidMedia("media.thumbnailUrl", "올바른 썸네일 주소가 아닙니다."));
+		validateObject(MediaType.IMAGE, key, "media.thumbnailUrl");
 	}
 
 	public void validateProfileImage(String profileImageUrl) {
-		String key = keyResolver.resolveProfileImage(profileImageUrl).orElseThrow(this::invalidMedia);
-		validateObject(MediaType.IMAGE, key);
+		String key = keyResolver.resolveProfileImage(profileImageUrl)
+			.orElseThrow(() -> invalidMedia("profileImageUrl", "올바른 프로필 사진 주소가 아닙니다."));
+		validateObject(MediaType.IMAGE, key, "profileImageUrl");
 	}
 
-	private void validateObject(MediaType mediaType, String key) {
+	private void validateObject(MediaType mediaType, String key, String field) {
 		HeadObjectResponse metadata;
 		try {
 			metadata = s3Client.headObject(HeadObjectRequest.builder()
@@ -64,20 +72,31 @@ public class S3MediaValidator {
 				.key(key)
 				.build());
 		} catch (S3Exception | SdkClientException exception) {
-			throw invalidMedia();
+			throw invalidMedia(field, "업로드된 파일을 확인하지 못했습니다. 파일을 다시 선택해 주세요.");
 		}
 
-		if (metadata.contentLength() <= 0 || metadata.contentLength() > mediaProperties.maxSizeBytes(mediaType)
-			|| !mediaProperties.allows(mediaType, metadata.contentType())) {
-			throw invalidMedia();
+		if (metadata.contentLength() <= 0) {
+			throw invalidMedia(field, "내용이 없는 파일은 올릴 수 없습니다.");
+		}
+		if (metadata.contentLength() > mediaProperties.maxSizeBytes(mediaType)) {
+			String message = mediaType == MediaType.IMAGE
+				? "사진은 파일당 10MB 이하만 올릴 수 있습니다."
+				: "영상은 파일당 100MB 이하만 올릴 수 있습니다.";
+			throw invalidMedia(field, message);
+		}
+		if (!mediaProperties.allows(mediaType, metadata.contentType())) {
+			String message = mediaType == MediaType.IMAGE
+				? "사진은 JPEG, PNG, WebP 형식만 올릴 수 있습니다."
+				: "영상은 MP4 형식만 올릴 수 있습니다.";
+			throw invalidMedia(field, message);
 		}
 
 		if (mediaType == MediaType.VIDEO) {
-			validateVideoDuration(key);
+			validateVideoDuration(key, field);
 		}
 	}
 
-	private void validateVideoDuration(String key) {
+	private void validateVideoDuration(String key, String field) {
 		Path temporaryFile = null;
 		try {
 			temporaryFile = Files.createTempFile("s15p11b104-video-", ".mp4");
@@ -89,12 +108,16 @@ public class S3MediaValidator {
 				Files.copy(input, temporaryFile, StandardCopyOption.REPLACE_EXISTING);
 			}
 			BigDecimal duration = videoDurationProvider.durationSeconds(temporaryFile);
-			if (duration.signum() < 0
-				|| duration.compareTo(BigDecimal.valueOf(mediaProperties.videoMaxDurationSeconds())) > 0) {
-				throw invalidMedia();
+			if (duration.signum() < 0) {
+				throw invalidMedia(field, "영상 재생 시간을 확인할 수 없습니다.");
+			}
+			if (duration.compareTo(BigDecimal.valueOf(mediaProperties.videoMaxDurationSeconds())) > 0) {
+				throw invalidMedia(
+					field,
+					"영상은 최대 " + mediaProperties.videoMaxDurationSeconds() + "초까지 올릴 수 있습니다.");
 			}
 		} catch (IOException | S3Exception | SdkClientException | IllegalStateException exception) {
-			throw invalidMedia();
+			throw invalidMedia(field, "영상을 검사하지 못했습니다. 파일을 다시 선택해 주세요.");
 		} finally {
 			if (temporaryFile != null) {
 				try {
@@ -106,7 +129,7 @@ public class S3MediaValidator {
 		}
 	}
 
-	private BusinessException invalidMedia() {
-		return new BusinessException(ErrorCode.INVALID_REQUEST);
+	private BusinessException invalidMedia(String field, String message) {
+		return new BusinessException(ErrorCode.INVALID_REQUEST, field, message);
 	}
 }

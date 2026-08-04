@@ -59,6 +59,7 @@ interface PostDetailScreenProps {
     anchor: ReactionAnchor,
   ) => void;
   onRetryComments?: () => void;
+  onSelectReaction: (postId: string, reactionId: ReactionId) => void;
   onUpdateComment: (input: UpdateCommentInput) => Promise<void>;
   post: FeedPost;
   reactions: readonly FeedReaction[];
@@ -85,6 +86,7 @@ export function PostDetailScreen({
   onScrollBeginDrag,
   onToggleReactionPicker,
   onRetryComments,
+  onSelectReaction,
   onUpdateComment,
   post,
   reactions,
@@ -253,12 +255,15 @@ export function PostDetailScreen({
         </View>
 
         <Text style={styles.body}>{post.body}</Text>
-        <PostImageCarousel images={post.images} />
+        <PostImageCarousel enableFullscreen images={post.images} />
 
         <View style={styles.metaRow}>
           <ReactionBar
             canReact={canInteract}
             isPickerOpen={isReactionPickerOpen}
+            onSelectReaction={reactionId =>
+              onSelectReaction(post.id, reactionId)
+            }
             onTogglePicker={anchor =>
               onToggleReactionPicker(post.id, anchor)
             }

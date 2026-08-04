@@ -48,7 +48,10 @@ class MediaUploadPolicyTest {
 	void rejectsImageAboveTheLimit() {
 		assertThatThrownBy(() -> policy.validate("post-media",
 			List.of(new FileUploadRequest("photo.jpg", "image/jpeg", IMAGE_LIMIT + 1))))
-			.isInstanceOf(BusinessException.class);
+			.isInstanceOfSatisfying(BusinessException.class, exception -> {
+				assertThat(exception.getField()).isEqualTo("files.sizeBytes");
+				assertThat(exception.getDetailMessage()).isEqualTo("사진은 파일당 10MB 이하만 올릴 수 있습니다.");
+			});
 	}
 
 	@Test
@@ -78,7 +81,11 @@ class MediaUploadPolicyTest {
 	void rejectsUnsupportedType() {
 		assertThatThrownBy(() -> policy.validate("post-media",
 			List.of(new FileUploadRequest("movie.webm", "video/webm", 1024L))))
-			.isInstanceOf(BusinessException.class);
+			.isInstanceOfSatisfying(BusinessException.class, exception -> {
+				assertThat(exception.getField()).isEqualTo("files.contentType");
+				assertThat(exception.getDetailMessage())
+					.isEqualTo("사진은 JPEG, PNG, WebP 형식, 영상은 MP4 형식만 올릴 수 있습니다.");
+			});
 	}
 
 	@Test
