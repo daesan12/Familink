@@ -70,22 +70,24 @@ test('이름이 최대 길이여도 호칭 수정 버튼은 남아 있다', () =
   ).toBeGreaterThan(0);
 });
 
-test('표시 이름은 남은 폭 안에서 줄어들고 한 줄로 말줄임한다', () => {
+test('표시 이름은 남은 폭 안에서 줄어들고 두 줄까지 감싼다', () => {
+  // 최대 길이 이름을 잘라 보여주기보다 두 줄로 다 보여주는 편이 낫다는 판단이다.
   const renderer = render(member());
 
   const displayName = findText(renderer, MAX_LENGTH_NAME);
   expect(displayName).toBeDefined();
-  expect(displayName?.props.numberOfLines).toBe(1);
+  expect(displayName?.props.numberOfLines).toBe(2);
   expect(StyleSheet.flatten(displayName?.props.style).flexShrink).toBe(1);
 });
 
-test('호칭이 있으면 호칭과 실제 이름 모두 한 줄로 유지한다', () => {
+test('호칭이 있으면 호칭은 두 줄까지, 실제 이름은 한 줄로 보여준다', () => {
+  // 실제 이름은 호칭 아래 보조 정보라 행이 과하게 길어지지 않도록 한 줄로 둔다.
   const alias = '가나다라마바사아자차';
   const renderer = render(member({alias, name: '홍길동'}));
 
   const aliasText = findText(renderer, alias);
   const realName = findText(renderer, '홍길동');
-  expect(aliasText?.props.numberOfLines).toBe(1);
+  expect(aliasText?.props.numberOfLines).toBe(2);
   expect(realName?.props.numberOfLines).toBe(1);
   expect(StyleSheet.flatten(realName?.props.style).flexShrink).toBe(1);
 });

@@ -92,7 +92,7 @@ export function GroupMemberRow({
           </View>
         ) : (
           <View style={styles.nameLine}>
-            <Text numberOfLines={1} style={styles.displayName}>
+            <Text numberOfLines={2} style={styles.displayName}>
               {displayName}
             </Text>
             <Pressable
