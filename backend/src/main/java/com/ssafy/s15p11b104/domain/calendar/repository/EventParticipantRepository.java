@@ -1,6 +1,7 @@
 package com.ssafy.s15p11b104.domain.calendar.repository;
 
 import java.util.List;
+import java.util.Collection;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -24,6 +25,14 @@ public interface EventParticipantRepository extends JpaRepository<EventParticipa
 		order by participant.groupMember.id
 		""")
 	List<Long> findMemberIdsByEventId(@Param("eventId") Long eventId);
+
+	@Query("""
+		select participant.event.id, participant.groupMember.id
+		from EventParticipant participant
+		where participant.event.id in :eventIds
+		order by participant.event.id, participant.groupMember.id
+		""")
+	List<Object[]> findMemberIdsByEventIds(@Param("eventIds") Collection<Long> eventIds);
 
 	/**
 	 * 일정의 참여자를 모두 삭제한다.

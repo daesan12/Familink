@@ -142,6 +142,27 @@ class PostReadApiTest extends IntegrationTest {
 	}
 
 	@Test
+	void feedRejectsInvalidPageSizeAndSort() throws Exception {
+		mockMvc.perform(get("/groups/{groupId}/posts", group.getId())
+				.param("page", "-1")
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+		mockMvc.perform(get("/groups/{groupId}/posts", group.getId())
+				.param("size", "101")
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+		mockMvc.perform(get("/groups/{groupId}/posts", group.getId())
+				.param("sort", "createdAt,asc")
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
 	void activeMemberCanReadPostDetail() throws Exception {
 		mockMvc.perform(get("/posts/{postId}", imagePost.getId())
 				.with(authenticatedAs(viewer.getUser().getId())))

@@ -243,6 +243,17 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 	List<GroupMember> findAllActiveByGroupId(@Param("groupId") Long groupId);
 
 	@Query("""
+		select member
+		from GroupMember member
+		join fetch member.user
+		join fetch member.group
+		where member.group.id in :groupIds
+		  and member.leftAt is null
+		order by member.group.id, member.id
+		""")
+	List<GroupMember> findAllActiveByGroupIds(@Param("groupIds") Collection<Long> groupIds);
+
+	@Query("""
 		select member.group.id as groupId, count(member) as memberCount
 		from GroupMember member
 		where member.group.id in :groupIds

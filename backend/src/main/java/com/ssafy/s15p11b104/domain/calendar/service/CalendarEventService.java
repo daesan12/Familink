@@ -341,17 +341,8 @@ public class CalendarEventService {
 	 * 대응하는 슬롯만 지운다. 종료 날짜·시각 변경은 알림 시점을 바꾸지 않는다.
 	 */
 	private void cancelRemindersIfScheduleChanged(CalendarEvent event, EventSchedule schedule) {
-		if (!event.getEventDate().equals(schedule.eventDate())) {
-			cancelReminders(event, ReminderSlot.DAY_BEFORE);
-		}
-		if (!java.util.Objects.equals(event.getStartAt(), schedule.startAt())) {
-			cancelReminders(event, ReminderSlot.HOUR_BEFORE);
-		}
-	}
-
-	private void cancelReminders(CalendarEvent event, ReminderSlot reminderSlot) {
-		notificationRepository.deleteAllByRelatedEventIdAndTypeAndReminderSlot(
-			event.getId(), NotificationType.EVENT_REMINDER, reminderSlot);
+		// 기존 ledger를 삭제하지 않는다. 같은 event·receiver·slot은 Unique 제약으로 보존하고,
+		// reminderScheduleUpdatedAt이 과거 due time 재생성을 막는다.
 	}
 
 	private void publishCalendarChanged(

@@ -8,6 +8,7 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.repository.query.Param;
 
 import jakarta.persistence.LockModeType;
@@ -66,6 +67,22 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
 		@Param("timedEndAt") Instant timedEndAt,
 		@Param("firstEventDate") LocalDate firstEventDate,
 		@Param("lastEventDate") LocalDate lastEventDate);
+
+	@Query("""
+		select event
+		from CalendarEvent event
+		where event.id > :afterId
+			and ((event.startAt is not null and event.startAt between :timedStartAt and :timedEndAt)
+			or event.eventDate between :firstEventDate and :lastEventDate)
+		order by event.id asc
+		""")
+	List<CalendarEvent> findReminderCandidatesAfterId(
+		@Param("timedStartAt") Instant timedStartAt,
+		@Param("timedEndAt") Instant timedEndAt,
+		@Param("firstEventDate") LocalDate firstEventDate,
+		@Param("lastEventDate") LocalDate lastEventDate,
+		@Param("afterId") Long afterId,
+		Pageable pageable);
 
 	/**
 	 * 전날 09:00 알림을 보낼 일정을 모든 그룹에서 찾는다.
