@@ -45,6 +45,7 @@ class RefreshTokenStoreTest extends IntegrationTest {
 	@Test
 	void rotateKeepsStoredTokenWhenPresentedTokenIsStale() {
 		String stale = refreshTokenStore.issue(USER_ID);
+		refreshTokenStore.revokeIfCurrent(USER_ID, stale);
 		String current = refreshTokenStore.issue(USER_ID);
 
 		assertThat(refreshTokenStore.rotate(USER_ID, stale)).isEmpty();
@@ -63,6 +64,7 @@ class RefreshTokenStoreTest extends IntegrationTest {
 	@Test
 	void revokeIfCurrentDeletesOnlyTheStoredToken() {
 		String stale = refreshTokenStore.issue(USER_ID);
+		refreshTokenStore.revokeIfCurrent(USER_ID, stale);
 		String current = refreshTokenStore.issue(USER_ID);
 
 		assertThat(refreshTokenStore.revokeIfCurrent(USER_ID, stale)).isFalse();
@@ -73,10 +75,9 @@ class RefreshTokenStoreTest extends IntegrationTest {
 	}
 
 	@Test
-	void issuedTokensAreDistinctEvenWhenIssuedBackToBack() {
+	void secondIssueIsRejectedWhileSessionIsActive() {
 		String first = refreshTokenStore.issue(USER_ID);
-		String second = refreshTokenStore.issue(USER_ID);
-
-		assertThat(first).isNotEqualTo(second);
+		assertThat(refreshTokenStore.issueIfAbsent(USER_ID)).isEmpty();
+		assertThat(redisTemplate.opsForValue().get(STORED_KEY)).isEqualTo(first);
 	}
 }

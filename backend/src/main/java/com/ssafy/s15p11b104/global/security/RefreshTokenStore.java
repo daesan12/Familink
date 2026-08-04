@@ -40,6 +40,11 @@ public class RefreshTokenStore {
 		return 0
 		""", Long.class);
 
+	private static final RedisScript<Long> ISSUE_IF_ABSENT_SCRIPT = RedisScript.of("""
+		if redis.call('SET', KEYS[1], ARGV[1], 'NX', 'PX', ARGV[2]) then return 1 end
+		return 0
+		""", Long.class);
+
 	private final JwtProvider jwtProvider;
 	private final StringRedisTemplate redisTemplate;
 	private final Duration validity;
@@ -58,10 +63,19 @@ public class RefreshTokenStore {
 	 * @param userId 토큰 소유자의 사용자 ID
 	 * @return 발급된 Refresh Token 문자열
 	 */
-	public String issue(Long userId) {
+	public Optional<String> issueIfAbsent(Long userId) {
 		String refreshToken = jwtProvider.issue(userId, validity, TOKEN_USE);
-		redisTemplate.opsForValue().set(toKey(userId), refreshToken, validity);
-		return refreshToken;
+		Long applied = redisTemplate.execute(
+			ISSUE_IF_ABSENT_SCRIPT,
+			List.of(toKey(userId)),
+			refreshToken,
+			String.valueOf(validity.toMillis()));
+		return isApplied(applied) ? Optional.of(refreshToken) : Optional.empty();
+	}
+
+	/** 테스트와 내부 호출에서 세션이 없을 때만 토큰을 발급한다. */
+	public String issue(Long userId) {
+		return issueIfAbsent(userId).orElseThrow(() -> new IllegalStateException("active refresh token exists"));
 	}
 
 	/**

@@ -1,7 +1,9 @@
 package com.ssafy.s15p11b104.domain.feed.controller;
 
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
+import java.util.List;
+
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,6 +24,7 @@ import com.ssafy.s15p11b104.domain.feed.dto.CommentUpdateRequest;
 import com.ssafy.s15p11b104.domain.feed.dto.CommentUpdateResponse;
 import com.ssafy.s15p11b104.domain.feed.service.CommentService;
 import com.ssafy.s15p11b104.global.api.ApiResponse;
+import com.ssafy.s15p11b104.global.api.PageRequestFactory;
 import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
 
 import jakarta.validation.Valid;
@@ -38,8 +42,12 @@ public class CommentController {
 	@GetMapping("/posts/{postId}/comments")
 	public ApiResponse<CommentListResponse> getComments(
 		@PathVariable Long postId,
-		@PageableDefault(size = 20) Pageable pageable,
+		@RequestParam(required = false) Integer page,
+		@RequestParam(required = false) Integer size,
+		@RequestParam(required = false) List<String> sort,
 		@AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
+		Pageable pageable = PageRequestFactory.fixed(
+			page, size, sort, Sort.by(Sort.Order.asc("createdAt"), Sort.Order.asc("id")));
 		return ApiResponse.success(
 			"댓글 목록 조회 성공",
 			commentService.getComments(postId, pageable, authenticatedUser.id()));
