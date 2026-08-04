@@ -158,7 +158,9 @@ class PresignedUrlApiTest extends IntegrationTest {
 						"contentType", "application/pdf",
 						"sizeBytes", 1024))))))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.errors").isEmpty());
+			.andExpect(jsonPath("$.errors[0].field").value("purpose"))
+			.andExpect(jsonPath("$.errors[0].message")
+				.value("지원하지 않는 파일 업로드 목적입니다."));
 
 		verifyNoInteractions(uploadProvider);
 	}
