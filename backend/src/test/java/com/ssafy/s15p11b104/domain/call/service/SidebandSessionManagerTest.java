@@ -74,38 +74,51 @@ class SidebandSessionManagerTest {
 
 	@Test
 	void returnsTrueAfterExpectedNormalRemoteClose() {
-		connectAndPrepareClose();
+		SidebandSessionManager.ClosingSideband closingSideband = connectAndClaimClose();
 		listenerCaptor.getValue().onClose(webSocket, WebSocket.NORMAL_CLOSURE, "normal");
 
-		assertThat(manager.finishClose(CALL_SESSION_ID)).isTrue();
+		assertThat(closingSideband.finishClose()).isTrue();
 		verifyNoInteractions(unexpectedDisconnectHandler);
 	}
 
 	@Test
 	void returnsFalseWhenSocketErrorsDuringExpectedClose() {
-		connectAndPrepareClose();
+		SidebandSessionManager.ClosingSideband closingSideband = connectAndClaimClose();
 		listenerCaptor.getValue().onError(webSocket, new IllegalStateException("sideband failed"));
 
-		assertThat(manager.finishClose(CALL_SESSION_ID)).isFalse();
+		assertThat(closingSideband.finishClose()).isFalse();
 		verifyNoInteractions(unexpectedDisconnectHandler);
 	}
 
 	@Test
 	void returnsFalseAfterAbnormalRemoteClose() {
-		connectAndPrepareClose();
+		SidebandSessionManager.ClosingSideband closingSideband = connectAndClaimClose();
 		listenerCaptor.getValue().onClose(webSocket, 1011, "internal error");
 
-		assertThat(manager.finishClose(CALL_SESSION_ID)).isFalse();
+		assertThat(closingSideband.finishClose()).isFalse();
 		verifyNoInteractions(unexpectedDisconnectHandler);
 	}
 
-	private void connectAndPrepareClose() {
+	@Test
+	void grantsCloseOwnershipToOnlyOneClaim() {
+		SidebandSessionManager.ClosingSideband closingSideband = connectAndClaimClose();
+
+		assertThat(manager.claimClose(CALL_SESSION_ID)).isNull();
+		listenerCaptor.getValue().onClose(webSocket, WebSocket.NORMAL_CLOSURE, "normal");
+		assertThat(closingSideband.finishClose()).isTrue();
+		verifyNoInteractions(unexpectedDisconnectHandler);
+	}
+
+	private SidebandSessionManager.ClosingSideband connectAndClaimClose() {
 		manager.connect(
 			CALL_SESSION_ID,
 			"call-1",
 			Map.of(),
 			unexpectedDisconnectHandler
 		);
-		assertThat(manager.prepareClose(CALL_SESSION_ID)).isEqualTo("call-1");
+		SidebandSessionManager.ClosingSideband closingSideband = manager.claimClose(CALL_SESSION_ID);
+		assertThat(closingSideband).isNotNull();
+		assertThat(closingSideband.callId()).isEqualTo("call-1");
+		return closingSideband;
 	}
 }

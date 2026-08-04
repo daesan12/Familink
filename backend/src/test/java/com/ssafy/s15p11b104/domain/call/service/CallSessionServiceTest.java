@@ -87,6 +87,9 @@ class CallSessionServiceTest {
 	private CallSessionLeaseService callSessionLeaseService;
 
 	@Mock
+	private SidebandSessionManager.ClosingSideband closingSideband;
+
+	@Mock
 	private TransactionTemplate transactionTemplate;
 
 	@Mock
@@ -117,6 +120,8 @@ class CallSessionServiceTest {
 			callReportGenerationDispatcher,
 			callTranscriptService,
 			callSessionLeaseService,
+			// 뒷정리를 호출 스레드에서 즉시 실행해 종료 이후 절차를 그대로 검증한다.
+			new CallTeardownExecutor(Runnable::run),
 			transactionTemplate,
 			Clock.fixed(NOW, ZoneOffset.UTC)
 		);
@@ -186,14 +191,67 @@ class CallSessionServiceTest {
 		InOrder closeOrder = inOrder(
 			sidebandSessionManager,
 			realtimeGateway,
+			closingSideband,
 			callTranscriptService,
 			callReportGenerationDispatcher
 		);
-		closeOrder.verify(sidebandSessionManager).prepareClose(CALL_SESSION_ID);
+		closeOrder.verify(sidebandSessionManager).claimClose(CALL_SESSION_ID);
 		closeOrder.verify(realtimeGateway).hangUp(OPEN_AI_CALL_ID);
-		closeOrder.verify(sidebandSessionManager).finishClose(CALL_SESSION_ID);
+		closeOrder.verify(closingSideband).finishClose();
 		closeOrder.verify(callTranscriptService).finalizeSession(CALL_SESSION_ID, true);
 		closeOrder.verify(callReportGenerationDispatcher).dispatch(CALL_SESSION_ID);
+	}
+
+	@Test
+	void doesNotTearDownAgainWhenAnotherEndAlreadyOwnsTheSideband() {
+		when(callSessionRepository.findForUpdate(CALL_SESSION_ID, CARE_RECEIVER_MEMBER_ID))
+			.thenReturn(Optional.of(callSession));
+		when(callSession.getId()).thenReturn(CALL_SESSION_ID);
+		when(callSession.getStatus()).thenReturn(CallStatus.COMPLETED, CallStatus.COMPLETED);
+		when(sidebandSessionManager.claimClose(CALL_SESSION_ID)).thenReturn(null);
+
+		callSessionService.end(CALL_SESSION_ID, CallTerminationType.USER_REQUESTED);
+
+		verify(realtimeGateway, never()).hangUp(any());
+		verify(callTranscriptService, never()).finalizeSession(any(), anyBoolean());
+		verify(callReportGenerationDispatcher, never()).dispatch(any());
+	}
+
+	@Test
+	void releasesClaimedSidebandWhenTerminationTransactionFails() {
+		when(callSessionRepository.findForUpdate(CALL_SESSION_ID, CARE_RECEIVER_MEMBER_ID))
+			.thenReturn(Optional.of(callSession));
+		when(callSession.getStatus()).thenReturn(CallStatus.IN_PROGRESS, CallStatus.COMPLETED);
+		when(sidebandSessionManager.claimClose(CALL_SESSION_ID)).thenReturn(closingSideband);
+		when(closingSideband.callId()).thenReturn(OPEN_AI_CALL_ID);
+		// claim 직후 트랜잭션이 실패하는 상황을 만든다. getId는 claimClose 다음에 호출된다.
+		when(callSession.getId()).thenThrow(new IllegalStateException("commit failed"));
+
+		assertThatThrownBy(
+			() -> callSessionService.end(CALL_SESSION_ID, CallTerminationType.USER_REQUESTED)
+		).isInstanceOf(IllegalStateException.class);
+
+		verify(realtimeGateway).hangUp(OPEN_AI_CALL_ID);
+		verify(closingSideband).finishClose();
+		verify(callTranscriptService, never()).finalizeSession(any(), anyBoolean());
+		verify(callReportGenerationDispatcher, never()).dispatch(any());
+	}
+
+	@Test
+	void keepsTerminationResultWhenTeardownFails() {
+		when(callSessionRepository.findForUpdate(CALL_SESSION_ID, CARE_RECEIVER_MEMBER_ID))
+			.thenReturn(Optional.of(callSession));
+		when(callSession.getId()).thenReturn(CALL_SESSION_ID);
+		when(sidebandSessionManager.claimClose(CALL_SESSION_ID)).thenReturn(closingSideband);
+		when(callSession.getStatus()).thenReturn(CallStatus.IN_PROGRESS, CallStatus.COMPLETED);
+		when(closingSideband.finishClose()).thenThrow(new IllegalStateException("drain failed"));
+
+		assertThat(callSessionService.end(CALL_SESSION_ID, CallTerminationType.USER_REQUESTED)
+			.callSessionId()).isEqualTo(CALL_SESSION_ID);
+
+		verify(callSession).endByUser(NOW);
+		verify(callTranscriptService, never()).finalizeSession(any(), anyBoolean());
+		verify(callReportGenerationDispatcher, never()).dispatch(any());
 	}
 
 	@Test
@@ -238,9 +296,9 @@ class CallSessionServiceTest {
 
 		verify(callSessionLeaseService).recoverIfExpired(callSession, NOW);
 		verify(callSession, never()).markConnected(any(Instant.class));
-		verify(sidebandSessionManager).prepareClose(CALL_SESSION_ID);
+		verify(sidebandSessionManager).claimClose(CALL_SESSION_ID);
 		verify(realtimeGateway).hangUp(OPEN_AI_CALL_ID);
-		verify(sidebandSessionManager).finishClose(CALL_SESSION_ID);
+		verify(closingSideband).finishClose();
 	}
 
 	@Test
@@ -255,7 +313,7 @@ class CallSessionServiceTest {
 		);
 
 		verify(callSession, never()).markConnectionFailed(any(Instant.class));
-		verify(sidebandSessionManager, never()).prepareClose(any());
+		verify(sidebandSessionManager, never()).claimClose(any());
 		verify(callTranscriptService, never()).finalizeSession(any(), anyBoolean());
 	}
 
@@ -275,8 +333,9 @@ class CallSessionServiceTest {
 	private void stubOwnedSession() {
 		when(callSessionRepository.findForUpdate(CALL_SESSION_ID, CARE_RECEIVER_MEMBER_ID))
 			.thenReturn(Optional.of(callSession));
-		when(sidebandSessionManager.prepareClose(CALL_SESSION_ID)).thenReturn(OPEN_AI_CALL_ID);
-		when(sidebandSessionManager.finishClose(CALL_SESSION_ID)).thenReturn(true);
+		when(sidebandSessionManager.claimClose(CALL_SESSION_ID)).thenReturn(closingSideband);
+		when(closingSideband.callId()).thenReturn(OPEN_AI_CALL_ID);
+		when(closingSideband.finishClose()).thenReturn(true);
 	}
 
 	private void stubOwnedSessionForEnd() {
