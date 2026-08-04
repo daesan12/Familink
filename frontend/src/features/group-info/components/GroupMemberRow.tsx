@@ -92,7 +92,9 @@ export function GroupMemberRow({
           </View>
         ) : (
           <View style={styles.nameLine}>
-            <Text style={styles.displayName}>{displayName}</Text>
+            <Text numberOfLines={2} style={styles.displayName}>
+              {displayName}
+            </Text>
             <Pressable
               accessibilityLabel={`${member.name} 호칭 수정`}
               accessibilityRole="button"
@@ -110,7 +112,9 @@ export function GroupMemberRow({
         )}
 
         {isEditing || hasAlias ? (
-          <Text style={styles.realName}>{member.name}</Text>
+          <Text numberOfLines={1} style={styles.realName}>
+            {member.name}
+          </Text>
         ) : null}
         {member.isManager ? (
           <View style={styles.managerTag}>
@@ -163,6 +167,8 @@ const styles = StyleSheet.create({
   },
   displayName: {
     color: COLORS.textStrong,
+    // RN의 flexShrink 기본값은 0이라 이름이 길면 옆의 호칭 수정 버튼을 행 밖으로 밀어낸다.
+    flexShrink: 1,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -202,6 +208,7 @@ const styles = StyleSheet.create({
   },
   realName: {
     color: COLORS.textMuted,
+    flexShrink: 1,
     fontSize: 13,
   },
   row: {
