@@ -858,6 +858,16 @@ test('그룹 나가기 화면의 관리자 변경 링크는 H-6으로 이동한�
   expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(true);
 });
 
+test('비관리자는 그룹 나가기 화면에서 관리자 변경 화면을 우회할 수 없다', () => {
+  const renderer = renderScreen('m-dad');
+
+  press(renderer, '그룹 나가기');
+  press(renderer, '그룹관리자 변경하기');
+
+  expect(hasText(renderer, '그룹관리자만 접근할 수 있습니다')).toBe(true);
+  expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(false);
+});
+
 test('그룹 삭제 메뉴는 확인 팝업을 띄우고 삭제 콜백을 부른다', () => {
   const deleted: number[] = [];
   let renderer: TestRenderer.ReactTestRenderer;
@@ -891,7 +901,73 @@ test('그룹명 변경 메뉴를 누르면 H-10 화면으로 이동한다', () =
   expect(hasText(renderer, '그룹 이름을 변경하세요')).toBe(true);
 });
 
-test('그룹관리자 변경을 확정하면 콜백을 부르고 관리자 표시를 옮긴다', () => {
+test.each([
+  '가입 승인 대기',
+  '그룹관리자 변경',
+  '구성원 내보내기',
+  '그룹 삭제',
+  '그룹명 변경',
+])('비관리자가 %s 메뉴를 누르면 진입하지 않고 권한을 안내한다', label => {
+  const onFullscreenChange = jest.fn();
+  const renderer = renderScreen('m-dad', {onFullscreenChange});
+  onFullscreenChange.mockClear();
+
+  press(renderer, label);
+
+  expect(hasText(renderer, '그룹관리자만 접근할 수 있습니다')).toBe(true);
+  expect(onFullscreenChange).not.toHaveBeenCalledWith(true);
+  expect(hasText(renderer, '정말 그룹을 삭제하시겠어요?')).toBe(false);
+
+  press(renderer, '그룹관리자 접근 안내 확인');
+  expect(hasText(renderer, '그룹관리자만 접근할 수 있습니다')).toBe(false);
+});
+
+test('구성원 로딩 중에도 그룹 요약이 관리자이면 관리 메뉴에 진입한다', () => {
+  const membersLoader = () => new Promise<readonly GroupMember[]>(() => {});
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentGroup={{...baseProps.currentGroup, isManager: true}}
+        currentMemberId="m-manager"
+        membersLoader={membersLoader}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '그룹명 변경');
+
+  expect(hasText(renderer!, '그룹 이름을 변경하세요')).toBe(true);
+  expect(hasText(renderer!, '그룹관리자만 접근할 수 있습니다')).toBe(false);
+});
+
+test('구성원 로드 실패 후에는 오래된 그룹 요약 권한으로 관리 메뉴에 진입하지 않는다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentGroup={{...baseProps.currentGroup, isManager: true}}
+        currentMemberId="m-manager"
+        membersLoader={() => Promise.reject(new Error('load failed'))}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '그룹명 변경');
+
+  expect(hasText(renderer!, '그룹관리자만 접근할 수 있습니다')).toBe(true);
+  expect(hasText(renderer!, '그룹 이름을 변경할까요')).toBe(false);
+});
+
+test('그룹관리자 변경을 확정하면 이전 관리자의 재진입을 즉시 막는다', () => {
   const changed: string[] = [];
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
@@ -914,12 +990,10 @@ test('그룹관리자 변경을 확정하면 콜백을 부르고 관리자 표�
   press(renderer!, '그룹관리자 변경하기');
 
   expect(changed).toEqual(['m-dad']);
-  // 복귀 후 다시 H-6을 열면 손수호가 현재 관리자로 표시된다.
+  // 권한은 즉시 손수호에게 이동하므로 이전 관리자는 관리 화면을 다시 열 수 없다.
   press(renderer!, '그룹관리자 변경');
-  const dadRow = renderer!.root.findByProps({
-    accessibilityLabel: '손수호 선택',
-  });
-  expect(dadRow.props.accessibilityState.disabled).toBe(true);
+  expect(hasText(renderer!, '그룹관리자만 접근할 수 있습니다')).toBe(true);
+  expect(hasText(renderer!, '새 그룹관리자를 선택하세요')).toBe(false);
 });
 
 test('그룹 코드 카드를 누르면 그룹 코드 화면으로 이동한다', async () => {
