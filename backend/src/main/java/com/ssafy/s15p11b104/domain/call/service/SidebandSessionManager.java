@@ -111,24 +111,51 @@ public class SidebandSessionManager {
 		return Set.copyOf(sessions.keySet());
 	}
 
-	public String prepareClose(Long sessionId) {
-		ManagedSocket managedSocket = sessions.get(sessionId);
+	/**
+	 * 정상 종료할 세션의 소유권을 원자적으로 가져온다.
+	 *
+	 * <p>세션을 맵에서 제거하는 동시에 정상 종료 예정으로 표시하므로, 종료 요청이 여러 번
+	 * 들어와도 한 요청만 핸들을 받는다. 소유권 없이 {@link ClosingSideband#finishClose()}를
+	 * 나눠 호출하면 늦게 도착한 쪽이 drain 실패로 판정해 세션을 복구 불가능한 전사
+	 * 무결성 상태로 만든다.
+	 *
+	 * @return 이 호출이 소유권을 가져갔으면 핸들, 이미 정리됐거나 없으면 {@code null}
+	 */
+	public ClosingSideband claimClose(Long sessionId) {
+		ManagedSocket managedSocket = sessions.remove(sessionId);
 		if (managedSocket == null) {
 			return null;
 		}
 		managedSocket.expectClose();
-		return managedSocket.callId();
+		return new ClosingSideband(managedSocket);
 	}
 
-	public boolean finishClose(Long sessionId) {
-		ManagedSocket managedSocket = sessions.remove(sessionId);
-		if (managedSocket == null) {
-			return false;
+	/**
+	 * 소유권을 가져온 Sideband 세션의 종료 절차를 수행하는 핸들이다.
+	 */
+	public static final class ClosingSideband {
+
+		private final ManagedSocket managedSocket;
+
+		private ClosingSideband(ManagedSocket managedSocket) {
+			this.managedSocket = managedSocket;
 		}
-		boolean drained = managedSocket.awaitRemoteClose();
-		boolean transcriptHealthy = !managedSocket.transcriptHandler.hasIntegrityFailure();
-		managedSocket.close();
-		return drained && transcriptHealthy;
+
+		public String callId() {
+			return managedSocket.callId();
+		}
+
+		/**
+		 * 남은 이벤트를 drain하고 소켓을 닫는다.
+		 *
+		 * @return 정상 remote close를 관측하고 전사 무결성 실패가 없으면 {@code true}
+		 */
+		public boolean finishClose() {
+			boolean drained = managedSocket.awaitRemoteClose();
+			boolean transcriptHealthy = !managedSocket.transcriptHandler.hasIntegrityFailure();
+			managedSocket.close();
+			return drained && transcriptHealthy;
+		}
 	}
 
 	private final class ManagedSocket implements WebSocket.Listener {

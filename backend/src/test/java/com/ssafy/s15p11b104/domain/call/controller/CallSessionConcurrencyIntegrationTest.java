@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -154,7 +155,10 @@ class CallSessionConcurrencyIntegrationTest extends IntegrationTest {
 	@Test
 	void lateConnectedResultCannotReviveExpiredConnectingSession() throws Exception {
 		Long expiredSessionId = insertExpiredCallSession("CONNECTING");
-		when(sidebandSessionManager.prepareClose(expiredSessionId)).thenReturn(OPEN_AI_CALL_ID);
+		SidebandSessionManager.ClosingSideband closingSideband =
+			mock(SidebandSessionManager.ClosingSideband.class);
+		when(closingSideband.callId()).thenReturn(OPEN_AI_CALL_ID);
+		when(sidebandSessionManager.claimClose(expiredSessionId)).thenReturn(closingSideband);
 
 		MvcResult result = performConnectedResultRequest(expiredSessionId);
 
@@ -163,9 +167,9 @@ class CallSessionConcurrencyIntegrationTest extends IntegrationTest {
 		assertThat(responseBody.at("/error/code").asText()).isEqualTo("INVALID_CALL_STATUS");
 		assertThat(statusOf(expiredSessionId)).isEqualTo("FAILED");
 		assertThat(endedAtOf(expiredSessionId)).isNotNull();
-		verify(sidebandSessionManager).prepareClose(expiredSessionId);
+		verify(sidebandSessionManager).claimClose(expiredSessionId);
 		verify(realtimeGateway).hangUp(OPEN_AI_CALL_ID);
-		verify(sidebandSessionManager).finishClose(expiredSessionId);
+		verify(closingSideband).finishClose();
 	}
 
 	@Test
