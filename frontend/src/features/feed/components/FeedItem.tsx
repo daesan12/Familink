@@ -2,7 +2,7 @@ import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {COLORS} from '../../../design/tokens';
 import {formatRelativeTime} from '../time';
-import type {FeedPost, ReactionId} from '../types';
+import type {FeedMember, FeedPost, ReactionId} from '../types';
 import {FeedAvatar} from './FeedAvatar';
 import {PostImageCarousel} from './PostImageCarousel';
 import {ReactionBar, type ReactionAnchor} from './ReactionBar';
@@ -13,6 +13,7 @@ interface FeedItemProps {
   isVisible: boolean;
   isReactionPickerOpen: boolean;
   onPress: (postId: string) => void;
+  onPressAuthor?: (author: FeedMember) => void;
   onToggleReactionPicker: (
     postId: string,
     anchor: ReactionAnchor,
@@ -27,6 +28,7 @@ export function FeedItem({
   isVisible,
   isReactionPickerOpen,
   onPress,
+  onPressAuthor,
   onToggleReactionPicker,
   post,
   selectedReactionId,
@@ -36,7 +38,17 @@ export function FeedItem({
   return (
     <View style={styles.container}>
       <View style={styles.authorRow}>
-        <FeedAvatar member={post.author} />
+        {onPressAuthor === undefined ? (
+          <FeedAvatar member={post.author} />
+        ) : (
+          <Pressable
+            accessibilityLabel={`${post.author.name}님의 프로필 보기`}
+            accessibilityRole="button"
+            onPress={() => onPressAuthor(post.author)}
+          >
+            <FeedAvatar member={post.author} />
+          </Pressable>
+        )}
         <View style={styles.authorText}>
           <Text style={styles.authorName}>{post.author.name}</Text>
           <Text style={styles.createdAt}>

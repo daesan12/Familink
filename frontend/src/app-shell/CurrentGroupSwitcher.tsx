@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
   },
   triggerText: {
     color: COLORS.textStrong,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     maxWidth: 210,
   },

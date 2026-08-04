@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {SubScreenHeader} from '../components/SubScreenHeader';
 import {GroupMemberAvatar} from '../components/GroupMemberAvatar';
 import {getGroupManagementErrorMessage} from '../api/groupManagementApi';
@@ -227,11 +228,7 @@ function ConfirmStep({
             위 내용을 확인했으며 구성원을 내보냅니다.
           </Text>
         </Pressable>
-        {errorMessage ? (
-          <Text accessibilityRole="alert" style={styles.errorText}>
-            {errorMessage}
-          </Text>
-        ) : null}
+        {errorMessage ? <NoticeBanner message={errorMessage} /> : null}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -282,11 +279,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingVertical: 24,
     textAlign: 'center',
-  },
-  errorText: {
-    color: COLORS.error,
-    fontSize: 14,
-    lineHeight: 20,
   },
   footer: {
     borderTopColor: COLORS.divider,

@@ -5,20 +5,21 @@ import type {
   DailyReportResult,
   ReportCalendar,
   ReportEmotionCategory,
+  ReportEmotionPresentation,
   ReportPageState,
 } from "./types";
 
 const EMOTION_PRESENTATIONS: Record<
   ReportEmotionCategory,
-  { emoji: string; label: string }
+  ReportEmotionPresentation
 > = {
-  ANGER: { emoji: "😠", label: "분노" },
-  ANXIETY: { emoji: "😟", label: "불안" },
-  EMBARRASSMENT: { emoji: "😳", label: "당황" },
-  HURT: { emoji: "😔", label: "상처" },
-  JOY: { emoji: "😊", label: "기쁨" },
-  NEUTRAL: { emoji: "😌", label: "평온" },
-  SADNESS: { emoji: "😢", label: "슬픔" },
+  ANGER: { icon: "emoticon-angry-outline", label: "분노" },
+  ANXIETY: { icon: "emoticon-frown-outline", label: "불안" },
+  EMBARRASSMENT: { icon: "emoticon-confused-outline", label: "당황" },
+  HURT: { icon: "emoticon-sad-outline", label: "상처" },
+  JOY: { icon: "emoticon-happy-outline", label: "기쁨" },
+  NEUTRAL: { icon: "emoticon-neutral-outline", label: "평온" },
+  SADNESS: { icon: "emoticon-cry-outline", label: "슬픔" },
 };
 
 export function getReportPageState(

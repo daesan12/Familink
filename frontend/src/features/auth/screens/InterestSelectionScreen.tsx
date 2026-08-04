@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
+import {COLORS} from '../../../design/tokens';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {AnimatedPressable} from '../components/AnimatedPressable';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
@@ -194,9 +195,9 @@ export function InterestSelectionScreen({
             onPress={onBack}>
             <View style={styles.backButton}>
               <MaterialDesignIcons
-                color={AUTH_COLORS.background}
+                color={COLORS.purpleDeep}
                 name="chevron-left"
-                size={30}
+                size={28}
               />
             </View>
           </AnimatedPressable>
@@ -219,7 +220,6 @@ export function InterestSelectionScreen({
           <View style={styles.chipList}>
             {displayedInterests.map(interest => (
               <InterestChip
-                custom={customInterests.includes(interest)}
                 interest={interest}
                 key={interest}
                 onPress={() => handleToggleInterest(interest)}
@@ -235,7 +235,7 @@ export function InterestSelectionScreen({
               }}>
               <View style={styles.chip}>
                 <MaterialDesignIcons
-                  color={AUTH_COLORS.placeholder}
+                  color={COLORS.textStrong}
                   name="plus"
                   size={18}
                 />
@@ -310,49 +310,25 @@ export function InterestSelectionScreen({
 }
 
 interface InterestChipProps {
-  custom: boolean;
   interest: string;
   onPress: () => void;
   selected: boolean;
 }
 
-function InterestChip({
-  custom,
-  interest,
-  onPress,
-  selected,
-}: InterestChipProps) {
-  const customSelected = custom && selected;
-
+function InterestChip({interest, onPress, selected}: InterestChipProps) {
   return (
     <AnimatedPressable
       accessibilityLabel={`${interest} 관심사`}
       accessibilityRole="checkbox"
       accessibilityState={{checked: selected}}
       onPress={onPress}>
-      <View
-        style={[
-          styles.chip,
-          selected && styles.selectedChip,
-          customSelected && styles.customSelectedChip,
-        ]}>
+      <View style={[styles.chip, selected && styles.selectedChip]}>
         <MaterialDesignIcons
-          color={
-            customSelected
-              ? AUTH_COLORS.body
-              : selected
-                ? AUTH_COLORS.background
-                : AUTH_COLORS.placeholder
-          }
+          color={selected ? COLORS.purpleDeep : COLORS.textStrong}
           name={selected ? 'check' : 'plus'}
           size={18}
         />
-        <Text
-          style={[
-            styles.chipLabel,
-            selected && styles.selectedChipLabel,
-            customSelected && styles.customSelectedChipLabel,
-          ]}>
+        <Text style={[styles.chipLabel, selected && styles.selectedChipLabel]}>
           {interest}
         </Text>
       </View>
@@ -541,11 +517,11 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignItems: 'center',
-    backgroundColor: AUTH_COLORS.primarySoft,
-    borderRadius: 18,
-    height: 36,
+    backgroundColor: COLORS.lavenderSurface,
+    borderRadius: 20,
+    height: 40,
     justifyContent: 'center',
-    width: 36,
+    width: 40,
   },
   logo: {
     height: 120,
@@ -587,24 +563,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   selectedChip: {
-    backgroundColor: AUTH_COLORS.primarySoft,
-    borderColor: AUTH_COLORS.primarySoft,
-  },
-  customSelectedChip: {
-    backgroundColor: '#FFF7D6',
-    borderColor: '#FFF7D6',
+    backgroundColor: COLORS.lemon,
+    borderColor: COLORS.lemon,
   },
   chipLabel: {
-    color: AUTH_COLORS.placeholder,
+    color: COLORS.textStrong,
     fontSize: 13,
     fontWeight: '500',
   },
   selectedChipLabel: {
-    color: AUTH_COLORS.background,
+    color: COLORS.purpleDeep,
     fontWeight: '700',
-  },
-  customSelectedChipLabel: {
-    color: AUTH_COLORS.body,
   },
   feedbackArea: {
     minHeight: 36,

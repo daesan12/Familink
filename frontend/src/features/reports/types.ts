@@ -1,5 +1,16 @@
+// 감정 배지에 쓰는 머티리얼 아이콘 이름. OS 기본 이모지 대신
+// 앱 아이콘과 같은 플랫한 라인 스타일로 통일한다.
+export type ReportEmotionIcon =
+  | "emoticon-angry-outline"
+  | "emoticon-confused-outline"
+  | "emoticon-cry-outline"
+  | "emoticon-frown-outline"
+  | "emoticon-happy-outline"
+  | "emoticon-neutral-outline"
+  | "emoticon-sad-outline";
+
 export interface ReportEmotionPresentation {
-  emoji: string;
+  icon: ReportEmotionIcon;
   label: string;
 }
 

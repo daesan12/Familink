@@ -307,20 +307,6 @@ export function AppShell({
                   size={27}
                 />
               </Pressable>
-              <Pressable
-                accessibilityLabel="새 게시글 작성"
-                accessibilityRole="button"
-                onPress={() =>
-                  setCreatePostRequestId(requestId => requestId + 1)
-                }
-                style={styles.headerIconButton}
-              >
-                <MaterialDesignIcons
-                  color={COLORS.textStrong}
-                  name="plus"
-                  size={29}
-                />
-              </Pressable>
             </View>
           ) : (
             <View style={styles.headerSide} />
@@ -422,6 +408,25 @@ export function AppShell({
             </Text>
           </View>
         )}
+        {resolvedRoute === 'feed' &&
+        !isScreenFullscreen &&
+        isScreenHeaderVisible ? (
+          <Pressable
+            accessibilityLabel="새 게시글 작성"
+            accessibilityRole="button"
+            onPress={() => setCreatePostRequestId(requestId => requestId + 1)}
+            style={({ pressed }) => [
+              styles.feedFab,
+              pressed && styles.feedFabPressed,
+            ]}
+          >
+            <MaterialDesignIcons
+              color={COLORS.background}
+              name="plus"
+              size={32}
+            />
+          </Pressable>
+        ) : null}
       </View>
 
       {!isScreenFullscreen ? (
@@ -477,6 +482,25 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  feedFab: {
+    alignItems: 'center',
+    backgroundColor: COLORS.purple,
+    borderRadius: 30,
+    bottom: 24,
+    elevation: 6,
+    height: 60,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 20,
+    shadowColor: COLORS.textStrong,
+    shadowOffset: {height: 4, width: 0},
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    width: 60,
+  },
+  feedFabPressed: {
+    opacity: 0.85,
   },
   emptyContainer: {
     alignItems: 'center',

@@ -17,6 +17,7 @@ import {
 import {ApiError} from '../../../shared/api';
 import type {LoginCredentials} from '../types';
 import {canSubmitLogin} from '../validation';
+import {COLORS} from '../../../design/tokens';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 import {AnimatedPressable} from './AnimatedPressable';
 import {FormField} from './FormField';
@@ -209,7 +210,7 @@ export function LoginBottomSheet({
                 onPress={handleDismiss}>
                 <View style={styles.backButton}>
                   <MaterialDesignIcons
-                    color={AUTH_COLORS.background}
+                    color={COLORS.purpleDeep}
                     name="chevron-left"
                     size={28}
                   />
@@ -355,11 +356,11 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignItems: 'center',
-    backgroundColor: AUTH_COLORS.primarySoft,
-    borderRadius: 18,
-    height: 36,
+    backgroundColor: COLORS.lavenderSurface,
+    borderRadius: 20,
+    height: 40,
     justifyContent: 'center',
-    width: 36,
+    width: 40,
   },
   fields: {
     gap: 8,

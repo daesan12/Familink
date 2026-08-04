@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {BackButton} from '../../../shared/components/BackButton';
+import {RetryButton} from '../../../shared/components/RetryButton';
 import {avatarInitial, formatWeekRange, rankEntries} from '../rankingModel';
 import type {GroupMember, WeeklyRankingLoadState} from '../types';
 import {GroupMemberAvatar} from './GroupMemberAvatar';
@@ -56,19 +58,7 @@ export function WeeklyRankingModal({
             style={styles.card}
           >
             <View style={styles.header}>
-              <Pressable
-                accessibilityLabel="뒤로 가기"
-                accessibilityRole="button"
-                hitSlop={8}
-                onPress={onClose}
-                style={styles.backButton}
-              >
-                <MaterialDesignIcons
-                  color={COLORS.textStrong}
-                  name="chevron-left"
-                  size={24}
-                />
-              </Pressable>
+              <BackButton onPress={onClose} style={styles.backButton} />
               <Text style={styles.title}>주간 효자 랭킹</Text>
             </View>
 
@@ -108,15 +98,7 @@ function WeeklyRankingBody({
     return (
       <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
         <Text style={styles.errorText}>{state.message}</Text>
-        <Pressable
-          accessibilityLabel="다시 시도"
-          accessibilityRole="button"
-          onPress={onRetry}
-          style={styles.retryButton}
-        >
-          <MaterialDesignIcons color={COLORS.text} name="refresh" size={18} />
-          <Text style={styles.retryText}>다시 시도</Text>
-        </Pressable>
+        <RetryButton onPress={onRetry} />
       </View>
     );
   }
@@ -189,14 +171,8 @@ const styles = StyleSheet.create({
     width: 40,
   },
   backButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceMuted,
-    borderRadius: RADII.pill,
-    height: 36,
-    justifyContent: 'center',
     left: 0,
     position: 'absolute',
-    width: 36,
     zIndex: 1,
   },
   backdrop: {
@@ -252,23 +228,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     width: 24,
-  },
-  retryButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.divider,
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 8,
-    minHeight: 48,
-    paddingHorizontal: 18,
-  },
-  retryText: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: '700',
   },
   row: {
     alignItems: 'center',

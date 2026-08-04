@@ -10,9 +10,9 @@ import {
 import type {AppNotification, NotificationGateway} from '../types';
 import {NotificationsScreen} from './NotificationsScreen';
 
+jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
 jest.mock('lucide-react-native/icons/bell-off', () => 'BellOff');
 jest.mock('lucide-react-native/icons/check', () => 'Check');
-jest.mock('lucide-react-native/icons/chevron-left', () => 'ChevronLeft');
 jest.mock('lucide-react-native/icons/x', () => 'X');
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];

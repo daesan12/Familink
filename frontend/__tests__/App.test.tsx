@@ -3102,6 +3102,29 @@ test("앱 셸을 명시하면 개발 그룹과 하단 탭을 표시한다", asyn
   mountedRenderers.push(renderer!);
 });
 
+test("새 게시글 작성 버튼은 피드에서만 플로팅 버튼으로 표시한다", async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(<App initialRootRoute="appShell" />);
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(
+    renderer!.root.findByProps({ accessibilityLabel: "새 게시글 작성" })
+  ).toBeTruthy();
+
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "일정 탭" })
+      .props.onPress();
+  });
+
+  expect(
+    renderer!.root.findAllByProps({ accessibilityLabel: "새 게시글 작성" })
+  ).toHaveLength(0);
+});
+
 test("앱 셸 진입 시 알림 미읽음 개수를 벨 배지에 표시한다", async () => {
   const notificationGateway = createNotificationGateway();
   notificationGateway.getUnreadCount.mockResolvedValue(4);

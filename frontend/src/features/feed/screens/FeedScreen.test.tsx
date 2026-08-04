@@ -188,3 +188,58 @@ test('알림에서 전달된 postId의 게시글 상세를 바로 연다', async
     renderer!.unmount();
   });
 });
+
+test('작성자 아바타를 누르면 그룹정보와 동일한 프로필 팝업을 연다', async () => {
+  const membersLoader = jest.fn().mockResolvedValue([
+    {
+      age: null,
+      alias: null,
+      avatarText: '유',
+      gender: null,
+      isManager: false,
+      memberId: 'member-yura',
+      name: '유라',
+      role: 'careReceiver',
+    },
+  ]);
+  const memberProfileLoader = jest.fn().mockResolvedValue({
+    age: 70,
+    displayName: '유라',
+    gender: 'female',
+    memberId: 'member-yura',
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <FeedScreen
+        currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+        currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+        initialCommentsByPostId={{'post-1': []}}
+        loader={jest.fn().mockResolvedValue([post])}
+        memberProfileLoader={memberProfileLoader}
+        membersLoader={membersLoader}
+        role="guardian"
+      />,
+    );
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '유라님의 프로필 보기'})
+      .props.onPress();
+  });
+
+  expect(membersLoader).toHaveBeenCalledWith('group-1');
+  expect(memberProfileLoader).toHaveBeenCalledWith('group-1', 'member-yura');
+  const {Text} = require('react-native');
+  const shown = renderer!.root.findAllByType(Text).some(node => {
+    const children = node.props.children;
+    return (Array.isArray(children) ? children.join('') : children) === '만 70세';
+  });
+  expect(shown).toBe(true);
+
+  await TestRenderer.act(() => {
+    renderer!.unmount();
+  });
+});

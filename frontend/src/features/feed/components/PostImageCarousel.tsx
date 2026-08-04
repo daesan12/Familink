@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {RetryButton} from '../../../shared/components/RetryButton';
 
 const IMAGE_GAP = 10;
 const NEXT_IMAGE_PEEK = 28;
@@ -216,22 +217,13 @@ function FeedImageFrame({
       {hasPoster && loadState === 'error' ? (
         <View accessibilityLiveRegion="polite" style={styles.errorState}>
           <Text style={styles.errorText}>이미지를 불러오지 못했어요</Text>
-          <Pressable
+          <RetryButton
             accessibilityLabel="이미지 다시 불러오기"
-            accessibilityRole="button"
             onPress={() => {
               setLoadState('loading');
               setRetryCount(count => count + 1);
             }}
-            style={styles.retryButton}
-          >
-            <MaterialDesignIcons
-              color={COLORS.text}
-              name="refresh"
-              size={16}
-            />
-            <Text style={styles.retryText}>다시 시도</Text>
-          </Pressable>
+          />
         </View>
       ) : null}
 
@@ -378,23 +370,6 @@ const styles = StyleSheet.create({
     top: 10,
     width: 36,
     zIndex: 3,
-  },
-  retryButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderColor: COLORS.divider,
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 6,
-    minHeight: 44,
-    paddingHorizontal: 16,
-  },
-  retryText: {
-    color: COLORS.text,
-    fontSize: 13,
-    fontWeight: '700',
   },
   root: {
     alignSelf: 'center',
