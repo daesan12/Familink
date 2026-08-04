@@ -40,7 +40,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-009 역할별 화면 및 하단 내비게이션 | [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
 | 요구사항 | REQ-010 피보호자 자유 발신 AI 전화 | [AI 통화](./domains/AI_CALL.md) | 반영·확정 |  |
 | 요구사항 | REQ-011 AI 통화 제어 | [AI 통화](./domains/AI_CALL.md) | 반영·확정 |  |
-| 요구사항 | REQ-012 AI 페르소나 선택 및 예시 음성 | [AI 통화](./domains/AI_CALL.md) | 반영·일부 미결정 | 음성 예시 재생 방식·AI 고지 방식 미결정 |
+| 요구사항 | REQ-012 AI 페르소나 선택 및 소개 정보 | [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 표시명·소개글·말투 태그 제공, 텍스트 예시 발화·음성 미리 듣기 미제공 |
 | 요구사항 | REQ-013 AI 발화 실시간 자막 | [AI 통화](./domains/AI_CALL.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
 | 요구사항 | REQ-014 피보호자 관심사 입력 및 대화 반영 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 태그 목록은 미결정 |
 | 요구사항 | REQ-015 가족 게시글 기반 AI 대화 | [피드](./domains/FEED_AND_MEDIA.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 텍스트 모델·품질 기준·대체 모델은 미결정 유지 |
