@@ -74,7 +74,7 @@ public class AiCallPromptContextProvider {
 		FamilyMemberContexts familyMemberContexts = loadFamilyMembers(
 			groupId, careReceiverId, aliases);
 		List<AiCallPromptContext.TodayPostContext> todayPosts = loadTodayPosts(
-			groupId, startOfDay, endOfDay, aliases);
+			groupId, careReceiverId, startOfDay, endOfDay, aliases);
 		List<AiCallPromptContext.RecentCallContext> recentCalls = loadRecentCalls(careReceiverId);
 
 		AiCallPromptContext promptContext = new AiCallPromptContext(
@@ -120,12 +120,14 @@ public class AiCallPromptContextProvider {
 
 	private List<AiCallPromptContext.TodayPostContext> loadTodayPosts(
 		Long groupId,
+		Long careReceiverId,
 		ZonedDateTime startOfDay,
 		ZonedDateTime endOfDay,
 		Map<Long, String> aliases
 	) {
-		List<PostAnalysis> analyses = new ArrayList<>(postAnalysisRepository.findSuccessfulToday(
+		List<PostAnalysis> analyses = new ArrayList<>(postAnalysisRepository.findSuccessfulTodayExcludingAuthor(
 			groupId,
+			careReceiverId,
 			AnalysisStatus.SUCCESS,
 			startOfDay.toInstant(),
 			endOfDay.toInstant(),

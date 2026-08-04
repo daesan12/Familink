@@ -71,8 +71,9 @@ class AiCallPromptContextProviderTest {
 			.thenReturn(List.of());
 		when(memberAliasRepository.findAliases(2L, 1L)).thenReturn(List.of());
 		when(groupMemberRepository.findActiveMembers(2L)).thenReturn(List.of(careReceiver));
-		when(postAnalysisRepository.findSuccessfulToday(
+		when(postAnalysisRepository.findSuccessfulTodayExcludingAuthor(
 			eq(2L),
+			eq(1L),
 			any(),
 			any(),
 			any(),
