@@ -53,8 +53,8 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-022 게시글 미디어 구성 제한 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
 | 요구사항 | REQ-023 게시글 반응·댓글·게시 알림 | [피드](./domains/FEED_AND_MEDIA.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 새 게시글은 작성자를 제외한 그룹 활성 구성원, 댓글·반응은 본인 행동을 제외한 게시글 작성자에게 알림; 대댓글·댓글 반응 없음 |
 | 요구사항 | REQ-024 게시글 보관함 및 필터 | [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | 서버의 활성 구성원 `memberId`·날짜·유형 AND 필터 |
-| 요구사항 | REQ-025 공유 일정 등록·조회·수정·삭제 | [일정](./domains/CALENDAR.md) | 반영·확정 |  |
-| 요구사항 | REQ-026 공유 일정 알림 | [일정](./domains/CALENDAR.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 일정 변경은 변경자를 제외한 기존·변경 후 참여자, 시작 알림은 1분 주기와 최근 1시간 복구 범위 적용 |
+| 요구사항 | REQ-025 공유 일정 등록·조회·수정·삭제 | [일정](./domains/CALENDAR.md) | 반영·확정 | 그룹 이탈 멤버십의 참여자 연결 삭제·재가입 시 미복원 |
+| 요구사항 | REQ-026 공유 일정 알림 | [일정](./domains/CALENDAR.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 지정 참여자가 모두 이탈해도 그룹 전체로 확대하지 않음; 일정 변경은 변경자를 제외한 기존·변경 후 참여자, 시작 알림은 1분 주기와 최근 1시간 복구 범위 적용 |
 | 요구사항 | REQ-027 공유 캘린더 범위 분리 | [일정](./domains/CALENDAR.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 기기 캘린더 연동 없음 |
 | 요구사항 | REQ-028 보호자 활동 잔디 및 연속 기록 | [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영·미결정 유지 | 과거 주 UI 등 미결정 |
 | 요구사항 | REQ-029 그룹별 주간 효자랭킹 및 왕관 | [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영·미결정 유지 | 표시 세부 미결정 |
@@ -77,7 +77,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-046 특정 인물 최신 게시글 요약 조회 Tool | [AI 통화](./domains/AI_CALL.md) | 반영·확정 |  |
 | 요구사항 | REQ-047 대화 주제 관련 게시글 검색 Tool | [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 확장 분류만 확정, 계약은 미결정 |
 | 요구사항 | REQ-048 보호자 전달 메모 통화 후처리 | [AI 통화](./domains/AI_CALL.md), [리포트](./domains/REPORTS.md) | 반영·확정 | 통화 중 Tool이 아님 |
-| 요구사항 | REQ-049 회원 탈퇴와 기록 보존 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [데이터](./contracts/DATA_MODEL.md) | 반영·확정 |  |
+| 요구사항 | REQ-049 회원 탈퇴와 기록 보존 | [계정](./domains/ACCOUNT_AND_PROFILE.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md), [데이터](./contracts/DATA_MODEL.md) | 반영·확정 | 일정·멤버십 이력은 보존하고 종료 멤버십의 일정 참여자 연결은 삭제 |
 
 ## 현재 유효한 기능 명세 6건
 

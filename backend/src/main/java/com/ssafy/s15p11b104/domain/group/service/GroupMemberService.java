@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.calendar.repository.EventParticipantRepository;
 import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.group.dto.GroupMemberItemResponse;
 import com.ssafy.s15p11b104.domain.group.dto.GroupMemberListResponse;
@@ -44,6 +45,7 @@ public class GroupMemberService {
 	private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
 
 	private final GroupMemberRepository groupMemberRepository;
+	private final EventParticipantRepository eventParticipantRepository;
 	private final MemberAliasRepository memberAliasRepository;
 	private final UserRepository userRepository;
 	private final ConstraintViolationTranslator constraintViolationTranslator;
@@ -51,11 +53,13 @@ public class GroupMemberService {
 
 	public GroupMemberService(
 		GroupMemberRepository groupMemberRepository,
+		EventParticipantRepository eventParticipantRepository,
 		MemberAliasRepository memberAliasRepository,
 		UserRepository userRepository,
 		ConstraintViolationTranslator constraintViolationTranslator,
 		MediaDownloadUrlProvider mediaDownloadUrlProvider) {
 		this.groupMemberRepository = groupMemberRepository;
+		this.eventParticipantRepository = eventParticipantRepository;
 		this.memberAliasRepository = memberAliasRepository;
 		this.userRepository = userRepository;
 		this.constraintViolationTranslator = constraintViolationTranslator;
@@ -132,8 +136,8 @@ public class GroupMemberService {
 			lockMemberAccount(groupId, memberId);
 		}
 
-		requireActiveManager(groupId, authenticatedUserId);
-		GroupMember target = getManageableMember(groupId, memberId);
+		ManagerTargetMembers members = lockManagerAndTarget(groupId, authenticatedUserId, memberId);
+		GroupMember target = members.target();
 
 		if (role == GroupRole.CARE_RECEIVER && hasOtherActiveCareReceiverMembership(target)) {
 			throw new BusinessException(ErrorCode.CARE_RECEIVER_ALREADY_ACTIVE_IN_OTHER_GROUP);
@@ -158,8 +162,10 @@ public class GroupMemberService {
 		Long groupId,
 		Long authenticatedUserId,
 		ManagerUpdateRequest request) {
-		GroupMember currentManager = requireActiveManager(groupId, authenticatedUserId);
-		GroupMember newManager = getManageableMember(groupId, request.newManagerMemberId());
+		ManagerTargetMembers members = lockManagerAndTarget(
+			groupId, authenticatedUserId, request.newManagerMemberId());
+		GroupMember currentManager = members.manager();
+		GroupMember newManager = members.target();
 		if (currentManager.getId().equals(newManager.getId())) {
 			return new ManagerUpdateResponse(groupId, currentManager.getId());
 		}
@@ -180,46 +186,46 @@ public class GroupMemberService {
 	 */
 	@Transactional
 	public void removeMember(Long groupId, Long memberId, Long authenticatedUserId) {
-		GroupMember requester = requireActiveManager(groupId, authenticatedUserId);
-		GroupMember target = getManageableMember(groupId, memberId);
+		ManagerTargetMembers members = lockManagerAndTarget(groupId, authenticatedUserId, memberId);
+		GroupMember requester = members.manager();
+		GroupMember target = members.target();
 		if (requester.getId().equals(target.getId())) {
 			throw new BusinessException(ErrorCode.CANNOT_REMOVE_SELF);
 		}
 
 		target.leave(Instant.now());
+		eventParticipantRepository.deleteAllByGroupIdAndMemberId(groupId, target.getId());
 	}
 
 	/**
-	 * 요청자가 그룹의 활성 관리자인지 확인하고 그 행을 잠근다.
+	 * 관리자와 관리 대상을 멤버십 ID 오름차순으로 함께 잠그고 최신 상태를 검증한다.
 	 *
-	 * <p>관리자만 수행하는 역할 변경·관리자 위임·내보내기가 모두 같은 행을 잠그므로 그룹
-	 * 단위로 직렬화된다. 동시에 두 요청이 관리자를 위임해 활성 관리자가 사라지거나 둘이 되는
-	 * 상태를 막는다.
+	 * <p>일정 참여자 저장도 같은 ID 순서로 잠그므로 두 작업이 겹쳐도 잠금 순서 역전으로
+	 * 교착되지 않는다. 요청자 ID는 엔티티를 영속성 컨텍스트에 올리지 않는 스칼라 조회로 먼저 찾고,
+	 * 잠금 대기 뒤에 가져온 최신 엔티티에서 관리자 권한과 활성 상태를 다시 확인한다.
 	 */
-	private GroupMember requireActiveManager(Long groupId, Long authenticatedUserId) {
-		GroupMember requester = groupMemberRepository
-			.findActiveForUpdateByGroupIdAndUserId(groupId, authenticatedUserId)
+	private ManagerTargetMembers lockManagerAndTarget(
+		Long groupId, Long authenticatedUserId, Long targetMemberId) {
+		Long managerMemberId = groupMemberRepository
+			.findActiveIdByGroupIdAndUserId(groupId, authenticatedUserId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
-		if (!requester.isManager()) {
+		Map<Long, GroupMember> lockedMembers = groupMemberRepository
+			.findAllForManagerWrite(groupId, List.of(managerMemberId, targetMemberId))
+			.stream()
+			.collect(Collectors.toMap(GroupMember::getId, member -> member));
+
+		GroupMember manager = lockedMembers.get(managerMemberId);
+		if (manager == null || !manager.isActive() || !manager.isManager()) {
 			throw new BusinessException(ErrorCode.FORBIDDEN);
 		}
-		return requester;
-	}
-
-	/**
-	 * 관리 대상 구성원 행을 잠그고 찾으면서 존재하지 않는 경우와 이미 떠난 경우를 구분한다.
-	 *
-	 * <p>대상을 잠그지 않으면 대상이 같은 시점에 그룹을 떠나거나 회원 탈퇴할 때 두 트랜잭션이
-	 * 서로의 변경을 덮어쓴다. 특히 위임과 탈퇴가 겹치면 승격된 관리자에게 {@code left_at}이
-	 * 기록되어 활성 관리자가 없는 그룹이 남고, 모든 관리자 API가 막혀 복구할 수 없다.
-	 */
-	private GroupMember getManageableMember(Long groupId, Long memberId) {
-		GroupMember member = groupMemberRepository.findForUpdateByGroupIdAndMemberId(groupId, memberId)
-			.orElseThrow(() -> new BusinessException(ErrorCode.GROUP_MEMBER_NOT_FOUND));
-		if (!member.isActive()) {
+		GroupMember target = lockedMembers.get(targetMemberId);
+		if (target == null) {
+			throw new BusinessException(ErrorCode.GROUP_MEMBER_NOT_FOUND);
+		}
+		if (!target.isActive()) {
 			throw new BusinessException(ErrorCode.GROUP_MEMBER_ALREADY_LEFT);
 		}
-		return member;
+		return new ManagerTargetMembers(manager, target);
 	}
 
 	/**
@@ -295,5 +301,8 @@ public class GroupMemberService {
 			return null;
 		}
 		return Period.between(birthDate, LocalDate.now(BUSINESS_ZONE)).getYears();
+	}
+
+	private record ManagerTargetMembers(GroupMember manager, GroupMember target) {
 	}
 }
