@@ -366,7 +366,13 @@ internal class AiCallWebRtcSession(
         override fun onAddTrack(
             receiver: org.webrtc.RtpReceiver?,
             mediaStreams: Array<out org.webrtc.MediaStream>?,
-        ) = Unit
+        ) {
+          // Safe without [nativeLock]: teardown drains the signaling thread inside
+          // peerConnection.close() before disposal, so this cannot touch a freed track.
+          // Taking the lock here would deadlock instead, because close() holds it while
+          // waiting for this very thread.
+          (receiver?.track() as? AudioTrack)?.setVolume(REMOTE_AUDIO_GAIN)
+        }
 
         override fun onConnectionChange(newState: PeerConnection.PeerConnectionState?) {
           when (newState) {
@@ -532,5 +538,9 @@ internal class AiCallWebRtcSession(
     private const val DATA_CHANNEL_LABEL = "oai-events"
     private const val DEFAULT_STUN_SERVER = "stun:stun.l.google.com:19302"
     private const val ICE_GATHERING_TIMEOUT_MILLIS = 10_000L
+
+    // Playback multiplier for the model's voice. Above 1.0 amplifies; loud passages start
+    // clipping well before the 10.0 ceiling WebRTC allows.
+    private const val REMOTE_AUDIO_GAIN = 1.5
   }
 }
