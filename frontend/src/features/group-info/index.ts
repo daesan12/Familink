@@ -1,5 +1,11 @@
 export {GroupInfoScreen} from './screens/GroupInfoScreen';
 export type {GroupInfoScreenProps} from './screens/GroupInfoScreen';
+export {MemberProfilePopup} from './components/MemberProfilePopup';
+export type {
+  MemberProfilePopupInitialMember,
+  MemberProfilePopupProps,
+} from './components/MemberProfilePopup';
+export type {WeeklyRankingLoader} from './api/rankingApi';
 export {
   createGroup,
   familyGroupGateway,

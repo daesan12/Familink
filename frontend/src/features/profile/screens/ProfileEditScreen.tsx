@@ -69,6 +69,11 @@ export function ProfileEditScreen<T extends BaseProfile>({
     if (isSaving) {
       return true;
     }
+    // 성별 드롭다운은 Modal이 아니라 뒤로가기가 JS로 내려온다. 화면을 닫기 전에 먼저 접는다.
+    if (isGenderOpen) {
+      setIsGenderOpen(false);
+      return true;
+    }
     onBack();
     return true;
   });
@@ -187,12 +192,12 @@ export function ProfileEditScreen<T extends BaseProfile>({
           disabled={isSaving}
           hitSlop={8}
           onPress={onBack}
-          style={styles.headerButton}
+          style={styles.backButton}
         >
           <MaterialDesignIcons
             color={COLORS.purpleDeep}
             name="chevron-left"
-            size={22}
+            size={28}
           />
         </Pressable>
         <Text style={styles.headerTitle}>프로필 편집</Text>
@@ -532,6 +537,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 56,
     paddingHorizontal: 16,
+  },
+  backButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.lavenderSurface,
+    borderRadius: RADII.pill,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
   },
   headerButton: {
     alignItems: 'center',

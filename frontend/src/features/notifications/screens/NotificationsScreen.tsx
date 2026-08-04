@@ -1,10 +1,10 @@
 import BellOff from 'lucide-react-native/icons/bell-off';
-import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
-
 import type {AppScreenProps, GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {BackButton} from '../../../shared/components/BackButton';
+import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {
   processJoinRequest as processJoinRequestApi,
   type JoinRequestProcessor,
@@ -17,7 +17,11 @@ import {NotificationDecisionModal} from '../components/NotificationDecisionModal
 import {NotificationItem} from '../components/NotificationItem';
 import {DEVELOPMENT_NOTIFICATIONS} from '../fixtures/notificationFixtures';
 import {useNotificationGateway} from '../NotificationGatewayContext';
-import type {AppNotification, NotificationGateway} from '../types';
+import type {
+  AppNotification,
+  NotificationGateway,
+  NotificationJoinRequestStatus,
+} from '../types';
 
 export interface NotificationsScreenProps extends AppScreenProps {
   gateway?: NotificationGateway;
@@ -25,9 +29,7 @@ export interface NotificationsScreenProps extends AppScreenProps {
   // 가입 요청 승인·거절 커맨드 주입(테스트용). 없으면 API-GROUPS-009를 호출한다.
   processJoinRequest?: JoinRequestProcessor;
 }
-
 const NO_READ_IDS: readonly string[] = [];
-
 // 알림 탭은 알림 목록만 담당한다. 알림 설정(I-6)은 마이페이지에서 진입한다.
 export function NotificationsScreen({
   currentUserId,
@@ -82,22 +84,18 @@ export function NotificationsScreen({
     [notifications],
   );
   const displayedUnreadCount = serverUnreadCount ?? unreadCount;
-
   useEffect(() => {
     readNotificationIdsRef.current = readNotificationIds;
   }, [readNotificationIds]);
-
   useEffect(() => {
     onUnreadCountChange?.(displayedUnreadCount);
   }, [displayedUnreadCount, onUnreadCountChange]);
-
   useEffect(() => {
     if (resolvedGateway === null || usesInjectedNotifications) {
       setIsLoading(false);
       setServerUnreadCount(null);
       return;
     }
-
     const generation = ++generationRef.current;
     let disposed = false;
     loadingPageRef.current = false;
@@ -108,7 +106,6 @@ export function NotificationsScreen({
     setNotifications([]);
     // 사용자·게이트웨이 전환 시 이전 세대의 badge 값이 남지 않게 초기화한다.
     setServerUnreadCount(null);
-
     // 목록과 badge를 독립 처리해 unread-count 한 건의 실패가 목록까지 지우지 않게 한다.
     void Promise.allSettled([
       resolvedGateway.loadPage(0),
@@ -134,7 +131,6 @@ export function NotificationsScreen({
       }
       setIsLoading(false);
     });
-
     return () => {
       disposed = true;
     };
@@ -143,7 +139,6 @@ export function NotificationsScreen({
     resolvedGateway,
     usesInjectedNotifications,
   ]);
-
   const markAsRead = (notificationId: string) => {
     const target = notifications.find(notification => notification.id === notificationId);
     if (target === undefined || target.isRead) {
@@ -159,7 +154,6 @@ export function NotificationsScreen({
     setServerUnreadCount(current =>
       current === null ? null : Math.max(0, current - 1),
     );
-
     if (resolvedGateway !== null && !usesInjectedNotifications) {
       void resolvedGateway
         .markRead(notificationId)
@@ -186,22 +180,32 @@ export function NotificationsScreen({
       onNotificationRead?.(notificationId);
     }
   };
-
   const handleNotificationPress = (notification: AppNotification) => {
     markAsRead(notification.id);
     if (notification.postId) {
       onOpenPost?.(notification.postId, notification.groupId);
     }
   };
-
   const usesRemoteDecisions =
     resolvedGateway !== null && !usesInjectedNotifications;
   const resolvedProcessJoinRequest =
     processJoinRequest ?? processJoinRequestApi;
 
-  const removeDecidedNotification = (target: AppNotification) => {
+  const markDecidedNotification = (
+    target: AppNotification,
+    status: NotificationJoinRequestStatus | null,
+  ) => {
     setNotifications(current =>
-      current.filter(notification => notification.id !== target.id),
+      current.map(notification =>
+        notification.id === target.id
+          ? {
+              ...notification,
+              isRead: true,
+              relatedJoinRequestStatus: status,
+              requestKind: undefined,
+            }
+          : notification,
+      ),
     );
     if (!target.isRead) {
       setServerUnreadCount(current =>
@@ -218,15 +222,17 @@ export function NotificationsScreen({
       onNotificationRead?.(target.id);
     }
   };
-
   // API-GROUPS-009 처리에 성공한 뒤에만 알림을 정리한다. 실패하면 알림을 유지해 재시도하게 한다.
   const applyDecision = async (
     target: AppNotification,
     role?: GroupRole,
   ): Promise<boolean> => {
     if (!usesRemoteDecisions) {
-      removeDecidedNotification(target);
+      markDecidedNotification(target, role ? 'APPROVED' : 'REJECTED');
       return true;
+    }
+    if (target.relatedJoinRequestStatus !== 'PENDING_ADMIN') {
+      return false;
     }
     if (
       target.groupId === undefined ||
@@ -237,7 +243,6 @@ export function NotificationsScreen({
       );
       return false;
     }
-
     setProcessingDecisionId(target.id);
     setErrorMessage(null);
     try {
@@ -248,17 +253,16 @@ export function NotificationsScreen({
       });
     } catch (error) {
       if (isJoinRequestAlreadyProcessed(error)) {
-        removeDecidedNotification(target);
+        markDecidedNotification(target, null);
       }
       setErrorMessage(joinRequestDecisionErrorMessage(error));
       return false;
     } finally {
       setProcessingDecisionId(null);
     }
-    removeDecidedNotification(target);
+    markDecidedNotification(target, role ? 'APPROVED' : 'REJECTED');
     return true;
   };
-
   const handleDecision = (
     notificationId: string,
     mode: 'approve' | 'reject',
@@ -267,6 +271,9 @@ export function NotificationsScreen({
       notification => notification.id === notificationId,
     );
     if (target === undefined || processingDecisionId !== null) {
+      return;
+    }
+    if (target.relatedJoinRequestStatus !== 'PENDING_ADMIN') {
       return;
     }
     const applicantName = target.actorName ?? null;
@@ -281,7 +288,6 @@ export function NotificationsScreen({
       }
     });
   };
-
   const handleSelectRole = (role: GroupRole) => {
     if (decision === null || processingDecisionId !== null) {
       return;
@@ -296,13 +302,11 @@ export function NotificationsScreen({
     // 실패해도 팝업은 닫고 오류 문구를 보여준다. 알림이 남아 있어 재시도할 수 있다.
     void applyDecision(target, role).then(() => setDecision(null));
   };
-
   const handleCloseDecision = () => {
     if (processingDecisionId === null) {
       setDecision(null);
     }
   };
-
   const handleReadAll = () => {
     if (displayedUnreadCount === 0) {
       return;
@@ -316,7 +320,6 @@ export function NotificationsScreen({
       current.map(notification => ({...notification, isRead: true})),
     );
     setServerUnreadCount(0);
-
     if (resolvedGateway !== null && !usesInjectedNotifications) {
       void resolvedGateway
         .markAllRead()
@@ -336,7 +339,6 @@ export function NotificationsScreen({
       );
     }
   };
-
   const handleLoadMore = () => {
     if (
       resolvedGateway === null ||
@@ -346,7 +348,6 @@ export function NotificationsScreen({
     ) {
       return;
     }
-
     loadingPageRef.current = true;
     const nextPage = page + 1;
     void resolvedGateway
@@ -361,7 +362,6 @@ export function NotificationsScreen({
         loadingPageRef.current = false;
       });
   };
-
   return (
     <View style={styles.screen}>
       <ScreenHeader onBack={onCloseNotifications} title="알림" />
@@ -411,9 +411,9 @@ export function NotificationsScreen({
         showsVerticalScrollIndicator={false}
       />
       {errorMessage ? (
-        <Text accessibilityRole="alert" style={styles.errorMessage}>
-          {errorMessage}
-        </Text>
+        <View style={styles.errorBannerWrap}>
+          <NoticeBanner message={errorMessage} />
+        </View>
       ) : null}
       <NotificationDecisionModal
         applicantName={decision?.applicantName ?? null}
@@ -425,7 +425,6 @@ export function NotificationsScreen({
     </View>
   );
 }
-
 function applyReadIds(
   notifications: readonly AppNotification[],
   readIds: readonly string[],
@@ -439,7 +438,6 @@ function applyReadIds(
       : notification,
   );
 }
-
 function mergeNotificationPages(
   current: readonly AppNotification[],
   next: readonly AppNotification[],
@@ -452,31 +450,21 @@ function mergeNotificationPages(
   });
   return [...merged.values()];
 }
-
 function toNotificationErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
   }
   return '알림을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
 }
-
 function ScreenHeader({onBack, title}: {onBack?: () => void; title: string}) {
   return (
     <View style={styles.header}>
-      <Pressable
-        accessibilityLabel="알림 화면 닫기"
-        accessibilityRole="button"
-        onPress={onBack}
-        style={styles.headerButton}
-      >
-        <ChevronLeft color={COLORS.textStrong} size={27} strokeWidth={2.2} />
-      </Pressable>
+      <BackButton accessibilityLabel="알림 화면 닫기" onPress={onBack} />
       <Text style={styles.headerTitle}>{title}</Text>
       <View style={styles.headerButton} />
     </View>
   );
 }
-
 function EmptyNotificationState() {
   return (
     <View style={styles.emptyState}>
@@ -490,7 +478,6 @@ function EmptyNotificationState() {
     </View>
   );
 }
-
 function LoadingNotificationState() {
   return (
     <View style={styles.emptyState}>
@@ -498,7 +485,6 @@ function LoadingNotificationState() {
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   disabledText: {
     color: COLORS.textDisabled,
@@ -528,9 +514,7 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
     paddingHorizontal: 24,
   },
-  errorMessage: {
-    color: COLORS.error,
-    fontSize: 13,
+  errorBannerWrap: {
     paddingHorizontal: 20,
     paddingVertical: 8,
   },

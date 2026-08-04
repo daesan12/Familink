@@ -318,7 +318,7 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 |---|---|---|---|---|---|
 | `API-NOTIFICATIONS-001` | `POST /device-tokens` | Spring Boot · 본인 | `token`, `deviceType` | 신규 `201`, 재등록·재활성화·소유권 이전 `200`: `id`, `deviceType`, `active=true` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED` |
 | `API-NOTIFICATIONS-002` | `GET /notifications/unread-count` | Spring Boot · 본인 | 없음 | `200`: `unreadCount` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
-| `API-NOTIFICATIONS-003` | `GET /notifications` | Spring Boot · 본인 | 선택 query `page`, `size` | `200`: `content[{id,type,title,body,groupId,actor:{userId,name,profileImageUrl}\|null,relatedJoinRequestId,relatedPostId,relatedEventId,relatedCallReportId,relatedDailyReportId,readAt,createdAt}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-NOTIFICATIONS-003` | `GET /notifications` | Spring Boot · 본인 | 선택 query `page`, `size` | `200`: `content[{id,type,title,body,groupId,actor:{userId,name,profileImageUrl}\|null,relatedJoinRequestId,relatedJoinRequestStatus,relatedPostId,relatedEventId,relatedCallReportId,relatedDailyReportId,readAt,createdAt}]`, `hasNext` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-004` | `PATCH /notifications/{notificationId}/read` | Spring Boot · 본인 | path `notificationId` | `200`: `id`, `readAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-005` | `PATCH /notifications/read-all` | Spring Boot · 본인 | 없음 | `200`: `updatedCount`, `readAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-NOTIFICATIONS-006` | `GET /notification-settings` | Spring Boot · 본인 | 없음 | `200`: 알림 유형 7종의 `settings[{notificationType,enabled}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
@@ -326,6 +326,9 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 | `API-NOTIFICATIONS-008` | `DELETE /device-tokens` | Spring Boot · 본인 | `token` | `204 No Content` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 
 - `API-NOTIFICATIONS-003.actor`는 행위자 참조가 없거나 삭제됐다면 `null`이다.
+- `API-NOTIFICATIONS-003.relatedJoinRequestStatus`는 관련 가입 요청이 있는
+  `GROUP_JOIN_REQUEST` 알림에 현재 상태 `PENDING_ADMIN`, `APPROVED` 또는
+  `REJECTED`를 반환하며, 관련 요청이 없으면 `null`이다.
   actor가 있으면 `userId`는 필수이고, 회원 탈퇴 후 익명화될 수 있는
   `name`과 `profileImageUrl`은 nullable이다. `memberId`, `role`,
   `displayName`, `loginId`, 생년월일, 성별은 포함하지 않는다. 수신자별

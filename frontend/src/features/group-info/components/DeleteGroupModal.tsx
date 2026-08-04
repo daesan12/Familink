@@ -2,6 +2,7 @@ import {useState} from 'react';
 import {ActivityIndicator, Modal, Pressable, StyleSheet, Text} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {getGroupManagementErrorMessage} from '../api/groupManagementApi';
 
 interface DeleteGroupModalProps {
@@ -77,11 +78,7 @@ export function DeleteGroupModal({
           style={styles.card}
         >
           <Text style={styles.title}>정말 그룹을 삭제하시겠어요?</Text>
-          {errorMessage ? (
-            <Text accessibilityRole="alert" style={styles.errorText}>
-              {errorMessage}
-            </Text>
-          ) : null}
+          {errorMessage ? <NoticeBanner message={errorMessage} /> : null}
           <Pressable
             accessibilityLabel="그룹 삭제 확정"
             accessibilityRole="button"
@@ -130,12 +127,6 @@ const styles = StyleSheet.create({
     color: COLORS.background,
     fontSize: 16,
     fontWeight: '700',
-  },
-  errorText: {
-    color: COLORS.error,
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: 'center',
   },
   title: {
     color: COLORS.textStrong,

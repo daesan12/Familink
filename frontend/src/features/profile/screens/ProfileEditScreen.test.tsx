@@ -4,6 +4,7 @@ import {launchImageLibrary} from 'react-native-image-picker';
 import TestRenderer from 'react-test-renderer';
 
 import {ApiError} from '../../../shared/api';
+import {mockHardwareBack} from '../../../shared/testing/hardwareBack';
 import {GUARDIAN_PROFILE} from '../fixtures/profileFixtures';
 import type {GuardianProfile, ProfileImageChange} from '../types';
 import {ProfileEditScreen} from './ProfileEditScreen';
@@ -104,6 +105,44 @@ test('저장 중 시스템 Back은 화면을 닫지 않고 소비한다', async 
     expect(onBack).toHaveBeenCalledTimes(1);
   } finally {
     addEventListener.mockRestore();
+  }
+});
+
+test('성별 드롭다운이 열려 있으면 시스템 Back은 드롭다운만 닫는다', () => {
+  // 성별 드롭다운은 Modal이 아니라 인라인 View라서 Back이 JS 리스너까지 내려온다.
+  const back = mockHardwareBack();
+  const onBack = jest.fn();
+
+  try {
+    const renderer = render(jest.fn(async () => undefined), onBack);
+
+    TestRenderer.act(() => {
+      renderer.root
+        .findByProps({accessibilityLabel: '성별 선택'})
+        .props.onPress();
+    });
+    expect(
+      renderer.root.findAllByProps({accessibilityLabel: '성별 남자'}).length,
+    ).toBeGreaterThan(0);
+
+    let handled = false;
+    TestRenderer.act(() => {
+      handled = back.press();
+    });
+
+    expect(handled).toBe(true);
+    expect(
+      renderer.root.findAllByProps({accessibilityLabel: '성별 남자'}),
+    ).toHaveLength(0);
+    expect(onBack).not.toHaveBeenCalled();
+
+    // 드롭다운을 닫은 다음의 Back은 편집 화면을 닫는다.
+    TestRenderer.act(() => {
+      back.press();
+    });
+    expect(onBack).toHaveBeenCalledTimes(1);
+  } finally {
+    back.restore();
   }
 });
 

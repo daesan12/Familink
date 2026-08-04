@@ -46,7 +46,8 @@ export function NotificationItem({
         <Text style={[styles.body, textStyle]}>{notification.body}</Text>
         <Text style={styles.time}>{notification.createdAtLabel}</Text>
       </View>
-      {notification.requestKind === 'groupJoin' ? (
+      {notification.requestKind === 'groupJoin' &&
+      notification.relatedJoinRequestStatus === 'PENDING_ADMIN' ? (
         <View style={styles.decisionActions}>
           <DecisionButton
             accessibilityLabel="그룹 요청 승인"

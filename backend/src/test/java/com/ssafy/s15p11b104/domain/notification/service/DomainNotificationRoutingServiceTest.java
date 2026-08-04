@@ -96,6 +96,43 @@ class DomainNotificationRoutingServiceTest {
 	}
 
 	@Test
+	void routesJoinRequestApprovalAndRejectionToTheApplicantWithTheSameRelation() {
+		FamilyGroup group = group(10L, "우리 가족");
+		User applicant = user(103L, "신청자");
+		GroupJoinRequest joinRequest = mock(GroupJoinRequest.class);
+		when(joinRequest.getId()).thenReturn(20L);
+		when(joinRequest.getGroup()).thenReturn(group);
+		when(joinRequest.getApplicant()).thenReturn(applicant);
+		when(groupJoinRequestRepository.findById(20L)).thenReturn(Optional.of(joinRequest));
+
+		routingService.route(new DomainNotificationEvent.JoinRequestDecided(
+			20L,
+			101L,
+			DomainNotificationEvent.Decision.APPROVED));
+		routingService.route(new DomainNotificationEvent.JoinRequestDecided(
+			20L,
+			101L,
+			DomainNotificationEvent.Decision.REJECTED));
+
+		ArgumentCaptor<Command> captor = ArgumentCaptor.forClass(Command.class);
+		verify(notificationCreationService, org.mockito.Mockito.times(2)).create(captor.capture());
+		assertThat(captor.getAllValues())
+			.extracting(Command::receiverUserId)
+			.containsOnly(103L);
+		assertThat(captor.getAllValues())
+			.extracting(Command::relatedJoinRequestId)
+			.containsOnly(20L);
+		assertThat(captor.getAllValues())
+			.extracting(Command::type)
+			.containsOnly(NotificationType.GROUP_JOIN_REQUEST);
+		assertThat(captor.getAllValues())
+			.extracting(Command::sourceEventKey)
+			.containsExactly(
+				"JOIN_REQUEST:20:APPROVED",
+				"JOIN_REQUEST:20:REJECTED");
+	}
+
+	@Test
 	void routesNewPostToMembersExceptAuthorWithReceiverAlias() {
 		FamilyGroup group = group(10L, "우리 가족");
 		GroupMember author = member(11L, 101L, group, GroupRole.GUARDIAN, false, "홍길동");

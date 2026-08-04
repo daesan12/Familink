@@ -14,6 +14,7 @@ import {
 
 import type { AppScreenProps } from "../../../app-shell";
 import { COLORS, RADII } from "../../../design/tokens";
+import { RetryButton } from "../../../shared/components/RetryButton";
 import { CallReportDetailModal } from "../components/CallReportDetailModal";
 import { CallReportRow } from "../components/CallReportRow";
 import { DailyReportCard } from "../components/DailyReportCard";
@@ -495,14 +496,13 @@ function ReportLoadState({
       <Text style={styles.loadStateTitle}>{title}</Text>
       <Text style={styles.loadStateDescription}>{description}</Text>
       {actionLabel && onAction ? (
-        <Pressable
-          accessibilityLabel={actionAccessibilityLabel}
-          accessibilityRole="button"
-          onPress={onAction}
-          style={styles.retryButton}
-        >
-          <Text style={styles.retryButtonText}>{actionLabel}</Text>
-        </Pressable>
+        <View style={styles.retryButtonWrap}>
+          <RetryButton
+            accessibilityLabel={actionAccessibilityLabel}
+            label={actionLabel}
+            onPress={onAction}
+          />
+        </View>
       ) : null}
     </View>
   );
@@ -578,6 +578,8 @@ function ReportPage({
   return (
     <View style={[styles.page, { width }]}>
       <View style={styles.header}>
+        {/* 캘린더 버튼과 같은 폭의 스페이서로 제목을 정확히 가운데에 둔다. */}
+        <View style={styles.headerSpacer} />
         <Text style={styles.title}>{page.displayName} 님의 통화 리포트</Text>
         <Pressable
           accessibilityHint="생성된 일간 리포트 날짜를 월별로 확인합니다"
@@ -588,7 +590,7 @@ function ReportPage({
         >
           <MaterialDesignIcons
             color={COLORS.textStrong}
-            name="calendar-month-outline"
+            name="calendar-blank-outline"
             size={26}
           />
         </Pressable>
@@ -725,6 +727,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     height: 44,
     justifyContent: "center",
+    width: 44,
+  },
+  headerSpacer: {
     width: 44,
   },
   callList: {
@@ -877,19 +882,8 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 22,
   },
-  retryButton: {
-    alignItems: "center",
-    backgroundColor: COLORS.purpleDeep,
-    borderRadius: RADII.medium,
-    justifyContent: "center",
+  retryButtonWrap: {
     marginTop: 20,
-    minHeight: 44,
-    paddingHorizontal: 22,
-  },
-  retryButtonText: {
-    color: COLORS.background,
-    fontSize: 14,
-    fontWeight: "800",
   },
   screen: {
     backgroundColor: COLORS.background,
@@ -901,5 +895,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "800",
     lineHeight: 28,
+    textAlign: "center",
   },
 });

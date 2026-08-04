@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -45,9 +46,88 @@ class AiCallContentTest {
     }
 
     composeRule.onNodeWithTag("start-call").assertIsNotEnabled()
+    composeRule.onNodeWithTag("featured-persona-depth").assertIsDisplayed()
+    composeRule.onNodeWithTag("start-call-depth").assertIsDisplayed()
     composeRule.onNodeWithTag("persona-4").performClick().assertIsSelected()
     composeRule.onNodeWithTag("start-call").assertIsEnabled()
-    composeRule.onNodeWithText("“편하게 말씀해 주세요. 제가 듣고 있어요.”").assertIsDisplayed()
+    composeRule.onNodeWithText("차분한 말투").assertIsDisplayed()
+    composeRule
+        .onNodeWithText(
+            "차분한 말투로 필요한 내용을 쉽고 꼼꼼하게 안내해요.\n" +
+                "부담 없는 유머를 곁들여 편안하게 이야기를 이어가요."
+        )
+        .assertIsDisplayed()
+  }
+
+  @Test
+  fun 페르소나를_바꿀_때마다_이름과_태그와_소개글이_함께_바뀐다() {
+    var selectedPersonaId by mutableStateOf<Long?>(1)
+
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state = AiCallUiState(phase = AiCallPhase.Selecting, persona = null),
+            selectedPersonaId = selectedPersonaId,
+            onPersonaSelected = { selectedPersonaId = it },
+            onStartCall = {},
+            onToggleMute = {},
+            onToggleSpeaker = {},
+            onEndCall = {},
+            onConfirm = {},
+            onRetry = {},
+        )
+      }
+    }
+
+    aiPersonas.forEach { persona ->
+      composeRule.onNodeWithTag("persona-${persona.id}").performClick().assertIsSelected()
+      composeRule
+          .onNodeWithTag("persona-depth-${persona.id}")
+          .assertIsDisplayed()
+      composeRule
+          .onNodeWithTag("persona-selected-check-${persona.id}")
+          .assertIsDisplayed()
+      composeRule.onNodeWithTag("selected-persona-name").assertTextEquals(persona.displayName)
+      composeRule.onNodeWithTag("selected-persona-tag").assertTextEquals(persona.toneTag)
+      composeRule
+          .onNodeWithTag("selected-persona-introduction")
+          .assertTextEquals(persona.introduction)
+    }
+  }
+
+  @Test
+  fun depth_motion_does_not_reflow_surrounding_layout() {
+    composeRule.mainClock.autoAdvance = false
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state = AiCallUiState(phase = AiCallPhase.Selecting, persona = null),
+            selectedPersonaId = 1,
+            onPersonaSelected = {},
+            onStartCall = {},
+            onToggleMute = {},
+            onToggleSpeaker = {},
+            onEndCall = {},
+            onConfirm = {},
+            onRetry = {},
+        )
+      }
+    }
+
+    val personaNameBounds =
+        composeRule.onNodeWithTag("selected-persona-name").fetchSemanticsNode().boundsInRoot
+    val callButtonBounds = composeRule.onNodeWithTag("start-call").fetchSemanticsNode().boundsInRoot
+
+    composeRule.mainClock.advanceTimeBy(4_200)
+
+    assertEquals(
+        personaNameBounds,
+        composeRule.onNodeWithTag("selected-persona-name").fetchSemanticsNode().boundsInRoot,
+    )
+    assertEquals(
+        callButtonBounds,
+        composeRule.onNodeWithTag("start-call").fetchSemanticsNode().boundsInRoot,
+    )
   }
 
   @Test
@@ -102,6 +182,7 @@ class AiCallContentTest {
     }
 
     composeRule.onNodeWithText("00:07").assertIsDisplayed()
+    composeRule.onNodeWithTag("call-gradient-background").assertIsDisplayed()
     composeRule.onNodeWithTag("live-caption").assertIsDisplayed()
     composeRule.onNodeWithText("안녕하세요, 어르신. 오늘은 어떤 하루를 보내셨어요?").assertIsDisplayed()
     composeRule.onNodeWithContentDescription("통화 종료").assertIsDisplayed()
@@ -131,6 +212,7 @@ class AiCallContentTest {
     }
 
     composeRule.onNodeWithText("통화가 종료되었어요.").assertIsDisplayed()
+    composeRule.onNodeWithTag("call-gradient-background").assertIsDisplayed()
     composeRule.onNodeWithText("02:05").assertIsDisplayed()
     composeRule.onNodeWithTag("confirm-call-ended").assertIsDisplayed()
   }
@@ -155,6 +237,7 @@ class AiCallContentTest {
 
     composeRule.onNodeWithTag("persona-4").performClick()
     composeRule.onNodeWithTag("preview-connection-failure").performClick()
+    composeRule.onNodeWithTag("call-gradient-background").assertIsDisplayed()
     composeRule.onNodeWithText("통화를 연결하지 못했어요.").assertIsDisplayed()
     composeRule.onNodeWithText("인터넷 연결을 확인한 뒤 다시 시도해 주세요.").assertIsDisplayed()
     composeRule.onNodeWithText("다시 시도").assertIsDisplayed()

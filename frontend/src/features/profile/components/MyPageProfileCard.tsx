@@ -39,7 +39,7 @@ export function MyPageProfileCard({
         style={styles.moreButton}
       >
         <MaterialDesignIcons
-          color={COLORS.textMuted}
+          color={COLORS.purpleDeep}
           name="dots-vertical"
           size={22}
         />
@@ -49,7 +49,7 @@ export function MyPageProfileCard({
         {hasCrown ? (
           <View style={styles.crown}>
             <MaterialDesignIcons
-              color={COLORS.textMuted}
+              color={COLORS.purpleDeep}
               name="crown"
               size={30}
             />
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
   },
   card: {
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: COLORS.lavenderSurface,
     borderCurve: 'continuous',
     borderRadius: RADII.medium,
     flexDirection: 'row',
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   },
   rankBadge: {
     alignItems: 'center',
-    backgroundColor: COLORS.textMuted,
+    backgroundColor: COLORS.purpleDeep,
     borderRadius: RADII.pill,
     height: 22,
     justifyContent: 'center',

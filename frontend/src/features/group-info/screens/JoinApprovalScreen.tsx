@@ -1,4 +1,3 @@
-import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {useState} from 'react';
 import {
   ActivityIndicator,
@@ -13,6 +12,7 @@ import {
 import type {GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
 import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
+import {RetryButton} from '../../../shared/components/RetryButton';
 import {SubScreenHeader} from '../components/SubScreenHeader';
 import {useJoinRequests} from '../hooks/useJoinRequests';
 import {
@@ -111,15 +111,7 @@ export function JoinApprovalScreen({
       ) : joinRequests.status === 'error' ? (
         <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
           <Text style={styles.errorText}>{joinRequests.message}</Text>
-          <Pressable
-            accessibilityLabel="다시 시도"
-            accessibilityRole="button"
-            onPress={joinRequests.retry}
-            style={styles.retryButton}
-          >
-            <MaterialDesignIcons color={COLORS.text} name="refresh" size={18} />
-            <Text style={styles.retryText}>다시 시도</Text>
-          </Pressable>
+          <RetryButton onPress={joinRequests.retry} />
         </View>
       ) : (
         <ScrollView
@@ -373,23 +365,6 @@ const styles = StyleSheet.create({
     borderRadius: RADII.medium,
     borderWidth: 1,
     padding: 18,
-  },
-  retryButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.divider,
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 8,
-    minHeight: 48,
-    paddingHorizontal: 18,
-  },
-  retryText: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: '700',
   },
   roleButton: {
     alignItems: 'center',

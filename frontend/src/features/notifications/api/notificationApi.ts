@@ -13,6 +13,7 @@ import type {
   AppNotification,
   DeviceTokenRegistration,
   NotificationGateway,
+  NotificationJoinRequestStatus,
   NotificationPage,
   NotificationReadAllResult,
   NotificationReadResult,
@@ -179,6 +180,9 @@ function parseNotification(value: unknown): AppNotification | null {
   const dailyReportId = readNullablePositiveId(value.relatedDailyReportId);
   const eventId = readNullablePositiveId(value.relatedEventId);
   const joinRequestId = readNullablePositiveId(value.relatedJoinRequestId);
+  const joinRequestStatus = readNullableJoinRequestStatus(
+    value.relatedJoinRequestStatus,
+  );
   if (
     id === null ||
     type === null ||
@@ -192,7 +196,8 @@ function parseNotification(value: unknown): AppNotification | null {
     callReportId === undefined ||
     dailyReportId === undefined ||
     eventId === undefined ||
-    joinRequestId === undefined
+    joinRequestId === undefined ||
+    joinRequestStatus === undefined
   ) {
     return null;
   }
@@ -211,7 +216,10 @@ function parseNotification(value: unknown): AppNotification | null {
     ...(dailyReportId === null ? {} : {relatedDailyReportId: dailyReportId}),
     ...(eventId === null ? {} : {relatedEventId: eventId}),
     ...(joinRequestId === null ? {} : {relatedJoinRequestId: joinRequestId}),
-    ...(type === 'GROUP_JOIN_REQUEST' ? {requestKind: 'groupJoin' as const} : {}),
+    relatedJoinRequestStatus: joinRequestStatus,
+    ...(type === 'GROUP_JOIN_REQUEST' && joinRequestStatus === 'PENDING_ADMIN'
+      ? {requestKind: 'groupJoin' as const}
+      : {}),
     title,
     type,
   };
@@ -342,6 +350,19 @@ function readNullablePositiveId(value: unknown): string | null | undefined {
   return value === null || value === undefined
     ? null
     : readPositiveId(value) ?? undefined;
+}
+
+function readNullableJoinRequestStatus(
+  value: unknown,
+): NotificationJoinRequestStatus | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return value === 'PENDING_ADMIN' ||
+    value === 'APPROVED' ||
+    value === 'REJECTED'
+    ? value
+    : null;
 }
 
 function readInstant(value: unknown): string | null {

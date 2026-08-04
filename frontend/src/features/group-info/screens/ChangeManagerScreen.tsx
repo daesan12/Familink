@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {SubScreenHeader} from '../components/SubScreenHeader';
 import {GroupMemberAvatar} from '../components/GroupMemberAvatar';
 import {
@@ -145,11 +146,7 @@ export function ChangeManagerScreen({
             </Text>
           ))}
         </View>
-        {errorMessage ? (
-          <Text accessibilityRole="alert" style={styles.errorText}>
-            {errorMessage}
-          </Text>
-        ) : null}
+        {errorMessage ? <NoticeBanner message={errorMessage} /> : null}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -197,11 +194,6 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 20,
     paddingTop: 8,
-  },
-  errorText: {
-    color: COLORS.error,
-    fontSize: 14,
-    lineHeight: 20,
   },
   currentTag: {
     color: COLORS.textSubtle,

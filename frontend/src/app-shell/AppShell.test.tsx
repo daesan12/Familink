@@ -1,0 +1,322 @@
+import React from 'react';
+import {Pressable, Text} from 'react-native';
+import {SafeAreaProvider} from 'react-native-safe-area-context';
+import TestRenderer from 'react-test-renderer';
+
+import {mockHardwareBack} from '../shared/testing/hardwareBack';
+import {AppShell} from './AppShell';
+import type {
+  AppRoute,
+  AppScreenProps,
+  AppScreenRegistry,
+  FamilyGroup,
+} from './types';
+
+function MockCurrentGroupSwitcher({
+  groups,
+  onSelect,
+}: {
+  groups: readonly FamilyGroup[];
+  onSelect: (groupId: string) => void;
+}) {
+  return (
+    <>
+      {groups.map(group => (
+        <Pressable key={group.id} onPress={() => onSelect(group.id)}>
+          <Text>{group.name}</Text>
+        </Pressable>
+      ))}
+    </>
+  );
+}
+
+jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
+jest.mock('./BottomTabBar', () => ({BottomTabBar: () => null}));
+jest.mock('./CurrentGroupSwitcher', () => ({
+  CurrentGroupSwitcher: MockCurrentGroupSwitcher,
+}));
+
+const GROUP_A: FamilyGroup = {
+  id: 'group-a',
+  name: '삭제할 그룹',
+  role: 'guardian',
+};
+const GROUP_B: FamilyGroup = {
+  id: 'group-b',
+  name: '남은 그룹',
+  role: 'guardian',
+};
+
+function FeedScreen({currentGroup}: AppScreenProps) {
+  return <Text>{`피드:${currentGroup.name}`}</Text>;
+}
+
+function GroupInfoScreen({currentGroup}: AppScreenProps) {
+  return <Text>{`그룹정보:${currentGroup.name}`}</Text>;
+}
+
+function CalendarScreen({currentGroup}: AppScreenProps) {
+  return <Text>{`캘린더:${currentGroup.name}`}</Text>;
+}
+
+const screens = {
+  calendar: CalendarScreen,
+  feed: FeedScreen,
+  groupInfo: GroupInfoScreen,
+};
+
+function hasText(renderer: TestRenderer.ReactTestRenderer, value: string) {
+  return renderer.root.findAllByType(Text).some(node => {
+    const children = node.props.children;
+    return Array.isArray(children)
+      ? children.join('') === value
+      : children === value;
+  });
+}
+
+function pressText(renderer: TestRenderer.ReactTestRenderer, value: string) {
+  const target = renderer.root.findAll(node => {
+    if (typeof node.props.onPress !== 'function') {
+      return false;
+    }
+    return node.findAllByType(Text).some(text => {
+      const children = text.props.children;
+      return Array.isArray(children)
+        ? children.join('') === value
+        : children === value;
+    });
+  })[0];
+  if (target === undefined) {
+    throw new Error(`누를 수 있는 "${value}" 텍스트가 없습니다.`);
+  }
+  TestRenderer.act(() => {
+    target.props.onPress();
+  });
+}
+
+test('현재 그룹이 삭제되고 대체 그룹이 지정되면 대체 그룹의 피드로 이동한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <AppShell
+        groups={[GROUP_A, GROUP_B]}
+        initialGroupId={GROUP_A.id}
+        initialRoute="groupInfo"
+        screens={screens}
+      />,
+    );
+  });
+
+  expect(hasText(renderer!, '그룹정보:삭제할 그룹')).toBe(true);
+
+  await TestRenderer.act(async () => {
+    renderer!.update(
+      <AppShell
+        groups={[GROUP_B]}
+        initialGroupId={GROUP_B.id}
+        initialRoute="groupInfo"
+        screens={screens}
+      />,
+    );
+  });
+
+  expect(hasText(renderer!, '피드:남은 그룹')).toBe(true);
+  expect(hasText(renderer!, '그룹정보:남은 그룹')).toBe(false);
+  TestRenderer.act(() => renderer!.unmount());
+});
+
+test('삭제가 아닌 일반 그룹 전환은 현재 화면을 유지한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <AppShell
+        groups={[GROUP_A, GROUP_B]}
+        initialGroupId={GROUP_A.id}
+        initialRoute="calendar"
+        screens={screens}
+      />,
+    );
+  });
+
+  pressText(renderer!, '남은 그룹');
+
+  expect(hasText(renderer!, '캘린더:남은 그룹')).toBe(true);
+  expect(hasText(renderer!, '피드:남은 그룹')).toBe(false);
+  TestRenderer.act(() => renderer!.unmount());
+});
+
+// 아래는 시스템 뒤로가기(S15P11B104-270) 회귀 테스트다. 위 그룹 전환 테스트와
+// 목적이 달라 라우트 이름만 렌더하는 별도의 화면 레지스트리를 쓴다.
+
+const SAFE_AREA_METRICS = {
+  frame: {x: 0, y: 0, width: 390, height: 844},
+  insets: {top: 0, left: 0, right: 0, bottom: 0},
+};
+
+const ALL_ROUTES: readonly AppRoute[] = [
+  'feed',
+  'calendar',
+  'report',
+  'aiCall',
+  'groupInfo',
+  'profile',
+  'notifications',
+  'archive',
+];
+
+const CARE_RECEIVER_GROUP: FamilyGroup = {
+  id: 'group-1',
+  name: '우리가족',
+  role: 'careReceiver',
+};
+
+const GUARDIAN_GROUP: FamilyGroup = {
+  id: 'group-2',
+  name: '보호자가족',
+  role: 'guardian',
+};
+
+const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
+
+afterEach(() => {
+  TestRenderer.act(() => {
+    mountedRenderers.splice(0).forEach(renderer => renderer.unmount());
+  });
+  jest.clearAllMocks();
+});
+
+// 실제 화면 대신 라우트 이름만 렌더한다. 뒤로가기 뒤에 어떤 라우트가 남았는지만 확인하면 된다.
+function createBackTestScreens(): AppScreenRegistry {
+  return ALL_ROUTES.reduce<AppScreenRegistry>((registry, route) => {
+    registry[route] = () => <Text>{`screen:${route}`}</Text>;
+    return registry;
+  }, {});
+}
+
+// AI 전화 통화 중처럼 화면이 전체화면을 차지하는 상태를 재현한다.
+function FullscreenScreen({onFullscreenChange}: AppScreenProps) {
+  React.useEffect(() => {
+    onFullscreenChange?.(true);
+  }, [onFullscreenChange]);
+
+  return <Text>screen:aiCall</Text>;
+}
+
+function renderForBack(
+  initialRoute: AppRoute,
+  group: FamilyGroup,
+  backTestScreens: AppScreenRegistry = createBackTestScreens(),
+) {
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
+        <AppShell
+          groups={[group]}
+          initialGroupId={group.id}
+          initialRoute={initialRoute}
+          screens={backTestScreens}
+        />
+      </SafeAreaProvider>,
+    );
+  });
+  mountedRenderers.push(renderer!);
+  return renderer!;
+}
+
+function renderedRoute(
+  renderer: TestRenderer.ReactTestRenderer,
+): string | undefined {
+  const label = renderer.root
+    .findAllByType(Text)
+    .map(node => node.props.children)
+    .find(child => typeof child === 'string' && child.startsWith('screen:'));
+
+  return typeof label === 'string' ? label.slice('screen:'.length) : undefined;
+}
+
+test.each<AppRoute>([
+  'calendar',
+  'aiCall',
+  'groupInfo',
+  'profile',
+  'notifications',
+  'archive',
+])('%s 라우트에서 시스템 Back은 앱을 종료하지 않고 피드로 돌아간다', route => {
+  const back = mockHardwareBack();
+
+  try {
+    const renderer = renderForBack(route, CARE_RECEIVER_GROUP);
+    expect(renderedRoute(renderer)).toBe(route);
+
+    let handled = false;
+    TestRenderer.act(() => {
+      handled = back.press();
+    });
+
+    expect(handled).toBe(true);
+    expect(renderedRoute(renderer)).toBe('feed');
+  } finally {
+    back.restore();
+  }
+});
+
+test('보호자 리포트 탭에서 시스템 Back은 앱을 종료하지 않고 피드로 돌아간다', () => {
+  const back = mockHardwareBack();
+
+  try {
+    const renderer = renderForBack('report', GUARDIAN_GROUP);
+    expect(renderedRoute(renderer)).toBe('report');
+
+    let handled = false;
+    TestRenderer.act(() => {
+      handled = back.press();
+    });
+
+    expect(handled).toBe(true);
+    expect(renderedRoute(renderer)).toBe('feed');
+  } finally {
+    back.restore();
+  }
+});
+
+test('피드 루트에서는 아무도 처리하지 않아 앱이 종료된다', () => {
+  const back = mockHardwareBack();
+
+  try {
+    const renderer = renderForBack('feed', CARE_RECEIVER_GROUP);
+
+    // press()가 false면 실제 앱에서 BackHandler.exitApp()이 호출된다. 홈에서의 정상 동작이다.
+    let handled = true;
+    TestRenderer.act(() => {
+      handled = back.press();
+    });
+
+    expect(handled).toBe(false);
+    expect(renderedRoute(renderer)).toBe('feed');
+  } finally {
+    back.restore();
+  }
+});
+
+test('화면이 전체화면을 보고하면 셸은 뒤로가기를 처리하지 않는다', () => {
+  // AI 전화 통화 중에는 네이티브 화면이 뒤로가기를 처리하므로 셸이 가로채면 안 된다.
+  const back = mockHardwareBack();
+
+  try {
+    const renderer = renderForBack('aiCall', CARE_RECEIVER_GROUP, {
+      ...createBackTestScreens(),
+      aiCall: FullscreenScreen,
+    });
+
+    let handled = true;
+    TestRenderer.act(() => {
+      handled = back.press();
+    });
+
+    expect(handled).toBe(false);
+    expect(renderedRoute(renderer)).toBe('aiCall');
+  } finally {
+    back.restore();
+  }
+});

@@ -17,7 +17,7 @@ test("당일 통화가 없어도 최신 일간 리포트가 있으면 준비된 
   const page: CareReceiverReportPage = {
     displayName: "김말순",
     latestDailyReport: {
-      emotion: { emoji: "😌", label: "평온" },
+      emotion: { icon: "emoticon-neutral-outline", label: "평온" },
       guardianMessageSummary: null,
       id: "daily-latest",
       reportDate: "2026-07-16",

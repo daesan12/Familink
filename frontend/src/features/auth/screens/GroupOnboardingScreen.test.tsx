@@ -92,6 +92,46 @@ test('그룹 보유 사용자의 빈 상태는 모순 없는 대기 문구를 �
   expect(rendered).toContain('대기 중인 참여 요청이 없어요');
 });
 
+test('initialAction이 create면 생성 시트를 바로 연다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupOnboardingScreen
+        initialAction="create"
+        onBack={jest.fn()}
+        onCreateGroup={jest.fn()}
+        onJoinByCode={jest.fn()}
+        pendingRequests={[]}
+      />,
+    );
+  });
+
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '그룹 이름'}),
+  ).toBeTruthy();
+});
+
+test('initialAction이 join이면 초대 코드 시트를 바로 연다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupOnboardingScreen
+        initialAction="join"
+        onBack={jest.fn()}
+        onCreateGroup={jest.fn()}
+        onJoinByCode={jest.fn()}
+        pendingRequests={[]}
+      />,
+    );
+  });
+
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '6자리 초대 코드'}),
+  ).toBeTruthy();
+});
+
 test('새 그룹 이름과 역할을 입력해 생성 요청을 전달한다', async () => {
   const onCreateGroup = jest.fn();
   let renderer: TestRenderer.ReactTestRenderer;
@@ -348,6 +388,7 @@ test('승인된 그룹 카드를 누르면 해당 그룹 진입을 요청한다'
     groupId: 'group-1',
     groupName: '우리 가족',
     id: 'request-1',
+    myMemberId: 'member-1',
     role: 'careReceiver' as const,
     status: 'APPROVED' as const,
   };

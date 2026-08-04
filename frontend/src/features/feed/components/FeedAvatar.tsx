@@ -1,9 +1,11 @@
 import {useEffect, useState} from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {Image, StyleSheet, View} from 'react-native';
 
 import {RADII} from '../../../design/tokens';
 import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import type {FeedMember} from '../types';
+
+const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
 
 interface FeedAvatarProps {
   member: FeedMember;
@@ -31,7 +33,11 @@ export function FeedAvatar({member, size = 44}: FeedAvatarProps) {
 
   return (
     <View accessibilityElementsHidden style={[styles.frame, frameStyle]}>
-      <Text style={styles.text}>{member.avatarText}</Text>
+      <Image
+        accessibilityIgnoresInvertColors
+        source={PROFILE_PLACEHOLDER}
+        style={styles.placeholderImage}
+      />
     </View>
   );
 }
@@ -47,9 +53,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  text: {
-    color: '#C4BAFF',
-    fontSize: 16,
-    fontWeight: '600',
+  placeholderImage: {
+    height: '100%',
+    width: '100%',
   },
 });

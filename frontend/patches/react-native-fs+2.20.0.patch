@@ -1,16 +1,24 @@
 diff --git a/node_modules/react-native-fs/android/src/main/java/com/rnfs/Uploader.java b/node_modules/react-native-fs/android/src/main/java/com/rnfs/Uploader.java
-index 672a1c5..13c6a0a 100644
+index 5b2e594..13c6a0a 100644
 --- a/node_modules/react-native-fs/android/src/main/java/com/rnfs/Uploader.java
 +++ b/node_modules/react-native-fs/android/src/main/java/com/rnfs/Uploader.java
-@@ -128 +128,3 @@ public class Uploader extends AsyncTask<UploadParams, int[], UploadResult> {
--            }
+@@ -125,6 +125,8 @@ public class Uploader extends AsyncTask<UploadParams, int[], UploadResult> {
+                 requestLength += stringData.length() + files.length * crlf.length();
+                 connection.setRequestProperty("Content-length", "" +(int) requestLength);
+                 connection.setFixedLengthStreamingMode((int)requestLength);
 +            } else {
 +                connection.setFixedLengthStreamingMode(totalFileLength);
-+            }
-@@ -154 +156,5 @@ public class Uploader extends AsyncTask<UploadParams, int[], UploadResult> {
--                while (bytesRead < fileLength) {
-+                while (bytesRead < fileLength) {
+             }
+             connection.connect();
+ 
+@@ -152,6 +154,10 @@ public class Uploader extends AsyncTask<UploadParams, int[], UploadResult> {
+                 FileChannel fileChannel = fileStream.getChannel();
+ 
+                 while (bytesRead < fileLength) {
 +                    if (mAbort.get()) {
 +                        throw new Exception("Upload has been aborted");
 +                    }
 +
+                     long transferredBytes = fileChannel.transferTo(bytesRead, bufferSize, requestChannel);
+                     bytesRead += transferredBytes;
+ 

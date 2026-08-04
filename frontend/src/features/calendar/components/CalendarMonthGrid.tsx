@@ -1,4 +1,11 @@
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {useState} from 'react';
+import {
+  type LayoutChangeEvent,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {
@@ -11,8 +18,23 @@ import type {
   DateKey,
 } from '../types';
 
-const EVENT_COLORS = ['#7160E0', '#397D75', '#C0694A', '#7A6599'] as const;
+const EVENT_PALETTE = [
+  {background: '#D9EAF2', foreground: '#315E72'},
+  {background: '#DCE8D3', foreground: '#496346'},
+  {background: '#F3E5A6', foreground: '#715E16'},
+  {background: '#EFC3A5', foreground: '#7A4933'},
+  {background: '#DDD8F0', foreground: '#554C7E'},
+] as const;
 const MAX_VISIBLE_LANES = 2;
+const MIN_VISIBLE_LANES = 0;
+const EVENT_OVERLAY_TOP = 31;
+const EVENT_BAR_HEIGHT = 13;
+const EVENT_LANE_HEIGHT = 14;
+const OVERFLOW_LINE_HEIGHT = 12;
+const OVERFLOW_BOTTOM_INSET = 1;
+const OVERFLOW_RESERVED_HEIGHT =
+  OVERFLOW_LINE_HEIGHT + OVERFLOW_BOTTOM_INSET;
+const WEEK_BOTTOM_INSET = 1;
 
 export const CALENDAR_WEEK_HEIGHT = 64;
 export const CALENDAR_MONTH_HEIGHT = CALENDAR_WEEK_HEIGHT * 6;
@@ -32,19 +54,44 @@ export function CalendarMonthGrid({
   selectedDate,
   today,
 }: CalendarMonthGridProps) {
+  const [monthHeight, setMonthHeight] = useState(CALENDAR_MONTH_HEIGHT);
+  const weekHeight = monthHeight / month.weeks.length;
+  const fullLaneCapacity = getVisibleLaneCapacity(weekHeight, false);
+  const overflowLaneCapacity = getVisibleLaneCapacity(weekHeight, true);
+
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const nextHeight = event.nativeEvent.layout.height;
+    setMonthHeight(currentHeight =>
+      Math.abs(currentHeight - nextHeight) < 1 ? currentHeight : nextHeight,
+    );
+  };
+
   return (
-    <View style={styles.month}>
+    <View
+      onLayout={handleLayout}
+      style={styles.month}
+      testID="calendar-month-grid">
       {month.weeks.map(week => {
-        const layout = buildWeekEventLayout(
+        const fullLayout = buildWeekEventLayout(
           week,
           events,
-          MAX_VISIBLE_LANES,
+          fullLaneCapacity,
         );
+        const needsOverflowIndicator = Object.keys(
+          fullLayout.overflowByDate,
+        ).length > 0;
+        const visibleLaneCount = needsOverflowIndicator
+          ? overflowLaneCapacity
+          : fullLaneCapacity;
+        const layout =
+          visibleLaneCount === fullLaneCapacity
+            ? fullLayout
+            : buildWeekEventLayout(week, events, visibleLaneCount);
 
         return (
           <View key={week.startDate} style={styles.week}>
             <View style={styles.dayRow}>
-              {week.days.map(day => {
+              {week.days.map((day, columnIndex) => {
                 const isToday = day.dateKey === today;
                 const isSelected = day.dateKey === selectedDate;
                 const hasEvent = events.some(
@@ -67,21 +114,24 @@ export function CalendarMonthGrid({
                     onPress={() => onSelectDate(day.dateKey)}
                     style={({pressed}) => [
                       styles.dayCell,
+                      columnIndex < 6 && styles.dayCellDivider,
                       pressed && styles.pressedDay,
                     ]}
                   >
                     <View
                       style={[
                         styles.dayNumberCircle,
-                        hasEvent && styles.eventDateCircle,
+                        isToday && styles.todayCircle,
                       ]}
                     >
                       <Text
                         style={[
                           styles.dayNumber,
+                          columnIndex === 0 &&
+                            day.isCurrentMonth &&
+                            styles.sundayNumber,
                           !day.isCurrentMonth && styles.outsideDayNumber,
-                          hasEvent && styles.eventDateNumber,
-                          isToday && !hasEvent && styles.todayNumber,
+                          isToday && styles.todayNumber,
                         ]}
                       >
                         {day.day}
@@ -98,7 +148,7 @@ export function CalendarMonthGrid({
             </View>
 
             <View pointerEvents="none" style={styles.eventsOverlay}>
-              {Array.from({length: MAX_VISIBLE_LANES}, (_, lane) => (
+              {Array.from({length: visibleLaneCount}, (_, lane) => (
                 <View key={lane} style={styles.eventLane}>
                   {layout.segments
                     .filter(segment => segment.lane === lane)
@@ -123,40 +173,60 @@ function EventBar({
 }: {
   segment: EventSegment;
 }) {
-  const leading = segment.startColumn;
   const length = segment.endColumn - segment.startColumn + 1;
-  const trailing = 7 - segment.endColumn - 1;
-  const color = EVENT_COLORS[hashId(segment.event.id) % EVENT_COLORS.length];
+  const color =
+    EVENT_PALETTE[hashId(segment.event.id) % EVENT_PALETTE.length];
+  const left = `${(segment.startColumn / 7) * 100}%` as `${number}%`;
+  const width = `${(length / 7) * 100}%` as `${number}%`;
 
   return (
-    <>
-      {leading > 0 ? <View style={{flex: leading}} /> : null}
+    <View style={[styles.eventSlot, {left, width}]}>
       <View
         accessibilityLabel={`${segment.event.title} 일정`}
         accessibilityRole="text"
         style={[
           styles.eventBar,
           {
-            backgroundColor: color,
-            flex: length,
+            backgroundColor: color.background,
           },
           segment.continuesBefore && styles.continuesBefore,
           segment.continuesAfter && styles.continuesAfter,
         ]}
       >
-        {!segment.continuesBefore ? (
-          <Text numberOfLines={1} style={styles.eventTitle}>
-            {segment.event.title}
-          </Text>
-        ) : null}
+        <Text
+          numberOfLines={1}
+          style={[styles.eventTitle, {color: color.foreground}]}
+        >
+          {segment.event.title}
+        </Text>
       </View>
-      {trailing > 0 ? <View style={{flex: trailing}} /> : null}
-    </>
+    </View>
   );
 }
 
 function hashId(id: string): number {
   return [...id].reduce((sum, character) => sum + character.charCodeAt(0), 0);
+}
+
+function getVisibleLaneCapacity(
+  weekHeight: number,
+  reserveOverflowIndicator: boolean,
+): number {
+  const reservedBottom = reserveOverflowIndicator
+    ? OVERFLOW_RESERVED_HEIGHT
+    : WEEK_BOTTOM_INSET;
+  const availableHeight = weekHeight - EVENT_OVERLAY_TOP - reservedBottom;
+  const capacity =
+    availableHeight < EVENT_BAR_HEIGHT
+      ? 0
+      : Math.floor(
+          (availableHeight - EVENT_BAR_HEIGHT) / EVENT_LANE_HEIGHT,
+        ) + 1;
+
+  return Math.max(
+    MIN_VISIBLE_LANES,
+    Math.min(MAX_VISIBLE_LANES, capacity),
+  );
 }
 
 const styles = StyleSheet.create({
@@ -171,15 +241,18 @@ const styles = StyleSheet.create({
     marginLeft: 0,
   },
   dayCell: {
-    alignItems: 'center',
-    borderRadius: RADII.medium,
+    alignItems: 'flex-start',
     flex: 1,
-    height: CALENDAR_WEEK_HEIGHT,
-    paddingTop: 3,
+    paddingLeft: 4,
+    paddingTop: 5,
+  },
+  dayCellDivider: {
+    borderRightColor: '#EEF0F2',
+    borderRightWidth: StyleSheet.hairlineWidth,
   },
   dayNumber: {
     color: COLORS.textStrong,
-    fontSize: 12,
+    fontSize: 16,
     fontVariant: ['tabular-nums'],
     fontWeight: '600',
   },
@@ -191,63 +264,76 @@ const styles = StyleSheet.create({
     width: 26,
   },
   dayRow: {
+    flex: 1,
     flexDirection: 'row',
   },
   eventBar: {
-    borderRadius: 4,
-    height: 16,
+    borderCurve: 'continuous',
+    borderRadius: 3,
+    flex: 1,
+    height: EVENT_BAR_HEIGHT,
     justifyContent: 'center',
-    marginHorizontal: 1,
+    marginLeft: 2,
+    marginRight: 2,
     overflow: 'hidden',
     paddingHorizontal: 4,
   },
   eventLane: {
-    flexDirection: 'row',
-    height: 18,
+    height: EVENT_LANE_HEIGHT,
+    position: 'relative',
     width: '100%',
+  },
+  eventSlot: {
+    height: EVENT_BAR_HEIGHT,
+    position: 'absolute',
+    top: 0,
   },
   eventsOverlay: {
     left: 0,
     position: 'absolute',
     right: 0,
-    top: 28,
+    top: EVENT_OVERLAY_TOP,
   },
   eventTitle: {
-    color: COLORS.background,
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
+    lineHeight: EVENT_BAR_HEIGHT,
   },
   month: {
-    marginHorizontal: 12,
+    borderBottomColor: '#E7E9EC',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flex: 1,
   },
   outsideDayNumber: {
     color: COLORS.textDisabled,
     fontWeight: '500',
   },
   overflowText: {
-    bottom: 2,
+    bottom: OVERFLOW_BOTTOM_INSET,
     color: COLORS.textMuted,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
+    left: 7,
+    lineHeight: OVERFLOW_LINE_HEIGHT,
     position: 'absolute',
   },
   pressedDay: {
     backgroundColor: COLORS.surface,
   },
-  eventDateCircle: {
-    backgroundColor: COLORS.lavenderSurface,
-    borderColor: COLORS.lavender,
-    borderWidth: 1,
+  sundayNumber: {
+    color: '#E06659',
   },
-  eventDateNumber: {
-    color: COLORS.purpleDeep,
-    fontWeight: '800',
+  todayCircle: {
+    backgroundColor: '#222222',
   },
   todayNumber: {
-    color: COLORS.error,
+    color: COLORS.background,
     fontWeight: '800',
   },
   week: {
-    height: CALENDAR_WEEK_HEIGHT,
+    borderTopColor: '#E7E9EC',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flex: 1,
+    overflow: 'hidden',
   },
 });
