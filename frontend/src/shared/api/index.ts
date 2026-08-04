@@ -14,6 +14,7 @@ export {
   normalizeApiError,
   type ApiErrorKind,
 } from './apiError';
+export {subscribeGroupAccessDenied} from './groupAccessEvents';
 export {
   isApiFailure,
   isApiSuccess,

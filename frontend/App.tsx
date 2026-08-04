@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -113,7 +114,11 @@ import {
   ProfileTabScreen,
   type ProfileGateway,
 } from "./src/features/profile";
-import { API_BASE_URL, ApiError } from "./src/shared/api";
+import {
+  API_BASE_URL,
+  ApiError,
+  subscribeGroupAccessDenied,
+} from "./src/shared/api";
 import { imageDiskCache } from "./src/shared/media/imageDiskCache";
 
 type RootRoute =
@@ -636,6 +641,7 @@ export default function App({
 }: AppProps) {
   const shouldRestoreSession = initialRootRoute === "welcome";
   const [route, setRoute] = useState<RootRoute>(initialRootRoute);
+  const routeRef = useRef<RootRoute>(initialRootRoute);
   const [groupOnboardingReturnRoute, setGroupOnboardingReturnRoute] =
     useState<Exclude<RootRoute, "groupOnboarding">>("welcome");
   const [groupOnboardingAction, setGroupOnboardingAction] = useState<
@@ -644,15 +650,18 @@ export default function App({
   const [appShellEntryRoute, setAppShellEntryRoute] = useState<AppRoute | undefined>(
     initialShellRoute,
   );
+  const [appShellRecoveryVersion, setAppShellRecoveryVersion] = useState(0);
   const [loginVisible, setLoginVisible] = useState(false);
   // 방금 가입한 로그인 ID. 가입 직후 여는 로그인 시트에 미리 채운다.
   const [signupLoginId, setSignupLoginId] = useState("");
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [activeGroupId, setActiveGroupId] = useState(initialGroupId);
+  const selectedGroupIdRef = useRef<string | null | undefined>(initialGroupId);
   const [availableGroups, setAvailableGroups] = useState<FamilyGroup[]>(() => [
     ...(groups ??
       (initialRootRoute === "appShell" && __DEV__ ? DEVELOPMENT_GROUPS : [])),
   ]);
+  const availableGroupsRef = useRef<readonly FamilyGroup[]>(availableGroups);
   const [interestGroup, setInterestGroup] = useState<FamilyGroup | null>(null);
   const [interestMemberId, setInterestMemberId] = useState<string | null>(null);
   const [interestInitialValues, setInterestInitialValues] = useState<
@@ -731,11 +740,30 @@ export default function App({
   const withdrawalInFlightRef = useRef<Promise<void> | null>(null);
   // 포그라운드 복귀 갱신 in-flight 가드. 연속 전환에서 그룹 재조회가 겹치지 않게 한다.
   const foregroundGroupRefreshInFlightRef = useRef(false);
+  // 그룹 범위 API의 403이 가리킨 그룹. 진행 중인 목록 갱신이 있으면 그 결과에서도
+  // 내보내기 여부를 판정할 수 있도록 ref에 보존한다.
+  const deniedGroupIdsRef = useRef<Set<string>>(new Set());
   const resolvedGroups = availableGroups;
 
   useEffect(() => {
     joinRequestsRef.current = joinRequests;
   }, [joinRequests]);
+
+  useLayoutEffect(() => {
+    routeRef.current = route;
+  }, [route]);
+
+  useEffect(() => {
+    availableGroupsRef.current = availableGroups;
+  }, [availableGroups]);
+
+  useEffect(() => {
+    selectedGroupIdRef.current = activeGroupId;
+  }, [activeGroupId]);
+
+  const handleCurrentGroupChange = useCallback((groupId: string) => {
+    selectedGroupIdRef.current = groupId;
+  }, []);
 
   const refreshGroupSnapshot = useCallback(async () => {
     if (
@@ -767,13 +795,53 @@ export default function App({
       setJoinRequests(current =>
         reconcileJoinRequests(current, snapshot, trackedRequestIds),
       );
+
+      const deniedGroupIds = deniedGroupIdsRef.current;
+      deniedGroupIdsRef.current = new Set();
+      const selectedGroupId =
+        selectedGroupIdRef.current ??
+        (availableGroupsRef.current.length === 1
+          ? availableGroupsRef.current[0]?.id ?? null
+          : null);
+      const selectedGroupWasRemoved =
+        selectedGroupId !== null &&
+        deniedGroupIds.has(selectedGroupId) &&
+        availableGroupsRef.current.some(group => group.id === selectedGroupId) &&
+        !snapshot.groups.some(group => group.id === selectedGroupId);
+      if (
+        routeRef.current === "appShell" &&
+        selectedGroupWasRemoved
+      ) {
+        const nextGroup = snapshot.groups[0];
+        setAppShellEntryRoute("feed");
+        setAppShellRecoveryVersion(version => version + 1);
+        if (nextGroup === undefined) {
+          selectedGroupIdRef.current = null;
+          setActiveGroupId(null);
+          setRoute("signedInWelcome");
+        } else {
+          selectedGroupIdRef.current = nextGroup.id;
+          setActiveGroupId(nextGroup.id);
+          onGroupChange?.(nextGroup.id);
+          groupStore?.save(nextGroup.id).catch(() => {
+            // 서버가 확정한 대체 그룹 전환은 유지하고 다음 진입에서 다시 저장한다.
+          });
+        }
+      }
     } catch {
       // Keep the current view when a background refresh fails. The next
       // foreground transition or polling tick will retry it.
     } finally {
       foregroundGroupRefreshInFlightRef.current = false;
     }
-  }, [groupGateway, groups, joinRequestStore, user]);
+  }, [
+    groupGateway,
+    groupStore,
+    groups,
+    joinRequestStore,
+    onGroupChange,
+    user,
+  ]);
 
   const cancelLoginAttempt = useCallback(() => {
     loginAttemptIdRef.current += 1;
@@ -1183,6 +1251,17 @@ export default function App({
     return () => {
       subscription.remove();
     };
+  }, [groups, refreshGroupSnapshot, user]);
+
+  useLayoutEffect(() => {
+    if (user === null || groups !== undefined) {
+      return;
+    }
+
+    return subscribeGroupAccessDenied(groupId => {
+      deniedGroupIdsRef.current.add(groupId);
+      refreshGroupSnapshot().catch(() => undefined);
+    });
   }, [groups, refreshGroupSnapshot, user]);
 
   useEffect(() => {
@@ -1948,6 +2027,7 @@ export default function App({
             )}
             {route === "appShell" && (
               <AppShell
+                key={appShellRecoveryVersion}
                 apiBaseUrl={apiBaseUrl}
                 authSession={authSession}
                 accessToken={authSession.getAccessToken()}
@@ -1958,6 +2038,7 @@ export default function App({
                 initialGroupId={activeGroupId}
                 initialRoute={appShellEntryRoute}
                 onCreateGroup={() => openGroupOnboarding("appShell", "create")}
+                onCurrentGroupChange={handleCurrentGroupChange}
                 onGroupChange={onGroupChange}
                 onJoinGroup={() => openGroupOnboarding("appShell", "join")}
                 onCallResult={onCallResult}
