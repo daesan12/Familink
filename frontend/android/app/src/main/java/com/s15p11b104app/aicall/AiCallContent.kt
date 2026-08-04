@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -76,9 +77,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -105,6 +110,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 
+/** 최신 자막부터 적용할 투명도. 목록을 넘어선 오래된 자막은 마지막 값을 쓴다. */
+private val CAPTION_ALPHAS = listOf(1f, 0.45f, 0.2f)
+
+/** 자막 영역 위쪽에서 잘린 글자를 감추는 페이드 높이. */
+private val CAPTION_FADE_HEIGHT = 40.dp
+
+private const val CAPTION_PLACEHOLDER = "자막을 기다리는 중입니다."
+
 @Composable
 internal fun AiCallRoute(
     apiBaseUrl: String?,
@@ -118,7 +131,6 @@ internal fun AiCallRoute(
   var isMuted by rememberSaveable { mutableStateOf(false) }
   var isSpeakerOn by rememberSaveable { mutableStateOf(true) }
   var captionDraft by rememberSaveable { mutableStateOf("") }
-  var currentCaption by rememberSaveable { mutableStateOf<String?>(null) }
   var captionHistory by remember { mutableStateOf(emptyList<String>()) }
   var pendingPersonaId by rememberSaveable { mutableStateOf<Long?>(null) }
   var permissionResult by remember { mutableStateOf<Boolean?>(null) }
@@ -148,12 +160,10 @@ internal fun AiCallRoute(
                       (update.text.ifBlank { captionDraft }).trim()
                   if (completedCaption.isNotBlank()) {
                     captionHistory = (captionHistory + completedCaption).takeLast(3)
-                    currentCaption = completedCaption
                   }
                   captionDraft = ""
                 } else {
                   captionDraft += update.text
-                  currentCaption = captionDraft
                 }
               },
               onConnectionLost = { connectionLostSignal += 1 },
@@ -230,7 +240,6 @@ internal fun AiCallRoute(
       failureReason = AiCallFailureReason.Connection
       durationSeconds = 0
       captionDraft = ""
-      currentCaption = null
       captionHistory = emptyList()
       phase = AiCallPhase.Connecting
       callJob =
@@ -315,7 +324,6 @@ internal fun AiCallRoute(
     phase = AiCallPhase.Selecting
     durationSeconds = 0
     captionDraft = ""
-    currentCaption = null
     captionHistory = emptyList()
     isMuted = false
     isSpeakerOn = true
@@ -386,7 +394,7 @@ internal fun AiCallRoute(
               durationSeconds = durationSeconds,
               isMuted = isMuted,
               isSpeakerOn = isSpeakerOn,
-              currentCaption = currentCaption,
+              captionDraft = captionDraft,
               captionHistory = captionHistory,
           ),
       selectedPersonaId = selectedPersonaId,
@@ -875,8 +883,7 @@ private fun ActiveCallScreen(
   val persona = state.persona ?: return
   val isConnecting = state.phase == AiCallPhase.Connecting
   val isEnding = state.phase == AiCallPhase.Ending
-  val currentCaption = state.currentCaption ?: "자막을 기다리는 중입니다."
-  val previousCaption = state.captionHistory.dropLast(1).lastOrNull()
+  val captionLines = state.captionLines.ifEmpty { listOf(CAPTION_PLACEHOLDER) }
 
   Column(
       modifier =
@@ -927,39 +934,38 @@ private fun ActiveCallScreen(
         contentScale = ContentScale.Crop,
     )
 
-    Spacer(modifier = Modifier.weight(1f))
-    if (!isConnecting && !isEnding) {
-      Column(
-          modifier =
-              Modifier.fillMaxWidth()
-                  .semantics { liveRegion = LiveRegionMode.Polite }
-                  .testTag("live-caption"),
-      ) {
-        if (previousCaption != null) {
-          Text(
-              text = previousCaption,
-              color = AiCallColors.OnDarkMuted,
-              fontSize = 16.sp,
-              lineHeight = 24.sp,
-              maxLines = 2,
-              overflow = TextOverflow.Ellipsis,
-          )
-          Spacer(modifier = Modifier.height(10.dp))
-        }
+    // 자막이 이 영역을 넘겨도 통화 제어 버튼을 밀어낼 수 없도록 weight를 자막 쪽에 준다. weight가 붙은
+    // 자식은 나머지 자식을 모두 배분한 뒤 남은 높이만 받으므로, 버튼은 항상 자기 크기를 먼저 확보한다.
+    Box(
+        modifier =
+            Modifier.fillMaxWidth()
+                .weight(1f)
+                // clip을 켜야 넘친 자막이 그리기뿐 아니라 레이아웃·시맨틱스 경계에서도 잘린다.
+                // 끄면 화면에서 사라진 자막이 접근성 트리에 남아 TalkBack이 함께 읽는다.
+                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen, clip = true)
+                .drawWithContent {
+                  drawContent()
+                  drawRect(
+                      brush =
+                          Brush.verticalGradient(
+                              colors = listOf(Color.Transparent, Color.Black),
+                              startY = 0f,
+                              endY = CAPTION_FADE_HEIGHT.toPx(),
+                          ),
+                      blendMode = BlendMode.DstIn,
+                  )
+                },
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+      if (!isConnecting && !isEnding) {
+        CaptionStack(lines = captionLines)
+      } else {
         Text(
-            text = currentCaption,
-            color = AiCallColors.OnDark,
-            fontSize = 27.sp,
-            fontWeight = FontWeight.Bold,
-            lineHeight = 38.sp,
+            text = if (isEnding) "통화 종료 중입니다." else "잠시만 기다려 주세요.",
+            color = AiCallColors.OnDarkMuted,
+            fontSize = 17.sp,
         )
       }
-    } else {
-      Text(
-          text = if (isEnding) "통화 종료 중입니다." else "잠시만 기다려 주세요.",
-          color = AiCallColors.OnDarkMuted,
-          fontSize = 17.sp,
-      )
     }
 
     Spacer(modifier = Modifier.height(30.dp))
@@ -1012,6 +1018,37 @@ private fun ActiveCallScreen(
             modifier = Modifier.size(29.dp),
         )
       }
+    }
+  }
+}
+
+/**
+ * 자막을 오래된 것부터 최신 순으로 아래에 붙여 쌓는다. [Modifier.wrapContentHeight]의 `unbounded`가
+ * 높이 제한 없이 측정시키므로 최신 자막은 줄 수와 무관하게 온전히 자리를 잡고, 묶음이 부모 영역보다
+ * 커지면 위쪽의 오래된 자막부터 넘쳐서 잘린다. 크기는 모두 같고 최신에서 멀어질수록 투명해진다.
+ */
+@Composable
+private fun CaptionStack(lines: List<String>) {
+  Column(
+      modifier =
+          Modifier.fillMaxWidth()
+              .wrapContentHeight(align = Alignment.Bottom, unbounded = true)
+              .semantics { liveRegion = LiveRegionMode.Polite }
+              .testTag("live-caption"),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+  ) {
+    lines.forEachIndexed { index, line ->
+      Text(
+          text = line,
+          color =
+              AiCallColors.OnDark.copy(
+                  alpha =
+                      CAPTION_ALPHAS.getOrElse(lines.lastIndex - index) { CAPTION_ALPHAS.last() },
+              ),
+          fontSize = 27.sp,
+          fontWeight = FontWeight.Bold,
+          lineHeight = 38.sp,
+      )
     }
   }
 }
