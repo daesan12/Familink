@@ -17,7 +17,11 @@ import {NotificationDecisionModal} from '../components/NotificationDecisionModal
 import {NotificationItem} from '../components/NotificationItem';
 import {DEVELOPMENT_NOTIFICATIONS} from '../fixtures/notificationFixtures';
 import {useNotificationGateway} from '../NotificationGatewayContext';
-import type {AppNotification, NotificationGateway} from '../types';
+import type {
+  AppNotification,
+  NotificationGateway,
+  NotificationJoinRequestStatus,
+} from '../types';
 
 export interface NotificationsScreenProps extends AppScreenProps {
   gateway?: NotificationGateway;
@@ -199,9 +203,21 @@ export function NotificationsScreen({
   const resolvedProcessJoinRequest =
     processJoinRequest ?? processJoinRequestApi;
 
-  const removeDecidedNotification = (target: AppNotification) => {
+  const markDecidedNotification = (
+    target: AppNotification,
+    status: NotificationJoinRequestStatus | null,
+  ) => {
     setNotifications(current =>
-      current.filter(notification => notification.id !== target.id),
+      current.map(notification =>
+        notification.id === target.id
+          ? {
+              ...notification,
+              isRead: true,
+              relatedJoinRequestStatus: status,
+              requestKind: undefined,
+            }
+          : notification,
+      ),
     );
     if (!target.isRead) {
       setServerUnreadCount(current =>
@@ -225,8 +241,11 @@ export function NotificationsScreen({
     role?: GroupRole,
   ): Promise<boolean> => {
     if (!usesRemoteDecisions) {
-      removeDecidedNotification(target);
+      markDecidedNotification(target, role ? 'APPROVED' : 'REJECTED');
       return true;
+    }
+    if (target.relatedJoinRequestStatus !== 'PENDING_ADMIN') {
+      return false;
     }
     if (
       target.groupId === undefined ||
@@ -248,14 +267,14 @@ export function NotificationsScreen({
       });
     } catch (error) {
       if (isJoinRequestAlreadyProcessed(error)) {
-        removeDecidedNotification(target);
+        markDecidedNotification(target, null);
       }
       setErrorMessage(joinRequestDecisionErrorMessage(error));
       return false;
     } finally {
       setProcessingDecisionId(null);
     }
-    removeDecidedNotification(target);
+    markDecidedNotification(target, role ? 'APPROVED' : 'REJECTED');
     return true;
   };
 
@@ -267,6 +286,9 @@ export function NotificationsScreen({
       notification => notification.id === notificationId,
     );
     if (target === undefined || processingDecisionId !== null) {
+      return;
+    }
+    if (target.relatedJoinRequestStatus !== 'PENDING_ADMIN') {
       return;
     }
     const applicantName = target.actorName ?? null;

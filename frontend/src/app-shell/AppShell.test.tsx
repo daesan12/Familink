@@ -1,5 +1,5 @@
 import React from 'react';
-import {Text} from 'react-native';
+import {Pressable, Text} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import TestRenderer from 'react-test-renderer';
 
@@ -12,13 +12,141 @@ import type {
   FamilyGroup,
 } from './types';
 
+function MockCurrentGroupSwitcher({
+  groups,
+  onSelect,
+}: {
+  groups: readonly FamilyGroup[];
+  onSelect: (groupId: string) => void;
+}) {
+  return (
+    <>
+      {groups.map(group => (
+        <Pressable key={group.id} onPress={() => onSelect(group.id)}>
+          <Text>{group.name}</Text>
+        </Pressable>
+      ))}
+    </>
+  );
+}
+
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
-jest.mock('lucide-react-native/icons/calendar', () => 'Icon');
-jest.mock('lucide-react-native/icons/circle-user-round', () => 'Icon');
-jest.mock('lucide-react-native/icons/file-chart-column', () => 'Icon');
-jest.mock('lucide-react-native/icons/house', () => 'Icon');
-jest.mock('lucide-react-native/icons/phone-call', () => 'Icon');
-jest.mock('lucide-react-native/icons/users-round', () => 'Icon');
+jest.mock('./BottomTabBar', () => ({BottomTabBar: () => null}));
+jest.mock('./CurrentGroupSwitcher', () => ({
+  CurrentGroupSwitcher: MockCurrentGroupSwitcher,
+}));
+
+const GROUP_A: FamilyGroup = {
+  id: 'group-a',
+  name: '삭제할 그룹',
+  role: 'guardian',
+};
+const GROUP_B: FamilyGroup = {
+  id: 'group-b',
+  name: '남은 그룹',
+  role: 'guardian',
+};
+
+function FeedScreen({currentGroup}: AppScreenProps) {
+  return <Text>{`피드:${currentGroup.name}`}</Text>;
+}
+
+function GroupInfoScreen({currentGroup}: AppScreenProps) {
+  return <Text>{`그룹정보:${currentGroup.name}`}</Text>;
+}
+
+function CalendarScreen({currentGroup}: AppScreenProps) {
+  return <Text>{`캘린더:${currentGroup.name}`}</Text>;
+}
+
+const screens = {
+  calendar: CalendarScreen,
+  feed: FeedScreen,
+  groupInfo: GroupInfoScreen,
+};
+
+function hasText(renderer: TestRenderer.ReactTestRenderer, value: string) {
+  return renderer.root.findAllByType(Text).some(node => {
+    const children = node.props.children;
+    return Array.isArray(children)
+      ? children.join('') === value
+      : children === value;
+  });
+}
+
+function pressText(renderer: TestRenderer.ReactTestRenderer, value: string) {
+  const target = renderer.root.findAll(node => {
+    if (typeof node.props.onPress !== 'function') {
+      return false;
+    }
+    return node.findAllByType(Text).some(text => {
+      const children = text.props.children;
+      return Array.isArray(children)
+        ? children.join('') === value
+        : children === value;
+    });
+  })[0];
+  if (target === undefined) {
+    throw new Error(`누를 수 있는 "${value}" 텍스트가 없습니다.`);
+  }
+  TestRenderer.act(() => {
+    target.props.onPress();
+  });
+}
+
+test('현재 그룹이 삭제되고 대체 그룹이 지정되면 대체 그룹의 피드로 이동한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <AppShell
+        groups={[GROUP_A, GROUP_B]}
+        initialGroupId={GROUP_A.id}
+        initialRoute="groupInfo"
+        screens={screens}
+      />,
+    );
+  });
+
+  expect(hasText(renderer!, '그룹정보:삭제할 그룹')).toBe(true);
+
+  await TestRenderer.act(async () => {
+    renderer!.update(
+      <AppShell
+        groups={[GROUP_B]}
+        initialGroupId={GROUP_B.id}
+        initialRoute="groupInfo"
+        screens={screens}
+      />,
+    );
+  });
+
+  expect(hasText(renderer!, '피드:남은 그룹')).toBe(true);
+  expect(hasText(renderer!, '그룹정보:남은 그룹')).toBe(false);
+  TestRenderer.act(() => renderer!.unmount());
+});
+
+test('삭제가 아닌 일반 그룹 전환은 현재 화면을 유지한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <AppShell
+        groups={[GROUP_A, GROUP_B]}
+        initialGroupId={GROUP_A.id}
+        initialRoute="calendar"
+        screens={screens}
+      />,
+    );
+  });
+
+  pressText(renderer!, '남은 그룹');
+
+  expect(hasText(renderer!, '캘린더:남은 그룹')).toBe(true);
+  expect(hasText(renderer!, '피드:남은 그룹')).toBe(false);
+  TestRenderer.act(() => renderer!.unmount());
+});
+
+// 아래는 시스템 뒤로가기(S15P11B104-270) 회귀 테스트다. 위 그룹 전환 테스트와
+// 목적이 달라 라우트 이름만 렌더하는 별도의 화면 레지스트리를 쓴다.
 
 const SAFE_AREA_METRICS = {
   frame: {x: 0, y: 0, width: 390, height: 844},
@@ -58,7 +186,7 @@ afterEach(() => {
 });
 
 // 실제 화면 대신 라우트 이름만 렌더한다. 뒤로가기 뒤에 어떤 라우트가 남았는지만 확인하면 된다.
-function createScreens(): AppScreenRegistry {
+function createBackTestScreens(): AppScreenRegistry {
   return ALL_ROUTES.reduce<AppScreenRegistry>((registry, route) => {
     registry[route] = () => <Text>{`screen:${route}`}</Text>;
     return registry;
@@ -74,10 +202,10 @@ function FullscreenScreen({onFullscreenChange}: AppScreenProps) {
   return <Text>screen:aiCall</Text>;
 }
 
-function render(
+function renderForBack(
   initialRoute: AppRoute,
   group: FamilyGroup,
-  screens: AppScreenRegistry = createScreens(),
+  backTestScreens: AppScreenRegistry = createBackTestScreens(),
 ) {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
@@ -87,7 +215,7 @@ function render(
           groups={[group]}
           initialGroupId={group.id}
           initialRoute={initialRoute}
-          screens={screens}
+          screens={backTestScreens}
         />
       </SafeAreaProvider>,
     );
@@ -118,7 +246,7 @@ test.each<AppRoute>([
   const back = mockHardwareBack();
 
   try {
-    const renderer = render(route, CARE_RECEIVER_GROUP);
+    const renderer = renderForBack(route, CARE_RECEIVER_GROUP);
     expect(renderedRoute(renderer)).toBe(route);
 
     let handled = false;
@@ -137,7 +265,7 @@ test('보호자 리포트 탭에서 시스템 Back은 앱을 종료하지 않고
   const back = mockHardwareBack();
 
   try {
-    const renderer = render('report', GUARDIAN_GROUP);
+    const renderer = renderForBack('report', GUARDIAN_GROUP);
     expect(renderedRoute(renderer)).toBe('report');
 
     let handled = false;
@@ -156,7 +284,7 @@ test('피드 루트에서는 아무도 처리하지 않아 앱이 종료된다',
   const back = mockHardwareBack();
 
   try {
-    const renderer = render('feed', CARE_RECEIVER_GROUP);
+    const renderer = renderForBack('feed', CARE_RECEIVER_GROUP);
 
     // press()가 false면 실제 앱에서 BackHandler.exitApp()이 호출된다. 홈에서의 정상 동작이다.
     let handled = true;
@@ -176,8 +304,8 @@ test('화면이 전체화면을 보고하면 셸은 뒤로가기를 처리하지
   const back = mockHardwareBack();
 
   try {
-    const renderer = render('aiCall', CARE_RECEIVER_GROUP, {
-      ...createScreens(),
+    const renderer = renderForBack('aiCall', CARE_RECEIVER_GROUP, {
+      ...createBackTestScreens(),
       aiCall: FullscreenScreen,
     });
 

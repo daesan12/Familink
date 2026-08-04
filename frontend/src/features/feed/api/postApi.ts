@@ -10,6 +10,7 @@ import {
   BlobUploadError,
   uploadBlobWithXhr,
 } from '../../../shared/api/blobUpload';
+import {uploadFileWithRnfs} from '../../../shared/api/fileUpload';
 import {
   clientMediaProcessor,
   type ClientMediaProcessor,
@@ -36,29 +37,37 @@ interface UploadRequestConfig {
 }
 
 export interface PostUploadTransport {
-  readFile(uri: string, signal?: AbortSignal): Promise<Blob>;
   put(
     uploadUrl: string,
-    data: Blob,
+    file: UploadFile,
     config: UploadRequestConfig,
   ): Promise<void>;
 }
 
 const defaultUploadTransport: PostUploadTransport = {
-  async readFile(uri, signal) {
-    const response = await fetch(uri, {signal});
-    if (!response.ok) {
-      throw new ApiError({
-        code: 'MEDIA_READ_FAILED',
-        kind: 'network',
-        message: '선택한 미디어를 읽지 못했습니다.',
-        status: response.status,
+  async put(uploadUrl, file, config) {
+    if (file.contentType.startsWith('image/')) {
+      const response = await fetch(file.uri, {signal: config.signal});
+      if (!response.ok) {
+        throw new ApiError({
+          code: 'MEDIA_READ_FAILED',
+          kind: 'network',
+          message: '선택한 이미지를 읽지 못했습니다.',
+          status: response.status,
+        });
+      }
+      const blob = await response.blob();
+      await uploadBlobWithXhr(uploadUrl, blob, {
+        headers: config.headers,
+        onProgress: config.onUploadProgress,
+        signal: config.signal,
       });
+      return;
     }
-    return response.blob();
-  },
-  async put(uploadUrl, data, config) {
-    await uploadBlobWithXhr(uploadUrl, data, {
+
+    await uploadFileWithRnfs(uploadUrl, file.uri, {
+      contentType: file.contentType,
+      fileName: file.fileName,
       headers: config.headers,
       signal: config.signal,
       onProgress: config.onUploadProgress,
@@ -293,6 +302,7 @@ async function uploadNewMedia(
           uri: item.source.uri,
         });
         processedAssets.push(originalAsset);
+        validatePreparedOriginal(item, originalAsset);
         thumbnailAsset = await mediaProcessor.preparePostThumbnail({
           contentType: item.contentType,
           fileName: item.fileName,
@@ -301,16 +311,14 @@ async function uploadNewMedia(
         });
         processedAssets.push(thumbnailAsset);
       } catch (error) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
         throw mediaProcessingFailed(error);
       }
-      const blob = await transport.readFile(originalAsset.uri, signal);
-      const thumbnailBlob = await transport.readFile(
-        thumbnailAsset.uri,
-        signal,
-      );
       assertNotAborted(signal);
-      originalFiles.push(toUploadFile(item, originalAsset, blob));
-      thumbnailFiles.push(toThumbnailUploadFile(thumbnailAsset, thumbnailBlob));
+      originalFiles.push(toUploadFile(item, originalAsset));
+      thumbnailFiles.push(toThumbnailUploadFile(thumbnailAsset));
     }
     const allFiles = [...originalFiles, ...thumbnailFiles];
     const totalBytes = allFiles.reduce(
@@ -355,6 +363,24 @@ async function uploadNewMedia(
   }
 }
 
+function validatePreparedOriginal(
+  media: LocalMedia,
+  asset: ProcessedMediaAsset,
+): void {
+  if (!isPositiveSafeInteger(asset.sizeBytes)) {
+    throw invalidRequest('미디어 파일 크기 정보를 확인할 수 없습니다.');
+  }
+
+  const reason = validatePickedMedia(media.kind, {
+    contentType: asset.contentType,
+    durationSeconds: media.durationSeconds,
+    fileSizeBytes: asset.sizeBytes,
+  });
+  if (reason !== null) {
+    throw invalidRequest(mediaValidationMessage(reason));
+  }
+}
+
 async function clearTemporaryMediaFiles(
   mediaProcessor: ClientMediaProcessor,
   assets: readonly ProcessedMediaAsset[],
@@ -366,21 +392,20 @@ async function clearTemporaryMediaFiles(
   }
 }
 
-interface UploadFile {
-  blob: Blob;
+export interface UploadFile {
   contentType: string;
   fileName: string;
   sizeBytes: number;
+  uri: string;
 }
 
 function toUploadFile(
   media: LocalMedia,
   asset: ProcessedMediaAsset,
-  blob: Blob,
 ): UploadFile {
   const contentType = normalizeContentType(asset.contentType);
   const fileName = normalizeFileName(asset.fileName);
-  const sizeBytes = blob.size;
+  const sizeBytes = asset.sizeBytes;
   if (contentType === null || fileName === null || !isPositiveSafeInteger(sizeBytes)) {
     throw invalidRequest('미디어 파일명, MIME 타입, 크기 정보가 필요합니다.');
   }
@@ -394,16 +419,15 @@ function toUploadFile(
     throw invalidRequest(mediaValidationMessage(reason));
   }
 
-  return {blob, contentType, fileName, sizeBytes};
+  return {contentType, fileName, sizeBytes, uri: asset.uri};
 }
 
 function toThumbnailUploadFile(
   asset: ProcessedMediaAsset,
-  blob: Blob,
 ): UploadFile {
   const contentType = normalizeContentType(asset.contentType);
   const fileName = normalizeFileName(asset.fileName);
-  const sizeBytes = blob.size;
+  const sizeBytes = asset.sizeBytes;
   if (contentType === null || fileName === null || !isPositiveSafeInteger(sizeBytes)) {
     throw invalidRequest('썸네일 파일 정보가 올바르지 않습니다.');
   }
@@ -414,7 +438,7 @@ function toThumbnailUploadFile(
   if (reason !== null) {
     throw invalidRequest(mediaValidationMessage(reason));
   }
-  return {blob, contentType, fileName, sizeBytes};
+  return {contentType, fileName, sizeBytes, uri: asset.uri};
 }
 
 async function requestPresignedUploads(
@@ -455,7 +479,7 @@ async function uploadFiles(
     assertNotAborted(signal);
     const file = files[index];
     try {
-      await transport.put(upload.uploadUrl, file.blob, {
+      await transport.put(upload.uploadUrl, file, {
         headers: upload.headers,
         signal,
         onUploadProgress: event => {

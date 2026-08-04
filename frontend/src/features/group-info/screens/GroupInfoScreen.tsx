@@ -151,6 +151,7 @@ export function GroupInfoScreen({
   const [members, setMembers] = useState<readonly GroupMember[]>(
     scoped.members,
   );
+  const membersRef = useRef(members);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [aliasDraft, setAliasDraft] = useState('');
   const [profileMemberId, setProfileMemberId] = useState<string | null>(null);
@@ -195,6 +196,10 @@ export function GroupInfoScreen({
   // 마지막으로 조회를 마친 그룹. 같은 그룹의 재조회는 기존 데이터를 유지한 채 갱신한다.
   const lastLoadedMembersGroupId = useRef<string | null>(null);
   const lastLoadedDetailGroupId = useRef<string | null>(null);
+
+  useEffect(() => {
+    membersRef.current = members;
+  }, [members]);
 
   // 하위 전체화면에 들어가면 하단 탭을 숨긴다(피드 상세·컴포저와 같은 방식).
   useEffect(() => {
@@ -502,9 +507,34 @@ export function GroupInfoScreen({
       setUpdatingRoleMemberId(member.memberId);
       onUpdateMemberRole(currentGroup.id, member.memberId, role)
         .then(result => {
-          setMembers(current =>
-            applyRoleChange(current, result.memberId, result.role),
+          const latestMembers = membersRef.current;
+          const previousMember = latestMembers.find(
+            candidate => candidate.memberId === result.memberId,
           );
+          const nextMembers = applyRoleChange(
+            latestMembers,
+            result.memberId,
+            result.role,
+          );
+          membersRef.current = nextMembers;
+          setMembers(nextMembers);
+          setGroupDetail(current => {
+            if (
+              current === null ||
+              previousMember === undefined ||
+              previousMember.role === result.role
+            ) {
+              return current;
+            }
+            const careReceiverDelta =
+              result.role === 'careReceiver' ? 1 : -1;
+            return {
+              ...current,
+              careReceiverCount: current.careReceiverCount + careReceiverDelta,
+              guardianCount:
+                current.guardianCount - careReceiverDelta,
+            };
+          });
         })
         .catch(() => {
           Alert.alert(

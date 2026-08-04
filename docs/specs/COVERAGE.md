@@ -215,7 +215,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-INTERESTS-002 관심사 일괄 수정 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | 0~10개·피보호자 본인 |
 | 활성 API | API-NOTIFICATIONS-001 기기 토큰 등록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md), [데이터](./contracts/DATA_MODEL.md) | 반영·확정 | 원자적 재등록·재활성화·소유권 이전 |
 | 활성 API | API-NOTIFICATIONS-002 미읽음 수 조회 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 성공 문구 `읽지 않은 알림 개수 조회 성공` |
-| 활성 API | API-NOTIFICATIONS-003 앱 내부 알림 목록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | `page`·`size`, 최신순 고정; `actor={userId,name,profileImageUrl}\|null` |
+| 활성 API | API-NOTIFICATIONS-003 앱 내부 알림 목록 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | `page`·`size`, 최신순 고정; `actor={userId,name,profileImageUrl}\|null`; 가입 요청 현재 상태 `relatedJoinRequestStatus` |
 | 활성 API | API-NOTIFICATIONS-004 단일 알림 읽음 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 성공 문구 `알림 읽음 처리 성공` |
 | 활성 API | API-NOTIFICATIONS-005 전체 알림 읽음 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 성공 문구 `전체 알림 읽음 처리 성공` |
 | 활성 API | API-NOTIFICATIONS-006 푸시 설정 조회 | [API](./contracts/API.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 7개 유형; 성공 문구 `푸시 알림 설정 조회 성공` |

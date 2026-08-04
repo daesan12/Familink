@@ -33,4 +33,5 @@ export type {
   DeviceTokenProvider,
   DeviceTokenRegistration,
   NotificationGateway,
+  NotificationJoinRequestStatus,
 } from './types';

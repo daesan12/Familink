@@ -47,6 +47,7 @@ test('알림 목록 응답을 화면 모델로 변환하고 페이지 파라미�
           relatedDailyReportId: null,
           relatedEventId: null,
           relatedJoinRequestId: null,
+          relatedJoinRequestStatus: null,
           relatedPostId: 15,
           title: '새 게시글',
           type: 'NEW_POST',
@@ -62,6 +63,7 @@ test('알림 목록 응답을 화면 모델로 변환하고 페이지 파라미�
           relatedDailyReportId: null,
           relatedEventId: null,
           relatedJoinRequestId: null,
+          relatedJoinRequestStatus: null,
           relatedPostId: null,
           title: '알림',
           type: 'DAILY_REPORT',
@@ -77,6 +79,7 @@ test('알림 목록 응답을 화면 모델로 변환하고 페이지 파라미�
           relatedDailyReportId: null,
           relatedEventId: null,
           relatedJoinRequestId: 21,
+          relatedJoinRequestStatus: 'PENDING_ADMIN',
           relatedPostId: null,
           title: '그룹 가입 요청',
           type: 'GROUP_JOIN_REQUEST',
@@ -98,13 +101,20 @@ test('알림 목록 응답을 화면 모델로 변환하고 페이지 파라미�
         id: '12',
         isRead: false,
         postId: '15',
+        relatedJoinRequestStatus: null,
       }),
-      expect.objectContaining({avatarText: '알', id: '13', isRead: true}),
+      expect.objectContaining({
+        avatarText: '알',
+        id: '13',
+        isRead: true,
+        relatedJoinRequestStatus: null,
+      }),
       expect.objectContaining({
         actorName: '수호',
         groupId: '3',
         id: '14',
         relatedJoinRequestId: '21',
+        relatedJoinRequestStatus: 'PENDING_ADMIN',
         requestKind: 'groupJoin',
       }),
     ],
@@ -112,6 +122,56 @@ test('알림 목록 응답을 화면 모델로 변환하고 페이지 파라미�
   // 행위자가 삭제된 알림에는 actorName을 만들지 않는다.
   expect(page.notifications[1].actorName).toBeUndefined();
   expect(client.get).toHaveBeenCalledWith('/notifications?page=2&size=10');
+});
+
+test('누락되거나 알 수 없는 가입 요청 상태는 null로 읽고 처리 동작을 숨긴다', async () => {
+  const baseNotification = {
+    actor: {name: '수호', profileImageUrl: null, userId: 8},
+    body: '그룹 가입 요청이 도착했어요.',
+    createdAt: '2026-07-31T00:00:00Z',
+    groupId: 3,
+    id: 14,
+    readAt: null,
+    relatedCallReportId: null,
+    relatedDailyReportId: null,
+    relatedEventId: null,
+    relatedJoinRequestId: 21,
+    relatedPostId: null,
+    title: '그룹 가입 요청',
+    type: 'GROUP_JOIN_REQUEST',
+  };
+  const missingClient = createClient();
+  missingClient.get.mockResolvedValueOnce(
+    success({content: [baseNotification], hasNext: false}),
+  );
+
+  await expect(
+    createNotificationGateway({client: missingClient}).loadPage(0),
+  ).resolves.toMatchObject({
+    notifications: [
+      expect.objectContaining({
+        relatedJoinRequestStatus: null,
+      }),
+    ],
+  });
+
+  const unknownClient = createClient();
+  unknownClient.get.mockResolvedValueOnce(
+    success({
+      content: [
+        {...baseNotification, relatedJoinRequestStatus: 'UNKNOWN_STATUS'},
+      ],
+      hasNext: false,
+    }),
+  );
+
+  const unknownPage = await createNotificationGateway({
+    client: unknownClient,
+  }).loadPage(0);
+  expect(unknownPage.notifications[0]).toMatchObject({
+    relatedJoinRequestStatus: null,
+  });
+  expect(unknownPage.notifications[0]).not.toHaveProperty('requestKind');
 });
 
 test('읽지 않은 개수와 읽음 API를 계약 경로로 호출한다', async () => {
