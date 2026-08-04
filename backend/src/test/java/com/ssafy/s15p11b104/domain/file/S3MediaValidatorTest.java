@@ -1,5 +1,6 @@
 package com.ssafy.s15p11b104.domain.file;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -105,8 +106,19 @@ class S3MediaValidatorTest {
 
 		for (int attempt = 0; attempt < 3; attempt++) {
 			assertThatThrownBy(() -> validator.validateProfileImage("https://cdn/profile-image/invalid.jpg"))
-				.isInstanceOf(BusinessException.class);
+				.isInstanceOfSatisfying(BusinessException.class, exception ->
+					assertThat(exception.getField()).isEqualTo("profileImageUrl"));
 		}
+	}
+
+	@Test
+	void reportsThumbnailMetadataErrorsAgainstThumbnailUrl() {
+		given(s3Client.headObject(any(HeadObjectRequest.class)))
+			.willReturn(HeadObjectResponse.builder().contentLength(0L).contentType("image/jpeg").build());
+
+		assertThatThrownBy(() -> validator.validateThumbnail("https://cdn/post-media/thumbnail.jpg"))
+			.isInstanceOfSatisfying(BusinessException.class, exception ->
+				assertThat(exception.getField()).isEqualTo("media.thumbnailUrl"));
 	}
 
 	@Test
@@ -116,7 +128,10 @@ class S3MediaValidatorTest {
 				.contentType("image/jpeg").build());
 
 		assertThatThrownBy(() -> validator.validate(MediaType.IMAGE, "https://cdn/post-media/photo.jpg"))
-			.isInstanceOf(BusinessException.class);
+			.isInstanceOfSatisfying(BusinessException.class, exception -> {
+				assertThat(exception.getField()).isEqualTo("media.fileUrl");
+				assertThat(exception.getDetailMessage()).isEqualTo("사진은 파일당 10MB 이하만 올릴 수 있습니다.");
+			});
 	}
 
 	@Test
@@ -140,7 +155,10 @@ class S3MediaValidatorTest {
 		given(videoDurationProvider.durationSeconds(any())).willReturn(BigDecimal.valueOf(60.01));
 
 		assertThatThrownBy(() -> validator.validate(MediaType.VIDEO, "https://cdn/post-media/video.mp4"))
-			.isInstanceOf(BusinessException.class);
+			.isInstanceOfSatisfying(BusinessException.class, exception -> {
+				assertThat(exception.getField()).isEqualTo("media.fileUrl");
+				assertThat(exception.getDetailMessage()).isEqualTo("영상은 최대 60초까지 올릴 수 있습니다.");
+			});
 	}
 
 	@Test
