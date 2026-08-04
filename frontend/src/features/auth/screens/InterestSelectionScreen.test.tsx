@@ -206,6 +206,33 @@ test('중복된 직접 입력 관심사는 추가하지 않는다', async () => 
   ).toBeTruthy();
 });
 
+test('onSkip을 넘기지 않으면 건너뛰기 버튼을 숨긴다', async () => {
+  // 마이페이지(J-4) 관심사 설정은 이미 가입을 마친 사용자용이라 건너뛸 대상이 없다.
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <InterestSelectionScreen
+        onBack={jest.fn()}
+        onComplete={jest.fn()}
+        onSave={jest.fn().mockResolvedValue(undefined)}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(
+    renderer!.root.findAllByProps({
+      accessibilityLabel: '관심사 설정 건너뛰기',
+    }),
+  ).toHaveLength(0);
+  // 저장 버튼은 그대로 있어야 한다.
+  expect(
+    renderer!.root.findAllByProps({
+      accessibilityLabel: '관심사 저장하고 다음',
+    }).length,
+  ).toBeGreaterThan(0);
+});
+
 test('건너뛰기를 누르면 저장 없이 피드 이동을 요청한다', async () => {
   const {onSave, onSkip, renderer} = await renderScreen();
 
