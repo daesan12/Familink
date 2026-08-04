@@ -20,13 +20,15 @@ public interface PostAnalysisCallRepository extends JpaRepository<PostAnalysis, 
 		join fetch post.authorMember author
 		join fetch author.user
 		where post.group.id = :groupId
+			and author.id <> :excludedAuthorMemberId
 			and analysis.status = :status
 			and post.createdAt >= :fromInclusive
 			and post.createdAt < :toExclusive
 		order by post.createdAt desc
 		""")
-	List<PostAnalysis> findSuccessfulToday(
+	List<PostAnalysis> findSuccessfulTodayExcludingAuthor(
 		@Param("groupId") Long groupId,
+		@Param("excludedAuthorMemberId") Long excludedAuthorMemberId,
 		@Param("status") AnalysisStatus status,
 		@Param("fromInclusive") Instant fromInclusive,
 		@Param("toExclusive") Instant toExclusive,

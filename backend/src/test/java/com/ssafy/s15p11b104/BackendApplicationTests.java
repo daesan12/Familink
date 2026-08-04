@@ -186,18 +186,29 @@ class BackendApplicationTests extends IntegrationTest {
 		assertThat(member).isPresent();
 		assertThat(member.orElseThrow().getRole()).isEqualTo(GroupRole.CARE_RECEIVER);
 
+		Long authorUserId = jdbcTemplate.queryForObject("""
+			INSERT INTO users (login_id, password_hash, name, birth_date, gender)
+			VALUES ('call-test-fam', 'unused', '작성자', DATE '1980-01-01', 'FEMALE')
+			RETURNING id
+			""", Long.class);
+		Long authorMemberId = jdbcTemplate.queryForObject("""
+			INSERT INTO group_members (group_id, user_id, role, is_manager, joined_at)
+			VALUES (?, ?, 'GUARDIAN', FALSE, CURRENT_TIMESTAMP)
+			RETURNING id
+			""", Long.class, groupId, authorUserId);
 		Long postId = jdbcTemplate.queryForObject("""
 			INSERT INTO posts (group_id, author_member_id, content)
 			VALUES (?, ?, '테스트 게시글')
 			RETURNING id
-			""", Long.class, groupId, member.orElseThrow().getId());
+			""", Long.class, groupId, authorMemberId);
 		jdbcTemplate.update("""
 			INSERT INTO post_analyses (post_id, status, summary, analyzed_at)
 			VALUES (?, 'SUCCESS', '테스트 게시글 요약', CURRENT_TIMESTAMP)
 			""", postId);
 
-		var analyses = postAnalysisRepository.findSuccessfulToday(
+		var analyses = postAnalysisRepository.findSuccessfulTodayExcludingAuthor(
 			groupId,
+			member.orElseThrow().getId(),
 			AnalysisStatus.SUCCESS,
 			Instant.EPOCH,
 			Instant.now().plusSeconds(60),
