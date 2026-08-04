@@ -3,6 +3,7 @@ import {useRef, useState, type ReactNode} from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -236,7 +237,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
   };
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView behavior="padding" style={styles.screen}>
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="뒤로 가기"
@@ -487,7 +488,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
         value={toIsoValue(birthDate)}
         visible={isDateOpen && !isSaving}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

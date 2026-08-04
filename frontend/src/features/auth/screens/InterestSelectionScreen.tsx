@@ -3,6 +3,7 @@ import {useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -375,7 +376,7 @@ function CustomInterestModal({
       statusBarTranslucent
       transparent
       visible={visible}>
-      <View style={styles.modal}>
+      <KeyboardAvoidingView behavior="padding" style={styles.modal}>
         <Pressable
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
@@ -438,7 +439,7 @@ function CustomInterestModal({
             )}
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
