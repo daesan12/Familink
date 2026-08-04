@@ -37,6 +37,13 @@ interface JoinApprovalScreenProps {
   onProcess?: JoinRequestProcessor;
 }
 
+interface DecisionAlert {
+  accessibilityLabel: string;
+  confirmAccessibilityLabel: string;
+  message?: string;
+  title: string;
+}
+
 // H-5 가입 승인 대기. 관리자가 신청자를 확인해 승인(역할 지정) 또는 거절한다.
 export function JoinApprovalScreen({
   groupId,
@@ -49,7 +56,7 @@ export function JoinApprovalScreen({
   const [approving, setApproving] = useState<JoinRequest | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [processError, setProcessError] = useState<string | null>(null);
-  const [processAlert, setProcessAlert] = useState<string | null>(null);
+  const [processAlert, setProcessAlert] = useState<DecisionAlert | null>(null);
 
   const applyDecision = async (
     request: JoinRequest,
@@ -73,10 +80,21 @@ export function JoinApprovalScreen({
       return true;
     } catch (error) {
       const errorMessage = joinRequestDecisionErrorMessage(error);
-      if (isCareReceiverAlreadyActiveInOtherGroup(error)) {
-        setProcessAlert(errorMessage);
-      } else {
+      if (isJoinRequestAlreadyProcessed(error)) {
         setProcessError(errorMessage);
+      } else if (isCareReceiverAlreadyActiveInOtherGroup(error)) {
+        setProcessAlert({
+          accessibilityLabel: '피보호자 승인 제한 안내',
+          confirmAccessibilityLabel: '피보호자 승인 제한 확인',
+          message: errorMessage,
+          title: '피보호자로 승인할 수 없어요',
+        });
+      } else {
+        setProcessAlert({
+          accessibilityLabel: '가입 요청 처리 실패 안내',
+          confirmAccessibilityLabel: '가입 요청 처리 실패 확인',
+          title: '가입 요청을 처리하지 못했습니다.',
+        });
       }
       // 이미 처리된 요청은 재시도할 수 없으므로 목록에서도 정리한다.
       if (isJoinRequestAlreadyProcessed(error)) {
@@ -96,7 +114,7 @@ export function JoinApprovalScreen({
     if (!approving || processingId !== null) {
       return;
     }
-    // 실패해도 "참여했습니다" 팝업이 남지 않도록 항상 닫고, 오류는 화면 문구로 안내한다.
+    // 실패해도 "참여했습니다" 역할 팝업이 남지 않도록 항상 닫는다.
     await applyDecision(approving, role);
     setApproving(null);
   };
@@ -200,7 +218,7 @@ export function JoinApprovalScreen({
         onClose={handleCloseRoleModal}
       />
       <DecisionErrorModal
-        message={processAlert}
+        alert={processAlert}
         onClose={() => setProcessAlert(null)}
       />
     </View>
@@ -208,29 +226,35 @@ export function JoinApprovalScreen({
 }
 
 function DecisionErrorModal({
-  message,
+  alert,
   onClose,
 }: {
-  message: string | null;
+  alert: DecisionAlert | null;
   onClose: () => void;
 }) {
+  if (alert === null) {
+    return null;
+  }
+
   return (
     <Modal
       animationType="fade"
       onRequestClose={onClose}
       transparent
-      visible={message !== null}
+      visible
     >
       <View style={styles.alertBackdrop}>
         <View
-          accessibilityLabel="피보호자 승인 제한 안내"
+          accessibilityLabel={alert.accessibilityLabel}
           accessibilityViewIsModal
           style={styles.alertCard}
         >
-          <Text style={styles.alertTitle}>피보호자로 승인할 수 없어요</Text>
-          <Text style={styles.alertMessage}>{message}</Text>
+          <Text style={styles.alertTitle}>{alert.title}</Text>
+          {alert.message ? (
+            <Text style={styles.alertMessage}>{alert.message}</Text>
+          ) : null}
           <Pressable
-            accessibilityLabel="피보호자 승인 제한 확인"
+            accessibilityLabel={alert.confirmAccessibilityLabel}
             accessibilityRole="button"
             onPress={onClose}
             style={styles.alertButton}

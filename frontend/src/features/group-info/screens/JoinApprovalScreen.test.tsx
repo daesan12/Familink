@@ -100,7 +100,7 @@ test('거절하면 해당 카드가 사라지고 건수가 줄어든다', async 
   ]);
 });
 
-test('처리에 실패하면 요청 카드를 유지하고 다시 시도할 수 있다', async () => {
+test('일반 처리 실패는 안내 팝업을 보여주고 확인 후 카드를 유지한다', async () => {
   const renderer = await renderScreen(REQUESTS, async () => {
     throw new Error('network');
   });
@@ -108,12 +108,18 @@ test('처리에 실패하면 요청 카드를 유지하고 다시 시도할 수 
   await press(renderer, '손수호 거절');
 
   expect(hasText(renderer, '손수호')).toBe(true);
+  expect(hasText(renderer, '가입 요청을 처리하지 못했습니다.')).toBe(true);
+  expect(hasText(renderer, '잠시 후 다시 시도해 주세요.')).toBe(false);
   expect(
-    hasText(
-      renderer,
-      '가입 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.',
-    ),
-  ).toBe(true);
+    renderer.root.findAllByProps({
+      accessibilityLabel: '가입 요청 처리 실패 안내',
+    }).length,
+  ).toBeGreaterThan(0);
+
+  await press(renderer, '가입 요청 처리 실패 확인');
+
+  expect(hasText(renderer, '가입 요청을 처리하지 못했습니다.')).toBe(false);
+  expect(hasText(renderer, '손수호')).toBe(true);
 });
 
 test('승인하면 역할 선택 모달을 열고, 역할을 고르면 카드가 사라진다', async () => {
