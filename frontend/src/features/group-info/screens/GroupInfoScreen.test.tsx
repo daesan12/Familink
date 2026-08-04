@@ -2,6 +2,7 @@ import React from 'react';
 import {Alert, Text, TextInput} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
+import {mockHardwareBack} from '../../../shared/testing/hardwareBack';
 import type {GroupMember, WeeklyRankingSnapshot} from '../types';
 import {GroupInfoScreen} from './GroupInfoScreen';
 
@@ -363,6 +364,10 @@ test('역할 변경 확인 팝업에서 취소하면 역할이 유지된다', ()
   confirmLastAlert(alertSpy, '취소');
 
   expect(hasText(renderer, '피보호자 1명, 보호자 2명')).toBe(true);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '손수호 보호자'}).props
+      .accessibilityState,
+  ).toEqual({selected: true});
 });
 
 test('호칭 편집 모드에서는 역할 토글이 표시되지 않는다', () => {
@@ -406,6 +411,58 @@ test('호칭 편집을 취소하면 저장 없이 편집이 닫히고 역할 토
   ).toBeGreaterThan(0);
 });
 
+test('호칭 편집 중 시스템 Back은 편집만 취소하고 화면을 유지한다', () => {
+  // 호칭 편집은 Modal이 아니라 인라인 입력이라 Back이 JS 리스너까지 내려온다.
+  const back = mockHardwareBack();
+
+  try {
+    const renderer = renderScreen();
+
+    press(renderer, '손수호 호칭 수정');
+    const input = renderer.root.findByProps({
+      accessibilityLabel: '손수호 호칭 입력',
+    });
+    TestRenderer.act(() => {
+      input.props.onChangeText('바꾸다 만 호칭');
+    });
+
+    let handled = false;
+    TestRenderer.act(() => {
+      handled = back.press();
+    });
+
+    expect(handled).toBe(true);
+    // 편집만 닫히고 그룹 정보 화면은 그대로 남는다.
+    expect(renderer.root.findAllByType(TextInput)).toHaveLength(0);
+    expect(hasText(renderer, '바꾸다 만 호칭')).toBe(false);
+    expect(hasText(renderer, '아빠')).toBe(true);
+    expect(hasText(renderer, '그룹 정보')).toBe(true);
+  } finally {
+    back.restore();
+  }
+});
+
+test('하위 화면에서 시스템 Back은 그룹 정보로 돌아온다', () => {
+  const back = mockHardwareBack();
+
+  try {
+    const renderer = renderScreen();
+
+    press(renderer, '그룹관리자 변경');
+    expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(true);
+
+    let handled = false;
+    TestRenderer.act(() => {
+      handled = back.press();
+    });
+
+    expect(handled).toBe(true);
+    expect(hasText(renderer, '그룹 정보')).toBe(true);
+  } finally {
+    back.restore();
+  }
+});
+
 test('역할 변경 API가 실패하면 오류 팝업을 띄우고 역할을 유지한다', async () => {
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const updateMemberRole = jest.fn().mockRejectedValue(new Error('forbidden'));
@@ -425,6 +482,10 @@ test('역할 변경 API가 실패하면 오류 팝업을 띄우고 역할을 유
     '관리자 권한과 구성원 상태를 확인한 뒤 다시 시도해 주세요.',
   );
   expect(hasText(renderer, '피보호자 1명, 보호자 2명')).toBe(true);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '손수호 보호자'}).props
+      .accessibilityState,
+  ).toEqual({selected: true});
 });
 
 test('방장이 아니면 역할 토글 시 안내 팝업을 띄우고 역할을 바꾸지 않는다', () => {
@@ -926,6 +987,141 @@ test('가입 승인 대기 카드를 누르면 승인 화면으로 이동한다'
   expect(hasText(renderer!, '승인 요청 1건')).toBe(true);
   expect(hasText(renderer!, '손수호')).toBe(true);
 });
+
+// 승인 대기 건수 목업. 건수 필드를 내려주는 조회 API가 없어 대기 요청 목록으로 센다.
+const PENDING_JOIN_REQUEST = {
+  applicantName: '손수호',
+  applicantUserId: 'u-1',
+  assignedRole: null,
+  createdAt: '2026-07-30T09:12:00Z',
+  joinRequestId: 'jr-1',
+  processedAt: null,
+  profileImageUrl: null,
+  status: 'PENDING_ADMIN' as const,
+};
+
+function pendingJoinRequest(suffix: string) {
+  return {
+    ...PENDING_JOIN_REQUEST,
+    applicantUserId: `u-${suffix}`,
+    joinRequestId: `jr-${suffix}`,
+  };
+}
+
+test('관리자에게는 목업 prop이 아니라 실제 대기 요청 건수를 표시한다', async () => {
+  const joinRequestsLoader = jest.fn().mockResolvedValue([
+    pendingJoinRequest('1'),
+    pendingJoinRequest('2'),
+    pendingJoinRequest('3'),
+    // 처리된 요청은 대기 건수에서 빠진다.
+    {
+      ...pendingJoinRequest('4'),
+      assignedRole: 'guardian' as const,
+      processedAt: '2026-07-31T02:00:00Z',
+      status: 'APPROVED' as const,
+    },
+  ]);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        joinRequestsLoader={joinRequestsLoader}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(joinRequestsLoader).toHaveBeenCalledWith('group-1');
+  expect(hasText(renderer!, '승인 요청 3건')).toBe(true);
+  expect(hasText(renderer!, '승인 요청 2건')).toBe(false);
+});
+
+test('관리자가 아니면 건수를 조회하지 않고 조회 권한을 안내한다', async () => {
+  const joinRequestsLoader = jest.fn().mockResolvedValue([]);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-dad"
+        initialMembers={MEMBERS}
+        joinRequestsLoader={joinRequestsLoader}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  // API-GROUPS-008은 관리자만 호출할 수 있어 확정 실패 요청을 보내지 않는다.
+  expect(joinRequestsLoader).not.toHaveBeenCalled();
+  expect(hasText(renderer!, '관리자만 확인할 수 있어요')).toBe(true);
+});
+
+test('건수 조회에 실패하면 0건 대신 실패를 알린다', async () => {
+  const joinRequestsLoader = jest.fn().mockRejectedValue(new Error('offline'));
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        joinRequestsLoader={joinRequestsLoader}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(hasText(renderer!, '건수를 불러오지 못했어요')).toBe(true);
+});
+
+test('가입 승인 대기에서 돌아오면 처리 결과가 건수에 반영된다', async () => {
+  let pending = [pendingJoinRequest('1'), pendingJoinRequest('2')];
+  const joinRequestsLoader = jest.fn(() => Promise.resolve(pending));
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        joinRequestsLoader={joinRequestsLoader}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+  expect(hasText(renderer!, '승인 요청 2건')).toBe(true);
+
+  // 승인 화면에서 한 건을 처리하고 돌아온 상황.
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '가입 승인 대기'})
+      .props.onPress();
+  });
+  pending = [pendingJoinRequest('2')];
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '뒤로 가기'})
+      .props.onPress();
+  });
+
+  expect(hasText(renderer!, '승인 요청 1건')).toBe(true);
+});
+
 test('하위 화면에서 돌아오면 구성원 목록과 그룹 상세를 다시 조회한다', async () => {
   const membersLoader = jest.fn().mockResolvedValue([
     {
@@ -1040,6 +1236,15 @@ test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공
     memberId: 'm-member',
     role: 'careReceiver' as const,
   });
+  const groupDetailLoader = jest.fn().mockResolvedValue({
+    careReceiverCount: 0,
+    guardianCount: 2,
+    id: 'group-1',
+    isManager: true,
+    managerMemberId: 'm-manager',
+    memberCount: 2,
+    name: '우리 가족',
+  });
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(async () => {
@@ -1047,6 +1252,7 @@ test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공
       <GroupInfoScreen
         {...baseProps}
         currentMemberId="m-manager"
+        groupDetailLoader={groupDetailLoader}
         membersLoader={membersLoader}
         onUpdateMemberRole={updateMemberRole}
         pendingJoinCount={0}
@@ -1054,11 +1260,14 @@ test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공
       />,
     );
     await Promise.resolve();
+    await Promise.resolve();
   });
 
   mountedRenderers.push(renderer!);
   expect(membersLoader).toHaveBeenCalledWith('group-1');
+  expect(groupDetailLoader).toHaveBeenCalledWith('group-1');
   expect(hasText(renderer!, '엄마')).toBe(true);
+  expect(hasText(renderer!, '피보호자 0명, 보호자 2명')).toBe(true);
 
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   press(renderer!, '엄마 피보호자');
@@ -1072,6 +1281,10 @@ test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공
     'm-member',
     'careReceiver',
   );
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '엄마 피보호자'}).props
+      .accessibilityState,
+  ).toEqual({selected: true});
   expect(hasText(renderer!, '피보호자 1명, 보호자 1명')).toBe(true);
 });
 

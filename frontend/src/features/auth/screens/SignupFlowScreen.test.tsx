@@ -10,9 +10,6 @@ import type {
 import {SignupFlowScreen} from './SignupFlowScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
-jest.mock('react-native-image-picker', () => ({
-  launchImageLibrary: jest.fn(),
-}));
 jest.mock('../hooks/useScreenEntrance', () => ({
   useScreenEntrance: () => ({}),
 }));
@@ -86,6 +83,20 @@ function render(
   mountedRenderers.push(renderer!);
   return {gateway, renderer: renderer!};
 }
+
+test('회원가입에서는 저장되지 않는 사진 선택을 노출하지 않고 마이페이지 등록을 안내한다', () => {
+  const {renderer} = render();
+
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '프로필 사진 선택'}),
+  ).toHaveLength(0);
+  expect(
+    hasText(
+      renderer,
+      '프로필 사진은 가입 후 마이페이지에서 등록할 수 있어요',
+    ),
+  ).toBe(true);
+});
 
 test('시스템 Back은 회원가입 이전 단계를 먼저 닫고 첫 단계에서만 흐름을 종료한다', async () => {
   const onCancel = jest.fn();
@@ -234,6 +245,58 @@ test('비밀번호 규칙을 안내하고 입력 중 위반 이유를 표시한�
   ).toBe(true);
 });
 
+test('비밀번호 표시 아이콘은 각 입력창만 독립적으로 전환하고 입력값을 유지한다', async () => {
+  const {renderer} = render();
+
+  await advanceToPassword(renderer);
+  change(renderer, '회원가입 비밀번호', 'password123');
+  change(renderer, '회원가입 비밀번호 확인', 'password456');
+
+  const passwordInput = () =>
+    renderer.root.findByProps({accessibilityLabel: '회원가입 비밀번호'});
+  const confirmationInput = () =>
+    renderer.root.findByProps({
+      accessibilityLabel: '회원가입 비밀번호 확인',
+    });
+
+  expect(passwordInput().props.secureTextEntry).toBe(true);
+  expect(confirmationInput().props.secureTextEntry).toBe(true);
+
+  press(renderer, '회원가입 비밀번호 표시');
+
+  expect(passwordInput().props.secureTextEntry).toBe(false);
+  expect(confirmationInput().props.secureTextEntry).toBe(true);
+  expect(passwordInput().props.value).toBe('password123');
+  expect(confirmationInput().props.value).toBe('password456');
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: '회원가입 비밀번호 숨기기',
+    }).props.accessibilityLabel,
+  ).toBe('회원가입 비밀번호 숨기기');
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: '회원가입 비밀번호 확인 표시',
+    }).props.accessibilityLabel,
+  ).toBe('회원가입 비밀번호 확인 표시');
+
+  press(renderer, '회원가입 비밀번호 확인 표시');
+
+  expect(passwordInput().props.secureTextEntry).toBe(false);
+  expect(confirmationInput().props.secureTextEntry).toBe(false);
+
+  press(renderer, '회원가입 비밀번호 숨기기');
+
+  expect(passwordInput().props.secureTextEntry).toBe(true);
+  expect(confirmationInput().props.secureTextEntry).toBe(false);
+
+  press(renderer, '회원가입 비밀번호 확인 숨기기');
+
+  expect(passwordInput().props.secureTextEntry).toBe(true);
+  expect(confirmationInput().props.secureTextEntry).toBe(true);
+  expect(passwordInput().props.value).toBe('password123');
+  expect(confirmationInput().props.value).toBe('password456');
+});
+
 test('완료 버튼은 방금 가입한 로그인 ID를 전달한다', async () => {
   const onComplete = jest.fn();
   const {renderer} = render(createGateway(), onComplete);
@@ -243,6 +306,37 @@ test('완료 버튼은 방금 가입한 로그인 ID를 전달한다', async () 
   press(renderer, '완료');
 
   expect(onComplete).toHaveBeenCalledWith('CaseUser1');
+});
+
+test('완료 단계는 뒤로가기 버튼을 숨기고 시스템 Back으로도 입력 단계로 돌아가지 않는다', async () => {
+  const onCancel = jest.fn();
+  const onComplete = jest.fn();
+  let hardwareBackHandler: (() => boolean) | undefined;
+  const addEventListener = jest
+    .spyOn(BackHandler, 'addEventListener')
+    .mockImplementation((_event, handler) => {
+      hardwareBackHandler = () => handler({} as never) === true;
+      return {remove: jest.fn()};
+    });
+  const {renderer} = render(createGateway(), onComplete, onCancel);
+
+  await advanceToGender(renderer);
+  await pressAsync(renderer, '다음');
+  expect(hasText(renderer, '회원가입이\n완료되었습니다!')).toBe(true);
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '이전 단계'}),
+  ).toHaveLength(0);
+
+  TestRenderer.act(() => {
+    // 시스템 Back을 소비해 앱 종료도, 입력 단계 복귀도 일어나지 않는다.
+    expect(hardwareBackHandler?.()).toBe(true);
+  });
+
+  expect(hasText(renderer, '회원가입이\n완료되었습니다!')).toBe(true);
+  expect(hasText(renderer, '성별을\n선택해주세요')).toBe(false);
+  expect(onCancel).not.toHaveBeenCalled();
+  expect(onComplete).not.toHaveBeenCalled();
+  addEventListener.mockRestore();
 });
 
 test('로그인 ID 중복 확인 결과를 화면에 표시한다', async () => {

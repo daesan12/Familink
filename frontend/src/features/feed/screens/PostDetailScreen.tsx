@@ -3,7 +3,6 @@ import {useRef, useState} from 'react';
 import {
   Alert,
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,6 +16,7 @@ import {
 import {COLORS, RADII} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
 import {CommentItem} from '../components/CommentItem';
+import {FeedAvatar} from '../components/FeedAvatar';
 import {PostActionsSheet} from '../components/PostActionsSheet';
 import {PostImageCarousel} from '../components/PostImageCarousel';
 import {
@@ -35,8 +35,6 @@ import type {
 } from '../types';
 import {MAX_COMMENT_LENGTH} from '../types';
 import {formatRelativeTime} from '../time';
-
-const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
 
 interface PostDetailScreenProps {
   canInteract: boolean;
@@ -222,25 +220,14 @@ export function PostDetailScreen({
       >
         <View style={styles.authorRow}>
           {onPressAuthor === undefined ? (
-            <View accessibilityElementsHidden style={styles.avatar}>
-              <Image
-                accessibilityIgnoresInvertColors
-                source={PROFILE_PLACEHOLDER}
-                style={styles.avatarImage}
-              />
-            </View>
+            <FeedAvatar member={post.author} />
           ) : (
             <Pressable
               accessibilityLabel={`${post.author.name}님의 프로필 보기`}
               accessibilityRole="button"
               onPress={() => onPressAuthor(post.author)}
-              style={styles.avatar}
             >
-              <Image
-                accessibilityIgnoresInvertColors
-                source={PROFILE_PLACEHOLDER}
-                style={styles.avatarImage}
-              />
+              <FeedAvatar member={post.author} />
             </Pressable>
           )}
           <View style={styles.authorText}>
@@ -349,11 +336,7 @@ export function PostDetailScreen({
             </View>
           ) : null}
           <View style={styles.composer}>
-            <View accessibilityElementsHidden style={styles.composerAvatar}>
-              <Text style={styles.composerAvatarText}>
-                {currentUser.avatarText}
-              </Text>
-            </View>
+            <FeedAvatar member={currentUser} size={38} />
             <TextInput
               accessibilityLabel={
                 editingComment ? '댓글 수정 입력' : '댓글 입력'
@@ -435,20 +418,6 @@ const styles = StyleSheet.create({
     gap: 1,
     marginLeft: 12,
   },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceMuted,
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    height: 44,
-    justifyContent: 'center',
-    overflow: 'hidden',
-    width: 44,
-  },
-  avatarImage: {
-    height: '100%',
-    width: '100%',
-  },
   body: {
     color: COLORS.textStrong,
     fontSize: 15,
@@ -494,21 +463,6 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingLeft: 6,
     paddingRight: 4,
-  },
-  composerAvatar: {
-    alignItems: 'center',
-    backgroundColor: '#F7F5FF',
-    borderColor: '#D1C9FF',
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    height: 36,
-    justifyContent: 'center',
-    width: 36,
-  },
-  composerAvatarText: {
-    color: '#C4BAFF',
-    fontSize: 14,
-    fontWeight: '600',
   },
   composerSection: {
     backgroundColor: COLORS.background,

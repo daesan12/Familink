@@ -3,6 +3,7 @@ package com.ssafy.s15p11b104.domain.notification.dto;
 import java.time.Instant;
 import java.util.List;
 
+import com.ssafy.s15p11b104.domain.group.entity.JoinRequestStatus;
 import com.ssafy.s15p11b104.domain.notification.entity.NotificationType;
 
 public record NotificationListResponse(List<Item> content, boolean hasNext) {
@@ -15,6 +16,7 @@ public record NotificationListResponse(List<Item> content, boolean hasNext) {
 		Long groupId,
 		Actor actor,
 		Long relatedJoinRequestId,
+		JoinRequestStatus relatedJoinRequestStatus,
 		Long relatedPostId,
 		Long relatedEventId,
 		Long relatedCallReportId,

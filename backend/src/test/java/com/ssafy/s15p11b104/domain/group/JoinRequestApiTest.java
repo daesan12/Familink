@@ -1,6 +1,8 @@
 package com.ssafy.s15p11b104.domain.group;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -22,11 +24,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.entity.UserGender;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupJoinRequest;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
@@ -66,6 +70,9 @@ class JoinRequestApiTest extends IntegrationTest {
 
 	@Autowired
 	private GroupJoinRequestRepository groupJoinRequestRepository;
+
+	@MockitoBean
+	private MediaDownloadUrlProvider mediaDownloadUrlProvider;
 
 	private User managerUser;
 	private User memberUser;
@@ -201,6 +208,11 @@ class JoinRequestApiTest extends IntegrationTest {
 
 	@Test
 	void managerCanListJoinRequestsWithApplicantProfile() throws Exception {
+		applicantUser.updateProfileImageUrl("https://cdn/profile-image/applicant.jpg");
+		applicantUser = userRepository.saveAndFlush(applicantUser);
+		given(mediaDownloadUrlProvider.issueProfileImageDownloadUrl(
+			"https://cdn/profile-image/applicant.jpg"))
+			.willReturn("https://signed.example/applicant.jpg");
 		GroupJoinRequest pending = createPendingRequest(applicantUser);
 
 		mockMvc.perform(get("/groups/" + group.getId() + "/join-requests")
@@ -210,10 +222,17 @@ class JoinRequestApiTest extends IntegrationTest {
 			.andExpect(jsonPath("$.data.joinRequests[0].joinRequestId").value(pending.getId()))
 			.andExpect(jsonPath("$.data.joinRequests[0].applicantUserId").value(applicantUser.getId()))
 			.andExpect(jsonPath("$.data.joinRequests[0].applicantName").value("신청자"))
+			.andExpect(jsonPath("$.data.joinRequests[0].profileImageUrl")
+				.value("https://signed.example/applicant.jpg"))
 			.andExpect(jsonPath("$.data.joinRequests[0].status").value("PENDING_ADMIN"))
 			.andExpect(jsonPath("$.data.joinRequests[0].createdAt").exists())
 			.andExpect(jsonPath("$.data.joinRequests[0].assignedRole").doesNotExist())
 			.andExpect(jsonPath("$.data.joinRequests[0].processedAt").doesNotExist());
+
+		verify(mediaDownloadUrlProvider).issueProfileImageDownloadUrl(
+			"https://cdn/profile-image/applicant.jpg");
+		assertThat(userRepository.findById(applicantUser.getId()).orElseThrow().getProfileImageUrl())
+			.isEqualTo("https://cdn/profile-image/applicant.jpg");
 	}
 
 	@Test

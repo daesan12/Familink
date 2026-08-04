@@ -115,7 +115,12 @@ describe('family feed API', () => {
       hasNext: true,
       posts: [
         expect.objectContaining({
-          author: {avatarText: '홍유', id: '21', name: '홍유라'},
+          author: {
+            avatarText: '홍유',
+            id: '21',
+            name: '홍유라',
+            profileImageUrl: null,
+          },
           currentUserReactionId: 'HEART',
           groupId: 'group/1',
           id: '11',
@@ -173,7 +178,12 @@ describe('family feed API', () => {
 
     await expect(loadPostDetail('13', '21')).resolves.toEqual(
       expect.objectContaining({
-        author: {avatarText: '강다', id: '22', name: '강다영'},
+        author: {
+          avatarText: '강다',
+          id: '22',
+          name: '강다영',
+          profileImageUrl: null,
+        },
         body: '상세 내용',
         groupId: '12',
         id: '13',

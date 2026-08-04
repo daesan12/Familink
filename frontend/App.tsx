@@ -38,6 +38,10 @@ import { SessionRestoreErrorScreen } from "./src/features/auth/screens/SessionRe
 import { SignedInWelcomeScreen } from "./src/features/auth/screens/SignedInWelcomeScreen";
 import { SignupFlowScreen } from "./src/features/auth/screens/SignupFlowScreen";
 import { WelcomeScreen } from "./src/features/auth/screens/WelcomeScreen";
+import {
+  pendingJoinRequestStore,
+  type PendingJoinRequestStore,
+} from "./src/features/auth/storage/pendingJoinRequestStore";
 import type {
   AuthenticatedUser,
   AuthGateway,
@@ -80,10 +84,11 @@ import {
   GroupInfoScreen,
   createCarnationGateway,
   type FamilyGroupGateway,
+  type FamilyGroupListSnapshot,
   type GroupMemberGateway,
   type GroupManagementGateway,
   type GroupMembershipGateway,
-  type GroupJoinRequestSummary,
+  type MemberRoleUpdate,
   type CarnationGateway,
 } from "./src/features/group-info";
 import {
@@ -134,6 +139,7 @@ interface AppProps {
   profileGateway?: ProfileGateway;
   deviceTokenProvider?: DeviceTokenProvider;
   groupStore?: CurrentGroupStore;
+  joinRequestStore?: PendingJoinRequestStore;
   groups?: readonly FamilyGroup[];
   initialGroupId?: string | null;
   initialJoinRequests?: readonly PendingJoinRequest[];
@@ -187,22 +193,139 @@ const DEVELOPMENT_GROUPS: readonly FamilyGroup[] = [
   },
 ];
 
-function toPendingJoinRequests(
-  requests: readonly GroupJoinRequestSummary[]
+function reconcileJoinRequests(
+  current: readonly PendingJoinRequest[],
+  snapshot: FamilyGroupListSnapshot,
+  trackedRequestIds: ReadonlySet<string>,
 ): readonly PendingJoinRequest[] {
-  const pendingRequests: PendingJoinRequest[] = [];
-  requests.forEach((request) => {
-    if (request.status === "APPROVED") {
+  const serverRequests = new Map(
+    snapshot.joinRequests.map(request => [request.joinRequestId, request]),
+  );
+  const next: PendingJoinRequest[] = [];
+  const seenIds = new Set<string>();
+
+  current.forEach(request => {
+    const serverRequest = serverRequests.get(request.id);
+    if (serverRequest === undefined) {
+      next.push(request);
+      seenIds.add(request.id);
       return;
     }
-    pendingRequests.push({
+
+    if (serverRequest.status === "APPROVED") {
+      if (!trackedRequestIds.has(request.id)) {
+        return;
+      }
+      const group = snapshot.groups.find(
+        candidate => candidate.id === serverRequest.groupId,
+      );
+      if (group === undefined) {
+        // The approval and group-list writes can be observed a few milliseconds
+        // apart. Keep the pending card until both are visible together.
+        next.push(request);
+      } else {
+        next.push({
+          groupId: group.id,
+          groupName: group.name,
+          id: serverRequest.joinRequestId,
+          myMemberId: group.myMemberId,
+          role: group.role,
+          status: "APPROVED",
+        });
+      }
+      seenIds.add(request.id);
+      return;
+    }
+
+    if (serverRequest.status === "REJECTED") {
+      return;
+    }
+
+    next.push({
+      groupId: serverRequest.groupId,
+      groupName: serverRequest.groupName,
+      id: serverRequest.joinRequestId,
+      status: serverRequest.status,
+    });
+    seenIds.add(request.id);
+  });
+
+  // Only newly observed pending requests are appended. An already
+  // approved request is shown only when the UI had observed its pending state,
+  // preventing old history from reopening onboarding unexpectedly.
+  snapshot.joinRequests.forEach(request => {
+    if (seenIds.has(request.joinRequestId) || request.status === "REJECTED") {
+      return;
+    }
+    if (request.status === "APPROVED") {
+      if (!trackedRequestIds.has(request.joinRequestId)) {
+        return;
+      }
+      const group = snapshot.groups.find(
+        candidate => candidate.id === request.groupId,
+      );
+      if (group === undefined) {
+        next.push({
+          groupId: request.groupId,
+          groupName: request.groupName,
+          id: request.joinRequestId,
+          status: "PENDING_ADMIN",
+        });
+      } else {
+        next.push({
+          groupId: group.id,
+          groupName: group.name,
+          id: request.joinRequestId,
+          myMemberId: group.myMemberId,
+          role: group.role,
+          status: "APPROVED",
+        });
+      }
+      return;
+    }
+    next.push({
       groupId: request.groupId,
       groupName: request.groupName,
       id: request.joinRequestId,
       status: request.status,
     });
   });
-  return pendingRequests;
+
+  if (
+    next.length === current.length &&
+    next.every((request, index) => {
+      const previous = current[index];
+      return (
+        previous !== undefined &&
+        request.id === previous.id &&
+        request.groupId === previous.groupId &&
+        request.groupName === previous.groupName &&
+        request.role === previous.role &&
+        request.status === previous.status &&
+        (request.status !== "APPROVED" ||
+          previous.status !== "APPROVED" ||
+          request.myMemberId === previous.myMemberId)
+      );
+    })
+  ) {
+    return current;
+  }
+  return next;
+}
+
+function reconcileTrackedJoinRequestIds(
+  current: ReadonlySet<string>,
+  snapshot: FamilyGroupListSnapshot,
+): ReadonlySet<string> {
+  const next = new Set(current);
+  snapshot.joinRequests.forEach(request => {
+    if (request.status === "PENDING_ADMIN") {
+      next.add(request.joinRequestId);
+    } else if (request.status === "REJECTED") {
+      next.delete(request.joinRequestId);
+    }
+  });
+  return next;
 }
 
 interface GroupInfoIntegration {
@@ -214,6 +337,11 @@ interface GroupInfoIntegration {
   deleteGroup(groupId: string, confirmationName: string): Promise<void>;
   leaveGroup(groupId: string): Promise<void>;
   renameGroup(groupId: string, name: string): Promise<void>;
+  updateMemberRole(
+    groupId: string,
+    memberId: string,
+    role: FamilyGroup["role"],
+  ): Promise<MemberRoleUpdate>;
 }
 
 const GroupInfoIntegrationContext = createContext<GroupInfoIntegration | null>(
@@ -247,7 +375,7 @@ function ConnectedGroupInfoScreen(screenProps: AppScreenProps) {
         integration.members.updateMemberAlias(groupId, memberId, alias)
       }
       onUpdateMemberRole={(groupId, memberId, role) =>
-        integration.members.updateMemberRole(groupId, memberId, role)
+        integration.updateMemberRole(groupId, memberId, role)
       }
       onChangeManager={memberId =>
         integration.management.changeManager(
@@ -482,6 +610,7 @@ export default function App({
   groupManagementGateway = familyGroupManagementGateway,
   groupMembershipGateway = familyGroupMembershipGateway,
   interestGateway = familyInterestGateway,
+  joinRequestStore = pendingJoinRequestStore,
   notificationGateway: injectedNotificationGateway,
   profileGateway,
   deviceTokenProvider = nativeDeviceTokenProvider,
@@ -505,6 +634,12 @@ export default function App({
   const [route, setRoute] = useState<RootRoute>(initialRootRoute);
   const [groupOnboardingReturnRoute, setGroupOnboardingReturnRoute] =
     useState<Exclude<RootRoute, "groupOnboarding">>("welcome");
+  const [groupOnboardingAction, setGroupOnboardingAction] = useState<
+    "create" | "join" | null
+  >(null);
+  const [appShellEntryRoute, setAppShellEntryRoute] = useState<AppRoute | undefined>(
+    initialShellRoute,
+  );
   const [loginVisible, setLoginVisible] = useState(false);
   // 방금 가입한 로그인 ID. 가입 직후 여는 로그인 시트에 미리 채운다.
   const [signupLoginId, setSignupLoginId] = useState("");
@@ -522,6 +657,14 @@ export default function App({
   const [interestLoadFailed, setInterestLoadFailed] = useState(false);
   const [joinRequests, setJoinRequests] =
     useState<readonly PendingJoinRequest[]>(initialJoinRequests);
+  const joinRequestsRef = useRef<readonly PendingJoinRequest[]>(initialJoinRequests);
+  const trackedJoinRequestIdsRef = useRef<ReadonlySet<string>>(
+    new Set(
+      initialJoinRequests
+        .filter(request => request.status !== "REJECTED")
+        .map(request => request.id),
+    ),
+  );
   const resolvedCalendarGateway = useMemo(
     () =>
       calendarGateway ??
@@ -586,6 +729,48 @@ export default function App({
   const foregroundGroupRefreshInFlightRef = useRef(false);
   const resolvedGroups = availableGroups;
 
+  useEffect(() => {
+    joinRequestsRef.current = joinRequests;
+  }, [joinRequests]);
+
+  const refreshGroupSnapshot = useCallback(async () => {
+    if (
+      user === null ||
+      groups !== undefined ||
+      foregroundGroupRefreshInFlightRef.current
+    ) {
+      return;
+    }
+
+    foregroundGroupRefreshInFlightRef.current = true;
+    const sessionVersion = authInvalidationVersionRef.current;
+    try {
+      const snapshot = await groupGateway.loadGroups();
+      if (authInvalidationVersionRef.current !== sessionVersion) {
+        return;
+      }
+      const trackedRequestIds = reconcileTrackedJoinRequestIds(
+        trackedJoinRequestIdsRef.current,
+        snapshot,
+      );
+      trackedJoinRequestIdsRef.current = trackedRequestIds;
+      try {
+        await joinRequestStore.save(user.id, [...trackedRequestIds]);
+      } catch {
+        // 저장 실패가 현재 세션의 서버 상태 갱신까지 막지는 않는다.
+      }
+      setAvailableGroups([...snapshot.groups]);
+      setJoinRequests(current =>
+        reconcileJoinRequests(current, snapshot, trackedRequestIds),
+      );
+    } catch {
+      // Keep the current view when a background refresh fails. The next
+      // foreground transition or polling tick will retry it.
+    } finally {
+      foregroundGroupRefreshInFlightRef.current = false;
+    }
+  }, [groupGateway, groups, joinRequestStore, user]);
+
   const cancelLoginAttempt = useCallback(() => {
     loginAttemptIdRef.current += 1;
     loginAbortControllerRef.current?.abort();
@@ -603,12 +788,16 @@ export default function App({
     setInterestLoadFailed(false);
     interestSetupRequestRef.current += 1;
     setJoinRequests([]);
+    joinRequestsRef.current = [];
+    trackedJoinRequestIdsRef.current = new Set();
+    setAppShellEntryRoute(initialShellRoute);
     setGroupOnboardingReturnRoute("welcome");
+    setGroupOnboardingAction(null);
     setLoginVisible(false);
     // 로그아웃 후 다른 사용자가 직전 가입 계정 아이디를 보지 않게 미리 채움을 비운다.
     setSignupLoginId("");
     setRoute("welcome");
-  }, [cancelLoginAttempt]);
+  }, [cancelLoginAttempt, initialShellRoute]);
 
   useEffect(() => cancelLoginAttempt, [cancelLoginAttempt]);
 
@@ -783,6 +972,15 @@ export default function App({
 
       let loadedGroups: readonly FamilyGroup[];
       let loadedJoinRequests: readonly PendingJoinRequest[] | undefined;
+      let trackedRequestIds: ReadonlySet<string>;
+
+      try {
+        trackedRequestIds = new Set(
+          await joinRequestStore.load(authenticatedUser.id),
+        );
+      } catch {
+        trackedRequestIds = new Set();
+      }
 
       if (groups !== undefined) {
         loadedGroups = groups;
@@ -790,7 +988,23 @@ export default function App({
         try {
           const snapshot = await groupGateway.loadGroups();
           loadedGroups = snapshot.groups;
-          loadedJoinRequests = toPendingJoinRequests(snapshot.joinRequests);
+          trackedRequestIds = reconcileTrackedJoinRequestIds(
+            trackedRequestIds,
+            snapshot,
+          );
+          loadedJoinRequests = reconcileJoinRequests(
+            joinRequestsRef.current,
+            snapshot,
+            trackedRequestIds,
+          );
+          try {
+            await joinRequestStore.save(
+              authenticatedUser.id,
+              [...trackedRequestIds],
+            );
+          } catch {
+            // 저장 실패가 로그인을 막지는 않는다.
+          }
         } catch {
           if (!shouldApply()) {
             return;
@@ -813,6 +1027,7 @@ export default function App({
       }
 
       setUser(authenticatedUser);
+      trackedJoinRequestIdsRef.current = trackedRequestIds;
       setAvailableGroups([...loadedGroups]);
       if (loadedJoinRequests !== undefined) {
         setJoinRequests(loadedJoinRequests);
@@ -829,14 +1044,28 @@ export default function App({
         if (restorableGroupId !== null) {
           onOpenActiveGroup?.(restorableGroupId);
         }
+        if (loadedJoinRequests !== undefined && loadedJoinRequests.length > 0) {
+          setGroupOnboardingReturnRoute("appShell");
+          setGroupOnboardingAction(null);
+          setAppShellEntryRoute("feed");
+          setRoute("groupOnboarding");
+          return;
+        }
         setRoute("appShell");
+        setAppShellEntryRoute(initialShellRoute);
         return;
       }
 
       setActiveGroupId(null);
+      if (loadedJoinRequests !== undefined && loadedJoinRequests.length > 0) {
+        setGroupOnboardingReturnRoute("signedInWelcome");
+        setGroupOnboardingAction(null);
+        setRoute("groupOnboarding");
+        return;
+      }
       setRoute("signedInWelcome");
     },
-    [groupGateway, groups, onOpenActiveGroup]
+    [groupGateway, groups, initialShellRoute, joinRequestStore, onOpenActiveGroup]
   );
 
   useEffect(() => {
@@ -941,35 +1170,33 @@ export default function App({
     }
 
     const subscription = AppState.addEventListener("change", (nextState) => {
-      if (
-        nextState !== "active" ||
-        foregroundGroupRefreshInFlightRef.current
-      ) {
+      if (nextState !== "active") {
         return;
       }
-      foregroundGroupRefreshInFlightRef.current = true;
-      const sessionVersion = authInvalidationVersionRef.current;
-      void groupGateway
-        .loadGroups()
-        .then((snapshot) => {
-          if (authInvalidationVersionRef.current !== sessionVersion) {
-            return;
-          }
-          setAvailableGroups([...snapshot.groups]);
-          setJoinRequests(toPendingJoinRequests(snapshot.joinRequests));
-        })
-        .catch(() => {
-          // 복귀 갱신 실패는 조용히 넘기고 다음 포그라운드 전환에서 다시 시도한다.
-        })
-        .finally(() => {
-          foregroundGroupRefreshInFlightRef.current = false;
-        });
+      void refreshGroupSnapshot();
     });
 
     return () => {
       subscription.remove();
     };
-  }, [groupGateway, groups, user]);
+  }, [groups, refreshGroupSnapshot, user]);
+
+  useEffect(() => {
+    if (
+      route !== "groupOnboarding" ||
+      user === null ||
+      groups !== undefined ||
+      !joinRequests.some(request => request.status === "PENDING_ADMIN")
+    ) {
+      return;
+    }
+
+    void refreshGroupSnapshot();
+    const interval = setInterval(() => {
+      void refreshGroupSnapshot();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [groups, joinRequests, refreshGroupSnapshot, route, user]);
 
   const handleLogin = async (credentials: LoginCredentials) => {
     const previousController = loginAbortControllerRef.current;
@@ -1293,6 +1520,40 @@ export default function App({
     ]
   );
 
+  const rememberJoinRequest = useCallback(
+    async (requestId: string) => {
+      const next = new Set(trackedJoinRequestIdsRef.current);
+      next.add(requestId);
+      trackedJoinRequestIdsRef.current = next;
+      if (user === null) {
+        return;
+      }
+      try {
+        await joinRequestStore.save(user.id, [...next]);
+      } catch {
+        // 현재 세션에서는 계속 추적하고 다음 서버 조회에서 다시 저장한다.
+      }
+    },
+    [joinRequestStore, user],
+  );
+
+  const forgetJoinRequest = useCallback(
+    async (requestId: string) => {
+      const next = new Set(trackedJoinRequestIdsRef.current);
+      next.delete(requestId);
+      trackedJoinRequestIdsRef.current = next;
+      if (user === null) {
+        return;
+      }
+      try {
+        await joinRequestStore.save(user.id, [...next]);
+      } catch {
+        // 카드 제거는 유지하고 저장소 정리는 다음 서버 조회에서 재시도한다.
+      }
+    },
+    [joinRequestStore, user],
+  );
+
   const handleCreateGroup = async (
     input: CreateGroupInput,
     signal: AbortSignal,
@@ -1326,6 +1587,7 @@ export default function App({
       await openInterestSetup(groupForState, createdMemberId, false);
       return;
     }
+    setAppShellEntryRoute("feed");
     setRoute("appShell");
   };
 
@@ -1338,6 +1600,7 @@ export default function App({
       if (signal.aborted) {
         return;
       }
+      await rememberJoinRequest(request.id);
       setJoinRequests((current) => {
         const withoutDuplicate = current.filter((item) => item.id !== request.id);
         return [...withoutDuplicate, request];
@@ -1360,17 +1623,35 @@ export default function App({
       id: submitted.joinRequestId,
       status: submitted.status,
     };
+    await rememberJoinRequest(request.id);
 
     try {
       const snapshot = await groupGateway.loadGroups();
       if (signal.aborted) {
         return;
       }
-      const refreshedRequests = [...toPendingJoinRequests(snapshot.joinRequests)];
-      if (!refreshedRequests.some((item) => item.id === request.id)) {
-        refreshedRequests.push(request);
+      const trackedRequestIds = reconcileTrackedJoinRequestIds(
+        trackedJoinRequestIdsRef.current,
+        snapshot,
+      );
+      trackedJoinRequestIdsRef.current = trackedRequestIds;
+      if (user !== null) {
+        try {
+          await joinRequestStore.save(user.id, [...trackedRequestIds]);
+        } catch {
+          // 서버 반영 결과는 유지하고 다음 조회에서 저장을 재시도한다.
+        }
       }
-      setJoinRequests(refreshedRequests);
+      setJoinRequests(current =>
+        reconcileJoinRequests(
+          [
+            ...current.filter(item => item.id !== request.id),
+            request,
+          ],
+          snapshot,
+          trackedRequestIds,
+        ),
+      );
       return;
     } catch {
       // 가입 요청은 이미 생성됐으므로 목록 재조회 실패 시 제출 결과를 유지한다.
@@ -1387,8 +1668,11 @@ export default function App({
 
   const handleOpenApprovedGroup = async (request: ApprovedJoinRequest) => {
     const groupId = request.groupId;
+    setJoinRequests(current => current.filter(item => item.id !== request.id));
+    void forgetJoinRequest(request.id);
     const groupForState: FamilyGroupWithMemberId = {
       id: groupId,
+      myMemberId: request.myMemberId,
       name: request.groupName,
       role: request.role,
     };
@@ -1408,10 +1692,7 @@ export default function App({
     groupStore?.save(groupId).catch(() => {
       // 그룹 진입 상태는 유지하고 영속화 오류 처리는 상위 계층에 위임한다.
     });
-    if (request.role === "careReceiver") {
-      await openInterestSetup(groupForState, groupForState.myMemberId);
-      return;
-    }
+    setAppShellEntryRoute("feed");
     setRoute("appShell");
     try {
       const snapshot = await groupGateway.loadGroups();
@@ -1478,9 +1759,14 @@ export default function App({
   };
 
   const openGroupOnboarding = (
-    returnRoute: Exclude<RootRoute, "groupOnboarding">
+    returnRoute: Exclude<RootRoute, "groupOnboarding">,
+    action: "create" | "join" | null = null,
   ) => {
+    if (returnRoute === "appShell") {
+      setAppShellEntryRoute("feed");
+    }
     setGroupOnboardingReturnRoute(returnRoute);
+    setGroupOnboardingAction(action);
     setRoute("groupOnboarding");
   };
 
@@ -1496,6 +1782,25 @@ export default function App({
       );
     },
     [groupGateway]
+  );
+
+  const handleUpdateMemberRole = useCallback(
+    async (groupId: string, memberId: string, role: FamilyGroup["role"]) => {
+      const result = await groupMemberGateway.updateMemberRole(
+        groupId,
+        memberId,
+        role,
+      );
+      setAvailableGroups(current =>
+        current.map(group =>
+          group.id === result.groupId && group.myMemberId === result.memberId
+            ? {...group, role: result.role}
+            : group,
+        ),
+      );
+      return result;
+    },
+    [groupMemberGateway],
   );
 
   const removeGroupFromState = useCallback(
@@ -1548,6 +1853,7 @@ export default function App({
       deleteGroup: handleDeleteGroup,
       leaveGroup: handleLeaveGroup,
       renameGroup: handleRenameGroup,
+      updateMemberRole: handleUpdateMemberRole,
     }),
     [
       groupGateway,
@@ -1557,6 +1863,7 @@ export default function App({
       handleDeleteGroup,
       handleLeaveGroup,
       handleRenameGroup,
+      handleUpdateMemberRole,
       resolvedCarnationGateway,
     ]
   );
@@ -1642,10 +1949,10 @@ export default function App({
                 groupStore={groupStore}
                 groups={resolvedGroups}
                 initialGroupId={activeGroupId}
-                initialRoute={initialShellRoute}
-                onCreateGroup={() => openGroupOnboarding("appShell")}
+                initialRoute={appShellEntryRoute}
+                onCreateGroup={() => openGroupOnboarding("appShell", "create")}
                 onGroupChange={onGroupChange}
-                onJoinGroup={() => openGroupOnboarding("appShell")}
+                onJoinGroup={() => openGroupOnboarding("appShell", "join")}
                 onCallResult={onCallResult}
                 onRequestLogout={handleLogout}
                 onRequestWithdrawal={handleWithdrawal}
@@ -1665,7 +1972,11 @@ export default function App({
             {route === "groupOnboarding" && (
               <GroupOnboardingScreen
                 hasJoinedGroups={availableGroups.length > 0}
-                onBack={() => setRoute(groupOnboardingReturnRoute)}
+                initialAction={groupOnboardingAction}
+                onBack={() => {
+                  setGroupOnboardingAction(null);
+                  setRoute(groupOnboardingReturnRoute);
+                }}
                 onCreateGroup={handleCreateGroup}
                 onJoinByCode={handleJoinGroup}
                 onOpenApprovedGroup={handleOpenApprovedGroup}

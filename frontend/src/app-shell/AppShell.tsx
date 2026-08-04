@@ -82,10 +82,10 @@ export function AppShell({
   const resolvedRoute = currentRole
     ? resolveAllowedRoute(currentRole, activeRoute)
     : 'feed';
-  const canReturnToFeed =
-    resolvedRoute === 'archive' ||
-    resolvedRoute === 'notifications' ||
-    resolvedRoute === 'profile';
+  // 피드는 홈이므로 뒤로가기를 처리하지 않는다(처리하는 리스너가 없으면 앱이 종료된다).
+  // 나머지 라우트는 모두 피드로 복귀한다. 라우트를 열거하지 않아야 화면이 늘어도
+  // 목록 갱신을 빠뜨려 앱이 종료되는 일이 생기지 않는다.
+  const canReturnToFeed = resolvedRoute !== 'feed';
 
   useHardwareBack(() => {
     setIsScreenHeaderVisible(true);
@@ -182,6 +182,14 @@ export function AppShell({
       initialGroupStillExists
     ) {
       setCurrentGroupId(initialGroupId);
+      // 삭제·탈퇴한 그룹의 하위 화면을 다음 그룹에 그대로 보여주면 삭제된
+      // 그룹 정보가 남은 것처럼 보인다. 대체 그룹은 피드에서 새로 시작한다.
+      setActiveRoute('feed');
+      setIsScreenFullscreen(false);
+      setIsScreenHeaderVisible(true);
+      setIsGroupMenuOpen(false);
+      setOpenPostId(null);
+      setOpenPostRequestId(0);
     }
   }, [currentGroupId, groups, initialGroupId]);
 

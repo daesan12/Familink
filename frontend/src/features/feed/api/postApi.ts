@@ -1,4 +1,4 @@
-import axios, {type AxiosProgressEvent} from 'axios';
+import axios from 'axios';
 
 import {
   ApiError,
@@ -6,6 +6,16 @@ import {
   normalizeApiError,
   type ApiSuccess,
 } from '../../../shared/api';
+import {
+  BlobUploadError,
+  uploadBlobWithXhr,
+} from '../../../shared/api/blobUpload';
+import {uploadFileWithRnfs} from '../../../shared/api/fileUpload';
+import {
+  clientMediaProcessor,
+  type ClientMediaProcessor,
+  type ProcessedMediaAsset,
+} from '../../../shared/media/clientMediaProcessor';
 import {parseApiEnvelope} from '../../group-info/api/groupApi';
 import {
   validatePickedMedia,
@@ -22,42 +32,51 @@ export type PostUploadProgress = (progress: number) => void;
 
 interface UploadRequestConfig {
   headers: Record<string, string>;
-  onUploadProgress?: (event: AxiosProgressEvent) => void;
+  onUploadProgress?: (event: {loaded: number; total?: number}) => void;
   signal?: AbortSignal;
 }
 
 export interface PostUploadTransport {
-  readFile(uri: string, signal?: AbortSignal): Promise<Blob>;
   put(
     uploadUrl: string,
-    data: Blob,
+    file: UploadFile,
     config: UploadRequestConfig,
   ): Promise<void>;
 }
 
 const defaultUploadTransport: PostUploadTransport = {
-  async readFile(uri, signal) {
-    const response = await fetch(uri, {signal});
-    if (!response.ok) {
-      throw new ApiError({
-        code: 'MEDIA_READ_FAILED',
-        kind: 'network',
-        message: '선택한 미디어를 읽지 못했습니다.',
-        status: response.status,
+  async put(uploadUrl, file, config) {
+    if (file.contentType.startsWith('image/')) {
+      const response = await fetch(file.uri, {signal: config.signal});
+      if (!response.ok) {
+        throw new ApiError({
+          code: 'MEDIA_READ_FAILED',
+          kind: 'network',
+          message: '선택한 이미지를 읽지 못했습니다.',
+          status: response.status,
+        });
+      }
+      const blob = await response.blob();
+      await uploadBlobWithXhr(uploadUrl, blob, {
+        headers: config.headers,
+        onProgress: config.onUploadProgress,
+        signal: config.signal,
       });
+      return;
     }
-    return response.blob();
-  },
-  async put(uploadUrl, data, config) {
-    await axios.put(uploadUrl, data, {
+
+    await uploadFileWithRnfs(uploadUrl, file.uri, {
+      contentType: file.contentType,
+      fileName: file.fileName,
       headers: config.headers,
-      onUploadProgress: config.onUploadProgress,
       signal: config.signal,
+      onProgress: config.onUploadProgress,
     });
   },
 };
 
 interface SubmitPostOptions {
+  mediaProcessor?: ClientMediaProcessor;
   transport?: PostUploadTransport;
 }
 
@@ -114,6 +133,7 @@ export async function submitPost(
       onProgress,
       signal,
       options.transport ?? defaultUploadTransport,
+      options.mediaProcessor ?? clientMediaProcessor,
     );
     const media = buildMediaRequest(orderedMedia, uploadedMedia);
 
@@ -259,74 +279,133 @@ async function uploadNewMedia(
   onProgress: PostUploadProgress | undefined,
   signal: AbortSignal | undefined,
   transport: PostUploadTransport,
+  mediaProcessor: ClientMediaProcessor,
 ): Promise<readonly UploadedMedia[]> {
   if (media.length === 0) {
     onProgress?.(1);
     return [];
   }
 
-  const files = media.map(toUploadFile);
-  const totalBytes = files.reduce((total, file) => total + file.sizeBytes, 0);
-  let uploadedBytes = 0;
-  onProgress?.(0);
+  const processedAssets: ProcessedMediaAsset[] = [];
+  try {
+    const originalFiles: UploadFile[] = [];
+    const thumbnailFiles: UploadFile[] = [];
+    for (const item of media) {
+      assertNotAborted(signal);
+      let originalAsset: ProcessedMediaAsset;
+      let thumbnailAsset: ProcessedMediaAsset;
+      try {
+        originalAsset = await mediaProcessor.preparePostOriginal({
+          contentType: item.contentType,
+          fileName: item.fileName,
+          kind: item.kind,
+          uri: item.source.uri,
+        });
+        processedAssets.push(originalAsset);
+        validatePreparedOriginal(item, originalAsset);
+        thumbnailAsset = await mediaProcessor.preparePostThumbnail({
+          contentType: item.contentType,
+          fileName: item.fileName,
+          kind: item.kind,
+          uri: item.source.uri,
+        });
+        processedAssets.push(thumbnailAsset);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        throw mediaProcessingFailed(error);
+      }
+      assertNotAborted(signal);
+      originalFiles.push(toUploadFile(item, originalAsset));
+      thumbnailFiles.push(toThumbnailUploadFile(thumbnailAsset));
+    }
+    const allFiles = [...originalFiles, ...thumbnailFiles];
+    const totalBytes = allFiles.reduce(
+      (total, file) => total + file.sizeBytes,
+      0,
+    );
+    let uploadedBytes = 0;
+    onProgress?.(0);
 
-  const presignedResponse = await apiClient.post<ApiSuccess<unknown>>(
-    '/files/presigned-urls',
-    {
-      files: files.map(file => ({
-        contentType: file.contentType,
-        fileName: file.fileName,
-        sizeBytes: file.sizeBytes,
-      })),
-      purpose: 'post-media',
-    },
-    {signal},
-  );
-  assertStatus(presignedResponse.status, 201);
-  const uploads = parseApiEnvelope(
-    presignedResponse.data,
-    presignedResponse.status,
-    value => parsePresignedUploads(value, files.length),
-  );
-
-  const uploaded: UploadedMedia[] = [];
-  for (const [index, upload] of uploads.entries()) {
-    assertNotAborted(signal);
-    const file = files[index];
-    const blob = await transport.readFile(media[index].source.uri, signal);
-    assertNotAborted(signal);
-    await transport.put(upload.uploadUrl, blob, {
-      headers: upload.headers,
+    const originalUploads = await requestPresignedUploads(originalFiles, signal);
+    uploadedBytes = await uploadFiles(
+    originalFiles,
+    originalUploads,
+    uploadedBytes,
+    totalBytes,
+    onProgress,
+    signal,
+    transport,
+    );
+    const thumbnailUploads = await requestPresignedUploads(
+      thumbnailFiles,
       signal,
-      onUploadProgress: event => {
-        const eventLoaded =
-          typeof event.loaded === 'number'
-            ? Math.min(event.loaded, file.sizeBytes)
-            : 0;
-        onProgress?.(
-          Math.min(1, (uploadedBytes + eventLoaded) / totalBytes),
-        );
-      },
-    });
-    uploadedBytes += file.sizeBytes;
-    onProgress?.(Math.min(1, uploadedBytes / totalBytes));
-    uploaded.push({fileUrl: upload.fileUrl, localId: media[index].id});
-  }
+    );
+    await uploadFiles(
+    thumbnailFiles,
+    thumbnailUploads,
+    uploadedBytes,
+    totalBytes,
+    onProgress,
+    signal,
+    transport,
+    );
 
-  onProgress?.(1);
-  return uploaded;
+    onProgress?.(1);
+    return media.map((item, index) => ({
+      fileUrl: originalUploads[index].fileUrl,
+      localId: item.id,
+      thumbnailUrl: thumbnailUploads[index].fileUrl,
+    }));
+  } finally {
+    await clearTemporaryMediaFiles(mediaProcessor, processedAssets);
+  }
 }
 
-interface UploadFile {
+function validatePreparedOriginal(
+  media: LocalMedia,
+  asset: ProcessedMediaAsset,
+): void {
+  if (!isPositiveSafeInteger(asset.sizeBytes)) {
+    throw invalidRequest('미디어 파일 크기 정보를 확인할 수 없습니다.');
+  }
+
+  const reason = validatePickedMedia(media.kind, {
+    contentType: asset.contentType,
+    durationSeconds: media.durationSeconds,
+    fileSizeBytes: asset.sizeBytes,
+  });
+  if (reason !== null) {
+    throw invalidRequest(mediaValidationMessage(reason));
+  }
+}
+
+async function clearTemporaryMediaFiles(
+  mediaProcessor: ClientMediaProcessor,
+  assets: readonly ProcessedMediaAsset[],
+): Promise<void> {
+  try {
+    await mediaProcessor.clearTemporaryFiles?.(assets);
+  } catch {
+    // 캐시 정리 실패가 이미 끝난 업로드 결과를 실패로 바꾸지 않게 한다.
+  }
+}
+
+export interface UploadFile {
   contentType: string;
   fileName: string;
   sizeBytes: number;
+  uri: string;
 }
 
-function toUploadFile(media: LocalMedia): UploadFile {
-  const contentType = normalizeContentType(media.contentType);
-  const fileName = normalizeFileName(media.fileName);
-  const sizeBytes = media.fileSizeBytes;
+function toUploadFile(
+  media: LocalMedia,
+  asset: ProcessedMediaAsset,
+): UploadFile {
+  const contentType = normalizeContentType(asset.contentType);
+  const fileName = normalizeFileName(asset.fileName);
+  const sizeBytes = asset.sizeBytes;
   if (contentType === null || fileName === null || !isPositiveSafeInteger(sizeBytes)) {
     throw invalidRequest('미디어 파일명, MIME 타입, 크기 정보가 필요합니다.');
   }
@@ -340,7 +419,89 @@ function toUploadFile(media: LocalMedia): UploadFile {
     throw invalidRequest(mediaValidationMessage(reason));
   }
 
-  return {contentType, fileName, sizeBytes};
+  return {contentType, fileName, sizeBytes, uri: asset.uri};
+}
+
+function toThumbnailUploadFile(
+  asset: ProcessedMediaAsset,
+): UploadFile {
+  const contentType = normalizeContentType(asset.contentType);
+  const fileName = normalizeFileName(asset.fileName);
+  const sizeBytes = asset.sizeBytes;
+  if (contentType === null || fileName === null || !isPositiveSafeInteger(sizeBytes)) {
+    throw invalidRequest('썸네일 파일 정보가 올바르지 않습니다.');
+  }
+  const reason = validatePickedMedia('image', {
+    contentType,
+    fileSizeBytes: sizeBytes,
+  });
+  if (reason !== null) {
+    throw invalidRequest(mediaValidationMessage(reason));
+  }
+  return {contentType, fileName, sizeBytes, uri: asset.uri};
+}
+
+async function requestPresignedUploads(
+  files: readonly UploadFile[],
+  signal?: AbortSignal,
+): Promise<readonly PresignedUpload[]> {
+  const response = await apiClient.post<ApiSuccess<unknown>>(
+    '/files/presigned-urls',
+    {
+      files: files.map(file => ({
+        contentType: file.contentType,
+        fileName: file.fileName,
+        sizeBytes: file.sizeBytes,
+      })),
+      purpose: 'post-media',
+    },
+    {signal},
+  );
+  assertStatus(response.status, 201);
+  return parseApiEnvelope(
+    response.data,
+    response.status,
+    value => parsePresignedUploads(value, files.length),
+  );
+}
+
+async function uploadFiles(
+  files: readonly UploadFile[],
+  uploads: readonly PresignedUpload[],
+  initialUploadedBytes: number,
+  totalBytes: number,
+  onProgress: PostUploadProgress | undefined,
+  signal: AbortSignal | undefined,
+  transport: PostUploadTransport,
+): Promise<number> {
+  let uploadedBytes = initialUploadedBytes;
+  for (const [index, upload] of uploads.entries()) {
+    assertNotAborted(signal);
+    const file = files[index];
+    try {
+      await transport.put(upload.uploadUrl, file, {
+        headers: upload.headers,
+        signal,
+        onUploadProgress: event => {
+          const eventLoaded =
+            typeof event.loaded === 'number'
+              ? Math.min(event.loaded, file.sizeBytes)
+              : 0;
+          onProgress?.(
+            Math.min(1, (uploadedBytes + eventLoaded) / totalBytes),
+          );
+        },
+      });
+    } catch (error) {
+      if (isAbortError(error) || signal?.aborted) {
+        throw error;
+      }
+      throw mediaUploadFailed(error);
+    }
+    uploadedBytes += file.sizeBytes;
+    onProgress?.(Math.min(1, uploadedBytes / totalBytes));
+  }
+  return uploadedBytes;
 }
 
 function validateMediaSelection(
@@ -517,6 +678,34 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 
 function invalidRequest(message: string): ApiError {
   return new ApiError({code: 'INVALID_REQUEST', kind: 'invalidResponse', message});
+}
+
+function mediaUploadFailed(error: unknown): ApiError {
+  return new ApiError({
+    code: 'MEDIA_UPLOAD_FAILED',
+    kind:
+      (axios.isAxiosError(error) && error.response !== undefined) ||
+      (error instanceof BlobUploadError && error.status !== undefined)
+        ? 'server'
+        : 'network',
+    message: '미디어 업로드에 실패했습니다. 다시 시도해 주세요.',
+    originalError: error,
+    status:
+      error instanceof BlobUploadError
+        ? error.status
+        : axios.isAxiosError(error)
+        ? error.response?.status
+        : undefined,
+  });
+}
+
+function mediaProcessingFailed(error: unknown): ApiError {
+  return new ApiError({
+    code: 'MEDIA_PROCESSING_FAILED',
+    kind: 'network',
+    message: '미디어 압축 또는 썸네일 생성에 실패했습니다.',
+    originalError: error,
+  });
 }
 
 function assertStatus(actual: number, expected: number): void {

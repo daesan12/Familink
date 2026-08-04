@@ -13,6 +13,7 @@ import {COLORS, RADII} from '../../../design/tokens';
 import {RetryButton} from '../../../shared/components/RetryButton';
 import {formatAge, formatGender} from '../groupInfoModel';
 import {WEEKLY_STAMP_DAYS, type GroupMember} from '../types';
+import {GroupMemberAvatar} from './GroupMemberAvatar';
 
 const CARNATION_IMAGE = require('../../../assets/images/carnation.png');
 
@@ -88,7 +89,7 @@ export function MemberProfileModal({
             ) : null}
             <View style={styles.headerRow}>
               <View style={styles.avatarWrap}>
-                <View style={styles.avatar} />
+                <GroupMemberAvatar member={member} size={88} />
                 {showRanking && isWeeklyWinner ? (
                   <View
                     accessibilityLabel="이번 주 1위"
@@ -163,12 +164,6 @@ export function MemberProfileModal({
 }
 
 const styles = StyleSheet.create({
-  avatar: {
-    backgroundColor: COLORS.surfaceMuted,
-    borderRadius: RADII.pill,
-    height: 88,
-    width: 88,
-  },
   avatarWrap: {
     height: 88,
     width: 88,

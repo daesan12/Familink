@@ -1,16 +1,16 @@
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 
-import {COLORS, RADII} from '../../../design/tokens';
-
-const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
+import {COLORS} from '../../../design/tokens';
 import {formatRelativeTime} from '../time';
 import type {FeedMember, FeedPost, ReactionId} from '../types';
+import {FeedAvatar} from './FeedAvatar';
 import {PostImageCarousel} from './PostImageCarousel';
 import {ReactionBar, type ReactionAnchor} from './ReactionBar';
 
 interface FeedItemProps {
   canInteract: boolean;
   commentCount: number;
+  isVisible: boolean;
   isReactionPickerOpen: boolean;
   onPress: (postId: string) => void;
   onPressAuthor?: (author: FeedMember) => void;
@@ -25,6 +25,7 @@ interface FeedItemProps {
 export function FeedItem({
   canInteract,
   commentCount,
+  isVisible,
   isReactionPickerOpen,
   onPress,
   onPressAuthor,
@@ -38,25 +39,14 @@ export function FeedItem({
     <View style={styles.container}>
       <View style={styles.authorRow}>
         {onPressAuthor === undefined ? (
-          <View accessibilityElementsHidden style={styles.avatar}>
-            <Image
-              accessibilityIgnoresInvertColors
-              source={PROFILE_PLACEHOLDER}
-              style={styles.avatarImage}
-            />
-          </View>
+          <FeedAvatar member={post.author} />
         ) : (
           <Pressable
             accessibilityLabel={`${post.author.name}님의 프로필 보기`}
             accessibilityRole="button"
             onPress={() => onPressAuthor(post.author)}
-            style={styles.avatar}
           >
-            <Image
-              accessibilityIgnoresInvertColors
-              source={PROFILE_PLACEHOLDER}
-              style={styles.avatarImage}
-            />
+            <FeedAvatar member={post.author} />
           </Pressable>
         )}
         <View style={styles.authorText}>
@@ -75,7 +65,11 @@ export function FeedItem({
       >
         <Text style={styles.body}>{post.body}</Text>
       </Pressable>
-      <PostImageCarousel images={post.images} onImagePress={handlePress} />
+      <PostImageCarousel
+        images={post.images}
+        isVisible={isVisible}
+        onImagePress={handlePress}
+      />
 
       <View style={styles.metaRow}>
         <ReactionBar
@@ -116,20 +110,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 1,
     marginLeft: 12,
-  },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceMuted,
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    height: 44,
-    justifyContent: 'center',
-    overflow: 'hidden',
-    width: 44,
-  },
-  avatarImage: {
-    height: '100%',
-    width: '100%',
   },
   body: {
     color: COLORS.textStrong,

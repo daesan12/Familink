@@ -171,13 +171,19 @@ public class PostReadService {
 				post.getGroup().getId(), viewer.getId(), author.getId())
 			.map(alias -> alias.getAlias())
 			.orElse(author.getUser().getName());
-		return PostAuthorResponse.from(author, displayName);
+		return PostAuthorResponse.from(
+			author,
+			displayName,
+			mediaDownloadUrlProvider.issueProfileImageDownloadUrl(author.getUser().getProfileImageUrl()));
 	}
 
 	private PostAuthorResponse authorOf(Post post, GroupMember viewer, Map<Long, String> aliasesByTarget) {
 		GroupMember author = post.getAuthorMember();
 		String displayName = aliasesByTarget.getOrDefault(author.getId(), author.getUser().getName());
-		return PostAuthorResponse.from(author, displayName);
+		return PostAuthorResponse.from(
+			author,
+			displayName,
+			mediaDownloadUrlProvider.issueProfileImageDownloadUrl(author.getUser().getProfileImageUrl()));
 	}
 
 	private ArchiveItemResponse toArchiveItem(

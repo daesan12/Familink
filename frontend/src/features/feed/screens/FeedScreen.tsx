@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   View,
+  type ViewToken,
 } from 'react-native';
 
 import type {AppScreenProps} from '../../../app-shell';
@@ -206,6 +207,9 @@ export function FeedScreen({
   const [openReactionPicker, setOpenReactionPicker] =
     useState<OpenReactionPicker | null>(null);
   const [uploadState, setUploadState] = useState<UploadState>({status: 'idle'});
+  const [visiblePostIds, setVisiblePostIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [commentsState, setCommentsState] = useState<CommentsState>({
     error: null,
     hasNext: false,
@@ -226,6 +230,17 @@ export function FeedScreen({
   const isDeleteConfirmationOpen = useRef(false);
   const isDeleteSubmitting = useRef(false);
   const feedScrollOffset = useRef(0);
+  const handleViewablePostsChanged = useRef(
+    ({viewableItems}: {viewableItems: readonly ViewToken<FeedPost>[]}) => {
+      setVisiblePostIds(
+        new Set(
+          viewableItems
+            .filter(token => token.isViewable)
+            .map(token => token.item.id),
+        ),
+      );
+    },
+  ).current;
 
   useEffect(() => {
     if (previousGroupId.current === currentGroup.id) {
@@ -931,6 +946,7 @@ export function FeedScreen({
         onEndReachedThreshold={0.5}
         onScroll={handleFeedScroll}
         onScrollBeginDrag={closeReactionPicker}
+        onViewableItemsChanged={handleViewablePostsChanged}
         renderItem={({item}) => {
           const reactions =
             interactions.reactionsByPostId[item.id] ?? item.reactions;
@@ -942,6 +958,7 @@ export function FeedScreen({
                 interactions.commentCountByPostId[item.id] ??
                 item.commentCount
               }
+              isVisible={visiblePostIds.has(item.id)}
               isReactionPickerOpen={
                 openReactionPicker?.postId === item.id
               }

@@ -11,7 +11,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import {launchImageLibrary} from 'react-native-image-picker';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
 import {ApiError} from '../../../shared/api';
@@ -149,6 +148,10 @@ export function SignupFlowScreen({
     if (submittingRef.current) {
       return;
     }
+    // 가입이 이미 끝난 완료 단계에서는 되돌아갈 입력 단계가 없다.
+    if (step === 5) {
+      return;
+    }
     if (step === 1) {
       onCancel();
       return;
@@ -163,18 +166,6 @@ export function SignupFlowScreen({
 
   const goForward = (nextStep: SignupStep) => {
     setStep(nextStep);
-  };
-
-  const handlePickProfile = async () => {
-    const result = await launchImageLibrary({
-      mediaType: 'photo',
-      selectionLimit: 1,
-      quality: 0.9,
-    });
-    const selectedUri = result.assets?.[0]?.uri;
-    if (selectedUri !== undefined) {
-      updateDraft('profileImageUri', selectedUri);
-    }
   };
 
   const handleCheckLoginId = async () => {
@@ -355,7 +346,6 @@ export function SignupFlowScreen({
               }}
               onCheckLoginId={handleCheckLoginId}
               onNext={handleBasicInfoNext}
-              onPickProfile={handlePickProfile}
             />
           )}
           {step === 2 && (
@@ -406,10 +396,7 @@ export function SignupFlowScreen({
             />
           )}
           {step === 5 && (
-            <CompleteStep
-              onBack={handleBack}
-              onComplete={() => onComplete(draft.loginId)}
-            />
+            <CompleteStep onComplete={() => onComplete(draft.loginId)} />
           )}
         </Animated.View>
       </KeyboardAvoidingView>
@@ -478,7 +465,6 @@ interface BasicInfoStepProps {
   onChangeName: (value: string) => void;
   onCheckLoginId: () => void;
   onNext: () => void;
-  onPickProfile: () => void;
 }
 
 function BasicInfoStep({
@@ -491,7 +477,6 @@ function BasicInfoStep({
   onChangeName,
   onCheckLoginId,
   onNext,
-  onPickProfile,
 }: BasicInfoStepProps) {
   const canContinue =
     isValidName(draft.name) && availability === 'available';
@@ -510,27 +495,16 @@ function BasicInfoStep({
         step={1}
         title={'기본 정보를\n입력해주세요'}
       />
-      <AnimatedPressable
-        accessibilityLabel="프로필 사진 선택"
-        accessibilityRole="button"
-        containerStyle={styles.profileContainer}
-        onPress={onPickProfile}>
-        <View style={styles.profileStage}>
-          <Image
-            resizeMode="cover"
-            source={
-              draft.profileImageUri === null
-                ? PROFILE_PLACEHOLDER
-                : {uri: draft.profileImageUri}
-            }
-            style={styles.profileImage}
-          />
-          <View style={styles.plusBadge}>
-            <MaterialDesignIcons name="plus" size={26} color="#FFFFFF" />
-          </View>
-        </View>
-      </AnimatedPressable>
-      <Text style={styles.profileHint}>프로필 사진은 나중에 등록해도 돼요</Text>
+      <View style={styles.profileStage}>
+        <Image
+          resizeMode="cover"
+          source={PROFILE_PLACEHOLDER}
+          style={styles.profileImage}
+        />
+      </View>
+      <Text style={styles.profileHint}>
+        {'프로필 사진은 가입 후 마이페이지에서 등록할 수 있어요'}
+      </Text>
       <View style={styles.basicFields}>
         <FormField
           accessibilityLabel="회원가입 이름"
@@ -610,22 +584,44 @@ function PasswordStep({
   onNext,
 }: PasswordStepProps) {
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [passwordConfirmationVisible, setPasswordConfirmationVisible] =
+    useState(false);
   const canAttempt =
     isValidPassword(draft.password) &&
     draft.passwordConfirmation.length > 0;
   // 입력 중 규칙 위반 이유를 바로 안내해 "다음" 비활성의 원인을 알 수 있게 한다.
   const passwordViolation = getPasswordRuleViolation(draft.password);
 
-  const visibilityButton = (
+  const passwordVisibilityButton = (
     <Pressable
       accessibilityLabel={
-        passwordVisible ? '비밀번호 숨기기' : '비밀번호 표시'
+        passwordVisible
+          ? '회원가입 비밀번호 숨기기'
+          : '회원가입 비밀번호 표시'
       }
       hitSlop={10}
       onPress={() => setPasswordVisible(current => !current)}>
       <MaterialDesignIcons
         color={AUTH_COLORS.placeholder}
         name={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
+        size={22}
+      />
+    </Pressable>
+  );
+  const passwordConfirmationVisibilityButton = (
+    <Pressable
+      accessibilityLabel={
+        passwordConfirmationVisible
+          ? '회원가입 비밀번호 확인 숨기기'
+          : '회원가입 비밀번호 확인 표시'
+      }
+      hitSlop={10}
+      onPress={() => setPasswordConfirmationVisible(current => !current)}>
+      <MaterialDesignIcons
+        color={AUTH_COLORS.placeholder}
+        name={
+          passwordConfirmationVisible ? 'eye-off-outline' : 'eye-outline'
+        }
         size={22}
       />
     </Pressable>
@@ -655,7 +651,7 @@ function PasswordStep({
           onChangeText={onChangePassword}
           placeholder="영문·숫자 8 ~ 16자로 입력해주세요."
           secureTextEntry={!passwordVisible}
-          trailing={visibilityButton}
+          trailing={passwordVisibilityButton}
           value={draft.password}
         />
         {errorMessage !== undefined ? (
@@ -672,8 +668,8 @@ function PasswordStep({
           label="비밀번호 확인"
           maxLength={16}
           onChangeText={onChangeConfirmation}
-          secureTextEntry={!passwordVisible}
-          trailing={visibilityButton}
+          secureTextEntry={!passwordConfirmationVisible}
+          trailing={passwordConfirmationVisibilityButton}
           value={draft.passwordConfirmation}
         />
         {mismatch && (
@@ -840,19 +836,15 @@ function GenderCard({
 }
 
 interface CompleteStepProps {
-  onBack: () => void;
   onComplete: () => void;
 }
 
-function CompleteStep({onBack, onComplete}: CompleteStepProps) {
+function CompleteStep({onComplete}: CompleteStepProps) {
   return (
     <StepLayout
       button={<PrimaryButton label="완료" onPress={onComplete} />}>
-      <StepHeader
-        onBack={onBack}
-        step={5}
-        title={'회원가입이\n완료되었습니다!'}
-      />
+      {/* 가입이 끝난 단계이므로 이전 단계로 돌아가는 경로를 두지 않는다. */}
+      <StepHeader step={5} title={'회원가입이\n완료되었습니다!'} />
       <View style={styles.completeArtwork}>
         <FloatingIllustration
           containerStyle={styles.completeFloating}
@@ -936,12 +928,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: AUTH_LAYOUT.horizontalPadding,
   },
-  profileContainer: {
-    alignSelf: 'center',
-    marginTop: 20,
-  },
   profileStage: {
     alignItems: 'center',
+    alignSelf: 'center',
     backgroundColor: AUTH_COLORS.background,
     borderColor: '#C7BBFF',
     borderRadius: 80,
@@ -949,6 +938,7 @@ const styles = StyleSheet.create({
     boxShadow: '0px 7px 14px rgba(102, 83, 188, 0.12)',
     height: 160,
     justifyContent: 'center',
+    marginTop: 20,
     padding: 3,
     width: 160,
   },
@@ -958,20 +948,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 148,
     width: 148,
-  },
-  plusBadge: {
-    alignItems: 'center',
-    backgroundColor: '#000000',
-    borderColor: AUTH_COLORS.background,
-    borderRadius: 21,
-    borderWidth: 4,
-    bottom: 3,
-    boxShadow: '0px 5px 10px rgba(15, 23, 42, 0.22)',
-    height: 42,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 3,
-    width: 42,
   },
   profileHint: {
     color: AUTH_COLORS.muted,

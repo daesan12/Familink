@@ -387,6 +387,11 @@ export function MyPageScreen({
     if (Object.keys(update).length > 0) {
       await profileGateway.updateCurrentProfile(update);
     }
+    if (imageChange.type === 'replace') {
+      const refreshedProfile = await profileGateway.loadCurrentProfile();
+      setProfile(mergeUserProfile(nextProfile, refreshedProfile));
+      return;
+    }
     setProfile({
       ...nextProfile,
       profileImageUrl:

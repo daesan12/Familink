@@ -243,14 +243,24 @@ test('새 프로필 이미지는 업로드 후 안정적인 URL로 저장하고 
     name: '변경된 이름',
     updatedAt: '2026-08-01T00:00:00Z',
   });
-  const profileGateway: ProfileGateway = {
-    loadCurrentProfile: jest.fn().mockResolvedValue({
+  const loadCurrentProfile = jest
+    .fn()
+    .mockResolvedValueOnce({
       birthDate: '1999-08-02',
       gender: 'male',
       loginId: GUARDIAN_PROFILE.loginId,
       name: GUARDIAN_PROFILE.name,
-      profileImageUrl: 'https://cdn.example.com/old.webp',
-    }),
+      profileImageUrl: 'https://signed.example.com/old.webp',
+    })
+    .mockResolvedValueOnce({
+      birthDate: '1999-08-02',
+      gender: 'male',
+      loginId: GUARDIAN_PROFILE.loginId,
+      name: '변경된 이름',
+      profileImageUrl: 'https://signed.example.com/new.webp',
+    });
+  const profileGateway: ProfileGateway = {
+    loadCurrentProfile,
     updateCurrentProfile,
     uploadProfileImage: jest
       .fn()
@@ -286,10 +296,52 @@ test('새 프로필 이미지는 업로드 후 안정적인 URL로 저장하고 
     name: '변경된 이름',
     profileImageUrl: 'https://cdn.example.com/new.webp',
   });
+  expect(loadCurrentProfile).toHaveBeenCalledTimes(2);
   expect(renderer.root.findByType(MyPageProfileCard).props).toMatchObject({
     name: '변경된 이름',
-    profileImageUrl: 'https://cdn.example.com/new.webp',
+    profileImageUrl: 'https://signed.example.com/new.webp',
   });
+});
+
+test('프로필 이미지 업로드가 실패하면 프로필 PATCH를 실행하지 않는다', async () => {
+  const localAsset = {
+    contentType: 'image/webp',
+    fileName: 'profile.webp',
+    sizeBytes: 1024,
+    uri: 'content://profile.webp',
+  } as const;
+  const updateCurrentProfile = jest.fn();
+  const profileGateway: ProfileGateway = {
+    loadCurrentProfile: jest.fn().mockResolvedValue({
+      birthDate: '1999-08-02',
+      gender: 'male',
+      loginId: GUARDIAN_PROFILE.loginId,
+      name: GUARDIAN_PROFILE.name,
+      profileImageUrl: null,
+    }),
+    updateCurrentProfile,
+    uploadProfileImage: jest.fn().mockRejectedValue(new Error('S3 PUT failed')),
+    withdrawCurrentUser: jest.fn(),
+  };
+  const renderer = render({profileGateway});
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '프로필 편집'})
+      .props.onPress();
+  });
+  const editScreen = renderer.root.findByType(ProfileEditScreen);
+
+  await expect(
+    editScreen.props.onSave(
+      {...GUARDIAN_PROFILE, profileImageUrl: localAsset.uri},
+      {asset: localAsset, type: 'replace'},
+    ),
+  ).rejects.toThrow('S3 PUT failed');
+
+  expect(updateCurrentProfile).not.toHaveBeenCalled();
 });
 
 test('KST 현재 주 월요일부터 일요일까지 병렬 조회하고 도장·순위·왕관을 반영한다', async () => {

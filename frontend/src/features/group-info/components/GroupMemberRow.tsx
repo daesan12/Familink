@@ -1,16 +1,15 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Image, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
+import {Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
 
 import type {GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
-
-const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
 import {
   ALIAS_MAX_LENGTH,
   isAliasSaveable,
   resolveMemberDisplayName,
 } from '../groupInfoModel';
 import type {GroupMember} from '../types';
+import {GroupMemberAvatar} from './GroupMemberAvatar';
 import {RoleToggle} from './RoleToggle';
 
 interface GroupMemberRowProps {
@@ -51,13 +50,8 @@ export function GroupMemberRow({
         accessibilityLabel={`${member.name} 프로필 보기`}
         accessibilityRole="button"
         onPress={onOpenProfile}
-        style={styles.avatar}
       >
-        <Image
-          accessibilityIgnoresInvertColors
-          source={PROFILE_PLACEHOLDER}
-          style={styles.avatarImage}
-        />
+        <GroupMemberAvatar member={member} />
       </Pressable>
 
       <View style={styles.info}>
@@ -147,17 +141,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     minWidth: 90,
     paddingVertical: 2,
-  },
-  avatar: {
-    backgroundColor: COLORS.surfaceMuted,
-    borderRadius: RADII.pill,
-    height: 44,
-    overflow: 'hidden',
-    width: 44,
-  },
-  avatarImage: {
-    height: '100%',
-    width: '100%',
   },
   cancelButton: {
     alignItems: 'center',

@@ -12,6 +12,7 @@ import {
 import {COLORS, RADII} from '../../../design/tokens';
 import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {SubScreenHeader} from '../components/SubScreenHeader';
+import {GroupMemberAvatar} from '../components/GroupMemberAvatar';
 import {
   currentManagerId,
   isManagerChangeSaveable,
@@ -117,9 +118,7 @@ export function ChangeManagerScreen({
                 onPress={() => setSelectedId(member.memberId)}
                 style={[styles.row, isSelected && styles.rowSelected]}
               >
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{member.avatarText}</Text>
-                </View>
+                <GroupMemberAvatar member={member} />
                 <View style={styles.rowText}>
                   <Text style={styles.name}>{member.name}</Text>
                   {subtitle ? (
@@ -190,19 +189,6 @@ function isPromiseLike(value: unknown): value is Promise<void> {
 }
 
 const styles = StyleSheet.create({
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceMuted,
-    borderRadius: RADII.pill,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  avatarText: {
-    color: COLORS.textMuted,
-    fontSize: 16,
-    fontWeight: '700',
-  },
   content: {
     gap: 12,
     paddingBottom: 24,

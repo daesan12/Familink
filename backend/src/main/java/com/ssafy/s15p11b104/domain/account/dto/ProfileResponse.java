@@ -24,12 +24,12 @@ public record ProfileResponse(
 	String profileImageUrl
 ) {
 
-	public static ProfileResponse from(User user) {
+	public static ProfileResponse from(User user, String profileImageUrl) {
 		return new ProfileResponse(
 			user.getLoginId(),
 			user.getName(),
 			user.getBirthDate(),
 			user.getGender(),
-			user.getProfileImageUrl());
+			profileImageUrl);
 	}
 }

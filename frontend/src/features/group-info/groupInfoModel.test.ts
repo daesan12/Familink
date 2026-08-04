@@ -8,6 +8,7 @@ import {
   formatAge,
   formatGender,
   formatMemberCounts,
+  formatPendingJoinDescription,
   isAliasSaveable,
   resolveMemberDisplayName,
 } from './groupInfoModel';
@@ -54,6 +55,24 @@ test('역할별 인원 수를 세고 문구로 만든다', () => {
     guardianCount: 2,
   });
   expect(formatMemberCounts(MEMBERS)).toBe('피보호자 1명, 보호자 2명');
+});
+
+test('승인 대기 건수 문구는 건수를 모르는 이유를 0건과 구분해 알린다', () => {
+  expect(formatPendingJoinDescription({count: 0, status: 'success'})).toBe(
+    '승인 요청 0건',
+  );
+  expect(formatPendingJoinDescription({count: 3, status: 'success'})).toBe(
+    '승인 요청 3건',
+  );
+  expect(formatPendingJoinDescription({status: 'loading'})).toBe(
+    '승인 요청 불러오는 중',
+  );
+  expect(formatPendingJoinDescription({status: 'error'})).toBe(
+    '건수를 불러오지 못했어요',
+  );
+  expect(formatPendingJoinDescription({status: 'disabled'})).toBe(
+    '관리자만 확인할 수 있어요',
+  );
 });
 
 test('호칭 입력은 최대 길이로 자른다', () => {

@@ -1,9 +1,10 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 
-import {COLORS, RADII} from '../../../design/tokens';
+import {COLORS} from '../../../design/tokens';
 import {formatRelativeTime} from '../time';
 import type {PostComment} from '../types';
+import {FeedAvatar} from './FeedAvatar';
 
 interface CommentItemProps {
   comment: PostComment;
@@ -20,9 +21,7 @@ export function CommentItem({
 
   return (
     <View style={styles.container}>
-      <View accessibilityElementsHidden style={styles.avatar}>
-        <Text style={styles.avatarText}>{comment.author.avatarText}</Text>
-      </View>
+      <FeedAvatar member={comment.author} />
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.authorName}>{comment.author.name}</Text>
@@ -56,22 +55,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 19,
-  },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: '#F7F5FF',
-    borderColor: '#D1C9FF',
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    borderWidth: 1,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  avatarText: {
-    color: '#C4BAFF',
-    fontSize: 16,
-    fontWeight: '600',
   },
   body: {
     color: COLORS.textStrong,

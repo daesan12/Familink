@@ -28,6 +28,7 @@ import {
   canManageRoles as canManageRolesFor,
   clampAliasInput,
   formatMemberCounts,
+  formatPendingJoinDescription,
   isAliasSaveable,
   resolveMemberDisplayName,
 } from '../groupInfoModel';
@@ -53,6 +54,7 @@ import type {
   MemberProfileLoader,
   MemberRoleUpdater,
 } from '../api/groupMemberApi';
+import {usePendingJoinCount} from '../hooks/usePendingJoinCount';
 import {useWeeklyRanking} from '../hooks/useWeeklyRanking';
 import type {GroupMember} from '../types';
 import {ChangeManagerScreen} from './ChangeManagerScreen';
@@ -150,6 +152,7 @@ export function GroupInfoScreen({
   const [members, setMembers] = useState<readonly GroupMember[]>(
     scoped.members,
   );
+  const membersRef = useRef(members);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [aliasDraft, setAliasDraft] = useState('');
   const [profileMemberId, setProfileMemberId] = useState<string | null>(null);
@@ -189,15 +192,15 @@ export function GroupInfoScreen({
   const [detailReloadCount, setDetailReloadCount] = useState(0);
   const detailRequestVersion = useRef(0);
 
-  useHardwareBack(() => {
-    setSubScreen(null);
-    return true;
-  }, subScreen !== null);
   const membersRequestVersion = useRef(0);
   const profileRequestVersion = useRef(0);
   // 마지막으로 조회를 마친 그룹. 같은 그룹의 재조회는 기존 데이터를 유지한 채 갱신한다.
   const lastLoadedMembersGroupId = useRef<string | null>(null);
   const lastLoadedDetailGroupId = useRef<string | null>(null);
+
+  useEffect(() => {
+    membersRef.current = members;
+  }, [members]);
 
   // 하위 전체화면에 들어가면 하단 탭을 숨긴다(피드 상세·컴포저와 같은 방식).
   useEffect(() => {
@@ -409,7 +412,20 @@ export function GroupInfoScreen({
   const viewerMemberId = scoped.currentMemberId;
   const canManageRoles =
     groupDetail?.isManager ?? canManageRolesFor(members, viewerMemberId);
-  const waitingCount = scoped.pendingJoinCount;
+  // 승인 대기 건수는 관리자만 조회할 수 있는 대기 요청 목록에서 센다.
+  // 멤버십이 바뀔 수 있는 하위 화면에서 돌아오면 membersReloadCount가 올라가
+  // 승인·거절 결과가 건수에 반영된다.
+  const pendingJoinCountState = usePendingJoinCount(
+    currentGroup.id,
+    joinRequestsLoader,
+    canManageRoles,
+    membersReloadCount,
+  );
+  // 로더를 주입하지 않은 개발용 목업 화면은 기존 목업 건수를 그대로 쓴다.
+  const waitingDescription =
+    joinRequestsLoader === undefined
+      ? `승인 요청 ${scoped.pendingJoinCount}건`
+      : formatPendingJoinDescription(pendingJoinCountState);
   const resolvedGroupName = groupDetail?.name ?? currentGroup.name;
   const resolvedMemberCount = groupDetail?.memberCount ?? members.length;
   const memberCounts = groupDetail
@@ -471,14 +487,55 @@ export function GroupInfoScreen({
     setAliasDraft('');
   };
 
+  // 시스템 뒤로가기는 한 단계씩 되돌린다. 호칭 인라인 편집은 Modal이 아니라
+  // 뒤로가기가 JS로 내려오므로 하위 화면보다 먼저 처리한다.
+  useHardwareBack(() => {
+    // 저장 중에는 소비만 해 화면을 유지한다(ProfileEditScreen과 같은 관례).
+    if (updatingAliasMemberId !== null) {
+      return true;
+    }
+    if (editingMemberId !== null) {
+      handleCancelEditAlias();
+      return true;
+    }
+
+    setSubScreen(null);
+    return true;
+  }, editingMemberId !== null || subScreen !== null);
+
   const applyRoleSelection = (member: GroupMember, role: GroupRole) => {
     if (onUpdateMemberRole !== undefined) {
       setUpdatingRoleMemberId(member.memberId);
       onUpdateMemberRole(currentGroup.id, member.memberId, role)
         .then(result => {
-          setMembers(current =>
-            applyRoleChange(current, result.memberId, result.role),
+          const latestMembers = membersRef.current;
+          const previousMember = latestMembers.find(
+            candidate => candidate.memberId === result.memberId,
           );
+          const nextMembers = applyRoleChange(
+            latestMembers,
+            result.memberId,
+            result.role,
+          );
+          membersRef.current = nextMembers;
+          setMembers(nextMembers);
+          setGroupDetail(current => {
+            if (
+              current === null ||
+              previousMember === undefined ||
+              previousMember.role === result.role
+            ) {
+              return current;
+            }
+            const careReceiverDelta =
+              result.role === 'careReceiver' ? 1 : -1;
+            return {
+              ...current,
+              careReceiverCount: current.careReceiverCount + careReceiverDelta,
+              guardianCount:
+                current.guardianCount - careReceiverDelta,
+            };
+          });
         })
         .catch(() => {
           Alert.alert(
@@ -670,7 +727,7 @@ export function GroupInfoScreen({
       onPress: () => setSubScreen('groupCode'),
     },
     {
-      description: `승인 요청 ${waitingCount}건`,
+      description: waitingDescription,
       key: 'join-requests',
       label: '가입 승인 대기',
       onPress: () => setSubScreen('joinApproval'),
@@ -869,6 +926,7 @@ export function GroupInfoScreen({
       />
 
       <WeeklyRankingModal
+        members={members}
         onClose={() => setIsRankingOpen(false)}
         onRetry={ranking.retry}
         state={ranking}

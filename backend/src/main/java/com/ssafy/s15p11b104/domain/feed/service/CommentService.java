@@ -20,6 +20,7 @@ import com.ssafy.s15p11b104.domain.feed.entity.Comment;
 import com.ssafy.s15p11b104.domain.feed.entity.Post;
 import com.ssafy.s15p11b104.domain.feed.repository.CommentRepository;
 import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
+import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
@@ -35,18 +36,21 @@ public class CommentService {
 	private final GroupMemberRepository groupMemberRepository;
 	private final MemberAliasRepository memberAliasRepository;
 	private final ApplicationEventPublisher eventPublisher;
+	private final MediaDownloadUrlProvider mediaDownloadUrlProvider;
 
 	public CommentService(
 		CommentRepository commentRepository,
 		PostRepository postRepository,
 		GroupMemberRepository groupMemberRepository,
 		MemberAliasRepository memberAliasRepository,
-		ApplicationEventPublisher eventPublisher) {
+		ApplicationEventPublisher eventPublisher,
+		MediaDownloadUrlProvider mediaDownloadUrlProvider) {
 		this.commentRepository = commentRepository;
 		this.postRepository = postRepository;
 		this.groupMemberRepository = groupMemberRepository;
 		this.memberAliasRepository = memberAliasRepository;
 		this.eventPublisher = eventPublisher;
+		this.mediaDownloadUrlProvider = mediaDownloadUrlProvider;
 	}
 
 	@Transactional(readOnly = true)
@@ -108,7 +112,10 @@ public class CommentService {
 		GroupMember author = comment.getAuthorMember();
 		return new CommentResponse(
 			comment.getId(),
-			PostAuthorResponse.from(author, aliasesByTarget.getOrDefault(author.getId(), author.getUser().getName())),
+			PostAuthorResponse.from(
+				author,
+				aliasesByTarget.getOrDefault(author.getId(), author.getUser().getName()),
+				mediaDownloadUrlProvider.issueProfileImageDownloadUrl(author.getUser().getProfileImageUrl())),
 			comment.getContent(),
 			comment.getCreatedAt(),
 			comment.getUpdatedAt());

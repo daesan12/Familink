@@ -10,6 +10,15 @@ import {
   type ApiSuccess,
 } from '../../../shared/api';
 import {
+  BlobUploadError,
+  uploadBlobWithXhr,
+} from '../../../shared/api/blobUpload';
+import {
+  clientMediaProcessor,
+  type ClientMediaProcessor,
+  type ProcessedMediaAsset,
+} from '../../../shared/media/clientMediaProcessor';
+import {
   hasInvalidFileNameCharacter,
   PROFILE_IMAGE_LIMITS,
 } from '../profileModel';
@@ -66,6 +75,7 @@ export interface ProfileGatewayOptions {
   authSession?: ApiAuthSession;
   baseUrl?: string;
   client?: ProfileHttpClient;
+  mediaProcessor?: ClientMediaProcessor;
   uploadTransport?: ProfileUploadTransport;
 }
 
@@ -83,7 +93,9 @@ const defaultUploadTransport: ProfileUploadTransport = {
     return response.blob();
   },
   async put(uploadUrl, data, config) {
-    await axios.put(uploadUrl, data, {headers: config.headers});
+    await uploadBlobWithXhr(uploadUrl, data, {
+      headers: config.headers,
+    });
   },
 };
 
@@ -96,6 +108,7 @@ export function createProfileGateway(
       ? apiClient
       : createApiClient(options.baseUrl, options.authSession));
   const uploadTransport = options.uploadTransport ?? defaultUploadTransport;
+  const mediaProcessor = options.mediaProcessor ?? clientMediaProcessor;
 
   return {
     async loadCurrentProfile() {
@@ -105,16 +118,37 @@ export function createProfileGateway(
 
     async uploadProfileImage(asset) {
       assertProfileImageAsset(asset);
+      const processedAssets: ProcessedMediaAsset[] = [];
 
       try {
+        let processedAsset: ProcessedMediaAsset;
+        try {
+          processedAsset = await mediaProcessor.prepareProfileImage({
+            contentType: asset.contentType,
+            fileName: asset.fileName,
+            kind: 'image',
+            uri: asset.uri,
+          });
+          processedAssets.push(processedAsset);
+        } catch (error) {
+          throw mediaReadFailed(error);
+        }
+        let blob: Blob;
+        try {
+          blob = await uploadTransport.readFile(processedAsset.uri);
+        } catch (error) {
+          throw mediaReadFailed(error);
+        }
+        assertProfileImageBlob(blob);
+
         const response = await client.post<ApiSuccess<unknown>>(
           '/files/presigned-urls',
           {
             files: [
               {
-                contentType: asset.contentType,
-                fileName: asset.fileName,
-                sizeBytes: asset.sizeBytes,
+                contentType: processedAsset.contentType,
+                fileName: processedAsset.fileName,
+                sizeBytes: blob.size,
               },
             ],
             purpose: 'profile-image',
@@ -128,13 +162,18 @@ export function createProfileGateway(
           response.status,
           parseProfileImageUpload,
         );
-        const blob = await uploadTransport.readFile(asset.uri);
-        await uploadTransport.put(upload.uploadUrl, blob, {
-          headers: upload.headers,
-        });
+        try {
+          await uploadTransport.put(upload.uploadUrl, blob, {
+            headers: upload.headers,
+          });
+        } catch (error) {
+          throw mediaUploadFailed(error);
+        }
         return upload.fileUrl;
       } catch (error) {
         throw normalizeApiError(error);
+      } finally {
+        await clearTemporaryMediaFiles(mediaProcessor, processedAssets);
       }
     },
 
@@ -159,6 +198,17 @@ export function createProfileGateway(
   };
 }
 
+async function clearTemporaryMediaFiles(
+  mediaProcessor: ClientMediaProcessor,
+  assets: readonly ProcessedMediaAsset[],
+): Promise<void> {
+  try {
+    await mediaProcessor.clearTemporaryFiles?.(assets);
+  } catch {
+    // 캐시 정리 실패가 프로필 저장 결과를 실패로 바꾸지 않게 한다.
+  }
+}
+
 export const profileGateway = createProfileGateway();
 
 export function getProfileSaveErrorMessage(error: unknown): string {
@@ -169,6 +219,8 @@ export function getProfileSaveErrorMessage(error: unknown): string {
   switch (error.code) {
     case 'MEDIA_READ_FAILED':
       return '선택한 사진을 읽지 못했습니다. 다른 사진을 선택해 주세요.';
+    case 'MEDIA_UPLOAD_FAILED':
+      return '프로필 이미지 업로드에 실패했습니다. 다시 시도해 주세요.';
     case 'INVALID_REQUEST':
       return '선택한 사진 또는 입력 값을 확인해 주세요.';
     case 'UNAUTHORIZED':
@@ -308,9 +360,6 @@ function assertProfileImageAsset(asset: ProfileImageAsset): void {
   const allowedTypes: readonly string[] = PROFILE_IMAGE_LIMITS.allowedTypes;
   if (
     !allowedTypes.includes(asset.contentType) ||
-    asset.sizeBytes <= 0 ||
-    !Number.isSafeInteger(asset.sizeBytes) ||
-    asset.sizeBytes > PROFILE_IMAGE_LIMITS.maxSizeBytes ||
     asset.uri.trim().length === 0 ||
     asset.fileName.trim().length === 0 ||
     asset.fileName.length > 255 ||
@@ -323,6 +372,52 @@ function assertProfileImageAsset(asset: ProfileImageAsset): void {
       status: 400,
     });
   }
+}
+
+function assertProfileImageBlob(blob: Blob): void {
+  if (
+    !Number.isSafeInteger(blob.size) ||
+    blob.size <= 0 ||
+    blob.size > PROFILE_IMAGE_LIMITS.maxSizeBytes
+  ) {
+    throw new ApiError({
+      code: 'INVALID_REQUEST',
+      kind: 'server',
+      message: '프로필 이미지는 10MiB 이하의 비어 있지 않은 파일이어야 합니다.',
+      status: 400,
+    });
+  }
+}
+
+function mediaReadFailed(error: unknown): ApiError {
+  if (error instanceof ApiError) {
+    return error;
+  }
+  return new ApiError({
+    code: 'MEDIA_READ_FAILED',
+    kind: 'network',
+    message: '선택한 사진을 읽지 못했습니다.',
+    originalError: error,
+  });
+}
+
+function mediaUploadFailed(error: unknown): ApiError {
+  return new ApiError({
+    code: 'MEDIA_UPLOAD_FAILED',
+    kind:
+      (axios.isAxiosError(error) && error.response !== undefined) ||
+      (error instanceof BlobUploadError && error.status !== undefined)
+        ? 'server'
+        : 'network',
+    message: '프로필 이미지 업로드에 실패했습니다. 다시 시도해 주세요.',
+    originalError: error,
+    status:
+      error instanceof BlobUploadError
+        ? error.status
+        : axios.isAxiosError(error)
+        ? error.response?.status
+        : undefined,
+  });
 }
 
 function readGender(value: unknown): Gender | null {
