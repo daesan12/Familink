@@ -134,9 +134,17 @@ internal data class AiCallUiState(
     val durationSeconds: Int = 0,
     val isMuted: Boolean = false,
     val isSpeakerOn: Boolean = true,
-    val currentCaption: String? = null,
+    val captionDraft: String = "",
     val captionHistory: List<String> = emptyList(),
 )
+
+/**
+ * 화면에 그릴 자막 줄을 오래된 것부터 최신 순으로 반환한다. 발화 중에는 [AiCallUiState.captionDraft]가
+ * 마지막 줄이 되고 발화가 끝나면 방금 확정된 문장이 마지막 줄이 되므로, 확정 여부에 따라 표시 대상을
+ * 따로 분기할 필요가 없다.
+ */
+internal val AiCallUiState.captionLines: List<String>
+  get() = captionHistory + listOfNotNull(captionDraft.takeIf { it.isNotBlank() })
 
 internal fun formatCallDuration(durationSeconds: Int): String {
   val minutes = durationSeconds / 60
