@@ -138,7 +138,7 @@ export async function submitPost(
     const media = buildMediaRequest(orderedMedia, uploadedMedia);
 
     if (payload.postId !== undefined) {
-      return updatePost(
+      return await updatePost(
         payload.postId,
         normalizedBody,
         mediaType,
@@ -147,7 +147,7 @@ export async function submitPost(
       );
     }
 
-    return createPost(
+    return await createPost(
       normalizedGroupId,
       normalizedBody,
       mediaType,
@@ -738,7 +738,29 @@ function isAbortError(error: unknown): boolean {
 
 function normalizePostError(error: unknown): ApiError {
   if (error instanceof ApiError || axios.isAxiosError(error)) {
-    return normalizeApiError(error);
+    const normalized = normalizeApiError(error);
+    if (normalized.code !== 'INVALID_REQUEST') {
+      return normalized;
+    }
+
+    const details = [
+      ...new Set(
+        normalized.errors
+          .map(fieldError => fieldError.message.trim())
+          .filter(message => message.length > 0),
+      ),
+    ];
+    return new ApiError({
+      code: normalized.code,
+      errors: normalized.errors,
+      kind: normalized.kind,
+      message:
+        details.length > 0
+          ? details.join('\n')
+          : '게시글 내용과 사진·영상의 형식, 용량, 길이를 확인해 주세요.',
+      originalError: normalized,
+      status: normalized.status,
+    });
   }
   return new ApiError({
     code: 'MEDIA_UPLOAD_FAILED',

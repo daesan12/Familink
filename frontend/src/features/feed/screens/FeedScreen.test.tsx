@@ -1,7 +1,7 @@
 import React from 'react';
 import TestRenderer from 'react-test-renderer';
 
-import type {FeedPost} from '../types';
+import type {FeedPost, ReactionId} from '../types';
 import {FeedScreen} from './FeedScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
@@ -14,10 +14,12 @@ jest.mock('../components/ReactionBar', () => {
 
   return {
     ReactionBar: ({
+      onSelectReaction,
       onTogglePicker,
       reactions,
       selectedReactionId,
     }: {
+      onSelectReaction: (reactionId: ReactionId) => void;
       onTogglePicker: (anchor: {
         height: number;
         width: number;
@@ -36,7 +38,7 @@ jest.mock('../components/ReactionBar', () => {
             onTogglePicker({height: 44, width: 44, x: 100, y: 200}),
         }),
         selectedReactionId
-          ? ReactRuntime.createElement(View, {
+          ? ReactRuntime.createElement(Pressable, {
               accessibilityLabel: `${
                 reactions.find(
                   reaction => reaction.id === selectedReactionId,
@@ -46,6 +48,7 @@ jest.mock('../components/ReactionBar', () => {
                   reaction => reaction.id === selectedReactionId,
                 )?.count
               }개, 내가 선택함`,
+              onPress: () => onSelectReaction(selectedReactionId),
             })
           : null,
       ),
@@ -153,6 +156,25 @@ test('D-2와 D-3가 같은 postId의 반응 상태를 공유한다', async () =>
       accessibilityLabel: '사랑해요 반응 1개, 내가 선택함',
     }),
   ).not.toHaveLength(0);
+
+  const selectedReactionButton = renderer!.root
+    .findAllByProps({
+      accessibilityLabel: '사랑해요 반응 1개, 내가 선택함',
+    })
+    .find(node => typeof node.props.onPress === 'function');
+  expect(selectedReactionButton).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    selectedReactionButton!.props.onPress();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(onChangeReaction).toHaveBeenLastCalledWith({
+    nextReactionId: null,
+    postId: post.id,
+    previousReactionId: 'HEART',
+  });
 
   await TestRenderer.act(() => {
     renderer!.unmount();

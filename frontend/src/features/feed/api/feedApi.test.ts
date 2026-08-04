@@ -128,10 +128,12 @@ describe('family feed API', () => {
             expect.objectContaining({
               id: '101',
               source: {uri: 'https://cdn/thumb-1.jpg'},
+              viewerSource: {uri: 'https://cdn/image-1.jpg'},
             }),
             expect.objectContaining({
               id: '102',
               source: {uri: 'https://cdn/image-2.jpg'},
+              viewerSource: {uri: 'https://cdn/image-2.jpg'},
             }),
           ],
           isOwnedByCurrentUser: true,

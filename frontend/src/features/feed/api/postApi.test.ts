@@ -428,6 +428,27 @@ describe('postApi', () => {
     }))).toBe(true);
   });
 
+  it('INVALID_REQUEST의 필드 오류를 사용자에게 보여 줄 메시지로 유지한다', async () => {
+    jest.spyOn(apiClient, 'post').mockRejectedValueOnce(
+      new ApiError({
+        code: 'INVALID_REQUEST',
+        errors: [
+          {field: 'media.fileUrl', message: '사진은 파일당 10MB 이하만 올릴 수 있습니다.'},
+          {field: 'media.fileUrl', message: '사진은 파일당 10MB 이하만 올릴 수 있습니다.'},
+        ],
+        kind: 'server',
+        message: '요청 형식 또는 검증 실패',
+        status: 400,
+      }),
+    );
+
+    const error = await submitPost('11', payload()).catch(reason => reason);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject<Partial<ApiError>>({code: 'INVALID_REQUEST'});
+    expect(error.message).toBe('사진은 파일당 10MB 이하만 올릴 수 있습니다.');
+  });
+
   it('삭제 API는 204 응답만 성공으로 처리한다', async () => {
     const deleteSpy = jest
       .spyOn(apiClient, 'delete')

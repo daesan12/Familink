@@ -339,8 +339,12 @@ function toFeedPost(input: {
         hasPoster: item.type === 'IMAGE' || item.thumbnailUrl !== null,
         id: item.id,
         mediaType: item.type,
-        source: {uri: item.thumbnailUrl ?? item.fileUrl},
+        source: {
+          uri: item.thumbnailUrl ?? item.fileUrl,
+        },
         thumbnailUrl: item.thumbnailUrl,
+        viewerSource:
+          item.type === 'IMAGE' ? {uri: item.fileUrl} : undefined,
       })),
     ),
     isOwnedByCurrentUser:
