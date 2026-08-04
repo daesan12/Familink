@@ -1,12 +1,18 @@
 package com.s15p11b104app.aicall
 
 import android.content.ContextWrapper
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AiCallRuntimeTest {
@@ -26,6 +32,7 @@ class AiCallRuntimeTest {
             onCaptionUpdate = {},
             onConnectionLost = {},
             mediaSessionFactory = { _, _, _ -> mediaSession },
+            mediaContext = Dispatchers.Unconfined,
         )
 
     runtime.start(personaId = 4L)
@@ -53,6 +60,7 @@ class AiCallRuntimeTest {
             onCaptionUpdate = {},
             onConnectionLost = {},
             mediaSessionFactory = { _, _, _ -> mediaSession },
+            mediaContext = Dispatchers.Unconfined,
         )
 
     val exception =
@@ -106,7 +114,97 @@ class AiCallRuntimeTest {
   }
 
   @Test
-  fun `dispose falls back to the current token when the bridge is detached`() = runBlocking {
+  fun `end reuses the current token without asking the bridge to refresh`() = runBlocking {
+    val client =
+        RecordingSessionClient(
+            endResults = ArrayDeque(listOf(Result.success(42L))),
+        )
+    val accessTokenProvider = RecordingAccessTokenProvider(heldAccessToken = "held-token")
+    val runtime =
+        AiCallRuntime(
+            context = ContextWrapper(null),
+            sessionClient = client,
+            accessTokenProvider = accessTokenProvider,
+            onCaptionUpdate = {},
+            onConnectionLost = {},
+        )
+    setCallSessionId(runtime, 42L)
+
+    runtime.end(AiCallTerminationType.UserRequested)
+
+    assertEquals(listOf("held-token"), client.endTokens)
+    assertEquals(0, accessTokenProvider.refreshCount)
+  }
+
+  @Test
+  fun `end returns without waiting for the media session teardown`() = runBlocking {
+    val closeStarted = CountDownLatch(1)
+    val closeReleased = CountDownLatch(1)
+    val mediaSession = BlockingCloseMediaSession(closeStarted, closeReleased)
+    val client =
+        RecordingSessionClient(
+            endResults = ArrayDeque(listOf(Result.success(42L))),
+        )
+    val runtime =
+        AiCallRuntime(
+            context = ContextWrapper(null),
+            sessionClient = client,
+            accessTokenProvider = RecordingAccessTokenProvider(),
+            onCaptionUpdate = {},
+            onConnectionLost = {},
+            mediaSessionFactory = { _, _, _ -> mediaSession },
+        )
+
+    try {
+      runtime.start(personaId = 4L)
+      runtime.end(AiCallTerminationType.UserRequested)
+
+      assertEquals(1, client.endCallCount)
+      assertTrue(closeStarted.await(2, TimeUnit.SECONDS))
+      assertFalse(mediaSession.closeFinished)
+    } finally {
+      closeReleased.countDown()
+    }
+  }
+
+  @Test
+  fun `end completes when start is cancelled while awaiting the previous teardown`() =
+      runBlocking {
+        val closeStarted = CountDownLatch(1)
+        val closeReleased = CountDownLatch(1)
+        val blockingSession = BlockingCloseMediaSession(closeStarted, closeReleased)
+        val client =
+            RecordingSessionClient(
+                endResults = ArrayDeque(listOf(Result.success(42L), Result.success(43L))),
+            )
+        val runtime =
+            AiCallRuntime(
+                context = ContextWrapper(null),
+                sessionClient = client,
+                accessTokenProvider = RecordingAccessTokenProvider(),
+                onCaptionUpdate = {},
+                onConnectionLost = {},
+                mediaSessionFactory = { _, _, _ -> blockingSession },
+            )
+
+        try {
+          // 첫 통화를 종료해 정리 작업을 진행 중으로 만든다.
+          runtime.start(personaId = 4L)
+          runtime.end(AiCallTerminationType.UserRequested)
+          assertTrue(closeStarted.await(2, TimeUnit.SECONDS))
+
+          // 두 번째 start는 이전 정리를 기다리며 멈춘다. 그 상태에서 취소한 뒤 종료를 요청해도
+          // 응답이 돌아와야 한다.
+          val secondStart = launch { runCatching { runtime.start(personaId = 5L) } }
+          secondStart.cancel()
+          withTimeout(3_000) { runtime.end(AiCallTerminationType.UserRequested) }
+        } finally {
+          closeReleased.countDown()
+        }
+      }
+
+  @Test
+  fun `dispose ends the call with the current token when the bridge is detached`() = runBlocking {
     val endCompleted = CompletableDeferred<Unit>()
     val client =
         RecordingSessionClient(
@@ -184,14 +282,45 @@ class AiCallRuntimeTest {
     }
   }
 
-  private class RecordingAccessTokenProvider : AiCallAccessTokenProvider {
-    private var refreshCount = 0
+  private class RecordingAccessTokenProvider(
+      private val heldAccessToken: String? = null,
+  ) : AiCallAccessTokenProvider {
 
-    override fun currentAccessToken(): String? = null
+    var refreshCount = 0
+      private set
+
+    override fun currentAccessToken(): String? = heldAccessToken
 
     override suspend fun refreshAccessToken(): String {
       refreshCount += 1
       return "access-token-$refreshCount"
+    }
+  }
+
+  private class BlockingCloseMediaSession(
+      private val closeStarted: CountDownLatch,
+      private val closeReleased: CountDownLatch,
+  ) : AiCallMediaSession {
+
+    private val finished = AtomicBoolean(false)
+
+    val closeFinished: Boolean
+      get() = finished.get()
+
+    override suspend fun createOffer(): String = "offer"
+
+    override suspend fun setRemoteAnswer(sdpAnswer: String) = Unit
+
+    override suspend fun awaitConnected(timeoutMillis: Long) = Unit
+
+    override fun setMicrophoneEnabled(enabled: Boolean) = Unit
+
+    override fun setSpeakerEnabled(enabled: Boolean) = Unit
+
+    override fun close() {
+      closeStarted.countDown()
+      closeReleased.await()
+      finished.set(true)
     }
   }
 
