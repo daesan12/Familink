@@ -32,15 +32,21 @@ export function isJoinRequestAlreadyProcessed(error: unknown): boolean {
   );
 }
 
+export function isCareReceiverAlreadyActiveInOtherGroup(
+  error: unknown,
+): boolean {
+  return (
+    error instanceof ApiError &&
+    error.code === 'CARE_RECEIVER_ALREADY_ACTIVE_IN_OTHER_GROUP'
+  );
+}
+
 // API-GROUPS-009 승인·거절 실패의 409 코드를 사용자 문구로 구분한다.
 export function joinRequestDecisionErrorMessage(error: unknown): string {
   if (isJoinRequestAlreadyProcessed(error)) {
     return '이미 처리된 가입 요청이에요.';
   }
-  if (
-    error instanceof ApiError &&
-    error.code === 'CARE_RECEIVER_ALREADY_ACTIVE_IN_OTHER_GROUP'
-  ) {
+  if (isCareReceiverAlreadyActiveInOtherGroup(error)) {
     return '신청자가 이미 다른 그룹의 피보호자예요. 보호자 역할로만 승인할 수 있어요.';
   }
   return '가입 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.';
