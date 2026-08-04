@@ -490,15 +490,6 @@ export function CalendarScreen({
                 <Text style={styles.retryText}>재시도</Text>
               </Pressable>
             </View>
-          ) : status === "success" && events.length === 0 ? (
-            <View style={styles.emptyMessage}>
-              <Text style={styles.emptyTitle}>
-                이번 달에는 아직 일정이 없어요
-              </Text>
-              <Text style={styles.emptyDescription}>
-                날짜를 선택해 일정을 확인해 보세요.
-              </Text>
-            </View>
           ) : null}
         </>
       )}
@@ -535,21 +526,6 @@ const styles = StyleSheet.create({
   calendarViewport: {
     flex: 1,
     overflow: "hidden",
-  },
-  emptyDescription: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    marginTop: 5,
-  },
-  emptyMessage: {
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-  emptyTitle: {
-    color: COLORS.textStrong,
-    fontSize: 15,
-    fontWeight: "700",
   },
   loadingOverlay: {
     alignItems: "center",
