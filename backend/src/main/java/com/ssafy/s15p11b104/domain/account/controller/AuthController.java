@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import com.ssafy.s15p11b104.domain.account.dto.LoginIdAvailabilityResponse;
 import com.ssafy.s15p11b104.domain.account.dto.LoginRequest;
 import com.ssafy.s15p11b104.domain.account.dto.LoginResponse;
@@ -83,8 +85,10 @@ public class AuthController {
 	 * @return 발급된 인증 정보
 	 */
 	@PostMapping("/login")
-	public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-		return ApiResponse.success(LOGIN_MESSAGE, authService.login(request));
+	public ApiResponse<LoginResponse> login(
+		@Valid @RequestBody LoginRequest request,
+		HttpServletRequest servletRequest) {
+		return ApiResponse.success(LOGIN_MESSAGE, authService.login(request, servletRequest.getRemoteAddr()));
 	}
 
 	/**

@@ -1,6 +1,7 @@
 package com.ssafy.s15p11b104.domain.account.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * 로그인 요청이다.
@@ -11,7 +12,7 @@ import jakarta.validation.constraints.NotBlank;
  * @param password 원문 비밀번호
  */
 public record LoginRequest(
-	@NotBlank String loginId,
-	@NotBlank String password
+	@NotBlank @Size(max = 15) String loginId,
+	@NotBlank @Size(max = 16) String password
 ) {
 }

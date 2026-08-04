@@ -45,6 +45,8 @@ import com.ssafy.s15p11b104.global.exception.ErrorCode;
 public class PostReadService {
 
 	private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
+	private static final Instant ARCHIVE_MIN_INSTANT = Instant.parse("1900-01-01T00:00:00Z");
+	private static final Instant ARCHIVE_MAX_INSTANT = Instant.parse("9999-12-31T23:59:59Z");
 
 	private final GroupMemberRepository groupMemberRepository;
 	private final PostRepository postRepository;
@@ -100,6 +102,7 @@ public class PostReadService {
 		LocalDate date,
 		String type,
 		Long memberId,
+		Pageable pageable,
 		Long authenticatedUserId) {
 		getActiveMember(groupId, authenticatedUserId);
 		if (memberId != null) {
@@ -107,7 +110,11 @@ public class PostReadService {
 				.orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REQUEST));
 		}
 		PostArchiveType archiveType = parseType(type);
-		List<Post> posts = postRepository.findPageByGroupId(groupId, Pageable.unpaged()).getContent();
+		Instant startAt = date == null ? ARCHIVE_MIN_INSTANT : date.atStartOfDay(BUSINESS_ZONE).toInstant();
+		Instant endAt = date == null ? ARCHIVE_MAX_INSTANT : date.plusDays(1).atStartOfDay(BUSINESS_ZONE).toInstant();
+		Page<Post> page = postRepository.findArchivePage(
+			groupId, startAt, endAt, memberId, archiveType == null ? null : archiveType.name(), pageable);
+		List<Post> posts = page.getContent();
 		Map<Long, List<PostMedia>> mediaByPost = mediaByPost(posts);
 		Map<LocalDate, List<ArchiveItemResponse>> grouped = new LinkedHashMap<>();
 
@@ -129,7 +136,7 @@ public class PostReadService {
 
 		return new PostArchiveResponse(grouped.entrySet().stream()
 			.map(entry -> new ArchiveDateResponse(entry.getKey(), entry.getValue()))
-			.toList());
+			.toList(), page.hasNext());
 	}
 
 	private PostListItem toListItem(

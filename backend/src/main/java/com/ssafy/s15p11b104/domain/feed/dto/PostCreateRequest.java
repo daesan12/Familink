@@ -10,8 +10,8 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-public record PostCreateRequest(
-	@NotEmpty List<@NotNull Long> groupIds,
+	public record PostCreateRequest(
+		@NotEmpty @Size(max = 10) List<@NotNull Long> groupIds,
 	@NotBlank @Size(max = 140) String content,
 	MediaType mediaType,
 	@Valid List<@NotNull PostMediaRequest> media) {

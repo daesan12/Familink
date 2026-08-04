@@ -663,7 +663,7 @@ class CalendarEventApiTest extends IntegrationTest {
 	 * 알림 시점이 바뀌면 지난 시점 기준으로 만든 알림은 사실이 아니므로 지워야 한다.
 	 */
 	@Test
-	void updateCancelsRemindersWhenEventDateChanges() throws Exception {
+	void updateKeepsRemindersWhenEventDateChanges() throws Exception {
 		Long eventId = persistAllDayEvent("일정", LocalDate.of(2026, 8, 5), LocalDate.of(2026, 8, 5));
 		persistReminder(eventId, ReminderSlot.DAY_BEFORE);
 
@@ -678,11 +678,12 @@ class CalendarEventApiTest extends IntegrationTest {
 		entityManager.flush();
 		entityManager.clear();
 		assertThat(notificationRepository.findReceiverIdsByEventAndSlot(
-			eventId, NotificationType.EVENT_REMINDER, ReminderSlot.DAY_BEFORE)).isEmpty();
+			eventId, NotificationType.EVENT_REMINDER, ReminderSlot.DAY_BEFORE))
+			.containsExactly(memberUser.getId());
 	}
 
 	@Test
-	void updateCancelsHourBeforeReminderWhenStartTimeChanges() throws Exception {
+	void updateKeepsHourBeforeReminderWhenStartTimeChanges() throws Exception {
 		Long eventId = createTimedEvent("2026-08-05T01:00:00Z", "2026-08-05T02:00:00Z");
 		persistReminder(eventId, ReminderSlot.HOUR_BEFORE);
 
@@ -697,7 +698,8 @@ class CalendarEventApiTest extends IntegrationTest {
 		entityManager.flush();
 		entityManager.clear();
 		assertThat(notificationRepository.findReceiverIdsByEventAndSlot(
-			eventId, NotificationType.EVENT_REMINDER, ReminderSlot.HOUR_BEFORE)).isEmpty();
+			eventId, NotificationType.EVENT_REMINDER, ReminderSlot.HOUR_BEFORE))
+			.containsExactly(memberUser.getId());
 	}
 
 	/**

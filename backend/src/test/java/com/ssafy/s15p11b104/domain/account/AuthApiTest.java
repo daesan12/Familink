@@ -3,6 +3,7 @@ package com.ssafy.s15p11b104.domain.account;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -376,6 +377,25 @@ class AuthApiTest extends IntegrationTest {
 	}
 
 	@Test
+	void repeatedLoginFailuresAreRateLimitedWithRetryAfter() throws Exception {
+		signup();
+
+		for (int attempt = 0; attempt < 5; attempt++) {
+			mockMvc.perform(post("/auth/login")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(loginBody("wrong-password")))
+				.andExpect(status().isUnauthorized());
+		}
+
+		mockMvc.perform(post("/auth/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(loginBody("wrong-password")))
+			.andExpect(status().isTooManyRequests())
+			.andExpect(header().exists("Retry-After"))
+			.andExpect(jsonPath("$.code").value("LOGIN_RATE_LIMITED"));
+	}
+
+	@Test
 	void loginStoresRefreshTokenWithConfiguredExpiry() throws Exception {
 		signup();
 		Session session = login();
@@ -388,18 +408,15 @@ class AuthApiTest extends IntegrationTest {
 	}
 
 	@Test
-	void secondLoginReplacesStoredRefreshToken() throws Exception {
+	void secondLoginIsRejectedAndKeepsStoredRefreshToken() throws Exception {
 		signup();
 		Session first = login();
-		Session second = login();
 
-		assertThat(second.refreshToken()).isNotEqualTo(first.refreshToken());
+		mockMvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content(loginBody(PASSWORD)))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("ACTIVE_SESSION_EXISTS"));
 		assertThat(redisTemplate.opsForValue().get("refresh:" + first.userId()))
-			.isEqualTo(second.refreshToken());
-
-		reissue(first.refreshToken())
-			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"));
+			.isEqualTo(first.refreshToken());
 	}
 
 	@Test
@@ -516,7 +533,9 @@ class AuthApiTest extends IntegrationTest {
 	void logoutWithRotatedRefreshTokenKeepsTheActiveSession() throws Exception {
 		signup();
 		Session stale = login();
-		Session active = login();
+		MvcResult rotated = reissue(stale.refreshToken()).andExpect(status().isOk()).andReturn();
+		JsonNode activeData = readJson(rotated).path("data");
+		Session active = new Session(stale.userId(), activeData.path("accessToken").asText(), activeData.path("refreshToken").asText());
 
 		logout(stale.accessToken(), stale.refreshToken())
 			.andExpect(status().isNoContent());
