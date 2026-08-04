@@ -190,10 +190,6 @@ export function GroupInfoScreen({
   const [detailReloadCount, setDetailReloadCount] = useState(0);
   const detailRequestVersion = useRef(0);
 
-  useHardwareBack(() => {
-    setSubScreen(null);
-    return true;
-  }, subScreen !== null);
   const membersRequestVersion = useRef(0);
   const profileRequestVersion = useRef(0);
   // 마지막으로 조회를 마친 그룹. 같은 그룹의 재조회는 기존 데이터를 유지한 채 갱신한다.
@@ -484,6 +480,22 @@ export function GroupInfoScreen({
     setEditingMemberId(null);
     setAliasDraft('');
   };
+
+  // 시스템 뒤로가기는 한 단계씩 되돌린다. 호칭 인라인 편집은 Modal이 아니라
+  // 뒤로가기가 JS로 내려오므로 하위 화면보다 먼저 처리한다.
+  useHardwareBack(() => {
+    // 저장 중에는 소비만 해 화면을 유지한다(ProfileEditScreen과 같은 관례).
+    if (updatingAliasMemberId !== null) {
+      return true;
+    }
+    if (editingMemberId !== null) {
+      handleCancelEditAlias();
+      return true;
+    }
+
+    setSubScreen(null);
+    return true;
+  }, editingMemberId !== null || subScreen !== null);
 
   const applyRoleSelection = (member: GroupMember, role: GroupRole) => {
     if (onUpdateMemberRole !== undefined) {

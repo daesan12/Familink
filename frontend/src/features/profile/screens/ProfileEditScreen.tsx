@@ -69,6 +69,11 @@ export function ProfileEditScreen<T extends BaseProfile>({
     if (isSaving) {
       return true;
     }
+    // 성별 드롭다운은 Modal이 아니라 뒤로가기가 JS로 내려온다. 화면을 닫기 전에 먼저 접는다.
+    if (isGenderOpen) {
+      setIsGenderOpen(false);
+      return true;
+    }
     onBack();
     return true;
   });
