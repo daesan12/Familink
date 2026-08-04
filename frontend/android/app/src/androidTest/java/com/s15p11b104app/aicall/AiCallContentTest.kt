@@ -218,32 +218,6 @@ class AiCallContentTest {
   }
 
   @Test
-  fun 디버그_흐름에서_연결_실패와_재시도_화면을_확인한다() {
-    composeRule.setContent {
-      AiCallTheme {
-        AiCallRoute(
-            apiBaseUrl = null,
-            accessTokenProvider =
-                object : AiCallAccessTokenProvider {
-                  override fun currentAccessToken(): String = "test-access-token"
-
-                  override suspend fun refreshAccessToken(): String = "test-access-token"
-                },
-            onCallResult = {},
-            onFullscreenChange = {},
-        )
-      }
-    }
-
-    composeRule.onNodeWithTag("persona-4").performClick()
-    composeRule.onNodeWithTag("preview-connection-failure").performClick()
-    composeRule.onNodeWithTag("call-gradient-background").assertIsDisplayed()
-    composeRule.onNodeWithText("통화를 연결하지 못했어요.").assertIsDisplayed()
-    composeRule.onNodeWithText("인터넷 연결을 확인한 뒤 다시 시도해 주세요.").assertIsDisplayed()
-    composeRule.onNodeWithText("다시 시도").assertIsDisplayed()
-  }
-
-  @Test
   fun 실패_원인에_맞는_안내와_복구_동작을_표시한다() {
     var state by
         mutableStateOf(
@@ -270,8 +244,10 @@ class AiCallContentTest {
       }
     }
 
+    composeRule.onNodeWithTag("call-gradient-background").assertIsDisplayed()
     composeRule.onNodeWithText("통화를 연결하지 못했어요.").assertIsDisplayed()
     composeRule.onNodeWithText("인터넷 연결을 확인한 뒤 다시 시도해 주세요.").assertIsDisplayed()
+    composeRule.onNodeWithText("다시 시도").assertIsDisplayed()
 
     composeRule.runOnIdle {
       state = state.copy(failureReason = AiCallFailureReason.EndRequest)
