@@ -16,6 +16,7 @@ import {RetryButton} from '../../../shared/components/RetryButton';
 import {SubScreenHeader} from '../components/SubScreenHeader';
 import {useJoinRequests} from '../hooks/useJoinRequests';
 import {
+  isCareReceiverAlreadyActiveInOtherGroup,
   isJoinRequestAlreadyProcessed,
   joinRequestDecisionErrorMessage,
   roleLabel,
@@ -48,6 +49,7 @@ export function JoinApprovalScreen({
   const [approving, setApproving] = useState<JoinRequest | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [processError, setProcessError] = useState<string | null>(null);
+  const [processAlert, setProcessAlert] = useState<string | null>(null);
 
   const applyDecision = async (
     request: JoinRequest,
@@ -58,6 +60,7 @@ export function JoinApprovalScreen({
     }
 
     setProcessError(null);
+    setProcessAlert(null);
     setProcessingId(request.joinRequestId);
     try {
       await onProcess?.(groupId, {
@@ -69,7 +72,12 @@ export function JoinApprovalScreen({
       joinRequests.remove(request.joinRequestId);
       return true;
     } catch (error) {
-      setProcessError(joinRequestDecisionErrorMessage(error));
+      const errorMessage = joinRequestDecisionErrorMessage(error);
+      if (isCareReceiverAlreadyActiveInOtherGroup(error)) {
+        setProcessAlert(errorMessage);
+      } else {
+        setProcessError(errorMessage);
+      }
       // 이미 처리된 요청은 재시도할 수 없으므로 목록에서도 정리한다.
       if (isJoinRequestAlreadyProcessed(error)) {
         joinRequests.remove(request.joinRequestId);
@@ -191,7 +199,47 @@ export function JoinApprovalScreen({
         onSelect={handleSelectRole}
         onClose={handleCloseRoleModal}
       />
+      <DecisionErrorModal
+        message={processAlert}
+        onClose={() => setProcessAlert(null)}
+      />
     </View>
+  );
+}
+
+function DecisionErrorModal({
+  message,
+  onClose,
+}: {
+  message: string | null;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={onClose}
+      transparent
+      visible={message !== null}
+    >
+      <View style={styles.alertBackdrop}>
+        <View
+          accessibilityLabel="피보호자 승인 제한 안내"
+          accessibilityViewIsModal
+          style={styles.alertCard}
+        >
+          <Text style={styles.alertTitle}>피보호자로 승인할 수 없어요</Text>
+          <Text style={styles.alertMessage}>{message}</Text>
+          <Pressable
+            accessibilityLabel="피보호자 승인 제한 확인"
+            accessibilityRole="button"
+            onPress={onClose}
+            style={styles.alertButton}
+          >
+            <Text style={styles.alertButtonText}>확인</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -258,6 +306,49 @@ function RoleSelectModal({
 }
 
 const styles = StyleSheet.create({
+  alertBackdrop: {
+    alignItems: 'center',
+    backgroundColor: COLORS.overlay,
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  alertButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.textMuted,
+    borderCurve: 'continuous',
+    borderRadius: RADII.pill,
+    justifyContent: 'center',
+    minHeight: 52,
+    width: '100%',
+  },
+  alertButtonText: {
+    color: COLORS.background,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  alertCard: {
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderCurve: 'continuous',
+    borderRadius: RADII.sheet,
+    gap: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    width: '100%',
+  },
+  alertMessage: {
+    color: COLORS.text,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  alertTitle: {
+    color: COLORS.textStrong,
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   actionButton: {
     alignItems: 'center',
     borderCurve: 'continuous',
