@@ -1,3 +1,4 @@
+import {createContext, forwardRef, useContext, useRef} from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,36 +9,61 @@ import {
 
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 
+// 포커스된 입력이 키보드나 하단 고정 버튼에 가려지지 않도록,
+// 감싸는 화면이 이 컨텍스트로 전달받은 입력을 보이는 위치로 스크롤한다.
+export const FocusedInputScrollContext = createContext<
+  ((input: TextInput) => void) | null
+>(null);
+
 interface FormFieldProps extends TextInputProps {
   label?: string;
   trailing?: React.ReactNode;
   invalid?: boolean;
 }
 
-export function FormField({
-  label,
-  trailing,
-  invalid = false,
-  style,
-  ...props
-}: FormFieldProps) {
-  return (
-    <View style={styles.wrapper}>
-      {label !== undefined && label.length > 0 && (
-        <Text style={styles.label}>{label}</Text>
-      )}
-      <View style={[styles.field, invalid && styles.invalidField]}>
-        <TextInput
-          {...props}
-          placeholderTextColor={AUTH_COLORS.placeholder}
-          selectionColor={AUTH_COLORS.primary}
-          style={[styles.input, style]}
-        />
-        {trailing}
+// ref로 내부 TextInput을 노출해 "다음" 키로 다른 입력칸에 포커스를 넘길 수 있게 한다.
+export const FormField = forwardRef<TextInput, FormFieldProps>(
+  (
+    {label, trailing, invalid = false, style, onFocus, ...props},
+    forwardedRef,
+  ) => {
+    const scrollIntoView = useContext(FocusedInputScrollContext);
+    const inputRef = useRef<TextInput>(null);
+
+    return (
+      <View style={styles.wrapper}>
+        {label !== undefined && label.length > 0 && (
+          <Text style={styles.label}>{label}</Text>
+        )}
+        <View style={[styles.field, invalid && styles.invalidField]}>
+          <TextInput
+            {...props}
+            onFocus={event => {
+              onFocus?.(event);
+              if (inputRef.current !== null) {
+                scrollIntoView?.(inputRef.current);
+              }
+            }}
+            placeholderTextColor={AUTH_COLORS.placeholder}
+            ref={node => {
+              inputRef.current = node;
+              if (typeof forwardedRef === 'function') {
+                forwardedRef(node);
+              } else if (forwardedRef !== null) {
+                forwardedRef.current = node;
+              }
+            }}
+            selectionColor={AUTH_COLORS.primary}
+            style={[styles.input, style]}
+          />
+          {trailing}
+        </View>
       </View>
-    </View>
-  );
-}
+    );
+  },
+);
+
+FormField.displayName = 'FormField';
 
 const styles = StyleSheet.create({
   wrapper: {

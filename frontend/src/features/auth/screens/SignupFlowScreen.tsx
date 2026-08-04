@@ -1,14 +1,15 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {
   Animated,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  type TextInput,
   View,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -22,7 +23,10 @@ import {
 import {AnimatedPressable} from '../components/AnimatedPressable';
 import {DatePickerSheet} from '../components/DatePickerSheet';
 import {FloatingIllustration} from '../components/FloatingIllustration';
-import {FormField} from '../components/FormField';
+import {
+  FocusedInputScrollContext,
+  FormField,
+} from '../components/FormField';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {StepHeader} from '../components/StepHeader';
 import {ValidationMessage} from '../components/ValidationMessage';
@@ -318,7 +322,7 @@ export function SignupFlowScreen({
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={styles.flex}>
         <Animated.View
           style={[
@@ -480,6 +484,8 @@ function BasicInfoStep({
 }: BasicInfoStepProps) {
   const canContinue =
     isValidName(draft.name) && availability === 'available';
+  // 이름에서 키보드 "다음" 키를 누르면 아이디 입력으로 포커스를 넘긴다.
+  const loginIdInputRef = useRef<TextInput>(null);
 
   return (
     <StepLayout
@@ -512,7 +518,10 @@ function BasicInfoStep({
           label="이름"
           maxLength={10}
           onChangeText={onChangeName}
+          onSubmitEditing={() => loginIdInputRef.current?.focus()}
           placeholder="이름은 2 ~ 10자로 입력해주세요."
+          returnKeyType="next"
+          submitBehavior="submit"
           value={draft.name}
         />
         {nameError !== undefined && (
@@ -528,6 +537,8 @@ function BasicInfoStep({
           maxLength={15}
           onChangeText={onChangeLoginId}
           placeholder="영문·숫자 5 ~ 15자로 입력해주세요."
+          ref={loginIdInputRef}
+          returnKeyType="done"
           trailing={
             <Pressable
               accessibilityLabel="아이디 중복 확인"
@@ -586,6 +597,8 @@ function PasswordStep({
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [passwordConfirmationVisible, setPasswordConfirmationVisible] =
     useState(false);
+  // 비밀번호에서 키보드 "다음" 키를 누르면 비밀번호 확인으로 포커스를 넘긴다.
+  const confirmationInputRef = useRef<TextInput>(null);
   const canAttempt =
     isValidPassword(draft.password) &&
     draft.passwordConfirmation.length > 0;
@@ -649,8 +662,11 @@ function PasswordStep({
           label="비밀번호"
           maxLength={16}
           onChangeText={onChangePassword}
+          onSubmitEditing={() => confirmationInputRef.current?.focus()}
           placeholder="영문·숫자 8 ~ 16자로 입력해주세요."
+          returnKeyType="next"
           secureTextEntry={!passwordVisible}
+          submitBehavior="submit"
           trailing={passwordVisibilityButton}
           value={draft.password}
         />
@@ -668,6 +684,8 @@ function PasswordStep({
           label="비밀번호 확인"
           maxLength={16}
           onChangeText={onChangeConfirmation}
+          ref={confirmationInputRef}
+          returnKeyType="done"
           secureTextEntry={!passwordConfirmationVisible}
           trailing={passwordConfirmationVisibilityButton}
           value={draft.passwordConfirmation}
@@ -889,16 +907,105 @@ interface StepLayoutProps {
   button: React.ReactNode;
 }
 
+// KeyboardAvoidingView 패딩이 자리 잡은 뒤 측정해야 가려짐 판정이 정확하다.
+// 기기에 따라 정착 시점이 달라 두 번 측정한다. 두 번째 시도는 이미 보이면 아무것도 하지 않는다.
+const FOCUS_SCROLL_ATTEMPT_DELAYS_MS = [150, 600];
+const FOCUS_SCROLL_MARGIN = 16;
+
 function StepLayout({children, button}: StepLayoutProps) {
+  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollOffsetRef = useRef(0);
+  // 하단 버튼은 absolute로 ScrollView 위에 겹치므로, 가려짐 판정에서 그 높이를 빼야 한다.
+  const buttonAreaHeightRef = useRef(0);
+  const pendingTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const keyboardSubscriptionRef = useRef<ReturnType<
+    typeof Keyboard.addListener
+  > | null>(null);
+
+  // 이전 포커스가 남긴 시도가 다음 포커스나 사용자 스크롤을 되돌리지 않도록 정리한다.
+  const clearPendingScroll = useCallback(() => {
+    pendingTimersRef.current.forEach(clearTimeout);
+    pendingTimersRef.current = [];
+    keyboardSubscriptionRef.current?.remove();
+    keyboardSubscriptionRef.current = null;
+  }, []);
+
+  useEffect(() => clearPendingScroll, [clearPendingScroll]);
+
+  // 포커스된 입력칸이 키보드·하단 버튼에 가려지면 보이는 위치까지 스크롤한다.
+  const scrollInputIntoView = useCallback((input: TextInput) => {
+    clearPendingScroll();
+    const measureAndScroll = () => {
+      const scrollView = scrollViewRef.current;
+      const scrollHost = scrollView?.getNativeScrollRef();
+      if (scrollView === null || scrollHost == null) {
+        return;
+      }
+      input.measureInWindow((_inputX, inputY, _inputWidth, inputHeight) => {
+        scrollHost.measureInWindow(
+          (_scrollX, scrollY, _scrollWidth, scrollHeight) => {
+            const visibleBottom =
+              scrollY +
+              scrollHeight -
+              buttonAreaHeightRef.current -
+              FOCUS_SCROLL_MARGIN;
+            const inputBottom = inputY + inputHeight;
+            if (inputBottom > visibleBottom) {
+              scrollView.scrollTo({
+                animated: true,
+                y: scrollOffsetRef.current + (inputBottom - visibleBottom),
+              });
+            }
+          },
+        );
+      });
+    };
+
+    const scheduleAttempts = () => {
+      FOCUS_SCROLL_ATTEMPT_DELAYS_MS.forEach(delay => {
+        pendingTimersRef.current.push(setTimeout(measureAndScroll, delay));
+      });
+    };
+
+    // 키보드가 이미 떠 있으면 바로 측정한다. 단 "떠 있지만 내려가는 중"(스텝 전환 직후 등)일 수
+    // 있으므로, 아래 리스너도 함께 걸어 키보드가 다시 올라오는 시점에도 측정한다.
+    if (Keyboard.isVisible()) {
+      scheduleAttempts();
+    }
+    // 키보드 표시 완료 시점에 맞춰 측정한다.
+    // 키보드가 끝내 뜨지 않으면 리스너는 다음 포커스나 언마운트 때 정리된다.
+    keyboardSubscriptionRef.current = Keyboard.addListener(
+      'keyboardDidShow',
+      () => {
+        keyboardSubscriptionRef.current?.remove();
+        keyboardSubscriptionRef.current = null;
+        scheduleAttempts();
+      },
+    );
+  }, [clearPendingScroll]);
+
   return (
     <View style={styles.step}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
-        {children}
-      </ScrollView>
-      <View style={styles.bottomButton}>{button}</View>
+      <FocusedInputScrollContext.Provider value={scrollInputIntoView}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          onScroll={event => {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+          }}
+          ref={scrollViewRef}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}>
+          {children}
+        </ScrollView>
+      </FocusedInputScrollContext.Provider>
+      <View
+        onLayout={event => {
+          buttonAreaHeightRef.current = event.nativeEvent.layout.height;
+        }}
+        style={styles.bottomButton}>
+        {button}
+      </View>
     </View>
   );
 }
