@@ -2,6 +2,7 @@ import React from 'react';
 import {Alert, Text, TextInput} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
+import {mockHardwareBack} from '../../../shared/testing/hardwareBack';
 import type {GroupMember, WeeklyRankingSnapshot} from '../types';
 import {GroupInfoScreen} from './GroupInfoScreen';
 
@@ -408,6 +409,58 @@ test('호칭 편집을 취소하면 저장 없이 편집이 닫히고 역할 토
   expect(
     renderer.root.findAllByProps({accessibilityLabel: '손수호 피보호자'}).length,
   ).toBeGreaterThan(0);
+});
+
+test('호칭 편집 중 시스템 Back은 편집만 취소하고 화면을 유지한다', () => {
+  // 호칭 편집은 Modal이 아니라 인라인 입력이라 Back이 JS 리스너까지 내려온다.
+  const back = mockHardwareBack();
+
+  try {
+    const renderer = renderScreen();
+
+    press(renderer, '손수호 호칭 수정');
+    const input = renderer.root.findByProps({
+      accessibilityLabel: '손수호 호칭 입력',
+    });
+    TestRenderer.act(() => {
+      input.props.onChangeText('바꾸다 만 호칭');
+    });
+
+    let handled = false;
+    TestRenderer.act(() => {
+      handled = back.press();
+    });
+
+    expect(handled).toBe(true);
+    // 편집만 닫히고 그룹 정보 화면은 그대로 남는다.
+    expect(renderer.root.findAllByType(TextInput)).toHaveLength(0);
+    expect(hasText(renderer, '바꾸다 만 호칭')).toBe(false);
+    expect(hasText(renderer, '아빠')).toBe(true);
+    expect(hasText(renderer, '그룹 정보')).toBe(true);
+  } finally {
+    back.restore();
+  }
+});
+
+test('하위 화면에서 시스템 Back은 그룹 정보로 돌아온다', () => {
+  const back = mockHardwareBack();
+
+  try {
+    const renderer = renderScreen();
+
+    press(renderer, '그룹관리자 변경');
+    expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(true);
+
+    let handled = false;
+    TestRenderer.act(() => {
+      handled = back.press();
+    });
+
+    expect(handled).toBe(true);
+    expect(hasText(renderer, '그룹 정보')).toBe(true);
+  } finally {
+    back.restore();
+  }
 });
 
 test('역할 변경 API가 실패하면 오류 팝업을 띄우고 역할을 유지한다', async () => {
