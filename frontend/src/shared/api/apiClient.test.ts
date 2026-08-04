@@ -17,6 +17,7 @@ import {
   type ApiAuthSession,
 } from './apiClient';
 import {ApiError} from './apiError';
+import {subscribeGroupAccessDenied} from './groupAccessEvents';
 
 function createAdapter(
   data: unknown,
@@ -254,6 +255,29 @@ test('403과 공개 인증 API의 401에는 재발급하지 않는다', async ()
     client.post('/auth/login', {}, {adapter: invalidCredentials}),
   ).rejects.toMatchObject({code: 'INVALID_CREDENTIALS', status: 401});
   expect(authSession.refreshAccessToken).not.toHaveBeenCalled();
+});
+
+test('그룹 범위 API의 403은 그룹 접근 거부 신호를 보낸다', async () => {
+  const listener = jest.fn();
+  const unsubscribe = subscribeGroupAccessDenied(listener);
+  const client = createApiClient('https://api.example.com');
+  const forbidden: AxiosAdapter = async config => {
+    throwApiFailure(config, 403, 'FORBIDDEN');
+  };
+
+  try {
+    await expect(
+      client.get('/groups/11/posts', {adapter: forbidden}),
+    ).rejects.toMatchObject({code: 'FORBIDDEN', status: 403});
+    expect(listener).toHaveBeenCalledWith('11');
+
+    await expect(
+      client.get('/notifications', {adapter: forbidden}),
+    ).rejects.toMatchObject({code: 'FORBIDDEN', status: 403});
+    expect(listener).toHaveBeenCalledTimes(1);
+  } finally {
+    unsubscribe();
+  }
 });
 
 test('재시도 요청의 두 번째 401은 다시 재발급하지 않는다', async () => {

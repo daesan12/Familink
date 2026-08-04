@@ -7,6 +7,7 @@ import axios, {
 import {API_BASE_URL} from './apiConfig';
 import {ApiError, normalizeApiError} from './apiError';
 import {isApiSuccess} from './apiTypes';
+import {notifyGroupAccessDenied} from './groupAccessEvents';
 
 export const API_TIMEOUT_MS = 10_000;
 
@@ -99,6 +100,11 @@ export function createApiClient(
         : undefined;
       const session = resolveAuthSession();
 
+      const deniedGroupId = resolveGroupId(config);
+      if (apiError.status === 403 && deniedGroupId !== null) {
+        notifyGroupAccessDenied(deniedGroupId);
+      }
+
       if (
         config === undefined ||
         config.authRetry === true ||
@@ -138,6 +144,22 @@ export const apiClient = createApiClient();
 function isAccessTokenFree(config: InternalAxiosRequestConfig): boolean {
   const path = resolveRequestPath(config);
   return path !== null && ACCESS_TOKEN_FREE_PATHS.has(path);
+}
+
+function resolveGroupId(
+  config: InternalAxiosRequestConfig | undefined,
+): string | null {
+  const path = config === undefined ? null : resolveRequestPath(config);
+  const encodedGroupId = path?.match(/^\/groups\/([^/]+)(?:\/|$)/)?.[1];
+  if (encodedGroupId === undefined) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(encodedGroupId);
+  } catch {
+    return null;
+  }
 }
 
 function updateAuthRetryBody(
