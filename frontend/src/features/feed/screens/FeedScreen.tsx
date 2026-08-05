@@ -101,6 +101,9 @@ function RouteFocusReporter({
 // 상세 라우트의 마운트와 postId를 selectedPostId 미러로 동기화한다.
 // unmount cleanup이 기존 하드웨어 백 핸들러의 정리(피커·메뉴·상세 상태 닫기)를
 // 대체한다 — 스택 pop 한 번으로 오늘과 같은 동시 정리가 일어난다.
+// 포커스 기준으로 재보고해야 한다: 이 상세 위에 다른 화면(작성 중 딥링크로
+// 쌓인 두 번째 상세 등)이 pop되어 돌아왔을 때, 그 화면의 cleanup이 비운
+// 미러를 복구하는 경로가 포커스 재보고뿐이다.
 function DetailRouteSync({
   onClosed,
   onOpened,
@@ -110,10 +113,15 @@ function DetailRouteSync({
   onOpened: (postId: string) => void;
   postId: string;
 }) {
+  const isFocused = useIsFocused();
+
   useEffect(() => {
-    onOpened(postId);
-    return () => onClosed();
-  }, [onClosed, onOpened, postId]);
+    if (isFocused) {
+      onOpened(postId);
+    }
+  }, [isFocused, onOpened, postId]);
+
+  useEffect(() => () => onClosed(), [onClosed]);
 
   return null;
 }
@@ -444,7 +452,9 @@ export function FeedScreen({
           fallbackPost === null
         ) {
           setDetailPost(null);
-          feedNavRef.current?.dispatch(StackActions.popTo('FeedHome'));
+          // 실패한 상세 한 장만 걷어낸다. popTo('FeedHome')은 아래에 깔린
+          // dirty 작성 화면까지 경고 없이 파괴한다.
+          feedNavRef.current?.goBack();
         }
         if (isActive && detailRequestId.current === requestId) {
           Alert.alert(
@@ -606,6 +616,9 @@ export function FeedScreen({
   // (컨테이너 useBackButton이 최심 포커스 스택을 pop).
   const handleDetailRouteOpened = useCallback((postId: string) => {
     setSelectedPostId(postId);
+    // 열려 있던 상세의 postId가 딥링크로 교체되는 경우(기존 신호 소비와 동일
+    // 시점) 반응 피커가 이전 게시글 것을 가리키지 않게 닫는다.
+    setOpenReactionPicker(null);
   }, []);
   const handleDetailRouteClosed = useCallback(() => {
     setSelectedPostId(null);
