@@ -215,6 +215,47 @@ test("날짜 바텀시트에서 일정을 열고 작성자·참여자 상세를 
   ).toBeTruthy();
 });
 
+test("활성 구성원에서 사라진 참여자 태그와 편집 선택값을 제거한다", async () => {
+  const gateway = createGateway();
+  gateway.getEvent.mockResolvedValueOnce({
+    creatorMemberId: "7",
+    description: "",
+    endAt: "2026-07-17T07:00:00Z",
+    endDate: "2026-07-17",
+    eventDate: "2026-07-17",
+    groupId: "3",
+    id: "12",
+    participantMemberIds: ["8", "36"],
+    startAt: "2026-07-17T06:00:00Z",
+    title: "홍박사 정형외과",
+  });
+  const {renderer} = await renderCalendar(gateway);
+
+  await openEventDetail(renderer);
+
+  expect(renderer.root.findByProps({children: "홍유라"})).toBeTruthy();
+  expect(
+    renderer.root.findAllByProps({children: "구성원 36"}),
+  ).toHaveLength(0);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({accessibilityLabel: "일정 수정"})
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({accessibilityLabel: "일정 저장"})
+      .props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(gateway.updateEvent).toHaveBeenCalledWith(
+    "12",
+    expect.objectContaining({participantMemberIds: ["8"]}),
+  );
+});
+
 test("상세에서 기존 값으로 수정한 뒤 확인 후 일정을 삭제한다", async () => {
   const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
   const gateway = createGateway();
