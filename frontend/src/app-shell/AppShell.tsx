@@ -6,6 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../design/tokens';
 import type { NotificationDeepLinkTarget } from '../features/notifications/deepLink';
 import { useNotificationGateway } from '../features/notifications/NotificationGatewayContext';
+import {
+  subscribeNativePushReceived,
+  type SubscribePushReceived,
+} from '../features/notifications/pushReceivedProvider';
 import { useHardwareBack } from '../shared/hooks/useHardwareBack';
 import { BottomTabBar } from './BottomTabBar';
 import { CurrentGroupSwitcher } from './CurrentGroupSwitcher';
@@ -42,6 +46,8 @@ interface AppShellProps {
   deepLinkRequestId?: number;
   // 딥링크 소비 직후 호출된다. 부모가 상태를 비워 재마운트 때 재소비되지 않게 한다.
   onDeepLinkConsumed?: () => void;
+  // 앱 실행 중 푸시 도착 구독. 테스트에서 네이티브 브리지 없이 주입할 수 있다.
+  subscribePushReceived?: SubscribePushReceived;
 }
 
 export function AppShell({
@@ -65,6 +71,7 @@ export function AppShell({
   deepLinkTarget,
   deepLinkRequestId = 0,
   onDeepLinkConsumed,
+  subscribePushReceived = subscribeNativePushReceived,
 }: AppShellProps) {
   const [activeRoute, setActiveRoute] = useState(initialRoute);
   const [currentGroupId, setCurrentGroupId] = useState(initialGroupId);
@@ -181,6 +188,49 @@ export function AppShell({
       disposed = true;
     };
   }, [currentUserId, notificationGateway, resolvedRoute, screenRefreshNonce]);
+
+  // 앱 실행 중 푸시가 도착하면 배지를 즉시 갱신한다. 알림 화면에서는 구독하지
+  // 않고 화면이 보고한 값을 유지한다. 알림 화면에서 나온 직후 읽음 API 커밋 전에
+  // 푸시가 도착하는 좁은 경쟁까지는 막지 않으며, 이때는 다음 조회에서 수렴한다.
+  // 연속 푸시는 진행 중 조회 1건 + 후속 조회 1건으로 합쳐 마지막 푸시 이후
+  // 값으로 확정한다(응답 역전으로 오래된 값이 남는 것 방지).
+  useEffect(() => {
+    if (notificationGateway === null || resolvedRoute === 'notifications') {
+      return;
+    }
+
+    let disposed = false;
+    let isFetching = false;
+    let hasPendingRefresh = false;
+    const refreshUnreadCount = () => {
+      if (isFetching) {
+        hasPendingRefresh = true;
+        return;
+      }
+      isFetching = true;
+      notificationGateway
+        .getUnreadCount()
+        .then(count => {
+          if (!disposed) {
+            setUnreadNotificationCount(count);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          isFetching = false;
+          if (hasPendingRefresh && !disposed) {
+            hasPendingRefresh = false;
+            refreshUnreadCount();
+          }
+        });
+    };
+    const unsubscribe = subscribePushReceived(refreshUnreadCount);
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, [notificationGateway, resolvedRoute, subscribePushReceived]);
 
   useEffect(() => {
     if (initialGroupId || !groupStore) {
