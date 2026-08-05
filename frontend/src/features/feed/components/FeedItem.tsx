@@ -83,6 +83,7 @@ export function FeedItem({
       <View style={styles.metaRow}>
         <ReactionBar
           canReact={canInteract}
+          isVisible={isVisible}
           isPickerOpen={isReactionPickerOpen}
           onSelectReaction={reactionId =>
             onSelectReaction(post.id, reactionId)
