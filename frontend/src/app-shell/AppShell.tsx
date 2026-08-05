@@ -20,6 +20,7 @@ import { useHardwareBack } from '../shared/hooks/useHardwareBack';
 import { BottomTabBar } from './BottomTabBar';
 import { CurrentGroupSwitcher } from './CurrentGroupSwitcher';
 import type { FeedStackParamList } from '../features/feed/navigationTypes';
+import type { GroupInfoStackParamList } from '../features/group-info/navigationTypes';
 import { getTabsForRole, resolveAllowedRoute, resolveCurrentGroup } from './navigation';
 import type {
   AppRoute,
@@ -117,7 +118,6 @@ export function AppShell({
   const [openReportTarget, setOpenReportTarget] =
     useState<ReportDeepLinkParams | null>(null);
   const [openReportRequestId, setOpenReportRequestId] = useState(0);
-  const [openJoinApprovalRequestId, setOpenJoinApprovalRequestId] = useState(0);
   const [readNotificationIds, setReadNotificationIds] = useState<
     readonly string[]
   >([]);
@@ -185,6 +185,23 @@ export function AppShell({
         StackActions.popTo('MainTabs', {
           params: { initial: false, params, screen },
           screen: 'feed',
+        })
+      );
+    },
+    []
+  );
+  // 그룹정보 탭 내부 GroupInfoStack의 화면까지 한 번의 dispatch로 도달한다
+  // (navigateInFeedTab과 같은 관용구 — initial:false 필수, getId 금지).
+  const navigateInGroupInfoTab = useCallback(
+    (
+      screen: 'JoinApproval',
+      params: GroupInfoStackParamList['JoinApproval'],
+    ) => {
+      setVisibleRoute('groupInfo');
+      shellNavRef.current?.dispatch(
+        StackActions.popTo('MainTabs', {
+          params: { initial: false, params, screen },
+          screen: 'groupInfo',
         })
       );
     },
@@ -477,8 +494,13 @@ export function AppShell({
       goToTab('report');
       return;
     }
-    setOpenJoinApprovalRequestId(requestId => requestId + 1);
-    goToTab('groupInfo');
+    navigateInGroupInfoTab('JoinApproval', {
+      groupId:
+        target.groupId !== undefined &&
+        groups.some(group => group.id === target.groupId)
+          ? target.groupId
+          : currentGroup.id,
+    });
   };
   openNotificationTargetRef.current = handleOpenNotificationTarget;
 
@@ -518,7 +540,6 @@ export function AppShell({
     onUnreadCountChange: setUnreadNotificationCount,
     openCalendarEventId,
     openCalendarEventRequestId,
-    openJoinApprovalRequestId,
     openReportRequestId,
     openReportTarget,
     readNotificationIds,

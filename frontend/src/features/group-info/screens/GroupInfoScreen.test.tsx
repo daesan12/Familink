@@ -1070,37 +1070,45 @@ test('그룹 코드 카드를 누르면 그룹 코드 화면으로 이동한다'
   expect(hasText(renderer!, '그룹 정보')).toBe(true);
 });
 
-test('가입 요청 알림 딥링크로 진입하면 가입 승인 화면을 바로 연다', async () => {
+test('내비게이션으로 전달된 가입 승인 딥링크는 승인 화면을 바로 연다', async () => {
+  // 셸의 중첩 navigate(딥링크)가 도달하는 경로를 컨테이너 ref로 재현한다.
+  const navRef = createNavigationContainerRef<GroupInfoStackParamList>();
   let renderer: TestRenderer.ReactTestRenderer;
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <GroupInfoScreen
-        {...baseProps}
-        currentMemberId="m-manager"
-        initialMembers={MEMBERS}
-        joinRequestsLoader={() =>
-          Promise.resolve([
-            {
-              joinRequestId: 'jr-1',
-              applicantUserId: 'u-1',
-              applicantName: '손수호',
-              profileImageUrl: null,
-              status: 'PENDING_ADMIN' as const,
-              assignedRole: null,
-              processedAt: null,
-              createdAt: '2026-07-30T09:12:00Z',
-            },
-          ])
-        }
-        openJoinApprovalRequestId={1}
-        pendingJoinCount={1}
-        rankingLoader={PENDING_RANKING_LOADER}
-      />,
+      <NavigationContainer ref={navRef}>
+        <GroupInfoScreenBase
+          {...baseProps}
+          currentMemberId="m-manager"
+          initialMembers={MEMBERS}
+          joinRequestsLoader={() =>
+            Promise.resolve([
+              {
+                joinRequestId: 'jr-1',
+                applicantUserId: 'u-1',
+                applicantName: '손수호',
+                profileImageUrl: null,
+                status: 'PENDING_ADMIN' as const,
+                assignedRole: null,
+                processedAt: null,
+                createdAt: '2026-07-30T09:12:00Z',
+              },
+            ])
+          }
+          pendingJoinCount={1}
+          rankingLoader={PENDING_RANKING_LOADER}
+        />
+      </NavigationContainer>,
     );
   });
   mountedRenderers.push(renderer!);
-  await TestRenderer.act(async () => {});
 
+  await TestRenderer.act(async () => {
+    navRef.navigate('JoinApproval', {groupId: 'group-1'});
+    await Promise.resolve();
+  });
+
+  expect(navRef.getCurrentRoute()?.name).toBe('JoinApproval');
   expect(hasText(renderer!, '승인 요청 1건')).toBe(true);
   expect(hasText(renderer!, '손수호')).toBe(true);
 });

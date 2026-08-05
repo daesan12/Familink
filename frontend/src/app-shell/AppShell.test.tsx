@@ -346,6 +346,24 @@ function FeedParamsProbe(props: AppScreenProps) {
   );
 }
 
+// 가입 승인 딥링크도 그룹정보 탭 route의 중첩 params(GroupInfoStack
+// JoinApproval)로 전달된다. FeedParamsProbe와 같은 방식의 계약 단언용 목.
+function GroupInfoParamsProbe(props: AppScreenProps) {
+  const route = useRoute();
+  const nested = route.params as
+    | {
+        initial?: boolean;
+        params?: {groupId?: string};
+        screen?: string;
+      }
+    | undefined;
+  return (
+    <Text>
+      {`groupInfo:${props.currentGroup.id}:${nested?.screen ?? 'none'}:${nested?.params?.groupId ?? 'none'}:${String(nested?.initial ?? 'none')}`}
+    </Text>
+  );
+}
+
 function createDeepLinkScreens(): AppScreenRegistry {
   return {
     calendar: (props: AppScreenProps) => (
@@ -356,9 +374,7 @@ function createDeepLinkScreens(): AppScreenRegistry {
     // 게시글 딥링크는 피드 탭 route의 중첩 params(FeedStack PostDetail)로
     // 전달된다. 목 화면이 params를 렌더해 전달 계약을 단언할 수 있게 한다.
     feed: (props: AppScreenProps) => <FeedParamsProbe {...props} />,
-    groupInfo: (props: AppScreenProps) => (
-      <Text>{`groupInfo:${props.openJoinApprovalRequestId ?? 0}`}</Text>
-    ),
+    groupInfo: (props: AppScreenProps) => <GroupInfoParamsProbe {...props} />,
     notifications: (props: AppScreenProps) => (
       <>
         <Text>screen:notifications</Text>
@@ -456,12 +472,16 @@ test('리포트 목적지는 리포트 화면으로 이동하며 통화·날짜�
   expect(hasText(renderer, 'report:11:21:2026-08-03')).toBe(true);
 });
 
-test('가입 승인 목적지는 그룹정보로 이동하며 요청 id를 올린다', () => {
+test('가입 승인 목적지는 그룹정보 탭에 중첩 JoinApproval params를 전달한다', () => {
   const renderer = renderForDeepLink();
 
   pressText(renderer, 'open-join-approval');
 
-  expect(hasText(renderer, 'groupInfo:1')).toBe(true);
+  // groupId가 없는 목적지는 현재 그룹으로 폴백하고, initial:false가 함께
+  // 전달되어야 콜드 마운트에서 GroupInfoHome이 스택 밑에 깔린다.
+  expect(hasText(renderer, 'groupInfo:group-a:JoinApproval:group-a:false')).toBe(
+    true,
+  );
 });
 
 test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다', () => {

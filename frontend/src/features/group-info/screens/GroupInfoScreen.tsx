@@ -162,7 +162,6 @@ export function GroupInfoScreen({
   onDeleteGroup,
   onRenameGroup,
   onFullscreenChange,
-  openJoinApprovalRequestId,
 }: GroupInfoScreenProps) {
   // 현재 그룹 기준 데이터. props 오버라이드(테스트)가 없으면 그룹 ID로 목업을 조회한다.
   // API 연동 시 이 조회만 서버 응답으로 바꾸면 전환 로직은 그대로 재사용된다.
@@ -261,19 +260,6 @@ export function GroupInfoScreen({
 
     return () => onFullscreenChange?.(false);
   }, [focusedSubScreen, onFullscreenChange]);
-
-  // 가입 요청 알림 딥링크로 진입하면 가입 승인 화면을 바로 연다.
-  // 알림 수신자는 관리자이고 목록·처리 API가 권한을 강제하므로 사전 검사는 생략한다.
-  const lastJoinApprovalRequestId = useRef(0);
-  useEffect(() => {
-    const requestId = openJoinApprovalRequestId ?? 0;
-    if (requestId > 0 && requestId !== lastJoinApprovalRequestId.current) {
-      lastJoinApprovalRequestId.current = requestId;
-      groupInfoNavRef.current?.navigate('JoinApproval', {
-        groupId: currentGroup.id,
-      });
-    }
-  }, [currentGroup.id, openJoinApprovalRequestId]);
 
   // 그룹을 전환하면 열려 있던 하위 화면을 홈으로 되돌린다(미러 정리는
   // SubScreenRouteSync cleanup이 이어받는다). 그룹 전환이 동반된 가입 승인
