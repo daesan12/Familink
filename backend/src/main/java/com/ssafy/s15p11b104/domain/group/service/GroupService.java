@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.calendar.repository.EventParticipantRepository;
 import com.ssafy.s15p11b104.domain.group.dto.GroupCreateRequest;
 import com.ssafy.s15p11b104.domain.group.dto.GroupCreateResponse;
 import com.ssafy.s15p11b104.domain.group.dto.GroupDeleteRequest;
@@ -43,6 +44,7 @@ public class GroupService {
 	private final FamilyGroupRepository familyGroupRepository;
 	private final GroupMemberRepository groupMemberRepository;
 	private final GroupJoinRequestRepository groupJoinRequestRepository;
+	private final EventParticipantRepository eventParticipantRepository;
 	private final UserRepository userRepository;
 	private final EntityManager entityManager;
 	private final SecureRandom secureRandom = new SecureRandom();
@@ -51,11 +53,13 @@ public class GroupService {
 		FamilyGroupRepository familyGroupRepository,
 		GroupMemberRepository groupMemberRepository,
 		GroupJoinRequestRepository groupJoinRequestRepository,
+		EventParticipantRepository eventParticipantRepository,
 		UserRepository userRepository,
 		EntityManager entityManager) {
 		this.familyGroupRepository = familyGroupRepository;
 		this.groupMemberRepository = groupMemberRepository;
 		this.groupJoinRequestRepository = groupJoinRequestRepository;
+		this.eventParticipantRepository = eventParticipantRepository;
 		this.userRepository = userRepository;
 		this.entityManager = entityManager;
 	}
@@ -217,6 +221,7 @@ public class GroupService {
 		}
 
 		membership.leave(Instant.now());
+		eventParticipantRepository.deleteAllByGroupIdAndMemberId(groupId, membership.getId());
 	}
 
 	/**

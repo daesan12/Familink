@@ -5,12 +5,12 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.HashSet;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -153,9 +153,9 @@ public class EventReminderService {
 
 		List<GroupMember> activeMembers = activeMembersByGroup.getOrDefault(event.getGroup().getId(), List.of());
 		Set<Long> participantIds = participantIdsByEvent.getOrDefault(event.getId(), Set.of());
-		List<GroupMember> receivers = participantIds.isEmpty()
-			? activeMembers
-			: activeMembers.stream().filter(member -> participantIds.contains(member.getId())).toList();
+		List<GroupMember> receivers = event.isParticipantsSpecified()
+			? activeMembers.stream().filter(member -> participantIds.contains(member.getId())).toList()
+			: activeMembers;
 		String title = slot == ReminderSlot.DAY_BEFORE ? "내일 일정이 있어요" : "곧 일정이 시작돼요";
 		String body = slot == ReminderSlot.DAY_BEFORE
 			? "\"%s\" 일정이 내일 시작돼요.".formatted(event.getTitle())
@@ -240,7 +240,7 @@ public class EventReminderService {
 	}
 
 	private List<User> resolveLegacyReceivers(CalendarEvent event) {
-		if (eventParticipantRepository.existsByEventId(event.getId())) {
+		if (event.isParticipantsSpecified()) {
 			return eventParticipantRepository.findActiveParticipantUsersByEventId(event.getId());
 		}
 		return groupMemberRepository.findAllActiveByGroupId(event.getGroup().getId()).stream()

@@ -59,6 +59,17 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 		@Param("groupId") Long groupId,
 		@Param("userId") Long userId);
 
+	@Query("""
+		select member.id
+		from GroupMember member
+		where member.group.id = :groupId
+		  and member.user.id = :userId
+		  and member.leftAt is null
+		""")
+	Optional<Long> findActiveIdByGroupIdAndUserId(
+		@Param("groupId") Long groupId,
+		@Param("userId") Long userId);
+
 	/**
 	 * 그룹·사용자 조합의 활성 멤버십 행을 잠그고 활성이면 멤버십 id를 돌려준다.
 	 *
@@ -81,6 +92,53 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 	 */
 	default Optional<GroupMember> findActiveForUpdateByGroupIdAndUserId(Long groupId, Long userId) {
 		return lockActiveByGroupIdAndUserId(groupId, userId).flatMap(this::findById);
+	}
+
+	/**
+	 * 일정 참여자로 저장할 활성 멤버십 행을 ID 오름차순으로 잠근다.
+	 *
+	 * <p>{@code FOR SHARE}는 이탈 경로의 {@code FOR NO KEY UPDATE}와 충돌한다. 일정 저장이 먼저
+	 * 잠그면 이탈이 저장 커밋 뒤 연결을 삭제하고, 이탈이 먼저 잠그면 이 조회가 커밋을 기다린 뒤
+	 * 비활성 행을 제외한다. 고정된 ID 순서는 여러 참여자를 반대 순서로 요청해도 교착되지 않게 한다.
+	 */
+	@Query(value = """
+		select id
+		from group_members
+		where group_id = :groupId
+		  and id in (:memberIds)
+		  and left_at is null
+		order by id
+		for share
+		""", nativeQuery = true)
+	List<Long> lockAllActiveParticipantIdsByGroupIdAndIds(
+		@Param("groupId") Long groupId,
+		@Param("memberIds") Collection<Long> memberIds);
+
+	default List<GroupMember> findAllActiveParticipantsForWrite(
+		Long groupId, Collection<Long> memberIds) {
+		return findAllById(lockAllActiveParticipantIdsByGroupIdAndIds(groupId, memberIds));
+	}
+
+	/**
+	 * 관리자 작업의 요청자와 대상을 ID 오름차순으로 함께 잠근다.
+	 *
+	 * <p>일정 참여자 저장의 {@code FOR SHARE} 잠금도 같은 순서를 사용하므로 두 작업이 겹쳐도
+	 * 잠금 순서가 뒤집히지 않는다. 비활성 대상을 409로 구분하기 위해 {@code left_at} 조건은 두지 않는다.
+	 */
+	@Query(value = """
+		select id
+		from group_members
+		where group_id = :groupId
+		  and id in (:memberIds)
+		order by id
+		for no key update
+		""", nativeQuery = true)
+	List<Long> lockAllIdsByGroupIdAndIds(
+		@Param("groupId") Long groupId,
+		@Param("memberIds") Collection<Long> memberIds);
+
+	default List<GroupMember> findAllForManagerWrite(Long groupId, Collection<Long> memberIds) {
+		return findAllById(lockAllIdsByGroupIdAndIds(groupId, memberIds));
 	}
 
 	/**

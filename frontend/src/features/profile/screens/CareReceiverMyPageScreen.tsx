@@ -369,7 +369,6 @@ export function CareReceiverMyPageScreen({
         onBack={closeInterestSettings}
         onComplete={closeInterestSettings}
         onSave={saveInterestSettings}
-        onSkip={closeInterestSettings}
         savedContent={{
           buttonLabel: '확인',
           message: `${profile.name}님의 관심사가\n수정되었습니다.`,

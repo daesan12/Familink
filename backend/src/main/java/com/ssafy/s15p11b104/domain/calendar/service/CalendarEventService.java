@@ -116,15 +116,18 @@ public class CalendarEventService {
 	/**
 	 * 일정을 등록하고 참여자를 연결한다.
 	 *
-	 * <p>등록자의 활성 멤버십을 잠근 상태에서 검사한다. 근거는 {@link #getActiveMemberForWrite}에 있다.
+	 * <p>등록자와 참여자 멤버십을 ID 오름차순으로 한 번에 잠근 상태에서 검사한다. 서로를 참여자로
+	 * 지정하는 두 일정 생성이 반대 순서로 멤버십을 잠가 교착되는 것을 막는다.
 	 */
 	@Transactional
 	public CalendarEventCreateResponse create(
 		Long groupId, CalendarEventCreateRequest request, Long authenticatedUserId) {
-		GroupMember creator = getActiveMemberForWrite(groupId, authenticatedUserId);
+		ParticipantWriteMembers writeMembers = resolveCreatorAndParticipants(
+			groupId, authenticatedUserId, request.participantMemberIds());
+		GroupMember creator = writeMembers.actor();
 		EventSchedule schedule = resolveSchedule(
 			request.eventDate(), request.endDate(), request.startAt(), request.endAt());
-		List<GroupMember> participants = resolveParticipants(groupId, request.participantMemberIds());
+		List<GroupMember> participants = writeMembers.participants();
 
 		CalendarEvent event = calendarEventRepository.save(new CalendarEvent(
 			creator.getGroup(),
@@ -136,6 +139,7 @@ public class CalendarEventService {
 			schedule.startAt(),
 			schedule.endAt(),
 			clock.instant()));
+		event.changeParticipantScope(!participants.isEmpty());
 		eventParticipantRepository.saveAll(participants.stream()
 			.map(participant -> new EventParticipant(event, participant))
 			.toList());
@@ -176,6 +180,7 @@ public class CalendarEventService {
 			schedule.startAt(),
 			schedule.endAt(),
 			clock.instant());
+		event.changeParticipantScope(!participants.isEmpty());
 		replaceParticipants(event, participants);
 		calendarEventRepository.flush();
 		publishCalendarChanged(
@@ -213,18 +218,6 @@ public class CalendarEventService {
 
 	private GroupMember getActiveMember(Long groupId, Long authenticatedUserId) {
 		return groupMemberRepository.findActiveByGroupIdAndUserId(groupId, authenticatedUserId)
-			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
-	}
-
-	/**
-	 * 일정을 저장하기 전에 등록자의 활성 멤버십 행을 잠그고 찾는다.
-	 *
-	 * <p>잠그지 않으면 활성 구성원임을 읽은 뒤 그룹 나가기나 회원 탈퇴가 커밋되고, 그 다음 일정이
-	 * 저장되어 이미 떠난 구성원이 등록한 일정이 남는다. 나가기가 먼저 커밋된 경우 이 조회가 빈
-	 * 결과를 돌려주므로 잠금 없는 검사와 같은 {@code 403}으로 끝난다.
-	 */
-	private GroupMember getActiveMemberForWrite(Long groupId, Long authenticatedUserId) {
-		return groupMemberRepository.findActiveForUpdateByGroupIdAndUserId(groupId, authenticatedUserId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
 	}
 
@@ -307,11 +300,14 @@ public class CalendarEventService {
 		if (requestedMemberIds == null || requestedMemberIds.isEmpty()) {
 			return List.of();
 		}
-		Map<Long, GroupMember> activeById = groupMemberRepository.findAllActiveByGroupId(groupId).stream()
+		LinkedHashSet<Long> uniqueMemberIds = new LinkedHashSet<>(requestedMemberIds);
+		Map<Long, GroupMember> activeById = groupMemberRepository
+			.findAllActiveParticipantsForWrite(groupId, uniqueMemberIds)
+			.stream()
 			.collect(Collectors.toMap(GroupMember::getId, Function.identity()));
 
 		List<GroupMember> participants = new ArrayList<>();
-		for (Long memberId : new LinkedHashSet<>(requestedMemberIds)) {
+		for (Long memberId : uniqueMemberIds) {
 			GroupMember participant = activeById.get(memberId);
 			if (participant == null) {
 				throw new BusinessException(ErrorCode.INVALID_REQUEST);
@@ -319,6 +315,38 @@ public class CalendarEventService {
 			participants.add(participant);
 		}
 		return participants;
+	}
+
+	/**
+	 * 일정 생성의 작성자와 참여자를 공통 순서로 잠그고 요청 목록을 활성 멤버십으로 해석한다.
+	 */
+	private ParticipantWriteMembers resolveCreatorAndParticipants(
+		Long groupId, Long authenticatedUserId, List<Long> requestedMemberIds) {
+		GroupMember creatorCandidate = getActiveMember(groupId, authenticatedUserId);
+		LinkedHashSet<Long> participantIds = requestedMemberIds == null
+			? new LinkedHashSet<>()
+			: new LinkedHashSet<>(requestedMemberIds);
+		LinkedHashSet<Long> writeMemberIds = new LinkedHashSet<>(participantIds);
+		writeMemberIds.add(creatorCandidate.getId());
+
+		Map<Long, GroupMember> activeById = groupMemberRepository
+			.findAllActiveParticipantsForWrite(groupId, writeMemberIds)
+			.stream()
+			.collect(Collectors.toMap(GroupMember::getId, Function.identity()));
+		GroupMember creator = activeById.get(creatorCandidate.getId());
+		if (creator == null) {
+			throw new BusinessException(ErrorCode.FORBIDDEN);
+		}
+
+		List<GroupMember> participants = new ArrayList<>();
+		for (Long memberId : participantIds) {
+			GroupMember participant = activeById.get(memberId);
+			if (participant == null) {
+				throw new BusinessException(ErrorCode.INVALID_REQUEST);
+			}
+			participants.add(participant);
+		}
+		return new ParticipantWriteMembers(creator, participants);
 	}
 
 	/**
@@ -374,5 +402,8 @@ public class CalendarEventService {
 	}
 
 	private record EventSchedule(LocalDate eventDate, LocalDate endDate, Instant startAt, Instant endAt) {
+	}
+
+	private record ParticipantWriteMembers(GroupMember actor, List<GroupMember> participants) {
 	}
 }

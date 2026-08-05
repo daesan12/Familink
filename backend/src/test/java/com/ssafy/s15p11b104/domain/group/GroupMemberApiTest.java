@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.entity.UserGender;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.calendar.entity.CalendarEvent;
+import com.ssafy.s15p11b104.domain.calendar.entity.EventParticipant;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
@@ -78,6 +80,8 @@ class GroupMemberApiTest extends IntegrationTest {
 
 	@BeforeEach
 	void setUp() {
+		entityManager.createNativeQuery("DELETE FROM event_participants").executeUpdate();
+		entityManager.createNativeQuery("DELETE FROM calendar_events").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM member_interests").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM member_aliases").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM posts").executeUpdate();
@@ -446,6 +450,8 @@ class GroupMemberApiTest extends IntegrationTest {
 
 	@Test
 	void managerCanRemoveMemberKeepingMembershipHistory() throws Exception {
+		Long eventId = persistEventWithParticipants(careReceiverMember, guardianMember);
+
 		mockMvc.perform(delete("/groups/" + group.getId() + "/members/" + careReceiverMember.getId())
 				.with(authenticatedAs(managerUser.getId())))
 			.andExpect(status().isNoContent());
@@ -459,6 +465,35 @@ class GroupMemberApiTest extends IntegrationTest {
 		assertThat(groupMemberRepository.findAllActiveByGroupId(group.getId()))
 			.extracting(GroupMember::getId)
 			.containsExactlyInAnyOrder(managerMember.getId(), guardianMember.getId());
+		assertThat(entityManager.find(CalendarEvent.class, eventId)).isNotNull();
+		assertThat(participantMemberIds(eventId)).containsExactly(guardianMember.getId());
+	}
+
+	private Long persistEventWithParticipants(GroupMember... participants) {
+		FamilyGroup managedGroup = entityManager.find(FamilyGroup.class, group.getId());
+		GroupMember creator = entityManager.find(GroupMember.class, managerMember.getId());
+		CalendarEvent event = new CalendarEvent(
+			managedGroup, creator, "가족 일정", null, LocalDate.now(), LocalDate.now(), null, null);
+		event.changeParticipantScope(true);
+		entityManager.persist(event);
+		for (GroupMember participant : participants) {
+			entityManager.persist(new EventParticipant(
+				event, entityManager.find(GroupMember.class, participant.getId())));
+		}
+		entityManager.flush();
+		entityManager.clear();
+		return event.getId();
+	}
+
+	private List<Long> participantMemberIds(Long eventId) {
+		return entityManager.createQuery("""
+			select participant.groupMember.id
+			from EventParticipant participant
+			where participant.event.id = :eventId
+			order by participant.groupMember.id
+			""", Long.class)
+			.setParameter("eventId", eventId)
+			.getResultList();
 	}
 
 	@Test

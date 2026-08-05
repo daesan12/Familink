@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.entity.UserGender;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.calendar.entity.CalendarEvent;
+import com.ssafy.s15p11b104.domain.calendar.entity.EventParticipant;
 import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
@@ -504,13 +507,21 @@ class UserApiTest extends IntegrationTest {
 	@Test
 	void withdrawalEndsActiveGroupMemberships() throws Exception {
 		Session session = signupAndLogin();
-		Long memberId = joinGroup(session.userId(), "ABC123", GroupRole.CARE_RECEIVER, false);
+		Long firstMemberId = joinGroup(session.userId(), "ABC123", GroupRole.CARE_RECEIVER, false);
+		Long secondMemberId = joinGroup(session.userId(), "DEF456", GroupRole.GUARDIAN, false);
+		Long firstEventId = persistEventWithParticipant(firstMemberId);
+		Long secondEventId = persistEventWithParticipant(secondMemberId);
 
 		mockMvc.perform(authorized(delete(PATH), session))
 			.andExpect(status().isNoContent());
 
-		assertThat(groupMemberRepository.findById(memberId).orElseThrow().getLeftAt()).isNotNull();
+		assertThat(groupMemberRepository.findById(firstMemberId).orElseThrow().getLeftAt()).isNotNull();
+		assertThat(groupMemberRepository.findById(secondMemberId).orElseThrow().getLeftAt()).isNotNull();
 		assertThat(groupMemberRepository.findAllActiveByUserId(session.userId())).isEmpty();
+		assertThat(countParticipantLinks(firstEventId)).isZero();
+		assertThat(countParticipantLinks(secondEventId)).isZero();
+		assertThat(calendarEventExists(firstEventId)).isTrue();
+		assertThat(calendarEventExists(secondEventId)).isTrue();
 	}
 
 	@Test
@@ -625,9 +636,46 @@ class UserApiTest extends IntegrationTest {
 		});
 	}
 
+	private Long persistEventWithParticipant(Long memberId) {
+		return transactionTemplate.execute(status -> {
+			GroupMember member = entityManager.find(GroupMember.class, memberId);
+			CalendarEvent event = new CalendarEvent(
+				member.getGroup(),
+				member,
+				"가족 일정",
+				null,
+				LocalDate.now(),
+				LocalDate.now(),
+				null,
+				null);
+			event.changeParticipantScope(true);
+			entityManager.persist(event);
+			entityManager.persist(new EventParticipant(event, member));
+			entityManager.flush();
+			return event.getId();
+		});
+	}
+
+	private long countParticipantLinks(Long eventId) {
+		return transactionTemplate.execute(status -> {
+			Number count = (Number)entityManager.createNativeQuery(
+					"SELECT count(*) FROM event_participants WHERE event_id = :eventId")
+				.setParameter("eventId", eventId)
+				.getSingleResult();
+			return count.longValue();
+		});
+	}
+
+	private boolean calendarEventExists(Long eventId) {
+		return transactionTemplate.execute(
+			status -> entityManager.find(CalendarEvent.class, eventId) != null);
+	}
+
 	private void clearDatabase() {
 		transactionTemplate.executeWithoutResult(status -> {
 			entityManager.createQuery("delete from DeviceToken").executeUpdate();
+			entityManager.createQuery("delete from EventParticipant").executeUpdate();
+			entityManager.createQuery("delete from CalendarEvent").executeUpdate();
 			entityManager.createQuery("delete from GroupMember").executeUpdate();
 			entityManager.createQuery("delete from FamilyGroup").executeUpdate();
 			entityManager.createQuery("delete from User").executeUpdate();

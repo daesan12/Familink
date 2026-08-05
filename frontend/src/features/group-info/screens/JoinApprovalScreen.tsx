@@ -16,6 +16,7 @@ import {RetryButton} from '../../../shared/components/RetryButton';
 import {SubScreenHeader} from '../components/SubScreenHeader';
 import {useJoinRequests} from '../hooks/useJoinRequests';
 import {
+  isCareReceiverAlreadyActiveInOtherGroup,
   isJoinRequestAlreadyProcessed,
   joinRequestDecisionErrorMessage,
   roleLabel,
@@ -36,6 +37,13 @@ interface JoinApprovalScreenProps {
   onProcess?: JoinRequestProcessor;
 }
 
+interface DecisionAlert {
+  accessibilityLabel: string;
+  confirmAccessibilityLabel: string;
+  message?: string;
+  title: string;
+}
+
 // H-5 가입 승인 대기. 관리자가 신청자를 확인해 승인(역할 지정) 또는 거절한다.
 export function JoinApprovalScreen({
   groupId,
@@ -48,6 +56,7 @@ export function JoinApprovalScreen({
   const [approving, setApproving] = useState<JoinRequest | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [processError, setProcessError] = useState<string | null>(null);
+  const [processAlert, setProcessAlert] = useState<DecisionAlert | null>(null);
 
   const applyDecision = async (
     request: JoinRequest,
@@ -58,6 +67,7 @@ export function JoinApprovalScreen({
     }
 
     setProcessError(null);
+    setProcessAlert(null);
     setProcessingId(request.joinRequestId);
     try {
       await onProcess?.(groupId, {
@@ -69,7 +79,23 @@ export function JoinApprovalScreen({
       joinRequests.remove(request.joinRequestId);
       return true;
     } catch (error) {
-      setProcessError(joinRequestDecisionErrorMessage(error));
+      const errorMessage = joinRequestDecisionErrorMessage(error);
+      if (isJoinRequestAlreadyProcessed(error)) {
+        setProcessError(errorMessage);
+      } else if (isCareReceiverAlreadyActiveInOtherGroup(error)) {
+        setProcessAlert({
+          accessibilityLabel: '피보호자 승인 제한 안내',
+          confirmAccessibilityLabel: '피보호자 승인 제한 확인',
+          message: errorMessage,
+          title: '피보호자로 승인할 수 없어요',
+        });
+      } else {
+        setProcessAlert({
+          accessibilityLabel: '가입 요청 처리 실패 안내',
+          confirmAccessibilityLabel: '가입 요청 처리 실패 확인',
+          title: '가입 요청을 처리하지 못했습니다.',
+        });
+      }
       // 이미 처리된 요청은 재시도할 수 없으므로 목록에서도 정리한다.
       if (isJoinRequestAlreadyProcessed(error)) {
         joinRequests.remove(request.joinRequestId);
@@ -88,7 +114,7 @@ export function JoinApprovalScreen({
     if (!approving || processingId !== null) {
       return;
     }
-    // 실패해도 "참여했습니다" 팝업이 남지 않도록 항상 닫고, 오류는 화면 문구로 안내한다.
+    // 실패해도 "참여했습니다" 역할 팝업이 남지 않도록 항상 닫는다.
     await applyDecision(approving, role);
     setApproving(null);
   };
@@ -191,7 +217,53 @@ export function JoinApprovalScreen({
         onSelect={handleSelectRole}
         onClose={handleCloseRoleModal}
       />
+      <DecisionErrorModal
+        alert={processAlert}
+        onClose={() => setProcessAlert(null)}
+      />
     </View>
+  );
+}
+
+function DecisionErrorModal({
+  alert,
+  onClose,
+}: {
+  alert: DecisionAlert | null;
+  onClose: () => void;
+}) {
+  if (alert === null) {
+    return null;
+  }
+
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={onClose}
+      transparent
+      visible
+    >
+      <View style={styles.alertBackdrop}>
+        <View
+          accessibilityLabel={alert.accessibilityLabel}
+          accessibilityViewIsModal
+          style={styles.alertCard}
+        >
+          <Text style={styles.alertTitle}>{alert.title}</Text>
+          {alert.message ? (
+            <Text style={styles.alertMessage}>{alert.message}</Text>
+          ) : null}
+          <Pressable
+            accessibilityLabel={alert.confirmAccessibilityLabel}
+            accessibilityRole="button"
+            onPress={onClose}
+            style={styles.alertButton}
+          >
+            <Text style={styles.alertButtonText}>확인</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -258,6 +330,49 @@ function RoleSelectModal({
 }
 
 const styles = StyleSheet.create({
+  alertBackdrop: {
+    alignItems: 'center',
+    backgroundColor: COLORS.overlay,
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  alertButton: {
+    alignItems: 'center',
+    backgroundColor: COLORS.textMuted,
+    borderCurve: 'continuous',
+    borderRadius: RADII.pill,
+    justifyContent: 'center',
+    minHeight: 52,
+    width: '100%',
+  },
+  alertButtonText: {
+    color: COLORS.background,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  alertCard: {
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderCurve: 'continuous',
+    borderRadius: RADII.sheet,
+    gap: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    width: '100%',
+  },
+  alertMessage: {
+    color: COLORS.text,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  alertTitle: {
+    color: COLORS.textStrong,
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   actionButton: {
     alignItems: 'center',
     borderCurve: 'continuous',

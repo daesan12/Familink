@@ -184,6 +184,59 @@ class AiCallPromptComposerTest {
 			);
 	}
 
+	@Test
+	void disclosesIdentityOnlyOnDirectQuestion() {
+		String prompt = composer.compose(
+			personaCatalog.get(5L),
+			UserGender.MALE,
+			fullContext()
+		);
+
+		assertThat(prompt)
+			.contains("정체를 직접 물을 때만 한 문장으로 AI 말동무임을 밝히고")
+			.contains("관계 호칭을 쓰더라도 사실 여부를 확인하는 질문은 직접 물은 것으로 봅니다.")
+			.contains("다시 물으면 그때마다 다시 밝힙니다.")
+			.contains("정체를 먼저 꺼내지 않습니다.")
+			.contains("정체를 밝히는 조건과 분량은 공통 지시를 따르며, 먼저 꺼내지 않습니다.")
+			.contains("실제 가족, 지인이나 고용인")
+			.doesNotContain(
+				"혼동하면",
+				"그런 요청을 받아도 정중히 거절하고",
+				"사용자가 정체를 물으면 현재 말투를 유지하면서 AI 말동무임을 밝힙니다."
+			);
+		assertThat(prompt.split("AI 말동무", -1).length - 1)
+			.as("정체 공개 지시는 역할 정의와 공통 지시 각 한 번으로만 등장해야 한다")
+			.isEqualTo(2);
+	}
+
+	@Test
+	void limitsSpokenResponseLength() {
+		String prompt = composer.compose(
+			personaCatalog.get(5L),
+			UserGender.MALE,
+			fullContext()
+		);
+
+		assertThat(prompt)
+			.contains("""
+				# Verbosity
+				대화 답변은 두 문장 이내로 말하고, 한 문장은 25자 안쪽으로 유지합니다. 소리 내어 읽을 때 약 10초입니다.
+				도구 결과 안내, 실패 안내와 이 지침이 정한 고정 문구는 필요한 내용까지만 말하고, 그 밖에는 위 상한을 지킵니다.
+				한 턴은 사용자의 말에 대한 반응 한 마디로 끝내고, 더 물을 것이 있을 때만 질문 하나를 덧붙입니다. 그 이상 덧붙이지 않습니다.
+				질문은 한 턴에 하나만 합니다. 두 가지를 이어 붙여 묻지 않습니다.
+				같은 뜻을 다른 말로 반복하지 않고, 사용자가 한 말을 풀어서 다시 설명하지 않습니다.
+				목록이나 여러 항목의 열거는 음성으로 말하지 않습니다. 가장 중요한 하나만 말하고, 나머지는 사용자가 물을 때 이어서 말합니다.
+				조언, 설명, 위로를 길게 덧붙이지 않습니다. 사용자가 요청할 때만 이어서 말합니다.
+
+				- 일상 대화와 맞장구: 한 문장으로 반응한 뒤, 필요하면 짧은 질문 하나만 덧붙입니다.
+				- 가족 게시글 이야기: 한 턴에 게시글 하나만 다룹니다. 한 문장으로 소식을 전하고 한 문장으로 되묻습니다.
+				- 확인 질문: 한 문장으로 한 가지만 묻습니다.
+				- 도구 실행 결과: 핵심 결과를 한두 문장으로 말하고, 이어서 할 만한 것 하나만 제시합니다.
+				""")
+			.contains("한 턴에는 한 가지 주제만 다루고")
+			.doesNotContain("- 직접적인 답변: 짧은 문장 1~2개로 답합니다.");
+	}
+
 	@ParameterizedTest
 	@CsvSource({
 		"1, MALE, 아빠, 엄마",

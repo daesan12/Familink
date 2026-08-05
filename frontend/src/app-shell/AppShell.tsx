@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,6 +33,7 @@ interface AppShellProps {
   onGroupChange?: (groupId: string) => void;
   onJoinGroup?: () => void;
   onCallResult?: (status: 'COMPLETED' | 'CANCELLED' | 'FAILED') => void;
+  onCurrentGroupChange?: (groupId: string) => void;
   onRequestLogout?: () => void;
   onRequestWithdrawal?: () => Promise<void>;
   screens?: AppScreenRegistry;
@@ -57,6 +58,7 @@ export function AppShell({
   onGroupChange,
   onJoinGroup,
   onCallResult,
+  onCurrentGroupChange,
   onRequestLogout,
   onRequestWithdrawal,
   screens = {},
@@ -143,6 +145,12 @@ export function AppShell({
       resolveAllowedRoute(currentRole, currentRoute)
     );
   }, [currentRole]);
+
+  useLayoutEffect(() => {
+    if (!isRestoringGroup && currentGroup !== null) {
+      onCurrentGroupChange?.(currentGroup.id);
+    }
+  }, [currentGroup, isRestoringGroup, onCurrentGroupChange]);
 
   useEffect(() => {
     const previousRoute = previousRouteRef.current;
@@ -284,6 +292,7 @@ export function AppShell({
 
   const handleGroupSelect = (groupId: string) => {
     setCurrentGroupId(groupId);
+    onCurrentGroupChange?.(groupId);
     setOpenPostId(null);
     setOpenPostRequestId(0);
     setOpenCalendarEventId(null);
