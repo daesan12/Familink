@@ -21,4 +21,5 @@ export type {
   CurrentGroupStore,
   FamilyGroup,
   GroupRole,
+  ReportDeepLinkParams,
 } from './types';

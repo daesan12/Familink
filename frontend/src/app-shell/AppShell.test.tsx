@@ -299,6 +299,148 @@ test('피드 루트에서는 아무도 처리하지 않아 앱이 종료된다',
   }
 });
 
+// 알림 탭 딥링크 라우팅 테스트. 알림 화면 목이 목적지 콜백을 호출하고,
+// 목적지 화면 목은 전달받은 딥링크 prop을 텍스트로 렌더한다.
+const DEEP_LINK_GROUP_A: FamilyGroup = {
+  id: 'group-a',
+  name: '가족A',
+  role: 'guardian',
+};
+const DEEP_LINK_GROUP_B: FamilyGroup = {
+  id: 'group-b',
+  name: '가족B',
+  role: 'guardian',
+};
+
+function createDeepLinkScreens(): AppScreenRegistry {
+  return {
+    calendar: (props: AppScreenProps) => (
+      <Text>
+        {`calendar:${props.currentGroup.id}:${props.openCalendarEventId ?? 'none'}:${props.openCalendarEventRequestId ?? 0}`}
+      </Text>
+    ),
+    feed: (props: AppScreenProps) => <Text>{`feed:${props.currentGroup.id}`}</Text>,
+    groupInfo: (props: AppScreenProps) => (
+      <Text>{`groupInfo:${props.openJoinApprovalRequestId ?? 0}`}</Text>
+    ),
+    notifications: (props: AppScreenProps) => (
+      <>
+        <Text>screen:notifications</Text>
+        <Pressable
+          onPress={() =>
+            props.onOpenNotificationTarget?.({
+              eventId: '7',
+              groupId: 'group-b',
+              kind: 'calendarEvent',
+            })
+          }
+        >
+          <Text>open-event</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            props.onOpenNotificationTarget?.({
+              callSessionId: '21',
+              kind: 'callReport',
+              memberId: '11',
+              reportDate: '2026-08-03',
+            })
+          }
+        >
+          <Text>open-call-report</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            props.onOpenNotificationTarget?.({kind: 'joinApproval'})
+          }
+        >
+          <Text>open-join-approval</Text>
+        </Pressable>
+      </>
+    ),
+    report: (props: AppScreenProps) => (
+      <Text>
+        {`report:${props.openReportTarget?.memberId ?? 'none'}:${props.openReportTarget?.callSessionId ?? 'none'}:${props.openReportTarget?.reportDate ?? 'none'}`}
+      </Text>
+    ),
+  };
+}
+
+function renderForDeepLink() {
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <AppShell
+        groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+        initialGroupId={DEEP_LINK_GROUP_A.id}
+        initialRoute="notifications"
+        screens={createDeepLinkScreens()}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+  return renderer!;
+}
+
+test('일정 목적지는 그룹을 전환하고 캘린더로 이동하며 이벤트 id를 전달한다', () => {
+  const renderer = renderForDeepLink();
+
+  pressText(renderer, 'open-event');
+
+  expect(hasText(renderer, 'calendar:group-b:7:1')).toBe(true);
+});
+
+test('리포트 목적지는 리포트 화면으로 이동하며 통화·날짜를 전달한다', () => {
+  const renderer = renderForDeepLink();
+
+  pressText(renderer, 'open-call-report');
+
+  expect(hasText(renderer, 'report:11:21:2026-08-03')).toBe(true);
+});
+
+test('가입 승인 목적지는 그룹정보로 이동하며 요청 id를 올린다', () => {
+  const renderer = renderForDeepLink();
+
+  pressText(renderer, 'open-join-approval');
+
+  expect(hasText(renderer, 'groupInfo:1')).toBe(true);
+});
+
+test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다', () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <AppShell
+        deepLinkRequestId={1}
+        deepLinkTarget={{eventId: '9', kind: 'calendarEvent'}}
+        groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+        initialGroupId={DEEP_LINK_GROUP_A.id}
+        initialRoute="feed"
+        screens={createDeepLinkScreens()}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(hasText(renderer!, 'calendar:group-a:9:1')).toBe(true);
+
+  // 같은 requestId로는 재소비하지 않고, 증가하면 새 목적지로 이동한다.
+  TestRenderer.act(() => {
+    renderer!.update(
+      <AppShell
+        deepLinkRequestId={2}
+        deepLinkTarget={{kind: 'notifications'}}
+        groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+        initialGroupId={DEEP_LINK_GROUP_A.id}
+        initialRoute="feed"
+        screens={createDeepLinkScreens()}
+      />,
+    );
+  });
+
+  expect(hasText(renderer!, 'screen:notifications')).toBe(true);
+});
+
 test('화면이 전체화면을 보고하면 셸은 뒤로가기를 처리하지 않는다', () => {
   // AI 전화 통화 중에는 네이티브 화면이 뒤로가기를 처리하므로 셸이 가로채면 안 된다.
   const back = mockHardwareBack();

@@ -177,6 +177,11 @@ function parseNotification(value: unknown): AppNotification | null {
   const actor = parseActor(value.actor);
   const postId = readNullablePositiveId(value.relatedPostId);
   const callReportId = readNullablePositiveId(value.relatedCallReportId);
+  const callSessionId = readNullablePositiveId(value.relatedCallSessionId);
+  const careReceiverMemberId = readNullablePositiveId(
+    value.relatedCareReceiverMemberId,
+  );
+  const reportDate = readNullableDateKey(value.relatedReportDate);
   const dailyReportId = readNullablePositiveId(value.relatedDailyReportId);
   const eventId = readNullablePositiveId(value.relatedEventId);
   const joinRequestId = readNullablePositiveId(value.relatedJoinRequestId);
@@ -194,6 +199,9 @@ function parseNotification(value: unknown): AppNotification | null {
     actor === undefined ||
     postId === undefined ||
     callReportId === undefined ||
+    callSessionId === undefined ||
+    careReceiverMemberId === undefined ||
+    reportDate === undefined ||
     dailyReportId === undefined ||
     eventId === undefined ||
     joinRequestId === undefined ||
@@ -213,10 +221,15 @@ function parseNotification(value: unknown): AppNotification | null {
     isRead: readAt !== null,
     ...(postId === null ? {} : {postId}),
     ...(callReportId === null ? {} : {relatedCallReportId: callReportId}),
+    ...(callSessionId === null ? {} : {relatedCallSessionId: callSessionId}),
+    ...(careReceiverMemberId === null
+      ? {}
+      : {relatedCareReceiverMemberId: careReceiverMemberId}),
     ...(dailyReportId === null ? {} : {relatedDailyReportId: dailyReportId}),
     ...(eventId === null ? {} : {relatedEventId: eventId}),
     ...(joinRequestId === null ? {} : {relatedJoinRequestId: joinRequestId}),
     relatedJoinRequestStatus: joinRequestStatus,
+    ...(reportDate === null ? {} : {relatedReportDate: reportDate}),
     ...(type === 'GROUP_JOIN_REQUEST' && joinRequestStatus === 'PENDING_ADMIN'
       ? {requestKind: 'groupJoin' as const}
       : {}),
@@ -350,6 +363,15 @@ function readNullablePositiveId(value: unknown): string | null | undefined {
   return value === null || value === undefined
     ? null
     : readPositiveId(value) ?? undefined;
+}
+
+function readNullableDateKey(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? value
+    : undefined;
 }
 
 function readNullableJoinRequestStatus(

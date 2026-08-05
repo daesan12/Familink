@@ -24,10 +24,16 @@ export interface AppNotification {
   isRead: boolean;
   postId?: string;
   relatedCallReportId?: string;
+  // 리포트 알림 탭 이동용 조회 키. 리포트 조회 API가 callSessionId 또는
+  // 날짜·멤버 조합을 요구해 relatedCallReportId·relatedDailyReportId만으로는 열 수 없다.
+  relatedCallSessionId?: string;
+  relatedCareReceiverMemberId?: string;
   relatedDailyReportId?: string;
   relatedEventId?: string;
   relatedJoinRequestId?: string;
   relatedJoinRequestStatus: NotificationJoinRequestStatus | null;
+  // yyyy-MM-dd
+  relatedReportDate?: string;
   requestKind?: 'groupJoin';
   title: string;
   type: NotificationType;

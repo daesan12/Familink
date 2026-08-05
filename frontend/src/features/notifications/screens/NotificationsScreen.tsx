@@ -13,6 +13,7 @@ import {
   isJoinRequestAlreadyProcessed,
   joinRequestDecisionErrorMessage,
 } from '../../group-info/joinRequestModel';
+import {resolveNotificationTarget} from '../deepLink';
 import {NotificationDecisionModal} from '../components/NotificationDecisionModal';
 import {NotificationItem} from '../components/NotificationItem';
 import {DEVELOPMENT_NOTIFICATIONS} from '../fixtures/notificationFixtures';
@@ -38,6 +39,7 @@ export function NotificationsScreen({
   onCloseNotifications,
   onNotificationRead,
   onUnreadCountChange,
+  onOpenNotificationTarget,
   onOpenPost,
   processJoinRequest,
   readNotificationIds = NO_READ_IDS,
@@ -182,9 +184,16 @@ export function NotificationsScreen({
   };
   const handleNotificationPress = (notification: AppNotification) => {
     markAsRead(notification.id);
-    if (notification.postId) {
-      onOpenPost?.(notification.postId, notification.groupId);
+    const target = resolveNotificationTarget(notification);
+    if (target === null) {
+      return;
     }
+    // 게시글은 기존 콜백 경로를 유지하고, 나머지 목적지는 공용 라우팅에 위임한다.
+    if (target.kind === 'post') {
+      onOpenPost?.(target.postId, target.groupId);
+      return;
+    }
+    onOpenNotificationTarget?.(target);
   };
   const usesRemoteDecisions =
     resolvedGateway !== null && !usesInjectedNotifications;

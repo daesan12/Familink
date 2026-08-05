@@ -78,6 +78,8 @@ export function CalendarScreen({
   now,
   onFullscreenChange,
   onHeaderVisibilityChange,
+  openCalendarEventId,
+  openCalendarEventRequestId,
 }: CalendarScreenProps) {
   const contextGateway = useCalendarGateway();
   const resolvedGateway = gateway ?? contextGateway;
@@ -99,6 +101,10 @@ export function CalendarScreen({
   const detailController = useRef<AbortController | null>(null);
   const deleteController = useRef<AbortController | null>(null);
   const lastCreateRequestId = useRef(createCalendarEventRequestId ?? 0);
+  const lastOpenEventRequestId = useRef(0);
+  // 알림 딥링크로 연 상세는 로드 성공 시 선택 날짜를 이벤트 날짜로 맞춰,
+  // 모달을 닫았을 때 해당 날짜의 시트가 열리게 한다.
+  const syncDateOnDetailLoadRef = useRef(false);
   const calendarMonth = useMemo(
     () => createCalendarMonth(visibleMonth.year, visibleMonth.month),
     [visibleMonth]
@@ -293,6 +299,15 @@ export function CalendarScreen({
         .getEvent(eventId, controller.signal)
         .then((detail) => {
           if (!controller.signal.aborted) {
+            if (syncDateOnDetailLoadRef.current) {
+              syncDateOnDetailLoadRef.current = false;
+              const eventParts = parseDateKey(detail.eventDate);
+              setVisibleMonth({
+                month: eventParts.month,
+                year: eventParts.year,
+              });
+              setSelectedDate(detail.eventDate);
+            }
             setDetailState({
               deleteErrorMessage: null,
               deleting: false,
@@ -306,6 +321,8 @@ export function CalendarScreen({
         })
         .catch((error) => {
           if (!controller.signal.aborted) {
+            // 실패한 딥링크의 플래그가 남으면 다음에 여는 일정이 날짜를 가로챈다.
+            syncDateOnDetailLoadRef.current = false;
             setDetailState({
               deleteErrorMessage: null,
               deleting: false,
@@ -320,6 +337,19 @@ export function CalendarScreen({
     },
     [resolvedGateway]
   );
+
+  useEffect(() => {
+    const requestId = openCalendarEventRequestId ?? 0;
+    if (
+      openCalendarEventId &&
+      requestId > 0 &&
+      requestId !== lastOpenEventRequestId.current
+    ) {
+      lastOpenEventRequestId.current = requestId;
+      syncDateOnDetailLoadRef.current = true;
+      loadEventDetail(openCalendarEventId);
+    }
+  }, [openCalendarEventId, openCalendarEventRequestId, loadEventDetail]);
 
   const handleCloseDetail = () => {
     if (detailState.deleting) {

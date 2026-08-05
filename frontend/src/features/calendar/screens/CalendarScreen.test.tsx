@@ -177,6 +177,26 @@ test("실제 조회 구간으로 일정을 불러와 7개 요일과 기간 막�
   ).toHaveLength(0);
 });
 
+test("알림 딥링크로 이벤트 상세를 열고 닫으면 이벤트 날짜 시트를 표시한다", async () => {
+  const { gateway, renderer } = await renderCalendar(createGateway(), {
+    openCalendarEventId: "12",
+    openCalendarEventRequestId: 1,
+  });
+
+  expect(gateway.getEvent).toHaveBeenCalledWith("12", expect.anything());
+  const detailModal = renderer.root.findByType(CalendarEventDetailModal);
+  expect(detailModal.props.visible).toBe(true);
+  expect(detailModal.props.detail).toMatchObject({ id: "12" });
+
+  // 상세를 닫으면 선택 날짜가 이벤트 날짜로 동기화된 시트가 열린다.
+  await TestRenderer.act(async () => {
+    detailModal.props.onClose();
+  });
+  const sheet = renderer.root.findByType(CalendarEventsSheet);
+  expect(sheet.props.visible).toBe(true);
+  expect(sheet.props.dateKey).toBe("2026-07-17");
+});
+
 test("날짜 바텀시트에서 일정을 열고 작성자·참여자 상세를 표시한다", async () => {
   const { gateway, renderer } = await renderCalendar();
 
