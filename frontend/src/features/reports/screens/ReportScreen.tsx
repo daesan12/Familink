@@ -45,6 +45,8 @@ import type {
 const EMPTY_REPORT_PAGES: readonly CareReceiverReportPage[] = [];
 const EMPTY_REPORT_TARGETS: readonly CareReceiverReportTarget[] = [];
 const EMPTY_REPORT_DATES: readonly string[] = [];
+const CALL_REPORT_POLL_INTERVAL_MS = 5_000;
+const CALL_REPORT_POLL_TIMEOUT_MS = 90_000;
 
 interface ReportYearMonth {
   month: number;
@@ -143,6 +145,44 @@ export function ReportScreen({
     memberId: string;
     reportDate: string;
   } | null>(null);
+  const callPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const callDeadlineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearCallPollTimer = useCallback(() => {
+    if (callPollTimer.current !== null) {
+      clearTimeout(callPollTimer.current);
+      callPollTimer.current = null;
+    }
+  }, []);
+
+  const clearCallDeadlineTimer = useCallback(() => {
+    if (callDeadlineTimer.current !== null) {
+      clearTimeout(callDeadlineTimer.current);
+      callDeadlineTimer.current = null;
+    }
+  }, []);
+
+  const clearCallReportTimers = useCallback(() => {
+    clearCallPollTimer();
+    clearCallDeadlineTimer();
+  }, [clearCallDeadlineTimer, clearCallPollTimer]);
+
+  const invalidateCallDetail = useCallback(() => {
+    callRequestId.current += 1;
+    clearCallReportTimers();
+  }, [clearCallReportTimers]);
+
+  const expireCallReportPolling = useCallback(
+    (call: CallReportView, requestId: number) => {
+      if (requestId !== callRequestId.current) {
+        return;
+      }
+      callRequestId.current += 1;
+      clearCallReportTimers();
+      setSelectedDetail({ call, status: "delayed" });
+    },
+    [clearCallReportTimers]
+  );
 
   const calendarMonthKey = calendarTarget
     ? createCalendarMonthKey(
@@ -256,8 +296,31 @@ export function ReportScreen({
   useEffect(() => {
     setCurrentIndex(0);
     callRequestId.current += 1;
+    if (callPollTimer.current !== null) {
+      clearTimeout(callPollTimer.current);
+      callPollTimer.current = null;
+    }
+    if (callDeadlineTimer.current !== null) {
+      clearTimeout(callDeadlineTimer.current);
+      callDeadlineTimer.current = null;
+    }
     setSelectedDetail(null);
   }, [pageIdentity]);
+
+  useEffect(
+    () => () => {
+      callRequestId.current += 1;
+      if (callPollTimer.current !== null) {
+        clearTimeout(callPollTimer.current);
+        callPollTimer.current = null;
+      }
+      if (callDeadlineTimer.current !== null) {
+        clearTimeout(callDeadlineTimer.current);
+        callDeadlineTimer.current = null;
+      }
+    },
+    []
+  );
 
   const handlePageChange = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (reportItems.length === 0 || width <= 0) {
@@ -268,52 +331,148 @@ export function ReportScreen({
       reportItems.length - 1,
       Math.max(0, Math.round(event.nativeEvent.contentOffset.x / width))
     );
+    if (nextIndex !== currentIndex) {
+      invalidateCallDetail();
+      setSelectedDetail(null);
+    }
     setCurrentIndex(nextIndex);
   };
 
   const handleOpenCall = useCallback(
     async (call: CallReportView) => {
+      clearCallReportTimers();
       if (!reportGateway) {
         setSelectedDetail({
           call,
-          status: call.summary === null ? "generating" : "ready",
+          status: !call.reportAvailable
+            ? "unavailable"
+            : call.summary === null
+            ? "generating"
+            : "ready",
         });
         return;
       }
+      const gateway = reportGateway;
 
       const requestId = ++callRequestId.current;
+      const pollingStartedAt = Date.now();
       setSelectedDetail({ call, status: "loading" });
+      scheduleCallReportDeadline();
 
-      try {
-        const report = await reportGateway.getCallReport(call.callSessionId);
+      function scheduleCallReportStatus() {
+        clearCallPollTimer();
+        if (requestId !== callRequestId.current) {
+          return;
+        }
+        const elapsedMs = Date.now() - pollingStartedAt;
+        if (elapsedMs >= CALL_REPORT_POLL_TIMEOUT_MS) {
+          expireCallReportPolling(call, requestId);
+          return;
+        }
+
+        callPollTimer.current = setTimeout(() => {
+          callPollTimer.current = null;
+          loadCallReportStatus().catch(() => {
+            // loadCallReportStatus가 오류 상태로 변환하므로 추가 처리가 필요하지 않다.
+          });
+        }, Math.min(
+          CALL_REPORT_POLL_INTERVAL_MS,
+          CALL_REPORT_POLL_TIMEOUT_MS - elapsedMs
+        ));
+      }
+
+      function scheduleCallReportDeadline() {
+        clearCallDeadlineTimer();
+        const remainingMs = Math.max(
+          0,
+          CALL_REPORT_POLL_TIMEOUT_MS - (Date.now() - pollingStartedAt)
+        );
+        callDeadlineTimer.current = setTimeout(() => {
+          callDeadlineTimer.current = null;
+          expireCallReportPolling(call, requestId);
+        }, remainingMs);
+      }
+
+      async function loadCallReportStatus() {
         if (requestId !== callRequestId.current) {
           return;
         }
 
-        if (report.status === "generating") {
-          setSelectedDetail({ call, status: "generating" });
+        try {
+          const reportStatus = await gateway.getCallReportStatus(
+            call.callSessionId
+          );
+          if (requestId !== callRequestId.current) {
+            return;
+          }
+
+          if (reportStatus.status === "ready") {
+            await loadReadyCallReport();
+          } else if (reportStatus.status === "generating") {
+            setSelectedDetail({ call, status: "generating" });
+            scheduleCallReportStatus();
+          } else if (reportStatus.status === "failed") {
+            clearCallReportTimers();
+            setSelectedDetail({ call, status: "failed" });
+          } else {
+            clearCallReportTimers();
+            setSelectedDetail({ call, status: "unavailable" });
+          }
+        } catch {
+          if (requestId === callRequestId.current) {
+            clearCallReportTimers();
+            setSelectedDetail({ call, status: "error" });
+          }
+        }
+      }
+
+      async function loadReadyCallReport() {
+        if (requestId !== callRequestId.current) {
           return;
         }
 
-        setSelectedDetail({
-          call: {
-            ...call,
-            guardianMessage: report.guardianMessage,
-            summary: report.summary,
-          },
-          status: "ready",
-        });
-      } catch {
-        if (requestId === callRequestId.current) {
-          setSelectedDetail({ call, status: "error" });
+        try {
+          const report = await gateway.getCallReport(call.callSessionId);
+          if (requestId !== callRequestId.current) {
+            return;
+          }
+
+          if (report.status === "generating") {
+            setSelectedDetail({ call, status: "generating" });
+            scheduleCallReportStatus();
+            return;
+          }
+
+          setSelectedDetail({
+            call: {
+              ...call,
+              guardianMessage: report.guardianMessage,
+              summary: report.summary,
+            },
+            status: "ready",
+          });
+          clearCallReportTimers();
+        } catch {
+          if (requestId === callRequestId.current) {
+            clearCallReportTimers();
+            setSelectedDetail({ call, status: "error" });
+          }
         }
       }
+
+      await loadCallReportStatus();
     },
-    [reportGateway]
+    [
+      clearCallDeadlineTimer,
+      clearCallPollTimer,
+      clearCallReportTimers,
+      expireCallReportPolling,
+      reportGateway,
+    ]
   );
 
   const handleCloseDetail = () => {
-    callRequestId.current += 1;
+    invalidateCallDetail();
     setSelectedDetail(null);
   };
 
@@ -362,12 +521,15 @@ export function ReportScreen({
     }));
   };
 
-  const handleSelectReportDate = (date: string) => {
-    callRequestId.current += 1;
-    setSelectedDetail(null);
-    setCalendarTarget(null);
-    setSelectedReportDate(date);
-  };
+  const handleSelectReportDate = useCallback(
+    (date: string) => {
+      invalidateCallDetail();
+      setSelectedDetail(null);
+      setCalendarTarget(null);
+      setSelectedReportDate(date);
+    },
+    [invalidateCallDetail]
+  );
 
   const handleRetryDetail = () => {
     if (selectedDetail) {
@@ -394,7 +556,7 @@ export function ReportScreen({
       };
       handleSelectReportDate(openReportTarget.reportDate);
     }
-  }, [openReportTarget, openReportRequestId]);
+  }, [handleSelectReportDate, openReportTarget, openReportRequestId]);
 
   // 페이지 로드가 끝나면 딥링크 대상 멤버로 페이저를 이동하고,
   // callSessionId가 지정된 경우 해당 통화 상세까지 연다.
@@ -430,7 +592,9 @@ export function ReportScreen({
         (todayCall) => todayCall.callSessionId === pending.callSessionId
       );
       if (call) {
-        void handleOpenCall(call);
+        handleOpenCall(call).catch(() => {
+          // handleOpenCall이 오류 상태로 변환하므로 추가 처리가 필요하지 않다.
+        });
       }
     }
     // 이미 같은 날짜를 보고 있으면 페이지 재로딩이 없어 openReportRequestId 변화로

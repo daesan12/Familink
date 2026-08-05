@@ -3687,6 +3687,7 @@ test("보호자 리포트 탭에 리포트 화면을 연결한다", async () => 
 test("앱에 주입한 리포트 Gateway와 현재 그룹 피보호자를 조회한다", async () => {
   const reportGateway: jest.Mocked<ReportGateway> = {
     getCallReport: jest.fn(),
+    getCallReportStatus: jest.fn(),
     getDailyReport: jest.fn().mockResolvedValue({
       calls: [],
       dailyReport: {
@@ -3772,6 +3773,7 @@ test("현재 그룹 구성원 API에서 피보호자만 리포트 조회 대상�
   };
   const reportGateway: jest.Mocked<ReportGateway> = {
     getCallReport: jest.fn(),
+    getCallReportStatus: jest.fn(),
     getDailyReport: jest.fn().mockResolvedValue({
       calls: [],
       dailyReport: null,

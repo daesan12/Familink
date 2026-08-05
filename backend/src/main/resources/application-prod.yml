@@ -82,7 +82,7 @@ openai:
 gemini:
   request-timeout-ms: ${GEMINI_REQUEST_TIMEOUT_MS:30000}
   analysis:
-    api-key: ${GMS_API_KEY:}
+    api-key: ${GMS_API_KEY}
     base-url: ${GMS_API_BASE_URL:https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com}
     direct-media-enabled: ${GEMINI_DIRECT_MEDIA_ENABLED:true}
     direct-api-key: ${GEMINI_API_KEY:}

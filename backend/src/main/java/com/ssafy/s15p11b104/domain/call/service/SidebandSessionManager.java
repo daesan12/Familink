@@ -18,6 +18,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -27,7 +29,9 @@ import com.ssafy.s15p11b104.domain.call.config.OpenAiRealtimeProperties;
 @Component
 public class SidebandSessionManager {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(SidebandSessionManager.class);
 	private static final long FINAL_EVENT_DRAIN_TIMEOUT_SECONDS = 2;
+	private static final long CLOSE_CALLBACK_DISPATCH_TOLERANCE_MILLIS = 500;
 
 	private final HttpClient httpClient;
 	private final OpenAiRealtimeProperties properties;
@@ -148,13 +152,36 @@ public class SidebandSessionManager {
 		/**
 		 * 남은 이벤트를 drain하고 소켓을 닫는다.
 		 *
-		 * @return 정상 remote close를 관측하고 전사 무결성 실패가 없으면 {@code true}
+		 * @return remote 종료 callback을 관측하고 전사 무결성 실패가 없으면 {@code true}
 		 */
 		public boolean finishClose() {
-			boolean drained = managedSocket.awaitRemoteClose();
+			managedSocket.initiateCloseHandshake();
+			RemoteTermination remoteTermination = managedSocket.awaitRemoteClose();
 			boolean transcriptHealthy = !managedSocket.transcriptHandler.hasIntegrityFailure();
 			managedSocket.close();
-			return drained && transcriptHealthy;
+			boolean drained = remoteTermination.isCloseObserved() && transcriptHealthy;
+			if (!drained) {
+				LOGGER.warn(
+					"Sideband 종료 drain 판정에 실패했습니다. callSessionId={}, callId={}, remoteTermination={}, transcriptHealthy={}",
+					managedSocket.sessionId,
+					managedSocket.callId,
+					remoteTermination,
+					transcriptHealthy
+				);
+			}
+			return drained;
+		}
+	}
+
+	private enum RemoteTermination {
+		NORMAL_CLOSE,
+		OTHER_CLOSE,
+		ERROR,
+		TIMEOUT,
+		INTERRUPTED;
+
+		private boolean isCloseObserved() {
+			return this == NORMAL_CLOSE || this == OTHER_CLOSE;
 		}
 	}
 
@@ -163,9 +190,10 @@ public class SidebandSessionManager {
 		private final String callId;
 		private final BiConsumer<Long, Boolean> unexpectedDisconnectHandler;
 		private final AtomicBoolean closedByServer = new AtomicBoolean();
+		private final AtomicBoolean closeFrameSent = new AtomicBoolean();
 		private final AtomicBoolean closeExpected = new AtomicBoolean();
 		private final AtomicBoolean disconnected = new AtomicBoolean();
-		private final CompletableFuture<Boolean> remoteCloseSignal = new CompletableFuture<>();
+		private final CompletableFuture<RemoteTermination> remoteCloseSignal = new CompletableFuture<>();
 		private final Long sessionId;
 		private final SidebandTranscriptHandler transcriptHandler;
 		private final SidebandToolHandler toolHandler;
@@ -210,14 +238,29 @@ public class SidebandSessionManager {
 			closeExpected.set(true);
 		}
 
-		private boolean awaitRemoteClose() {
+		private RemoteTermination awaitRemoteClose() {
 			try {
-				return remoteCloseSignal.get(FINAL_EVENT_DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+				// 2초 drain 직후 JDK HttpClient가 onClose를 전달하는 스케줄링 지연만 흡수한다.
+				long callbackTimeoutMillis = TimeUnit.SECONDS.toMillis(FINAL_EVENT_DRAIN_TIMEOUT_SECONDS)
+					+ CLOSE_CALLBACK_DISPATCH_TOLERANCE_MILLIS;
+				return remoteCloseSignal.get(callbackTimeoutMillis, TimeUnit.MILLISECONDS);
 			} catch (InterruptedException exception) {
 				Thread.currentThread().interrupt();
-				return false;
-			} catch (ExecutionException | TimeoutException exception) {
-				return false;
+				return RemoteTermination.INTERRUPTED;
+			} catch (ExecutionException exception) {
+				return RemoteTermination.ERROR;
+			} catch (TimeoutException exception) {
+				return RemoteTermination.TIMEOUT;
+			}
+		}
+
+		private void initiateCloseHandshake() {
+			if (disconnected.get() || !closeFrameSent.compareAndSet(false, true)) {
+				return;
+			}
+			WebSocket socket = webSocket;
+			if (socket != null) {
+				socket.sendClose(WebSocket.NORMAL_CLOSURE, "server end");
 			}
 		}
 
@@ -225,10 +268,7 @@ public class SidebandSessionManager {
 			closedByServer.set(true);
 			transcriptHandler.close();
 			toolHandler.close();
-			WebSocket socket = webSocket;
-			if (socket != null) {
-				socket.sendClose(WebSocket.NORMAL_CLOSURE, "server end");
-			}
+			initiateCloseHandshake();
 		}
 
 		@Override
@@ -256,7 +296,7 @@ public class SidebandSessionManager {
 			}
 			return sendStage.handle((socket, error) -> {
 				if (error != null) {
-					handleDisconnect(false);
+					handleDisconnect(RemoteTermination.ERROR);
 				} else if (!closedByServer.get() && !disconnected.get()) {
 					webSocket.request(1);
 				}
@@ -272,20 +312,36 @@ public class SidebandSessionManager {
 
 		@Override
 		public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-			handleDisconnect(statusCode == WebSocket.NORMAL_CLOSURE);
+			RemoteTermination termination = statusCode == WebSocket.NORMAL_CLOSURE
+				? RemoteTermination.NORMAL_CLOSE
+				: RemoteTermination.OTHER_CLOSE;
+			LOGGER.info(
+				"OpenAI Sideband가 종료되었습니다. callSessionId={}, callId={}, statusCode={}, reason={}",
+				sessionId,
+				callId,
+				statusCode,
+				reason
+			);
+			handleDisconnect(termination);
 			return null;
 		}
 
 		@Override
 		public void onError(WebSocket webSocket, Throwable error) {
-			handleDisconnect(false);
+			LOGGER.warn(
+				"OpenAI Sideband 연결이 오류로 종료되었습니다. callSessionId={}, callId={}, errorType={}",
+				sessionId,
+				callId,
+				error.getClass().getSimpleName()
+			);
+			handleDisconnect(RemoteTermination.ERROR);
 		}
 
-		private void handleDisconnect(boolean remoteCloseObserved) {
+		private void handleDisconnect(RemoteTermination remoteTermination) {
 			disconnected.set(true);
 			transcriptHandler.close();
 			toolHandler.close();
-			remoteCloseSignal.complete(remoteCloseObserved);
+			remoteCloseSignal.complete(remoteTermination);
 			if (closedByServer.get() || closeExpected.get()) {
 				return;
 			}
@@ -293,7 +349,8 @@ public class SidebandSessionManager {
 			if (currentSessionId != null && sessions.remove(currentSessionId, this)) {
 				unexpectedDisconnectHandler.accept(
 					currentSessionId,
-					remoteCloseObserved && !transcriptHandler.hasIntegrityFailure()
+					remoteTermination == RemoteTermination.NORMAL_CLOSE
+						&& !transcriptHandler.hasIntegrityFailure()
 				);
 			}
 		}

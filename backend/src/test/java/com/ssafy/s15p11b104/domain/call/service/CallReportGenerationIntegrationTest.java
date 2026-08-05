@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -24,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.s15p11b104.domain.call.dto.CallTerminationType;
 import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
 import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationService;
+import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.global.ai.gemini.GeminiClient;
 import com.ssafy.s15p11b104.global.ai.gemini.GeminiGenerationRequest;
 import com.ssafy.s15p11b104.support.IntegrationTest;
@@ -41,6 +43,9 @@ class CallReportGenerationIntegrationTest extends IntegrationTest {
 
 	@Autowired
 	private CallReportGenerationService callReportGenerationService;
+
+	@Autowired
+	private CallReportCallRepository callReportRepository;
 
 	@Autowired
 	private ObjectMapper objectMapper;
@@ -152,6 +157,11 @@ class CallReportGenerationIntegrationTest extends IntegrationTest {
 			Integer.class,
 			fixture.callSessionId()
 		)).isEqualTo(1);
+		assertThat(callReportRepository.findCompletedInEndedAtRange(
+			CallStatus.COMPLETED,
+			Instant.now().minus(Duration.ofHours(1)),
+			Instant.now().plus(Duration.ofHours(1))
+		)).anyMatch(report -> report.getCallSession().getId().equals(fixture.callSessionId()));
 		assertThat(jdbcTemplate.queryForObject(
 			"SELECT status::text FROM call_report_generation_requests WHERE call_session_id = ?",
 			String.class,

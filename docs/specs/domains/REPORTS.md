@@ -7,7 +7,7 @@
 
 - 목적: 통화 종료 후 보호자가 통화별 근황을 확인하고, 하루의 여러 통화를 한 번에 이해할 수 있는 일일 리포트를 제공한다.
 - 포함 범위: 건별 리포트, 일일 리포트, 감정 대·소분류, 보호자 전달 메시지, 정기 생성과 조회.
-- 제외 범위: 통화 원본·전체 전사 노출, 건별 감정의 화면 노출, 리포트 재생성, 일보호자 다중 화면.
+- 제외 범위: 통화 원본·전체 전사 노출, 건별 감정의 화면 노출, 사용자용 리포트 재생성, 일보호자 다중 화면.
 - 핵심 경계: Spring Boot가 Gemini 호출, 리포트 생성·저장·조회와 스케줄 실행을 모두 담당하며 완료 콜백은 사용하지 않는다.
 
 ## 확정된 동작
@@ -71,6 +71,26 @@
 24. `call_reports` DB 쓰기 자체도 같은 무결성·finalization·미해결 원장 조건을
     강제한다. 따라서 롤링 배포 중 새 컬럼을 읽지 않는 이전 버전 인스턴스도
     부분 전사로 리포트를 저장할 수 없다.
+25. 건별 리포트 상태 조회는 `READY`, `GENERATING`, `FAILED`, `UNAVAILABLE`만
+    공개한다. 리포트가 있으면 `READY`, durable request가 `PENDING`·`CLAIMED`이거나
+    현재 전사 reconciliation 경로가 request를 만들 수 있으면 `GENERATING`,
+    request가 `GEMINI_FAILED`면 `FAILED`, 그 밖에 자동 생성·복구 경로가 없으면
+    `UNAVAILABLE`이다. 내부 실패 코드, 전사 원문과 claim token은 공개하지 않는다.
+26. 보호자 화면은 `GENERATING`을 5초 간격으로 최대 90초 동안 다시 조회한다.
+    90초 뒤에도 생성 중이면 실패로 단정하지 않고 지연 상태와 상태 다시 확인
+    동작을 제공한다. `FAILED`, `UNAVAILABLE`, 네트워크 조회 오류는 서로 구분한다.
+    상태 다시 확인은 generation request를 변경하지 않는다.
+27. 사용자용 재생성 API, 관리 화면과 `GEMINI_FAILED` 자동 스캔은 제공하지 않는다.
+    장애 원인을 제거하고 운영 GMS 호출을 검증한 뒤 운영자가 명시한 개별
+    `callSessionId`만 선별 복구할 수 있다. 대상은 `COMPLETED`, 전사 무결성
+    `COMPLETE`, finalization 완료, 공백이 아닌 전사 한 건 이상, 모든 전사 원장 이벤트
+    `APPLIED`, 기존 리포트 없음 조건을 모두 만족해야 한다. request가 없으면
+    현재 revision의 `PENDING`을 만들고, `GEMINI_FAILED`면 claim·실패 메타데이터를
+    지운 현재 revision의 `PENDING`으로 되돌린다. 잠금 순서는 세션 뒤 request다.
+28. `INCOMPLETE`, `CANCELLED`, `FAILED` 통화와 불완전하거나 미확정인 전사는
+    선별 복구하지 않는다. 과거 `INCOMPLETE`를 `COMPLETED`로 바꾸거나 조건 없이
+    일괄 backfill하지 않으며 자동 복구 스케줄은 계속 `PENDING`과 만료
+    `CLAIMED`만 접수한다.
 
 건별 감정 대분류 enum은 `ANGER`, `SADNESS`, `ANXIETY`, `HURT`, `EMBARRASSMENT`, `JOY`, `NEUTRAL`이다. 한국어 표시명과 이미지 매핑은 미결정이다.
 
@@ -78,6 +98,8 @@
 
 - 해당 리포트 구간에 통화가 없으면 그 기준일의 일일 리포트를 만들지 않는다. 이전에 생성된 일일 리포트가 있으면 조회 화면 상단에 가장 최신 일일 리포트를 유지하고 당일 건별 목록만 빈 상태로 표시한다. 생성된 일일 리포트가 전혀 없을 때만 전체 리포트 빈 상태를 표시한다.
 - 건별 리포트가 아직 준비되지 않았으면 [API 계약](../contracts/API.md)의 준비 전 오류를 사용한다.
+- 건별 리포트가 없는 이유는 상태 조회 API로 구분한다. 기존 상세 조회의
+  `404 CALL_REPORT_NOT_READY`는 변경하지 않는다.
 - Gemini 호출이 실패하거나 30초 총 제한시간을 넘으면 성공 리포트를 저장하지
   않는다. 건별 요청은 `GEMINI_FAILED`로 확정하고 자동 재시도하지 않는다.
   `PENDING`·만료 `CLAIMED` 복구는 Gemini 실패 재시도가 아니라 실행 접수·
@@ -92,6 +114,7 @@
     - `reportDates[]`는 요청한 월의 일일 리포트 날짜만 담고, `latestReportDate`는 월과 관계없이 전체 최신 일일 리포트 날짜를 담는다.
   - `API-REPORTS-002` `GET /groups/{groupId}/members/{memberId}/reports/daily/{reportDate}`
   - `API-REPORTS-003` `GET /call-sessions/{callSessionId}/report`
+  - `API-REPORTS-004` `GET /call-sessions/{callSessionId}/report/status`
   - 요청·응답·명시 오류의 상세는 [API 계약](../contracts/API.md)을 따른다.
 - 데이터:
   - 관련 엔티티는 `call_reports`, `daily_reports`,
@@ -99,6 +122,8 @@
     `call_sessions`, `call_transcript_events`, `call_transcripts`다.
   - 모든 읽기·쓰기는 Spring Boot가 소유한다.
   - 동일 통화 건별 리포트와 동일 피보호자·기준일 일일 리포트의 중복 생성을 DB 제약과 멱등 처리로 방지한다.
+  - 운영자 선별 복구는 확정된 조건을 모두 만족하는 명시적 세션 ID만 처리하며,
+    자동·일괄 복구나 사용자 요청 경로로 노출하지 않는다.
 - 알림:
   - 리포트 저장 트랜잭션 안에서 생성 이벤트를 발행한다.
   - 현재 활성 보호자 수신자·문구·중복 방지와 커밋 후 푸시는
@@ -111,7 +136,7 @@
   - 대상·claim·입력 조회와 결과 저장은 짧은 DB 트랜잭션으로 나누고 Gemini
     호출 중에는 DB 트랜잭션을 유지하지 않는다.
   - 공용 AI executor의 대기열이 가득 차면 무기한 기다리지 않는다. 건별·일일
-    리포트에는 이 티켓에서 새로운 수동 재시도 API나 관리 화면을 추가하지 않는다.
+    리포트에는 사용자용 재시도 API나 관리 화면을 추가하지 않는다.
 
 ## 인수 조건
 
@@ -196,10 +221,34 @@
 - Then: 최신 전사 revision의 유효 claim만 결과를 저장하고, 동시·지연 실행이
   있더라도 건별 리포트와 생성 알림은 각각 한 번만 저장된다.
 
+### AC-013
+
+- Given: 같은 그룹의 활성 보호자가 접근 가능한 통화의 건별 리포트 상태를 조회한다.
+- When: 리포트, durable request와 전사 복구 가능 상태를 판정한다.
+- Then: `READY`, `GENERATING`, `FAILED`, `UNAVAILABLE` 중 하나와
+  `callSessionId`만 반환하고 내부 실패·전사·claim 정보는 반환하지 않는다.
+
+### AC-014
+
+- Given: 보호자가 연 건별 리포트 상태가 `GENERATING`이다.
+- When: 5초 간격 조회가 90초 안에 `READY`가 되거나 90초를 초과한다.
+- Then: `READY`면 기존 상세 API의 리포트를 표시하고, 초과하면 실패가 아닌
+  지연 상태와 상태 다시 확인 동작을 표시한다. 화면이 닫히거나 조회 대상이
+  바뀐 뒤의 응답은 화면을 변경하지 않는다.
+
+### AC-015
+
+- Given: 운영자가 명시한 `COMPLETED` 통화가 전사 `COMPLETE`, finalization,
+  공백이 아닌 전사 존재, 전사 원장 전체 `APPLIED`, 기존 리포트 없음 조건을 모두 만족한다.
+- When: 장애 원인과 운영 GMS 호출을 확인한 뒤 선별 복구한다.
+- Then: 누락 request는 현재 revision의 `PENDING`으로 만들고 `GEMINI_FAILED`는
+  해당 request만 `PENDING`으로 되돌린다. 다른 통화 상태와 불완전 전사는
+  변경하지 않고 자동·일괄 재시도도 시작하지 않는다.
+
 ## 미결정 사항
 
 - 감정 소분류의 허용 목록·중립값·한국어 표시명·이미지 매핑.
 - `INCOMPLETE` 통화의 전사 충분 여부 판단 기준.
-- 건별·일일 리포트의 자동 재시도 횟수·backoff와 서버 재시작 후 누락
-  리포트를 다시 생성하는 정책.
+- 건별·일일 리포트의 자동 재시도 횟수·backoff와 조건 없는 자동·일괄
+  누락 리포트 복구 정책.
 - 스케줄러 실행 시점 이후 저장된 건별 리포트를 과거 `report_date`에 반영·복구하는 정책.

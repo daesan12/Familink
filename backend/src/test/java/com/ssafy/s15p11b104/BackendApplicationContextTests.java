@@ -15,11 +15,14 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationDispatcher;
 import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationRequestRepository;
 import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationService;
 import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallTranscriptEventClaimStore;
+import com.ssafy.s15p11b104.domain.call.repository.CallTranscriptEventRepository;
+import com.ssafy.s15p11b104.domain.call.repository.CallTranscriptRepository;
 import com.ssafy.s15p11b104.domain.call.repository.GroupMemberCallRepository;
 import com.ssafy.s15p11b104.domain.call.service.AiCallPostToolService;
 import com.ssafy.s15p11b104.domain.call.service.AiCallPromptContextProvider;
@@ -73,6 +76,9 @@ class BackendApplicationContextTests {
 	private CallReportGenerationService callReportGenerationService;
 
 	@MockitoBean
+	private CallReportGenerationDispatcher callReportGenerationDispatcher;
+
+	@MockitoBean
 	private CallReportCallRepository callReportCallRepository;
 
 	@MockitoBean
@@ -80,6 +86,12 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private CallTranscriptEventClaimStore callTranscriptEventClaimStore;
+
+	@MockitoBean
+	private CallTranscriptEventRepository callTranscriptEventRepository;
+
+	@MockitoBean
+	private CallTranscriptRepository callTranscriptRepository;
 
 	@MockitoBean
 	private GroupMemberCallRepository groupMemberCallRepository;

@@ -177,6 +177,23 @@ public class CallTranscriptEvent extends BaseEntity {
 		content = null;
 		nextAttemptAt = null;
 		appliedAt = now;
+		failureCode = null;
+		clearClaim();
+	}
+
+	/**
+	 * 전사 완료 이벤트가 공백이면 저장할 발화가 없는 정상 no-op로 종결한다.
+	 *
+	 * <p>원장 행은 감사와 멱등 처리를 위해 남기되 실제 {@link CallTranscript}는 만들지 않는다.
+	 * {@code APPLIED} payload 제약을 만족하도록 정규화된 공백의 해시를 보관한다.
+	 */
+	public void markEmptyTranscriptApplied(String hash, Instant now) {
+		status = TranscriptIngestStatus.APPLIED;
+		content = null;
+		contentHash = hash;
+		nextAttemptAt = null;
+		appliedAt = now;
+		failureCode = "EMPTY_TRANSCRIPT_IGNORED";
 		clearClaim();
 	}
 

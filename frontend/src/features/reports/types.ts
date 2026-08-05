@@ -76,6 +76,11 @@ export type CallReport =
       summary: string;
     };
 
+export type CallReportStatus = {
+  callSessionId: string;
+  status: "ready" | "generating" | "failed" | "unavailable";
+};
+
 export interface ReportGateway {
   getReportDates(
     groupId: string,
@@ -91,6 +96,8 @@ export interface ReportGateway {
   ): Promise<DailyReportResult>;
 
   getCallReport(callSessionId: string): Promise<CallReport>;
+
+  getCallReportStatus(callSessionId: string): Promise<CallReportStatus>;
 }
 
 export interface CareReceiverReportTarget {
@@ -133,5 +140,8 @@ export type ReportPageState = "empty" | "dailyPending" | "ready";
 export type CallReportDetailState =
   | { call: CallReportView; status: "loading" }
   | { call: CallReportView; status: "generating" }
+  | { call: CallReportView; status: "delayed" }
   | { call: CallReportView; status: "ready" }
+  | { call: CallReportView; status: "failed" }
+  | { call: CallReportView; status: "unavailable" }
   | { call: CallReportView; status: "error" };
