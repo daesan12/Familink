@@ -99,17 +99,16 @@ export function ReactionBar({
           }
           accessibilityRole="button"
           accessibilityState={{expanded: isPickerOpen}}
+          hitSlop={8}
           onPress={handleTogglePicker}
           ref={addButtonRef}
-          style={styles.addButtonTouchArea}
+          style={styles.addButton}
         >
-          <View style={styles.addButton}>
-            <MaterialDesignIcons
-              color={COLORS.textStrong}
-              name="plus"
-              size={17}
-            />
-          </View>
+          <MaterialDesignIcons
+            color={COLORS.textStrong}
+            name="plus"
+            size={17}
+          />
         </Pressable>
       ) : null}
     </View>
@@ -125,12 +124,6 @@ const styles = StyleSheet.create({
     height: 28,
     justifyContent: 'center',
     width: 28,
-  },
-  addButtonTouchArea: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
   },
   chip: {
     alignItems: 'center',
