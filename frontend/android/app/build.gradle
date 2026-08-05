@@ -122,6 +122,9 @@ android {
     buildFeatures {
         compose true
     }
+    packagingOptions {
+        jniLibs.pickFirsts += ["**/libNitroModules.so"]
+    }
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
