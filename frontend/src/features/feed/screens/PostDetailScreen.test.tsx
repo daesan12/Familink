@@ -1,5 +1,6 @@
 import React from 'react';
 import TestRenderer from 'react-test-renderer';
+import {ScrollView} from 'react-native';
 
 import type {
   FeedMember,
@@ -11,6 +12,16 @@ import {PostActionsSheet} from '../components/PostActionsSheet';
 import {PostDetailScreen} from './PostDetailScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
+jest.mock('react-native-safe-area-context', () => {
+  const {View} = jest.requireActual('react-native');
+
+  return {
+    SafeAreaProvider: View,
+    SafeAreaView: View,
+    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
+  };
+});
+
 
 const currentUser: FeedMember = {
   avatarText: '다',
@@ -337,5 +348,21 @@ test('댓글을 불러오는 중이거나 오류일 때 빈 상태를 표시하�
 
   await TestRenderer.act(() => {
     errorRenderer.unmount();
+  });
+});
+
+test('상세 화면을 당기면 최신 게시글과 댓글을 다시 요청한다', async () => {
+  const onRefresh = jest.fn();
+  const renderer = await renderScreen({onRefresh, isRefreshing: false});
+  const scrollView = renderer.root.findByType(ScrollView);
+
+  expect(scrollView.props.refreshControl).toBeDefined();
+  TestRenderer.act(() => {
+    scrollView.props.refreshControl.props.onRefresh();
+  });
+  expect(onRefresh).toHaveBeenCalledTimes(1);
+
+  await TestRenderer.act(() => {
+    renderer.unmount();
   });
 });

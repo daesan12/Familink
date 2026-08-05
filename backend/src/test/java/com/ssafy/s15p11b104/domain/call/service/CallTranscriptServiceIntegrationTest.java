@@ -141,7 +141,7 @@ class CallTranscriptServiceIntegrationTest extends IntegrationTest {
 			ZERO_HASH,
 			callSessionId);
 
-		callTranscriptService.reconcileReady();
+		assertThat(callTranscriptService.reconcileReady()).isEmpty();
 
 		assertThat(reservation.sequenceNumber()).isEqualTo(1);
 		assertThat(jdbcTemplate.queryForMap(
@@ -200,7 +200,7 @@ class CallTranscriptServiceIntegrationTest extends IntegrationTest {
 			callSessionId
 		)).isZero();
 
-		callTranscriptService.reconcileReady();
+		assertThat(callTranscriptService.reconcileReady()).containsExactly(callSessionId);
 
 		Map<String, Object> recoveredState = jdbcTemplate.queryForMap(
 			"""
@@ -217,6 +217,66 @@ class CallTranscriptServiceIntegrationTest extends IntegrationTest {
 			.containsEntry("request_status", "PENDING");
 		assertThat(recoveredState.get("input_revision"))
 			.isEqualTo(recoveredState.get("transcript_revision"));
+	}
+
+	@Test
+	void appliesEmptyTranscriptAsNoOpAndStillCreatesReportRequest() {
+		Long groupId = insertGroup();
+		Long memberId = insertCareReceiver(groupId);
+		Long callSessionId = insertCompletedSession(groupId, memberId);
+		callTranscriptService.reserveItem(callSessionId, SpeakerType.USER, "spoken-item");
+		callTranscriptService.reserveItem(callSessionId, SpeakerType.USER, "empty-item");
+
+		assertThat(callTranscriptService.completeItem(
+			callSessionId,
+			SpeakerType.USER,
+			"spoken-item",
+			"오늘은 기분이 좋아요."
+		)).isTrue();
+		assertThat(callTranscriptService.completeItem(
+			callSessionId,
+			SpeakerType.USER,
+			"empty-item",
+			"   "
+		)).isTrue();
+		assertThat(callTranscriptService.completeItem(
+			callSessionId,
+			SpeakerType.USER,
+			"empty-item",
+			null
+		)).isTrue();
+
+		assertThat(callTranscriptService.finalizeSession(callSessionId, true)).isTrue();
+		assertThat(jdbcTemplate.queryForMap(
+			"""
+				SELECT status::text AS status, failure_code, content_hash IS NOT NULL AS hashed,
+					applied_at IS NOT NULL AS applied
+				FROM call_transcript_events
+				WHERE call_session_id = ? AND openai_item_id = 'empty-item'
+				""",
+			callSessionId
+		)).containsEntry("status", "APPLIED")
+			.containsEntry("failure_code", "EMPTY_TRANSCRIPT_IGNORED")
+			.containsEntry("hashed", true)
+			.containsEntry("applied", true);
+		assertThat(jdbcTemplate.queryForObject(
+			"SELECT COUNT(*) FROM call_transcripts WHERE call_session_id = ?",
+			Integer.class,
+			callSessionId
+		)).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForMap(
+			"""
+				SELECT session.transcript_integrity_status::text AS integrity_status,
+					session.transcript_finalized_at IS NOT NULL AS finalized,
+					request.status::text AS request_status
+				FROM call_sessions session
+				JOIN call_report_generation_requests request ON request.call_session_id = session.id
+				WHERE session.id = ?
+				""",
+			callSessionId
+		)).containsEntry("integrity_status", "COMPLETE")
+			.containsEntry("finalized", true)
+			.containsEntry("request_status", "PENDING");
 	}
 
 	@Test
@@ -239,13 +299,92 @@ class CallTranscriptServiceIntegrationTest extends IntegrationTest {
 			"UPDATE call_sessions SET ended_at = CURRENT_TIMESTAMP - INTERVAL '2 minutes' WHERE id = ?",
 			collectingSessionId);
 
-		callTranscriptService.reconcileStaleFinalizations();
+		assertThat(callTranscriptService.reconcileStaleFinalizations()).isEmpty();
 
 		assertThat(jdbcTemplate.queryForObject(
 			"SELECT transcript_integrity_status::text FROM call_sessions WHERE id = ?",
 			String.class,
 			collectingSessionId
 		)).isEqualTo("RECONCILIATION_REQUIRED");
+	}
+
+	@Test
+	void watchdogRecoversUnfinalizedReconciliationAfterEveryEventIsApplied() {
+		Long groupId = insertGroup();
+		Long memberId = insertCareReceiver(groupId);
+		Long callSessionId = insertCompletedSession(groupId, memberId);
+		callTranscriptService.reserveItem(callSessionId, SpeakerType.USER, "late-final-item");
+		jdbcTemplate.update(
+			"""
+				UPDATE call_transcript_events
+				SET status = 'READY', content = 'late final transcript', content_hash = ?,
+					ready_at = CURRENT_TIMESTAMP, next_attempt_at = CURRENT_TIMESTAMP,
+					updated_at = CURRENT_TIMESTAMP
+				WHERE call_session_id = ? AND openai_item_id = 'late-final-item'
+				""",
+			ZERO_HASH,
+			callSessionId);
+
+		assertThat(callTranscriptService.finalizeSession(callSessionId, false)).isFalse();
+		assertThat(callTranscriptService.reconcileReady()).isEmpty();
+		jdbcTemplate.update(
+			"UPDATE call_sessions SET ended_at = CURRENT_TIMESTAMP - INTERVAL '2 minutes' WHERE id = ?",
+			callSessionId);
+
+		assertThat(callTranscriptService.reconcileStaleFinalizations()).containsExactly(callSessionId);
+
+		Map<String, Object> recoveredState = jdbcTemplate.queryForMap(
+			"""
+				SELECT session.transcript_integrity_status::text AS integrity_status,
+					session.transcript_finalized_at IS NOT NULL AS finalized,
+					request.status::text AS request_status
+				FROM call_sessions session
+				JOIN call_report_generation_requests request ON request.call_session_id = session.id
+				WHERE session.id = ?
+				""",
+			callSessionId);
+		assertThat(recoveredState)
+			.containsEntry("integrity_status", "COMPLETE")
+			.containsEntry("finalized", true)
+			.containsEntry("request_status", "PENDING");
+	}
+
+	@Test
+	void watchdogKeepsUnfinalizedReconciliationWhenAnEventFailed() {
+		Long groupId = insertGroup();
+		Long memberId = insertCareReceiver(groupId);
+		Long callSessionId = insertCompletedSession(groupId, memberId);
+		callTranscriptService.reserveItem(callSessionId, SpeakerType.USER, "failed-final-item");
+		jdbcTemplate.update(
+			"""
+				UPDATE call_transcript_events
+				SET status = 'FAILED', failure_code = 'EMPTY_TRANSCRIPT',
+					updated_at = CURRENT_TIMESTAMP
+				WHERE call_session_id = ? AND openai_item_id = 'failed-final-item'
+				""",
+			callSessionId);
+		assertThat(callTranscriptService.finalizeSession(callSessionId, false)).isFalse();
+		jdbcTemplate.update(
+			"UPDATE call_sessions SET ended_at = CURRENT_TIMESTAMP - INTERVAL '2 minutes' WHERE id = ?",
+			callSessionId);
+
+		assertThat(callTranscriptService.reconcileStaleFinalizations()).isEmpty();
+
+		assertThat(jdbcTemplate.queryForMap(
+			"""
+				SELECT transcript_integrity_status::text AS integrity_status,
+					transcript_finalized_at IS NOT NULL AS finalized
+				FROM call_sessions
+				WHERE id = ?
+				""",
+			callSessionId
+		)).containsEntry("integrity_status", "RECONCILIATION_REQUIRED")
+			.containsEntry("finalized", false);
+		assertThat(jdbcTemplate.queryForObject(
+			"SELECT COUNT(*) FROM call_report_generation_requests WHERE call_session_id = ?",
+			Integer.class,
+			callSessionId
+		)).isZero();
 	}
 
 	@Test

@@ -4,8 +4,8 @@ import {
   Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -45,6 +45,7 @@ interface PostDetailScreenProps {
   currentGroupName: string;
   currentUser: FeedMember | null;
   isCommentsLoading?: boolean;
+  isRefreshing?: boolean;
   isReactionPickerOpen: boolean;
   onBack: () => void;
   onCreateComment: (input: CreateCommentInput) => Promise<void>;
@@ -59,6 +60,7 @@ interface PostDetailScreenProps {
     anchor: ReactionAnchor,
   ) => void;
   onRetryComments?: () => void;
+  onRefresh?: () => void;
   onSelectReaction: (postId: string, reactionId: ReactionId) => void;
   onUpdateComment: (input: UpdateCommentInput) => Promise<void>;
   post: FeedPost;
@@ -75,6 +77,7 @@ export function PostDetailScreen({
   currentGroupName,
   currentUser,
   isCommentsLoading = false,
+  isRefreshing = false,
   isReactionPickerOpen,
   onBack,
   onCreateComment,
@@ -86,6 +89,7 @@ export function PostDetailScreen({
   onScrollBeginDrag,
   onToggleReactionPicker,
   onRetryComments,
+  onRefresh,
   onSelectReaction,
   onUpdateComment,
   post,
@@ -186,7 +190,7 @@ export function PostDetailScreen({
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
       style={styles.container}
     >
       <View style={styles.header}>
@@ -218,6 +222,15 @@ export function PostDetailScreen({
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         onScrollBeginDrag={onScrollBeginDrag}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              onRefresh={onRefresh}
+              refreshing={isRefreshing}
+              tintColor={COLORS.purple}
+            />
+          ) : undefined
+        }
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.authorRow}>

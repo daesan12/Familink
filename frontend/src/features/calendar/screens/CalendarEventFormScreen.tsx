@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -29,6 +28,7 @@ import {
   type CalendarEventDraftErrors,
 } from "../calendarFormModel";
 import { CalendarParticipantModal } from "../components/CalendarParticipantModal";
+import { CalendarTimePickerModal } from "../components/CalendarTimePickerModal";
 import { toErrorMessage } from "../hooks/useCalendarData";
 import type {
   CalendarEventDetail,
@@ -40,7 +40,8 @@ import type {
 const PROFILE_PLACEHOLDER = require("../../../assets/images/profile-placeholder.png");
 const KST_OFFSET_IN_MS = 9 * 60 * 60 * 1000;
 
-type PickerField = "startDate" | "startTime" | "endDate" | "endTime";
+type DatePickerField = "startDate" | "endDate";
+type TimePickerField = "startTime" | "endTime";
 
 interface CalendarEventFormScreenProps {
   currentMember: CalendarMember | null;
@@ -76,6 +77,8 @@ export function CalendarEventFormScreen({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [participantsVisible, setParticipantsVisible] = useState(false);
+  const [timePickerField, setTimePickerField] =
+    useState<TimePickerField | null>(null);
 
   useHardwareBack(() => {
     if (saving) {
@@ -84,34 +87,27 @@ export function CalendarEventFormScreen({
     onCancel();
     return true;
   });
-  const openPicker = (field: PickerField) => {
-    const isDate = field.endsWith("Date");
+  const openDatePicker = (field: DatePickerField) => {
     const dateKey = field.startsWith("start") ? draft.startDate : draft.endDate;
     const time = field.startsWith("start") ? draft.startTime : draft.endTime;
     DateTimePickerAndroid.open({
       is24Hour: true,
-      mode: isDate ? "date" : "time",
+      mode: "date",
       onChange: (event, value) => {
         if (event.type !== "set" || !value) {
           return;
         }
-        if (isDate) {
-          const nextDate = formatPickerDate(value);
-          setDraft((current) => {
-            if (field === "startDate") {
-              return {
-                ...current,
-                endDate:
-                  current.endDate < nextDate ? nextDate : current.endDate,
-                startDate: nextDate,
-              };
-            }
-            return { ...current, endDate: nextDate };
-          });
-        } else {
-          const nextTime = formatPickerTime(value);
-          setDraft((current) => ({ ...current, [field]: nextTime }));
-        }
+        const nextDate = formatPickerDate(value);
+        setDraft((current) => {
+          if (field === "startDate") {
+            return {
+              ...current,
+              endDate: current.endDate < nextDate ? nextDate : current.endDate,
+              startDate: nextDate,
+            };
+          }
+          return { ...current, endDate: nextDate };
+        });
         setErrors({});
       },
       timeZoneName: "Asia/Seoul",
@@ -151,7 +147,7 @@ export function CalendarEventFormScreen({
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior="padding"
       style={styles.screen}
     >
       <View style={styles.header}>
@@ -254,8 +250,8 @@ export function CalendarEventFormScreen({
             <ScheduleRow
               date={draft.startDate}
               label="시작"
-              onPressDate={() => openPicker("startDate")}
-              onPressTime={() => openPicker("startTime")}
+              onPressDate={() => openDatePicker("startDate")}
+              onPressTime={() => setTimePickerField("startTime")}
               showTime={draft.timeEnabled}
               time={draft.startTime}
             />
@@ -263,8 +259,8 @@ export function CalendarEventFormScreen({
             <ScheduleRow
               date={draft.endDate}
               label="종료"
-              onPressDate={() => openPicker("endDate")}
-              onPressTime={() => openPicker("endTime")}
+              onPressDate={() => openDatePicker("endDate")}
+              onPressTime={() => setTimePickerField("endTime")}
               showTime={draft.timeEnabled}
               time={draft.endTime}
             />
@@ -381,6 +377,26 @@ export function CalendarEventFormScreen({
         selectedMemberIds={draft.participantMemberIds}
         visible={participantsVisible}
       />
+      {timePickerField ? (
+        <CalendarTimePickerModal
+          key={`${timePickerField}:${draft[timePickerField]}`}
+          label={timePickerField === "startTime" ? "시작" : "종료"}
+          onCancel={() => setTimePickerField(null)}
+          onConfirm={(time) => {
+            const nextDraft = { ...draft, [timePickerField]: time };
+            const timeError = validateCalendarEventDraft(nextDraft).time;
+            if (timeError) {
+              return timeError;
+            }
+            setDraft(nextDraft);
+            setErrors((current) => ({ ...current, time: undefined }));
+            setTimePickerField(null);
+            return undefined;
+          }}
+          value={draft[timePickerField]}
+          visible
+        />
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -474,13 +490,6 @@ function formatPickerDate(value: Date): DateKey {
   return `${kstValue.getUTCFullYear()}-${padTwo(
     kstValue.getUTCMonth() + 1
   )}-${padTwo(kstValue.getUTCDate())}`;
-}
-
-function formatPickerTime(value: Date): string {
-  const kstValue = new Date(value.getTime() + KST_OFFSET_IN_MS);
-  return `${padTwo(kstValue.getUTCHours())}:${padTwo(
-    kstValue.getUTCMinutes()
-  )}`;
 }
 
 function formatDateLabel(date: DateKey): string {

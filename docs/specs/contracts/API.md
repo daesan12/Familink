@@ -251,6 +251,10 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
   `endDate`(일정 종료 날짜)와는 의미가 다르다.
 - `API-CALENDAR-004`는 핵심 요청의 전체 필드 세트를 보내는 전체 갱신이며,
   `startAt`·`endAt`이 없거나 null이면 날짜 일정으로 저장한다.
+- `API-CALENDAR-002`의 `participantMemberIds`에는 조회 시점의 활성 그룹
+  구성원만 포함한다. 그룹 나가기·관리자 내보내기·회원 탈퇴가 완료되면 해당
+  멤버십 ID는 같은 그룹의 모든 일정 응답에서 제거되고 재가입해도 자동
+  복원되지 않는다.
 - 일정 삭제 시 참여자를 삭제한다. 기존 알림은 `title`, `body` 스냅샷을
   유지하며 관련 FK 처리의 세부 방식은 데이터 계약의 미결정 사항을 따른다.
 
@@ -295,6 +299,7 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 | `API-REPORTS-001` | `GET /groups/{groupId}/care-receivers/{memberId}/reports/calendar` | Spring Boot · 같은 그룹 활성 보호자 | path `groupId`, `memberId`; query `year`, `month` | `200`: `yearMonth`, `reportDates[]`, `latestReportDate` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-REPORTS-002` | `GET /groups/{groupId}/members/{memberId}/reports/daily/{reportDate}` | Spring Boot · 같은 그룹 활성 보호자 | path `groupId`, `memberId`, `reportDate` | `200`: `date`, `dailyReport{id,summary,emotionCategory,emotionSubcategory,guardianMessageSummary}` 또는 `dailyReport=null`, `calls[{callSessionId,startedAt,reportAvailable}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-REPORTS-003` | `GET /call-sessions/{callSessionId}/report` | Spring Boot · 같은 그룹 활성 보호자 | path `callSessionId` | `200`: `callSessionId`, `summary`, `guardianMessage`, `createdAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `404 CALL_REPORT_NOT_READY` |
+| `API-REPORTS-004` | `GET /call-sessions/{callSessionId}/report/status` | Spring Boot · 같은 그룹 활성 보호자 | path `callSessionId` | `200`: `callSessionId`, `status(READY\|GENERATING\|FAILED\|UNAVAILABLE)` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-CARNATION-001` | `GET /groups/{groupId}/grass` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 선택 query `startDate`, `endDate`(둘 다 지정하거나 둘 다 생략) | `200`: `weekStart`, `weekEnd`, `rankings[{memberId,displayName,carnationCount,previousWeekWinner}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-CARNATION-002` | `GET /groups/{groupId}/members/{memberId}/carnations` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`, `memberId`; query `startDate`, `endDate` | `200`: `memberId`, `startDate`, `endDate`, `earnedDates[]` | 명시 없음 |
 
@@ -307,6 +312,14 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
   문자열을 사용한다.
 - Spring Boot는 `daily_reports`와 `call_reports`를 직접 읽어 리포트 응답을
   구성한다.
+- `API-REPORTS-004`는 기존 상세 조회와 같은 보호자 권한을 적용한다. 리포트가
+  있으면 `READY`, durable request가 `PENDING`·`CLAIMED`이거나 현재 전사 복구
+  경로가 request를 만들 수 있으면 `GENERATING`, request가 `GEMINI_FAILED`면
+  `FAILED`, 자동 생성·복구 경로가 없으면 `UNAVAILABLE`이다. 내부 실패 코드,
+  전사 원문과 claim token은 반환하지 않는다. 존재하지 않거나 접근할 수 없는
+  통화는 리소스 존재를 노출하지 않고 `403 FORBIDDEN`을 반환한다.
+- `API-REPORTS-004` 추가는 `API-REPORTS-003`의 응답과
+  `404 CALL_REPORT_NOT_READY`를 변경하지 않는다.
 - Spring Scheduler는 `Asia/Seoul` 기준 매일 22시에 일일 리포트 생성을
   실행한다. `API-REPORTS-002`의 `reportDate=D`는
   `[D-1 22:00, D 22:00)` 구간의 Asia/Seoul 기준일이며 시작 시각은

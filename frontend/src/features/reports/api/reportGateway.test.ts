@@ -191,3 +191,35 @@ test("성공 응답 필드가 계약과 다르면 렌더링 전에 차단한다"
     code: "INVALID_RESPONSE",
   });
 });
+
+test("건별 리포트 상태를 도메인 상태로 변환한다", async () => {
+  const client = createClient(
+    success({
+      callSessionId: 31,
+      status: "GENERATING",
+    })
+  );
+  const gateway = createReportGateway({ client });
+
+  await expect(gateway.getCallReportStatus("31")).resolves.toEqual({
+    callSessionId: "31",
+    status: "generating",
+  });
+  expect(client.get).toHaveBeenCalledWith(
+    "/call-sessions/31/report/status"
+  );
+});
+
+test("알 수 없는 건별 리포트 상태는 렌더링 전에 거부한다", async () => {
+  const client = createClient(
+    success({
+      callSessionId: 31,
+      status: "RETRYING",
+    })
+  );
+  const gateway = createReportGateway({ client });
+
+  await expect(gateway.getCallReportStatus("31")).rejects.toMatchObject({
+    code: "INVALID_RESPONSE",
+  });
+});

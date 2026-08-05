@@ -5,6 +5,16 @@ import type { CalendarGateway, CalendarMember } from "../types";
 import { CalendarEventFormScreen } from "./CalendarEventFormScreen";
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
+jest.mock("react-native-safe-area-context", () => {
+  const {View} = jest.requireActual("react-native");
+
+  return {
+    SafeAreaProvider: View,
+    SafeAreaView: View,
+    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
+  };
+});
+
 jest.mock("@react-native-community/datetimepicker", () => ({
   DateTimePickerAndroid: { open: jest.fn() },
 }));
@@ -135,3 +145,129 @@ test("제목이 비어 있으면 API를 호출하지 않고 입력 오류를 표
 
   TestRenderer.act(() => renderer!.unmount());
 });
+
+test("시간 버튼은 서비스 팝업을 열고 확인한 시간만 폼에 반영한다", async () => {
+  const gateway = createGateway();
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <CalendarEventFormScreen
+        currentMember={members[0] ?? null}
+        currentUserName="이종철"
+        gateway={gateway}
+        groupId="3"
+        initialDate="2026-07-31"
+        members={members}
+        now={new Date("2026-07-30T20:42:00Z")}
+        onCancel={jest.fn()}
+        onSaved={jest.fn()}
+      />
+    );
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "시간 설정" })
+      .props.onValueChange(true);
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "시작 시간 05:00" })
+      .props.onPress();
+  });
+
+  expect(
+    renderer!.root.findAllByProps({ children: "시간 설정" }).length
+  ).toBeGreaterThan(1);
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "05시 선택" })
+      .props.onPress();
+    scrollWheel(renderer!, "분 휠", 30);
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "시간 선택 확인" })
+      .props.onPress();
+  });
+
+  expect(
+    renderer!.root.findByProps({ accessibilityLabel: "시작 시간 05:30" })
+  ).toBeTruthy();
+  TestRenderer.act(() => renderer!.unmount());
+});
+
+test("종료 시간이 시작 시간보다 빠르면 팝업에서 확인을 막는다", async () => {
+  const gateway = createGateway();
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <CalendarEventFormScreen
+        currentMember={members[0] ?? null}
+        currentUserName="이종철"
+        gateway={gateway}
+        groupId="3"
+        initialDate="2026-07-31"
+        members={members}
+        now={new Date("2026-07-30T20:42:00Z")}
+        onCancel={jest.fn()}
+        onSaved={jest.fn()}
+      />
+    );
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "시간 설정" })
+      .props.onValueChange(true);
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "종료 시간 06:00" })
+      .props.onPress();
+  });
+
+  await TestRenderer.act(async () => {
+    scrollWheel(renderer!, "시 휠", 3);
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "시간 선택 확인" })
+      .props.onPress();
+  });
+
+  expect(
+    renderer!.root.findByProps({
+      children: "종료 시간은 시작 시간보다 빠를 수 없어요.",
+    })
+  ).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({ accessibilityLabel: "종료 시간 06:00" })
+  ).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({ accessibilityLabel: "시간 선택 확인" })
+  ).toBeTruthy();
+
+  TestRenderer.act(() => renderer!.unmount());
+});
+
+function scrollWheel(
+  renderer: TestRenderer.ReactTestRenderer,
+  accessibilityLabel: string,
+  index: number
+) {
+  const wheel = renderer.root
+    .findAllByProps({ accessibilityLabel })
+    .find((node) => typeof node.props.onMomentumScrollEnd === "function");
+  if (!wheel) {
+    throw new Error(`${accessibilityLabel}을 찾을 수 없습니다.`);
+  }
+  wheel.props.onMomentumScrollEnd({
+    nativeEvent: { contentOffset: { x: 0, y: index * 52 } },
+  });
+}

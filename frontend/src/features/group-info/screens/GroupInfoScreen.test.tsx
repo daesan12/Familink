@@ -335,6 +335,18 @@ test('연필을 누르면 호칭을 인라인으로 편집하고 저장한다', 
   expect(renderer.root.findAllByType(TextInput)).toHaveLength(0);
 });
 
+test('본인 행에는 호칭 수정 버튼을 표시하지 않는다', () => {
+  const renderer = renderScreen('m-manager');
+
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '이경호 호칭 수정'}),
+  ).toHaveLength(0);
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '손수호 호칭 수정'})
+      .length,
+  ).toBeGreaterThan(0);
+});
+
 test('방장은 역할 토글로 확인 후 구성원 역할을 바꿀 수 있다', () => {
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const renderer = renderScreen('m-manager');
@@ -1024,6 +1036,41 @@ test('그룹 코드 카드를 누르면 그룹 코드 화면으로 이동한다'
   // 뒤로 가면 그룹정보로 돌아온다.
   press(renderer!, '뒤로 가기');
   expect(hasText(renderer!, '그룹 정보')).toBe(true);
+});
+
+test('가입 요청 알림 딥링크로 진입하면 가입 승인 화면을 바로 연다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        joinRequestsLoader={() =>
+          Promise.resolve([
+            {
+              joinRequestId: 'jr-1',
+              applicantUserId: 'u-1',
+              applicantName: '손수호',
+              profileImageUrl: null,
+              status: 'PENDING_ADMIN' as const,
+              assignedRole: null,
+              processedAt: null,
+              createdAt: '2026-07-30T09:12:00Z',
+            },
+          ])
+        }
+        openJoinApprovalRequestId={1}
+        pendingJoinCount={1}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+  await TestRenderer.act(async () => {});
+
+  expect(hasText(renderer!, '승인 요청 1건')).toBe(true);
+  expect(hasText(renderer!, '손수호')).toBe(true);
 });
 
 test('가입 승인 대기 카드를 누르면 승인 화면으로 이동한다', async () => {

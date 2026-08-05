@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {
@@ -33,6 +34,8 @@ export function CalendarEventsSheet({
   onOpenEvent,
   visible,
 }: CalendarEventsSheetProps) {
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal
       animationType="slide"
@@ -47,7 +50,7 @@ export function CalendarEventsSheet({
           onPress={onClose}
           style={styles.dim}
         />
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, {paddingBottom: insets.bottom}]}>
           <View accessibilityElementsHidden style={styles.handle} />
           <View style={styles.header}>
             <View style={styles.headerText}>

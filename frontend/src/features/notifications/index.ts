@@ -6,6 +6,16 @@ export {
   useNotificationGateway,
 } from './NotificationGatewayContext';
 export {nativeDeviceTokenProvider} from './deviceTokenProvider';
+export {resolveNotificationTarget} from './deepLink';
+export type {NotificationDeepLinkTarget} from './deepLink';
+export {
+  createNativeNotificationTapProvider,
+  nativeNotificationTapProvider,
+} from './notificationTapProvider';
+export type {
+  NotificationTap,
+  NotificationTapProvider,
+} from './notificationTapProvider';
 export {
   createNotificationGateway,
   notificationGateway,

@@ -3,6 +3,7 @@ import {useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -63,7 +64,9 @@ export interface InterestSelectionScreenProps {
   onBack: () => void;
   onComplete: () => void;
   onSave: (interests: readonly string[]) => Promise<void> | void;
-  onSkip: () => void;
+  // 온보딩처럼 나중에 채울 수 있는 진입 경로에서만 넘긴다.
+  // 이미 가입을 마친 사용자의 관심사 설정(J-4)에서는 넘기지 않아 버튼을 숨긴다.
+  onSkip?: () => void;
   // 저장 완료 모달 문구. 온보딩과 마이페이지(J-4p)에서 다르게 쓴다.
   savedContent?: InterestSavedContent;
   // AppShell 하위 화면으로 임베드할 때는 자체 SafeAreaView를 끄고 부모 인셋을 따른다.
@@ -254,21 +257,23 @@ export function InterestSelectionScreen({
         </ScrollView>
 
         <View style={styles.footer}>
-          <AnimatedPressable
-            accessibilityLabel="관심사 설정 건너뛰기"
-            accessibilityRole="button"
-            containerStyle={styles.skipButton}
-            disabled={saving}
-            onPress={onSkip}>
-            <View style={styles.skipContent}>
-              <Text style={styles.skipLabel}>건너뛰기</Text>
-              <MaterialDesignIcons
-                color={AUTH_COLORS.placeholder}
-                name="arrow-right"
-                size={22}
-              />
-            </View>
-          </AnimatedPressable>
+          {onSkip !== undefined ? (
+            <AnimatedPressable
+              accessibilityLabel="관심사 설정 건너뛰기"
+              accessibilityRole="button"
+              containerStyle={styles.skipButton}
+              disabled={saving}
+              onPress={onSkip}>
+              <View style={styles.skipContent}>
+                <Text style={styles.skipLabel}>건너뛰기</Text>
+                <MaterialDesignIcons
+                  color={AUTH_COLORS.placeholder}
+                  name="arrow-right"
+                  size={22}
+                />
+              </View>
+            </AnimatedPressable>
+          ) : null}
 
           <AnimatedPressable
             accessibilityLabel="관심사 저장하고 다음"
@@ -375,7 +380,7 @@ function CustomInterestModal({
       statusBarTranslucent
       transparent
       visible={visible}>
-      <View style={styles.modal}>
+      <KeyboardAvoidingView behavior="padding" style={styles.modal}>
         <Pressable
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
@@ -438,7 +443,7 @@ function CustomInterestModal({
             )}
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

@@ -3,6 +3,7 @@ package com.ssafy.s15p11b104.domain.call.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -82,6 +83,19 @@ class SidebandSessionManagerTest {
 	}
 
 	@Test
+	void initiatesCloseHandshakeAndAcceptsExpectedProviderTermination() {
+		SidebandSessionManager.ClosingSideband closingSideband = connectAndClaimClose();
+		when(webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "server end")).thenAnswer(invocation -> {
+			listenerCaptor.getValue().onClose(webSocket, 1006, "");
+			return CompletableFuture.completedFuture(webSocket);
+		});
+
+		assertThat(closingSideband.finishClose()).isTrue();
+		verify(webSocket).sendClose(WebSocket.NORMAL_CLOSURE, "server end");
+		verifyNoInteractions(unexpectedDisconnectHandler);
+	}
+
+	@Test
 	void returnsFalseWhenSocketErrorsDuringExpectedClose() {
 		SidebandSessionManager.ClosingSideband closingSideband = connectAndClaimClose();
 		listenerCaptor.getValue().onError(webSocket, new IllegalStateException("sideband failed"));
@@ -91,11 +105,11 @@ class SidebandSessionManagerTest {
 	}
 
 	@Test
-	void returnsFalseAfterAbnormalRemoteClose() {
+	void acceptsProviderCloseFrameAfterExpectedHangupRegardlessOfStatusCode() {
 		SidebandSessionManager.ClosingSideband closingSideband = connectAndClaimClose();
 		listenerCaptor.getValue().onClose(webSocket, 1011, "internal error");
 
-		assertThat(closingSideband.finishClose()).isFalse();
+		assertThat(closingSideband.finishClose()).isTrue();
 		verifyNoInteractions(unexpectedDisconnectHandler);
 	}
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import {BackHandler} from 'react-native';
+import {launchImageLibrary} from 'react-native-image-picker';
 import TestRenderer from 'react-test-renderer';
 
 import {ApiError} from '../../../shared/api';
@@ -10,6 +11,9 @@ import type {
 import {SignupFlowScreen} from './SignupFlowScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
+jest.mock('react-native-image-picker', () => ({
+  launchImageLibrary: jest.fn(),
+}));
 jest.mock('../hooks/useScreenEntrance', () => ({
   useScreenEntrance: () => ({}),
 }));
@@ -48,8 +52,12 @@ const SIGNUP_RESULT: SignupResult = {
   userId: 7,
 };
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
+const mockLaunchImageLibrary = launchImageLibrary as jest.MockedFunction<
+  typeof launchImageLibrary
+>;
 
 afterEach(() => {
+  mockLaunchImageLibrary.mockReset();
   TestRenderer.act(() => {
     mountedRenderers.splice(0).forEach(renderer => renderer.unmount());
   });
@@ -84,16 +92,16 @@ function render(
   return {gateway, renderer: renderer!};
 }
 
-test('회원가입에서는 저장되지 않는 사진 선택을 노출하지 않고 마이페이지 등록을 안내한다', () => {
+test('회원가입 프로필 사진은 선택 사항이며 선택 UI를 제공한다', () => {
   const {renderer} = render();
 
   expect(
     renderer.root.findAllByProps({accessibilityLabel: '프로필 사진 선택'}),
-  ).toHaveLength(0);
+  ).not.toHaveLength(0);
   expect(
     hasText(
       renderer,
-      '프로필 사진은 가입 후 마이페이지에서 등록할 수 있어요',
+      '선택 사항 · 가입 후 마이페이지에서 다시 등록할 수 있어요',
     ),
   ).toBe(true);
 });

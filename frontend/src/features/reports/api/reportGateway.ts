@@ -7,11 +7,13 @@ import type { ApiAuthSession } from "../../../shared/api";
 import type {
   ApiSuccessResponseDto,
   CallReportResponseDto,
+  CallReportStatusResponseDto,
   DailyReportResponseDto,
   ReportCalendarResponseDto,
 } from "./reportDtos";
 import type {
   CallReport,
+  CallReportStatus,
   DailyReportResult,
   ReportCalendar,
   ReportEmotionCategory,
@@ -129,6 +131,13 @@ export function createReportGateway(
 
         throw gatewayError;
       }
+    },
+
+    async getCallReportStatus(callSessionId) {
+      return requestData(
+        `/call-sessions/${encodeURIComponent(callSessionId)}/report/status`,
+        parseCallReportStatus
+      );
     },
   };
 }
@@ -258,6 +267,28 @@ function parseCallReport(value: unknown): CallReport {
     ...responseDto,
     callSessionId: String(responseDto.callSessionId),
     status: "ready",
+  };
+}
+
+function parseCallReportStatus(value: unknown): CallReportStatus {
+  const dto = expectRecord(value, "건별 리포트 상태");
+  const status = expectString(dto.status, "status");
+  if (
+    status !== "READY" &&
+    status !== "GENERATING" &&
+    status !== "FAILED" &&
+    status !== "UNAVAILABLE"
+  ) {
+    throw invalidResponse(`지원하지 않는 건별 리포트 상태입니다: ${status}`);
+  }
+
+  const responseDto: CallReportStatusResponseDto = {
+    callSessionId: expectNumber(dto.callSessionId, "callSessionId"),
+    status,
+  };
+  return {
+    callSessionId: String(responseDto.callSessionId),
+    status: responseDto.status.toLowerCase() as CallReportStatus["status"],
   };
 }
 

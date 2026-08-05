@@ -1,17 +1,20 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {
   Animated,
+  Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  type TextInput,
   View,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {launchImageLibrary} from 'react-native-image-picker';
 
 import {ApiError} from '../../../shared/api';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
@@ -22,7 +25,10 @@ import {
 import {AnimatedPressable} from '../components/AnimatedPressable';
 import {DatePickerSheet} from '../components/DatePickerSheet';
 import {FloatingIllustration} from '../components/FloatingIllustration';
-import {FormField} from '../components/FormField';
+import {
+  FocusedInputScrollContext,
+  FormField,
+} from '../components/FormField';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {StepHeader} from '../components/StepHeader';
 import {ValidationMessage} from '../components/ValidationMessage';
@@ -34,6 +40,11 @@ import type {
   SignupDraft,
   SignupStep,
 } from '../types';
+import {
+  parsePickedProfileImage,
+  type ProfileImageValidationError,
+} from '../../profile/profileModel';
+import type {ProfileImageAsset} from '../../profile/types';
 import {
   canSubmitSignup,
   doPasswordsMatch,
@@ -73,6 +84,7 @@ const NETWORK_ERROR_MESSAGE =
 const SIGNUP_ERROR_MESSAGE =
   '회원가입에 실패했습니다. 잠시 후 다시 시도해주세요.';
 const INITIAL_DRAFT: SignupDraft = {
+  profileImageAsset: null,
   profileImageUri: null,
   name: '',
   loginId: '',
@@ -86,7 +98,7 @@ interface SignupFlowScreenProps {
   gateway?: SignupGateway;
   onCancel: () => void;
   // 방금 가입한 로그인 ID를 전달해 로그인 화면에서 재입력을 줄인다.
-  onComplete: (loginId: string) => void;
+  onComplete: (loginId: string, profileImageAsset?: ProfileImageAsset) => void;
 }
 
 // 생년월일 휠 첫 진입 기본값. 당해로 두면 고령 사용자가 수십 년을 스크롤해야 한다.
@@ -318,7 +330,7 @@ export function SignupFlowScreen({
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={styles.flex}>
         <Animated.View
           style={[
@@ -346,6 +358,52 @@ export function SignupFlowScreen({
               }}
               onCheckLoginId={handleCheckLoginId}
               onNext={handleBasicInfoNext}
+              onPickProfileImage={async () => {
+                try {
+                  const result = await launchImageLibrary({
+                    mediaType: 'photo',
+                    restrictMimeTypes: [
+                      'image/jpeg',
+                      'image/png',
+                      'image/webp',
+                    ],
+                    selectionLimit: 1,
+                  });
+                  if (result.didCancel) {
+                    return;
+                  }
+                  if (result.errorCode !== undefined) {
+                    Alert.alert(
+                      '프로필 사진을 선택할 수 없어요',
+                      result.errorMessage ?? '사진 접근 권한을 확인해 주세요.',
+                    );
+                    return;
+                  }
+                  const picked = result.assets?.[0];
+                  if (picked === undefined) {
+                    return;
+                  }
+                  const parsed = parsePickedProfileImage(picked);
+                  if (parsed.error !== null) {
+                    Alert.alert(
+                      '프로필 사진을 사용할 수 없어요',
+                      getProfileImageValidationMessage(parsed.error),
+                    );
+                    return;
+                  }
+                  updateDraft('profileImageAsset', parsed.asset);
+                  updateDraft('profileImageUri', parsed.asset.uri);
+                } catch {
+                  Alert.alert(
+                    '프로필 사진을 선택할 수 없어요',
+                    '잠시 후 다시 시도해 주세요.',
+                  );
+                }
+              }}
+              onRemoveProfileImage={() => {
+                updateDraft('profileImageAsset', null);
+                updateDraft('profileImageUri', null);
+              }}
             />
           )}
           {step === 2 && (
@@ -396,7 +454,13 @@ export function SignupFlowScreen({
             />
           )}
           {step === 5 && (
-            <CompleteStep onComplete={() => onComplete(draft.loginId)} />
+            <CompleteStep
+              onComplete={() =>
+                draft.profileImageAsset == null
+                  ? onComplete(draft.loginId)
+                  : onComplete(draft.loginId, draft.profileImageAsset)
+              }
+            />
           )}
         </Animated.View>
       </KeyboardAvoidingView>
@@ -455,6 +519,19 @@ function getSignupErrorMessage(error: unknown): string {
   return SIGNUP_ERROR_MESSAGE;
 }
 
+function getProfileImageValidationMessage(
+  error: ProfileImageValidationError,
+): string {
+  switch (error) {
+    case 'size':
+      return '프로필 사진은 10MB 이하만 사용할 수 있어요.';
+    case 'type':
+      return 'JPEG, PNG, WebP 사진만 사용할 수 있어요.';
+    default:
+      return '사진 정보를 읽을 수 없어요. 다른 사진을 선택해 주세요.';
+  }
+}
+
 interface BasicInfoStepProps {
   availability: LoginIdAvailability;
   draft: SignupDraft;
@@ -465,6 +542,8 @@ interface BasicInfoStepProps {
   onChangeName: (value: string) => void;
   onCheckLoginId: () => void;
   onNext: () => void;
+  onPickProfileImage: () => void;
+  onRemoveProfileImage: () => void;
 }
 
 function BasicInfoStep({
@@ -477,9 +556,13 @@ function BasicInfoStep({
   onChangeName,
   onCheckLoginId,
   onNext,
+  onPickProfileImage,
+  onRemoveProfileImage,
 }: BasicInfoStepProps) {
   const canContinue =
     isValidName(draft.name) && availability === 'available';
+  // 이름에서 키보드 "다음" 키를 누르면 아이디 입력으로 포커스를 넘긴다.
+  const loginIdInputRef = useRef<TextInput>(null);
 
   return (
     <StepLayout
@@ -495,15 +578,42 @@ function BasicInfoStep({
         step={1}
         title={'기본 정보를\n입력해주세요'}
       />
-      <View style={styles.profileStage}>
-        <Image
-          resizeMode="cover"
-          source={PROFILE_PLACEHOLDER}
-          style={styles.profileImage}
-        />
+      <View style={styles.profileStageContainer}>
+        <Pressable
+          accessibilityLabel="프로필 사진 선택"
+          accessibilityRole="button"
+          onPress={onPickProfileImage}
+          style={styles.profileStage}>
+          <Image
+            resizeMode="cover"
+            source={
+              draft.profileImageUri
+                ? {uri: draft.profileImageUri}
+                : PROFILE_PLACEHOLDER
+            }
+            style={styles.profileImage}
+          />
+          <View style={styles.profileImageBadge}>
+            <MaterialDesignIcons
+              color="#FFFFFF"
+              name={draft.profileImageUri ? 'pencil' : 'camera-plus'}
+              size={18}
+            />
+          </View>
+        </Pressable>
+        {draft.profileImageUri && (
+          <Pressable
+            accessibilityLabel="선택한 프로필 사진 삭제"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={onRemoveProfileImage}
+            style={styles.profileImageRemove}>
+            <MaterialDesignIcons color="#FFFFFF" name="close" size={14} />
+          </Pressable>
+        )}
       </View>
       <Text style={styles.profileHint}>
-        {'프로필 사진은 가입 후 마이페이지에서 등록할 수 있어요'}
+        {'선택 사항 · 가입 후 마이페이지에서 다시 등록할 수 있어요'}
       </Text>
       <View style={styles.basicFields}>
         <FormField
@@ -512,7 +622,10 @@ function BasicInfoStep({
           label="이름"
           maxLength={10}
           onChangeText={onChangeName}
+          onSubmitEditing={() => loginIdInputRef.current?.focus()}
           placeholder="이름은 2 ~ 10자로 입력해주세요."
+          returnKeyType="next"
+          submitBehavior="submit"
           value={draft.name}
         />
         {nameError !== undefined && (
@@ -528,6 +641,8 @@ function BasicInfoStep({
           maxLength={15}
           onChangeText={onChangeLoginId}
           placeholder="영문·숫자 5 ~ 15자로 입력해주세요."
+          ref={loginIdInputRef}
+          returnKeyType="done"
           trailing={
             <Pressable
               accessibilityLabel="아이디 중복 확인"
@@ -586,6 +701,8 @@ function PasswordStep({
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [passwordConfirmationVisible, setPasswordConfirmationVisible] =
     useState(false);
+  // 비밀번호에서 키보드 "다음" 키를 누르면 비밀번호 확인으로 포커스를 넘긴다.
+  const confirmationInputRef = useRef<TextInput>(null);
   const canAttempt =
     isValidPassword(draft.password) &&
     draft.passwordConfirmation.length > 0;
@@ -649,8 +766,11 @@ function PasswordStep({
           label="비밀번호"
           maxLength={16}
           onChangeText={onChangePassword}
+          onSubmitEditing={() => confirmationInputRef.current?.focus()}
           placeholder="영문·숫자 8 ~ 16자로 입력해주세요."
+          returnKeyType="next"
           secureTextEntry={!passwordVisible}
+          submitBehavior="submit"
           trailing={passwordVisibilityButton}
           value={draft.password}
         />
@@ -668,6 +788,8 @@ function PasswordStep({
           label="비밀번호 확인"
           maxLength={16}
           onChangeText={onChangeConfirmation}
+          ref={confirmationInputRef}
+          returnKeyType="done"
           secureTextEntry={!passwordConfirmationVisible}
           trailing={passwordConfirmationVisibilityButton}
           value={draft.passwordConfirmation}
@@ -889,16 +1011,105 @@ interface StepLayoutProps {
   button: React.ReactNode;
 }
 
+// KeyboardAvoidingView 패딩이 자리 잡은 뒤 측정해야 가려짐 판정이 정확하다.
+// 기기에 따라 정착 시점이 달라 두 번 측정한다. 두 번째 시도는 이미 보이면 아무것도 하지 않는다.
+const FOCUS_SCROLL_ATTEMPT_DELAYS_MS = [150, 600];
+const FOCUS_SCROLL_MARGIN = 16;
+
 function StepLayout({children, button}: StepLayoutProps) {
+  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollOffsetRef = useRef(0);
+  // 하단 버튼은 absolute로 ScrollView 위에 겹치므로, 가려짐 판정에서 그 높이를 빼야 한다.
+  const buttonAreaHeightRef = useRef(0);
+  const pendingTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const keyboardSubscriptionRef = useRef<ReturnType<
+    typeof Keyboard.addListener
+  > | null>(null);
+
+  // 이전 포커스가 남긴 시도가 다음 포커스나 사용자 스크롤을 되돌리지 않도록 정리한다.
+  const clearPendingScroll = useCallback(() => {
+    pendingTimersRef.current.forEach(clearTimeout);
+    pendingTimersRef.current = [];
+    keyboardSubscriptionRef.current?.remove();
+    keyboardSubscriptionRef.current = null;
+  }, []);
+
+  useEffect(() => clearPendingScroll, [clearPendingScroll]);
+
+  // 포커스된 입력칸이 키보드·하단 버튼에 가려지면 보이는 위치까지 스크롤한다.
+  const scrollInputIntoView = useCallback((input: TextInput) => {
+    clearPendingScroll();
+    const measureAndScroll = () => {
+      const scrollView = scrollViewRef.current;
+      const scrollHost = scrollView?.getNativeScrollRef();
+      if (scrollView === null || scrollHost == null) {
+        return;
+      }
+      input.measureInWindow((_inputX, inputY, _inputWidth, inputHeight) => {
+        scrollHost.measureInWindow(
+          (_scrollX, scrollY, _scrollWidth, scrollHeight) => {
+            const visibleBottom =
+              scrollY +
+              scrollHeight -
+              buttonAreaHeightRef.current -
+              FOCUS_SCROLL_MARGIN;
+            const inputBottom = inputY + inputHeight;
+            if (inputBottom > visibleBottom) {
+              scrollView.scrollTo({
+                animated: true,
+                y: scrollOffsetRef.current + (inputBottom - visibleBottom),
+              });
+            }
+          },
+        );
+      });
+    };
+
+    const scheduleAttempts = () => {
+      FOCUS_SCROLL_ATTEMPT_DELAYS_MS.forEach(delay => {
+        pendingTimersRef.current.push(setTimeout(measureAndScroll, delay));
+      });
+    };
+
+    // 키보드가 이미 떠 있으면 바로 측정한다. 단 "떠 있지만 내려가는 중"(스텝 전환 직후 등)일 수
+    // 있으므로, 아래 리스너도 함께 걸어 키보드가 다시 올라오는 시점에도 측정한다.
+    if (Keyboard.isVisible()) {
+      scheduleAttempts();
+    }
+    // 키보드 표시 완료 시점에 맞춰 측정한다.
+    // 키보드가 끝내 뜨지 않으면 리스너는 다음 포커스나 언마운트 때 정리된다.
+    keyboardSubscriptionRef.current = Keyboard.addListener(
+      'keyboardDidShow',
+      () => {
+        keyboardSubscriptionRef.current?.remove();
+        keyboardSubscriptionRef.current = null;
+        scheduleAttempts();
+      },
+    );
+  }, [clearPendingScroll]);
+
   return (
     <View style={styles.step}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
-        {children}
-      </ScrollView>
-      <View style={styles.bottomButton}>{button}</View>
+      <FocusedInputScrollContext.Provider value={scrollInputIntoView}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          onScroll={event => {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+          }}
+          ref={scrollViewRef}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}>
+          {children}
+        </ScrollView>
+      </FocusedInputScrollContext.Provider>
+      <View
+        onLayout={event => {
+          buttonAreaHeightRef.current = event.nativeEvent.layout.height;
+        }}
+        style={styles.bottomButton}>
+        {button}
+      </View>
     </View>
   );
 }
@@ -928,6 +1139,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: AUTH_LAYOUT.horizontalPadding,
   },
+  profileStageContainer: {
+    alignSelf: 'center',
+    height: 160,
+    marginTop: 20,
+    position: 'relative',
+    width: 160,
+  },
   profileStage: {
     alignItems: 'center',
     alignSelf: 'center',
@@ -938,7 +1156,6 @@ const styles = StyleSheet.create({
     boxShadow: '0px 7px 14px rgba(102, 83, 188, 0.12)',
     height: 160,
     justifyContent: 'center',
-    marginTop: 20,
     padding: 3,
     width: 160,
   },
@@ -948,6 +1165,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 148,
     width: 148,
+  },
+  profileImageBadge: {
+    alignItems: 'center',
+    backgroundColor: AUTH_COLORS.primary,
+    borderColor: AUTH_COLORS.background,
+    borderRadius: 16,
+    borderWidth: 2,
+    bottom: 4,
+    height: 32,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 4,
+    width: 32,
+  },
+  profileImageRemove: {
+    alignItems: 'center',
+    backgroundColor: '#454957',
+    borderColor: AUTH_COLORS.background,
+    borderRadius: 12,
+    borderWidth: 2,
+    height: 24,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    width: 24,
   },
   profileHint: {
     color: AUTH_COLORS.muted,

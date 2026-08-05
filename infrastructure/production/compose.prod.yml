@@ -31,7 +31,7 @@ services:
       OPENAI_REALTIME_TRANSCRIPTION_LANGUAGE: ${OPENAI_REALTIME_TRANSCRIPTION_LANGUAGE:-ko}
       OPENAI_REALTIME_BASE_URL: ${OPENAI_REALTIME_BASE_URL:-https://api.openai.com}
       OPENAI_REALTIME_SIDEBAND_URL: ${OPENAI_REALTIME_SIDEBAND_URL:-wss://api.openai.com/v1/realtime}
-      GMS_API_KEY: ${GMS_API_KEY:-}
+      GMS_API_KEY: ${GMS_API_KEY:?GMS_API_KEY is required}
       GMS_API_BASE_URL: ${GMS_API_BASE_URL:-https://gms.ssafy.io/gmsapi/generativelanguage.googleapis.com}
       GEMINI_DIRECT_MEDIA_ENABLED: ${GEMINI_DIRECT_MEDIA_ENABLED:-true}
       GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}

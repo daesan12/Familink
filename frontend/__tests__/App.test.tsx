@@ -5,6 +5,7 @@ import {
   AppState,
   Image,
   Modal,
+  Text,
 } from "react-native";
 import TestRenderer from "react-test-renderer";
 import { clearAllMockStorages } from "@react-native-async-storage/async-storage/jest";
@@ -23,6 +24,7 @@ import { SignupFlowScreen } from "../src/features/auth/screens/SignupFlowScreen"
 import { SignedInWelcomeScreen } from "../src/features/auth/screens/SignedInWelcomeScreen";
 import type { AuthGateway } from "../src/features/auth/types";
 import { ApiError } from "../src/shared/api";
+import { notifyGroupAccessDenied } from "../src/shared/api/groupAccessEvents";
 import { imageDiskCache } from "../src/shared/media/imageDiskCache";
 import type {
   FamilyGroupGateway,
@@ -34,7 +36,10 @@ import type {
   DeviceTokenProvider,
   NotificationGateway,
 } from "../src/features/notifications";
-import type { ProfileGateway } from "../src/features/profile";
+import type {
+  ProfileGateway,
+  ProfileImageAsset,
+} from "../src/features/profile";
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
 
@@ -355,6 +360,49 @@ test("회원가입 시작 화면을 표시하고 기존 회원가입으로 이�
     renderer.root.findByProps({ accessibilityLabel: "로그인 아이디" }).props
       .value
   ).toBe("CaseUser1");
+});
+
+test('회원가입 후 로그인하면 선택한 프로필 사진을 저장한다', async () => {
+  const profileGateway = createProfileGateway();
+  const {renderer} = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    createGroupGateway(),
+    undefined,
+    undefined,
+    profileGateway,
+  );
+  const asset: ProfileImageAsset = {
+    contentType: 'image/jpeg',
+    fileName: 'profile.jpg',
+    sizeBytes: 1024,
+    uri: 'file:///profile.jpg',
+  };
+
+  await TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '회원가입 시작'})
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer.root.findByType(SignupFlowScreen).props.onComplete(
+      'CaseUser1',
+      asset,
+    );
+  });
+  const loginSheet = renderer.root.findByType(LoginBottomSheet);
+  await TestRenderer.act(async () => {
+    await loginSheet.props.onLogin({
+      loginId: 'CaseUser1',
+      password: 'password123',
+    });
+    await flushAsyncWork();
+  });
+
+  expect(profileGateway.uploadProfileImage).toHaveBeenCalledWith(asset);
+  expect(profileGateway.updateCurrentProfile).toHaveBeenCalledWith({
+    profileImageUrl: 'https://cdn.example.com/profile.webp',
+  });
 });
 
 test("로그인 입력을 보존하고 비밀번호 표시 전환을 제공한다", async () => {
@@ -733,6 +781,295 @@ test("포그라운드로 돌아오면 그룹 목록을 다시 조회해 바뀐 �
   });
 
   expect(groupGateway.loadGroups).toHaveBeenCalledTimes(2);
+});
+
+test("그룹 API가 접근을 거부하고 목록에서 그룹이 사라지면 즉시 그룹 없음 화면으로 이동한다", async () => {
+  const groupGateway = createGroupGateway();
+  const serverGroup = {
+    id: "101",
+    isManager: false,
+    memberCount: 2,
+    myMemberId: "201",
+    name: "내보내질 가족",
+    role: "guardian" as const,
+  };
+  groupGateway.loadGroups
+    .mockResolvedValueOnce({groups: [serverGroup], joinRequests: []})
+    .mockResolvedValueOnce({groups: [], joinRequests: []});
+  const {renderer} = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    groupGateway,
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({accessibilityLabel: "로그인"})
+      .props.onPress();
+    await flushAsyncWork();
+  });
+  expect(renderer.root.findByType(AppShell)).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    notifyGroupAccessDenied("101");
+    await flushAsyncWork();
+  });
+
+  expect(groupGateway.loadGroups).toHaveBeenCalledTimes(2);
+  expect(renderer.root.findAllByType(AppShell)).toHaveLength(0);
+  expect(renderer.root.findByType(SignedInWelcomeScreen)).toBeTruthy();
+});
+
+test("비피드 화면에서 현재 그룹이 제거되면 대체 그룹의 피드로 이동한다", async () => {
+  const authGateway = createAuthGateway();
+  authGateway.login.mockResolvedValueOnce({
+    activeGroupId: "101",
+    id: 1,
+    name: "이종철",
+  });
+  const groupGateway = createGroupGateway();
+  groupGateway.loadGroups
+    .mockResolvedValueOnce({
+      groups: [
+        {
+          id: "101",
+          isManager: false,
+          memberCount: 2,
+          myMemberId: "201",
+          name: "내보내질 가족",
+          role: "guardian",
+        },
+      ],
+      joinRequests: [],
+    })
+    .mockResolvedValueOnce({
+      groups: [
+        {
+          id: "102",
+          isManager: false,
+          memberCount: 3,
+          myMemberId: "202",
+          name: "남은 가족",
+          role: "guardian",
+        },
+      ],
+      joinRequests: [],
+    });
+  const authSession = createAuthSessionCoordinator();
+
+  function CalendarProbe() {
+    return null;
+  }
+
+  function FeedProbe() {
+    return null;
+  }
+
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        authGateway={authGateway}
+        authSession={authSession}
+        groupGateway={groupGateway}
+        initialShellRoute="calendar"
+        screens={{calendar: CalendarProbe, feed: FeedProbe}}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+  await resolveAuthRestore(authSession);
+  await openLogin(renderer!);
+  await enterValidCredentials(renderer!);
+
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({accessibilityLabel: "로그인"})
+      .props.onPress();
+    await flushAsyncWork();
+  });
+  expect(renderer!.root.findByType(CalendarProbe)).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    notifyGroupAccessDenied("101");
+    await flushAsyncWork();
+  });
+
+  expect(renderer!.root.findAllByType(CalendarProbe)).toHaveLength(0);
+  expect(renderer!.root.findByType(FeedProbe)).toBeTruthy();
+  expect(renderer!.root.findByType(AppShell).props.initialGroupId).toBe("102");
+});
+
+test("앱 셸 첫 화면의 그룹 API 403도 구독 전에 유실하지 않는다", async () => {
+  const authGateway = createAuthGateway();
+  authGateway.login.mockResolvedValueOnce({
+    activeGroupId: "101",
+    id: 1,
+    name: "이종철",
+  });
+  const groupGateway = createGroupGateway();
+  groupGateway.loadGroups
+    .mockResolvedValueOnce({
+      groups: [
+        {
+          id: "101",
+          isManager: false,
+          memberCount: 2,
+          myMemberId: "201",
+          name: "내보내질 가족",
+          role: "guardian",
+        },
+      ],
+      joinRequests: [],
+    })
+    .mockResolvedValueOnce({groups: [], joinRequests: []});
+  const authSession = createAuthSessionCoordinator();
+
+  function DeniedOnMountFeed() {
+    React.useEffect(() => {
+      notifyGroupAccessDenied("101");
+    }, []);
+    return null;
+  }
+
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <App
+        authGateway={authGateway}
+        authSession={authSession}
+        groupGateway={groupGateway}
+        screens={{feed: DeniedOnMountFeed}}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+  await resolveAuthRestore(authSession);
+  await openLogin(renderer!);
+  await enterValidCredentials(renderer!);
+
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({accessibilityLabel: "로그인"})
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  expect(groupGateway.loadGroups).toHaveBeenCalledTimes(2);
+  expect(renderer!.root.findAllByType(AppShell)).toHaveLength(0);
+  expect(renderer!.root.findByType(SignedInWelcomeScreen)).toBeTruthy();
+});
+
+test("현재 선택하지 않은 그룹의 늦은 403은 현재 그룹을 바꾸지 않는다", async () => {
+  const authGateway = createAuthGateway();
+  authGateway.login.mockResolvedValueOnce({
+    activeGroupId: "101",
+    id: 1,
+    name: "이종철",
+  });
+  const currentGroup = {
+    id: "101",
+    isManager: false,
+    memberCount: 2,
+    myMemberId: "201",
+    name: "현재 가족",
+    role: "guardian" as const,
+  };
+  const removedInactiveGroup = {
+    ...currentGroup,
+    id: "102",
+    myMemberId: "202",
+    name: "이전 가족",
+  };
+  const groupGateway = createGroupGateway();
+  groupGateway.loadGroups
+    .mockResolvedValueOnce({
+      groups: [currentGroup, removedInactiveGroup],
+      joinRequests: [],
+    })
+    .mockResolvedValueOnce({groups: [currentGroup], joinRequests: []});
+  const {renderer} = await renderApp(
+    authGateway,
+    createAuthSessionCoordinator(),
+    groupGateway,
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({accessibilityLabel: "로그인"})
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  await TestRenderer.act(async () => {
+    notifyGroupAccessDenied("102");
+    await flushAsyncWork();
+  });
+
+  expect(groupGateway.loadGroups).toHaveBeenCalledTimes(2);
+  const appShell = renderer.root.findByType(AppShell);
+  expect(appShell.props.initialGroupId).toBe("101");
+  expect(appShell.props.groups).toEqual([currentGroup]);
+  expect(renderer.root.findAllByType(SignedInWelcomeScreen)).toHaveLength(0);
+});
+
+test("현재 그룹과 이전 그룹의 403이 겹쳐도 제거된 현재 그룹을 대체한다", async () => {
+  const authGateway = createAuthGateway();
+  authGateway.login.mockResolvedValueOnce({
+    activeGroupId: "101",
+    id: 1,
+    name: "이종철",
+  });
+  const currentGroup = {
+    id: "101",
+    isManager: false,
+    memberCount: 2,
+    myMemberId: "201",
+    name: "내보내질 가족",
+    role: "guardian" as const,
+  };
+  const remainingGroup = {
+    ...currentGroup,
+    id: "102",
+    myMemberId: "202",
+    name: "남은 가족",
+  };
+  const groupGateway = createGroupGateway();
+  groupGateway.loadGroups
+    .mockResolvedValueOnce({
+      groups: [currentGroup, remainingGroup],
+      joinRequests: [],
+    })
+    .mockResolvedValueOnce({groups: [remainingGroup], joinRequests: []});
+  const {renderer} = await renderApp(
+    authGateway,
+    createAuthSessionCoordinator(),
+    groupGateway,
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({accessibilityLabel: "로그인"})
+      .props.onPress();
+    await flushAsyncWork();
+  });
+
+  await TestRenderer.act(async () => {
+    notifyGroupAccessDenied("101");
+    notifyGroupAccessDenied("102");
+    await flushAsyncWork();
+  });
+
+  expect(groupGateway.loadGroups).toHaveBeenCalledTimes(2);
+  const appShell = renderer.root.findByType(AppShell);
+  expect(appShell.props.initialGroupId).toBe("102");
+  expect(appShell.props.groups).toEqual([remainingGroup]);
 });
 
 test("그룹 목록 조회 오류를 정상 빈 목록으로 표시하지 않는다", async () => {
@@ -3396,6 +3733,7 @@ test("보호자 리포트 탭에 리포트 화면을 연결한다", async () => 
 test("앱에 주입한 리포트 Gateway와 현재 그룹 피보호자를 조회한다", async () => {
   const reportGateway: jest.Mocked<ReportGateway> = {
     getCallReport: jest.fn(),
+    getCallReportStatus: jest.fn(),
     getDailyReport: jest.fn().mockResolvedValue({
       calls: [],
       dailyReport: {
@@ -3481,6 +3819,7 @@ test("현재 그룹 구성원 API에서 피보호자만 리포트 조회 대상�
   };
   const reportGateway: jest.Mocked<ReportGateway> = {
     getCallReport: jest.fn(),
+    getCallReportStatus: jest.fn(),
     getDailyReport: jest.fn().mockResolvedValue({
       calls: [],
       dailyReport: null,
@@ -3568,4 +3907,119 @@ test("그룹 선택 바텀시트에서 빈 피드 그룹으로 전환한다", as
 
   mountedRenderers.push(renderer!);
   jest.useRealTimers();
+});
+
+// OS 푸시 알림 탭 2단 해석: 탭 → 앱 셸 진입 후 알림 목록에서 알림을 찾아 목적지로 이동한다.
+
+function createNotificationTapProvider(tap: {
+  notificationId: string;
+  type?: string;
+} | null) {
+  return {
+    consumePendingTap: jest.fn().mockResolvedValue(tap),
+    subscribeTap: jest.fn().mockReturnValue(() => {}),
+  };
+}
+
+async function renderAppWithPendingTap(options: {
+  notificationGateway: jest.Mocked<NotificationGateway>;
+  screens: Record<string, (props: AppScreenProps) => React.ReactNode>;
+  tap: { notificationId: string; type?: string };
+}) {
+  const groupGateway = createGroupGateway();
+  groupGateway.loadGroups.mockResolvedValueOnce({
+    groups: [
+      {
+        id: "101",
+        isManager: true,
+        memberCount: 2,
+        myMemberId: "201",
+        name: "서버 가족",
+        role: "guardian",
+      },
+    ],
+    joinRequests: [],
+  });
+  const tapProvider = createNotificationTapProvider(options.tap);
+  // 세션 복원 경로를 쓴다. 미인증(signedOut) 복원은 clearAuthenticationState가
+  // 이전 사용자의 보류 탭을 비우므로 콜드 스타트 푸시 탭 시나리오와 다르다.
+  const authSession = createAuthSessionCoordinator({
+    status: "authenticated",
+    user: { id: 7, name: "복원 사용자" },
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <App
+        authGateway={createAuthGateway()}
+        authSession={authSession}
+        groupGateway={groupGateway}
+        notificationGateway={options.notificationGateway}
+        notificationTapProvider={tapProvider}
+        screens={options.screens}
+      />
+    );
+  });
+  await resolveAuthRestore(authSession);
+  mountedRenderers.push(renderer!);
+  await TestRenderer.act(async () => {});
+  await TestRenderer.act(async () => {});
+
+  return { renderer: renderer!, tapProvider };
+}
+
+test("푸시 탭은 앱 셸 진입 후 알림을 해석해 목적지로 이동하고 읽음 처리한다", async () => {
+  const notificationGateway = createNotificationGateway();
+  notificationGateway.loadPage.mockResolvedValue({
+    hasNext: false,
+    notifications: [
+      {
+        avatarText: "알",
+        body: "일정이 변경됐어요.",
+        createdAtLabel: "방금",
+        groupId: "101",
+        id: "77",
+        isRead: false,
+        relatedEventId: "9",
+        relatedJoinRequestStatus: null,
+        title: "일정 변경",
+        type: "EVENT_CHANGED",
+      },
+    ],
+  });
+
+  const { renderer, tapProvider } = await renderAppWithPendingTap({
+    notificationGateway,
+    screens: {
+      calendar: (props) => (
+        <Text>{`screen:calendar:${props.openCalendarEventId ?? "none"}`}</Text>
+      ),
+    },
+    tap: { notificationId: "77", type: "EVENT_CHANGED" },
+  });
+
+  expect(tapProvider.consumePendingTap).toHaveBeenCalled();
+  expect(notificationGateway.loadPage).toHaveBeenCalledWith(0);
+  expect(notificationGateway.markRead).toHaveBeenCalledWith("77");
+  expect(JSON.stringify(renderer.toJSON())).toContain("screen:calendar:9");
+});
+
+test("푸시 탭의 알림을 첫 페이지에서 찾지 못하면 알림 목록으로 폴백한다", async () => {
+  const notificationGateway = createNotificationGateway();
+  notificationGateway.loadPage.mockResolvedValue({
+    hasNext: false,
+    notifications: [],
+  });
+
+  const { renderer } = await renderAppWithPendingTap({
+    notificationGateway,
+    screens: {
+      notifications: () => <Text>screen:notifications</Text>,
+    },
+    tap: { notificationId: "404", type: "NEW_POST" },
+  });
+
+  expect(notificationGateway.markRead).not.toHaveBeenCalled();
+  expect(JSON.stringify(renderer.toJSON())).toContain("screen:notifications");
 });

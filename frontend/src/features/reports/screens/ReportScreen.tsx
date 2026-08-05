@@ -1,6 +1,6 @@
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
 import type { ComponentProps } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -45,6 +45,8 @@ import type {
 const EMPTY_REPORT_PAGES: readonly CareReceiverReportPage[] = [];
 const EMPTY_REPORT_TARGETS: readonly CareReceiverReportTarget[] = [];
 const EMPTY_REPORT_DATES: readonly string[] = [];
+const CALL_REPORT_POLL_INTERVAL_MS = 5_000;
+const CALL_REPORT_POLL_TIMEOUT_MS = 90_000;
 
 interface ReportYearMonth {
   month: number;
@@ -64,6 +66,8 @@ export function ReportScreen({
   careReceiverTargets,
   careReceiverTargetsLoader,
   currentGroup,
+  openReportRequestId,
+  openReportTarget,
   reportDate = getKoreaReportDate(),
   reportGateway,
 }: ReportScreenProps) {
@@ -133,6 +137,52 @@ export function ReportScreen({
   const calendarLoadGeneration = useRef(0);
   const calendarRequests = useRef(new Map<string, number>());
   const callRequestId = useRef(0);
+  const pagerRef = useRef<ScrollView>(null);
+  const lastOpenReportRequestId = useRef(0);
+  // 알림 딥링크로 진입할 멤버·통화. 목적지 날짜의 페이지 로드가 끝난 뒤 적용한다.
+  const pendingDeepLinkRef = useRef<{
+    callSessionId?: string;
+    memberId: string;
+    reportDate: string;
+  } | null>(null);
+  const callPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const callDeadlineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearCallPollTimer = useCallback(() => {
+    if (callPollTimer.current !== null) {
+      clearTimeout(callPollTimer.current);
+      callPollTimer.current = null;
+    }
+  }, []);
+
+  const clearCallDeadlineTimer = useCallback(() => {
+    if (callDeadlineTimer.current !== null) {
+      clearTimeout(callDeadlineTimer.current);
+      callDeadlineTimer.current = null;
+    }
+  }, []);
+
+  const clearCallReportTimers = useCallback(() => {
+    clearCallPollTimer();
+    clearCallDeadlineTimer();
+  }, [clearCallDeadlineTimer, clearCallPollTimer]);
+
+  const invalidateCallDetail = useCallback(() => {
+    callRequestId.current += 1;
+    clearCallReportTimers();
+  }, [clearCallReportTimers]);
+
+  const expireCallReportPolling = useCallback(
+    (call: CallReportView, requestId: number) => {
+      if (requestId !== callRequestId.current) {
+        return;
+      }
+      callRequestId.current += 1;
+      clearCallReportTimers();
+      setSelectedDetail({ call, status: "delayed" });
+    },
+    [clearCallReportTimers]
+  );
 
   const calendarMonthKey = calendarTarget
     ? createCalendarMonthKey(
@@ -246,8 +296,31 @@ export function ReportScreen({
   useEffect(() => {
     setCurrentIndex(0);
     callRequestId.current += 1;
+    if (callPollTimer.current !== null) {
+      clearTimeout(callPollTimer.current);
+      callPollTimer.current = null;
+    }
+    if (callDeadlineTimer.current !== null) {
+      clearTimeout(callDeadlineTimer.current);
+      callDeadlineTimer.current = null;
+    }
     setSelectedDetail(null);
   }, [pageIdentity]);
+
+  useEffect(
+    () => () => {
+      callRequestId.current += 1;
+      if (callPollTimer.current !== null) {
+        clearTimeout(callPollTimer.current);
+        callPollTimer.current = null;
+      }
+      if (callDeadlineTimer.current !== null) {
+        clearTimeout(callDeadlineTimer.current);
+        callDeadlineTimer.current = null;
+      }
+    },
+    []
+  );
 
   const handlePageChange = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (reportItems.length === 0 || width <= 0) {
@@ -258,49 +331,148 @@ export function ReportScreen({
       reportItems.length - 1,
       Math.max(0, Math.round(event.nativeEvent.contentOffset.x / width))
     );
+    if (nextIndex !== currentIndex) {
+      invalidateCallDetail();
+      setSelectedDetail(null);
+    }
     setCurrentIndex(nextIndex);
   };
 
-  const handleOpenCall = async (call: CallReportView) => {
-    if (!reportGateway) {
-      setSelectedDetail({
-        call,
-        status: call.summary === null ? "generating" : "ready",
-      });
-      return;
-    }
-
-    const requestId = ++callRequestId.current;
-    setSelectedDetail({ call, status: "loading" });
-
-    try {
-      const report = await reportGateway.getCallReport(call.callSessionId);
-      if (requestId !== callRequestId.current) {
+  const handleOpenCall = useCallback(
+    async (call: CallReportView) => {
+      clearCallReportTimers();
+      if (!reportGateway) {
+        setSelectedDetail({
+          call,
+          status: !call.reportAvailable
+            ? "unavailable"
+            : call.summary === null
+            ? "generating"
+            : "ready",
+        });
         return;
       }
+      const gateway = reportGateway;
 
-      if (report.status === "generating") {
-        setSelectedDetail({ call, status: "generating" });
-        return;
+      const requestId = ++callRequestId.current;
+      const pollingStartedAt = Date.now();
+      setSelectedDetail({ call, status: "loading" });
+      scheduleCallReportDeadline();
+
+      function scheduleCallReportStatus() {
+        clearCallPollTimer();
+        if (requestId !== callRequestId.current) {
+          return;
+        }
+        const elapsedMs = Date.now() - pollingStartedAt;
+        if (elapsedMs >= CALL_REPORT_POLL_TIMEOUT_MS) {
+          expireCallReportPolling(call, requestId);
+          return;
+        }
+
+        callPollTimer.current = setTimeout(() => {
+          callPollTimer.current = null;
+          loadCallReportStatus().catch(() => {
+            // loadCallReportStatus가 오류 상태로 변환하므로 추가 처리가 필요하지 않다.
+          });
+        }, Math.min(
+          CALL_REPORT_POLL_INTERVAL_MS,
+          CALL_REPORT_POLL_TIMEOUT_MS - elapsedMs
+        ));
       }
 
-      setSelectedDetail({
-        call: {
-          ...call,
-          guardianMessage: report.guardianMessage,
-          summary: report.summary,
-        },
-        status: "ready",
-      });
-    } catch {
-      if (requestId === callRequestId.current) {
-        setSelectedDetail({ call, status: "error" });
+      function scheduleCallReportDeadline() {
+        clearCallDeadlineTimer();
+        const remainingMs = Math.max(
+          0,
+          CALL_REPORT_POLL_TIMEOUT_MS - (Date.now() - pollingStartedAt)
+        );
+        callDeadlineTimer.current = setTimeout(() => {
+          callDeadlineTimer.current = null;
+          expireCallReportPolling(call, requestId);
+        }, remainingMs);
       }
-    }
-  };
+
+      async function loadCallReportStatus() {
+        if (requestId !== callRequestId.current) {
+          return;
+        }
+
+        try {
+          const reportStatus = await gateway.getCallReportStatus(
+            call.callSessionId
+          );
+          if (requestId !== callRequestId.current) {
+            return;
+          }
+
+          if (reportStatus.status === "ready") {
+            await loadReadyCallReport();
+          } else if (reportStatus.status === "generating") {
+            setSelectedDetail({ call, status: "generating" });
+            scheduleCallReportStatus();
+          } else if (reportStatus.status === "failed") {
+            clearCallReportTimers();
+            setSelectedDetail({ call, status: "failed" });
+          } else {
+            clearCallReportTimers();
+            setSelectedDetail({ call, status: "unavailable" });
+          }
+        } catch {
+          if (requestId === callRequestId.current) {
+            clearCallReportTimers();
+            setSelectedDetail({ call, status: "error" });
+          }
+        }
+      }
+
+      async function loadReadyCallReport() {
+        if (requestId !== callRequestId.current) {
+          return;
+        }
+
+        try {
+          const report = await gateway.getCallReport(call.callSessionId);
+          if (requestId !== callRequestId.current) {
+            return;
+          }
+
+          if (report.status === "generating") {
+            setSelectedDetail({ call, status: "generating" });
+            scheduleCallReportStatus();
+            return;
+          }
+
+          setSelectedDetail({
+            call: {
+              ...call,
+              guardianMessage: report.guardianMessage,
+              summary: report.summary,
+            },
+            status: "ready",
+          });
+          clearCallReportTimers();
+        } catch {
+          if (requestId === callRequestId.current) {
+            clearCallReportTimers();
+            setSelectedDetail({ call, status: "error" });
+          }
+        }
+      }
+
+      await loadCallReportStatus();
+    },
+    [
+      clearCallDeadlineTimer,
+      clearCallPollTimer,
+      clearCallReportTimers,
+      expireCallReportPolling,
+      reportGateway,
+    ]
+  );
 
   const handleCloseDetail = () => {
-    callRequestId.current += 1;
+    invalidateCallDetail();
     setSelectedDetail(null);
   };
 
@@ -349,12 +521,15 @@ export function ReportScreen({
     }));
   };
 
-  const handleSelectReportDate = (date: string) => {
-    callRequestId.current += 1;
-    setSelectedDetail(null);
-    setCalendarTarget(null);
-    setSelectedReportDate(date);
-  };
+  const handleSelectReportDate = useCallback(
+    (date: string) => {
+      invalidateCallDetail();
+      setSelectedDetail(null);
+      setCalendarTarget(null);
+      setSelectedReportDate(date);
+    },
+    [invalidateCallDetail]
+  );
 
   const handleRetryDetail = () => {
     if (selectedDetail) {
@@ -363,6 +538,76 @@ export function ReportScreen({
       });
     }
   };
+
+  useEffect(() => {
+    const requestId = openReportRequestId ?? 0;
+    if (
+      openReportTarget &&
+      requestId > 0 &&
+      requestId !== lastOpenReportRequestId.current
+    ) {
+      lastOpenReportRequestId.current = requestId;
+      pendingDeepLinkRef.current = {
+        ...(openReportTarget.callSessionId === undefined
+          ? {}
+          : { callSessionId: openReportTarget.callSessionId }),
+        memberId: openReportTarget.memberId,
+        reportDate: openReportTarget.reportDate,
+      };
+      handleSelectReportDate(openReportTarget.reportDate);
+    }
+  }, [handleSelectReportDate, openReportTarget, openReportRequestId]);
+
+  // 페이지 로드가 끝나면 딥링크 대상 멤버로 페이저를 이동하고,
+  // callSessionId가 지정된 경우 해당 통화 상세까지 연다.
+  useEffect(() => {
+    const pending = pendingDeepLinkRef.current;
+    if (!pending || reportItems.length === 0 || width <= 0) {
+      return;
+    }
+    // 날짜 변경 직후의 effect 실행은 아직 이전 날짜의 페이지를 들고 있으므로
+    // 선택 날짜가 목적지 날짜로 반영된 뒤에만 적용한다.
+    if (pending.reportDate !== selectedReportDate) {
+      return;
+    }
+    if (hasRemoteSource && remotePages.status !== "ready") {
+      return;
+    }
+    const index = reportItems.findIndex(
+      (item) => item.target.memberId === pending.memberId
+    );
+    if (index < 0) {
+      pendingDeepLinkRef.current = null;
+      return;
+    }
+    const item = reportItems[index];
+    if (item.status === "loading") {
+      return;
+    }
+    pendingDeepLinkRef.current = null;
+    pagerRef.current?.scrollTo({ animated: false, x: index * width });
+    setCurrentIndex(index);
+    if (item.status === "ready" && pending.callSessionId !== undefined) {
+      const call = item.page.todayCalls.find(
+        (todayCall) => todayCall.callSessionId === pending.callSessionId
+      );
+      if (call) {
+        handleOpenCall(call).catch(() => {
+          // handleOpenCall이 오류 상태로 변환하므로 추가 처리가 필요하지 않다.
+        });
+      }
+    }
+    // 이미 같은 날짜를 보고 있으면 페이지 재로딩이 없어 openReportRequestId 변화로
+    // 트리거된다. pendingDeepLinkRef 가드로 1회만 적용한다.
+  }, [
+    reportItems,
+    width,
+    hasRemoteSource,
+    remotePages.status,
+    handleOpenCall,
+    openReportRequestId,
+    selectedReportDate,
+  ]);
 
   if (shouldLoadTargets && targetState.status === "loading") {
     return (
@@ -421,6 +666,7 @@ export function ReportScreen({
         key={pageIdentity}
         onMomentumScrollEnd={handlePageChange}
         pagingEnabled
+        ref={pagerRef}
         showsHorizontalScrollIndicator={false}
         testID="care-receiver-report-pager"
       >

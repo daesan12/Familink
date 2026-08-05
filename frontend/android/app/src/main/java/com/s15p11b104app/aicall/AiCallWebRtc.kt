@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
@@ -445,11 +446,11 @@ internal class AiCallWebRtcSession(
         == PeerConnection.IceGatheringState.COMPLETE) {
       return
     }
-    try {
-      withTimeout(ICE_GATHERING_TIMEOUT_MILLIS) { iceGatheringReady.await() }
-    } catch (exception: kotlinx.coroutines.TimeoutCancellationException) {
-      throw AiCallConnectionException("WebRTC ICE gathering did not complete in time.")
-    }
+    // Some emulators keep ICE gathering in GATHERING when the public STUN server is
+    // unreachable even though localDescription already contains a usable offer. ICE
+    // can continue after the SDP exchange, so a missing COMPLETE callback must not
+    // prevent the call-session request from ever reaching the server.
+    withTimeoutOrNull(ICE_GATHERING_TIMEOUT_MILLIS) { iceGatheringReady.await() }
   }
 
   private fun configureAudioRoute() {
@@ -458,7 +459,8 @@ internal class AiCallWebRtcSession(
     previousAudioMode = manager.mode
     previousSpeakerphoneOn = manager.isSpeakerphoneOn
     manager.mode = AudioManager.MODE_IN_COMMUNICATION
-    manager.isSpeakerphoneOn = true
+    // 통화는 일반 전화와 같이 수화기로 시작한다. 화면의 스피커 기본 상태와 일치해야 한다.
+    manager.isSpeakerphoneOn = AI_CALL_DEFAULT_IS_SPEAKER_ON
   }
 
   private fun restoreAudioRoute() {

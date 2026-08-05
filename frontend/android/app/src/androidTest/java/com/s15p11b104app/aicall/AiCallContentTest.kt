@@ -167,7 +167,7 @@ class AiCallContentTest {
                     phase = AiCallPhase.InProgress,
                     persona = aiPersonas[3],
                     durationSeconds = 7,
-                    currentCaption = "안녕하세요, 어르신. 오늘은 어떤 하루를 보내셨어요?",
+                    captionHistory = listOf("안녕하세요, 어르신. 오늘은 어떤 하루를 보내셨어요?"),
                 ),
             selectedPersonaId = 4,
             onPersonaSelected = {},
@@ -186,6 +186,239 @@ class AiCallContentTest {
     composeRule.onNodeWithTag("live-caption").assertIsDisplayed()
     composeRule.onNodeWithText("안녕하세요, 어르신. 오늘은 어떤 하루를 보내셨어요?").assertIsDisplayed()
     composeRule.onNodeWithContentDescription("통화 종료").assertIsDisplayed()
+  }
+
+  @Test
+  fun 다음_발화가_진행되는_동안에도_직전_자막과_통화_제어를_유지한다() {
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state =
+                AiCallUiState(
+                    phase = AiCallPhase.InProgress,
+                    persona = aiPersonas[3],
+                    durationSeconds = 7,
+                    captionHistory = listOf("안녕하세요, 어르신."),
+                    captionDraft = "오늘은 어떤",
+                ),
+            selectedPersonaId = 4,
+            onPersonaSelected = {},
+            onStartCall = {},
+            onToggleMute = {},
+            onToggleSpeaker = {},
+            onEndCall = {},
+            onConfirm = {},
+            onRetry = {},
+        )
+      }
+    }
+
+    composeRule.onNodeWithText("안녕하세요, 어르신.").assertIsDisplayed()
+    composeRule.onNodeWithText("오늘은 어떤").assertIsDisplayed()
+    composeRule.onNodeWithContentDescription("통화 종료").assertIsDisplayed()
+  }
+
+  @Test
+  fun 자막이_화면을_넘겨도_통화_제어_버튼을_밀어내지_않는다() {
+    val 긴문장 =
+        "오늘 아침에는 날씨가 참 맑았는데 혹시 산책은 다녀오셨는지 궁금합니다. " +
+            "요즘 아침저녁으로 바람이 제법 선선해져서 나가실 때는 겉옷을 하나 챙기시면 좋겠어요. " +
+            "점심은 거르지 않고 챙겨 드셨는지도 여쭤보고 싶었습니다."
+
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state =
+                AiCallUiState(
+                    phase = AiCallPhase.InProgress,
+                    persona = aiPersonas[3],
+                    durationSeconds = 7,
+                    captionHistory = List(3) { "$긴문장 ${it + 1}" },
+                    captionDraft = 긴문장,
+                ),
+            selectedPersonaId = 4,
+            onPersonaSelected = {},
+            onStartCall = {},
+            onToggleMute = {},
+            onToggleSpeaker = {},
+            onEndCall = {},
+            onConfirm = {},
+            onRetry = {},
+        )
+      }
+    }
+
+    composeRule.onNodeWithContentDescription("통화 종료").assertIsDisplayed()
+    composeRule.onNodeWithContentDescription("음소거").assertIsDisplayed()
+    composeRule.onNodeWithText("00:07").assertIsDisplayed()
+  }
+
+  @Test
+  fun 통화_기본_상태는_마이크_켜짐과_일반_통화다() {
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state =
+                AiCallUiState(
+                    phase = AiCallPhase.InProgress,
+                    persona = aiPersonas[3],
+                ),
+            selectedPersonaId = 4,
+            onPersonaSelected = {},
+            onStartCall = {},
+            onToggleMute = {},
+            onToggleSpeaker = {},
+            onEndCall = {},
+            onConfirm = {},
+            onRetry = {},
+        )
+      }
+    }
+
+    composeRule.onNodeWithContentDescription("음소거").assertIsDisplayed().assertIsEnabled()
+    composeRule.onNodeWithContentDescription("스피커 켜기").assertIsDisplayed().assertIsEnabled()
+  }
+
+  @Test
+  fun 음소거와_스피커_모드_상태를_화면에_반영한다() {
+    var state by
+        mutableStateOf(
+            AiCallUiState(
+                phase = AiCallPhase.InProgress,
+                persona = aiPersonas[3],
+            )
+        )
+
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state = state,
+            selectedPersonaId = 4,
+            onPersonaSelected = {},
+            onStartCall = {},
+            onToggleMute = {},
+            onToggleSpeaker = {},
+            onEndCall = {},
+            onConfirm = {},
+            onRetry = {},
+        )
+      }
+    }
+
+    composeRule.runOnIdle { state = state.copy(isMuted = true, isSpeakerOn = true) }
+
+    composeRule.onNodeWithContentDescription("음소거 해제").assertIsDisplayed()
+    composeRule.onNodeWithContentDescription("스피커 끄기").assertIsDisplayed()
+    composeRule.onNodeWithContentDescription("음소거").assertDoesNotExist()
+    composeRule.onNodeWithContentDescription("스피커 켜기").assertDoesNotExist()
+  }
+
+  @Test
+  fun 통화_중에는_마이크와_스피커_토글이_호출된다() {
+    var muteToggleCount = 0
+    var speakerToggleCount = 0
+
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state =
+                AiCallUiState(
+                    phase = AiCallPhase.InProgress,
+                    persona = aiPersonas[3],
+                ),
+            selectedPersonaId = 4,
+            onPersonaSelected = {},
+            onStartCall = {},
+            onToggleMute = { muteToggleCount += 1 },
+            onToggleSpeaker = { speakerToggleCount += 1 },
+            onEndCall = {},
+            onConfirm = {},
+            onRetry = {},
+        )
+      }
+    }
+
+    composeRule.onNodeWithContentDescription("음소거").performClick()
+    composeRule.onNodeWithContentDescription("스피커 켜기").performClick()
+
+    composeRule.runOnIdle {
+      assertEquals(1, muteToggleCount)
+      assertEquals(1, speakerToggleCount)
+    }
+  }
+
+  @Test
+  fun 연결_중에는_마이크와_스피커를_막고_통화_종료만_동작한다() {
+    var muteToggleCount = 0
+    var speakerToggleCount = 0
+    var endCallCount = 0
+
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state =
+                AiCallUiState(
+                    phase = AiCallPhase.Connecting,
+                    persona = aiPersonas[3],
+                ),
+            selectedPersonaId = 4,
+            onPersonaSelected = {},
+            onStartCall = {},
+            onToggleMute = { muteToggleCount += 1 },
+            onToggleSpeaker = { speakerToggleCount += 1 },
+            onEndCall = { endCallCount += 1 },
+            onConfirm = {},
+            onRetry = {},
+        )
+      }
+    }
+
+    composeRule.onNodeWithContentDescription("음소거").assertIsNotEnabled().performClick()
+    composeRule.onNodeWithContentDescription("스피커 켜기").assertIsNotEnabled().performClick()
+    composeRule.onNodeWithContentDescription("통화 종료").assertIsEnabled().performClick()
+
+    composeRule.runOnIdle {
+      assertEquals(0, muteToggleCount)
+      assertEquals(0, speakerToggleCount)
+      assertEquals(1, endCallCount)
+    }
+  }
+
+  @Test
+  fun 종료_중에는_통화_제어를_모두_막는다() {
+    var muteToggleCount = 0
+    var speakerToggleCount = 0
+    var endCallCount = 0
+
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state =
+                AiCallUiState(
+                    phase = AiCallPhase.Ending,
+                    persona = aiPersonas[3],
+                ),
+            selectedPersonaId = 4,
+            onPersonaSelected = {},
+            onStartCall = {},
+            onToggleMute = { muteToggleCount += 1 },
+            onToggleSpeaker = { speakerToggleCount += 1 },
+            onEndCall = { endCallCount += 1 },
+            onConfirm = {},
+            onRetry = {},
+        )
+      }
+    }
+
+    composeRule.onNodeWithContentDescription("음소거").assertIsNotEnabled().performClick()
+    composeRule.onNodeWithContentDescription("스피커 켜기").assertIsNotEnabled().performClick()
+    composeRule.onNodeWithContentDescription("통화 종료").assertIsNotEnabled().performClick()
+
+    composeRule.runOnIdle {
+      assertEquals(0, muteToggleCount)
+      assertEquals(0, speakerToggleCount)
+      assertEquals(0, endCallCount)
+    }
   }
 
   @Test

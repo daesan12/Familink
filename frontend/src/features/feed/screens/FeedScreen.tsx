@@ -7,6 +7,7 @@ import {
   type NativeSyntheticEvent,
   StyleSheet,
   Text,
+  Vibration,
   View,
   type ViewToken,
 } from 'react-native';
@@ -202,6 +203,7 @@ export function FeedScreen({
   interactionsRef.current = interactions;
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [detailPost, setDetailPost] = useState<FeedPost | null>(null);
+  const [isDetailRefreshing, setIsDetailRefreshing] = useState(false);
   const [menuPostId, setMenuPostId] = useState<string | null>(null);
   const [composer, setComposer] = useState<ComposerState | null>(null);
   const [openReactionPicker, setOpenReactionPicker] =
@@ -250,6 +252,7 @@ export function FeedScreen({
     detailRequestId.current += 1;
     setSelectedPostId(null);
     setDetailPost(null);
+    setIsDetailRefreshing(false);
     setMenuPostId(null);
     setOpenReactionPicker(null);
     uploadAbortController.current?.abort();
@@ -357,6 +360,7 @@ export function FeedScreen({
     if (selectedPostId === null) {
       detailRequestId.current += 1;
       setDetailPost(null);
+      setIsDetailRefreshing(false);
       commentsRequestId.current += 1;
       commentsLoading.current = false;
       setCommentsState({
@@ -402,6 +406,10 @@ export function FeedScreen({
           throw new Error('The post belongs to a different group.');
         }
         if (isActive && detailRequestId.current === requestId) {
+          interactionsRef.current.setCommentCount(
+            post.id,
+            post.commentCount,
+          );
           setDetailPost(post);
         }
       })
@@ -431,6 +439,124 @@ export function FeedScreen({
     currentMemberId,
     detailLoader,
     loadCommentsPage,
+    selectedPostId,
+  ]);
+
+  const refreshSelectedPost = useCallback(async () => {
+    const postId = selectedPostId;
+    if (postId === null || isDetailRefreshing) {
+      return;
+    }
+
+    setIsDetailRefreshing(true);
+
+    const nextDetailRequestId = detailRequestId.current + 1;
+    detailRequestId.current = nextDetailRequestId;
+    const nextCommentsRequestId = commentsRequestId.current + 1;
+    commentsRequestId.current = nextCommentsRequestId;
+    commentsLoading.current = commentsLoader !== undefined;
+
+    if (commentsLoader !== undefined) {
+      setCommentsState({
+        error: null,
+        hasNext: false,
+        isLoading: true,
+        page: 0,
+        postId,
+      });
+    }
+
+    const detailRequest = detailLoader
+      ? detailLoader(postId, currentMemberId, currentGroup.id)
+          .then(post => {
+            if (post.groupId !== currentGroup.id) {
+              throw new Error('The post belongs to a different group.');
+            }
+            if (
+              selectedPostId === postId &&
+              detailRequestId.current === nextDetailRequestId
+            ) {
+              interactionsRef.current.setCommentCount(
+                post.id,
+                post.commentCount,
+              );
+              setDetailPost(post);
+            }
+          })
+          .catch(error => {
+            if (
+              selectedPostId === postId &&
+              detailRequestId.current === nextDetailRequestId
+            ) {
+              Alert.alert(
+                '寃뚯떆湲 ?곸꽭瑜?遺덈윭?ㅼ? 紐삵뻽?댁슂',
+                error instanceof Error
+                  ? error.message
+                  : '?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??',
+              );
+            }
+          })
+      : Promise.resolve();
+
+    const commentsRequest = commentsLoader
+      ? commentsLoader(postId, 0, COMMENT_PAGE_SIZE)
+          .then(result => {
+            if (
+              commentsRequestId.current !== nextCommentsRequestId ||
+              selectedPostId !== postId
+            ) {
+              return;
+            }
+            interactionsRef.current.replaceComments(
+              postId,
+              result.comments,
+              true,
+            );
+            setCommentsState({
+              error: null,
+              hasNext: result.hasNext,
+              isLoading: false,
+              page: 0,
+              postId,
+            });
+          })
+          .catch(error => {
+            if (
+              commentsRequestId.current !== nextCommentsRequestId ||
+              selectedPostId !== postId
+            ) {
+              return;
+            }
+            setCommentsState({
+              error:
+                error instanceof Error
+                  ? error.message
+                  : '?볤???遺덈윭?ㅼ? 紐삵뻽?듬땲?? ?ㅼ떆 ?쒕룄??二쇱꽭??',
+              hasNext: false,
+              isLoading: false,
+              page: 0,
+              postId,
+            });
+          })
+      : Promise.resolve();
+
+    await Promise.allSettled([detailRequest, commentsRequest]);
+
+    if (commentsRequestId.current === nextCommentsRequestId) {
+      commentsLoading.current = false;
+    }
+    if (
+      detailRequestId.current === nextDetailRequestId &&
+      commentsRequestId.current === nextCommentsRequestId
+    ) {
+      setIsDetailRefreshing(false);
+    }
+  }, [
+    commentsLoader,
+    currentGroup.id,
+    currentMemberId,
+    detailLoader,
+    isDetailRefreshing,
     selectedPostId,
   ]);
 
@@ -486,6 +612,7 @@ export function FeedScreen({
     const nextReactionId =
       previousReactionId === reactionId ? null : reactionId;
     pendingReactionPostIds.current.add(postId);
+    Vibration.vibrate(previousReactionId === reactionId ? 6 : 10);
     interactions.changeReaction(postId, reactionId);
     const input: ChangeReactionInput = {
       nextReactionId,
@@ -555,12 +682,14 @@ export function FeedScreen({
       {commentId: localCommentId},
     );
     if (onCreateComment === undefined) {
+      interactionsRef.current.settleCommentCountDelta(input.postId, 1);
       return;
     }
 
     try {
       const result = await onCreateComment(input);
       if (result === undefined) {
+        interactionsRef.current.settleCommentCountDelta(input.postId, 1);
         return;
       }
       interactionsRef.current.replaceComment(
@@ -575,6 +704,7 @@ export function FeedScreen({
         },
         localCommentId,
       );
+      interactionsRef.current.settleCommentCountDelta(input.postId, 1);
     } catch (error) {
       interactionsRef.current.deleteComment(input.postId, localCommentId);
       Alert.alert(
@@ -634,11 +764,22 @@ export function FeedScreen({
     );
     interactions.deleteComment(input.postId, input.commentId);
     if (onDeleteComment === undefined) {
+      if (previousComment !== undefined) {
+        interactionsRef.current.settleCommentCountDelta(input.postId, -1);
+      }
       return;
     }
 
     void Promise.resolve()
       .then(() => onDeleteComment(input))
+      .then(() => {
+        if (previousComment !== undefined) {
+          interactionsRef.current.settleCommentCountDelta(
+            input.postId,
+            -1,
+          );
+        }
+      })
       .catch(error => {
         if (previousComment !== undefined) {
           interactionsRef.current.restoreComment(
@@ -864,6 +1005,7 @@ export function FeedScreen({
           currentGroupName={currentGroup.name}
           currentUser={resolvedCurrentUser}
           isCommentsLoading={commentsState.isLoading}
+          isRefreshing={isDetailRefreshing}
           isReactionPickerOpen={
             openReactionPicker?.postId === selectedPost.id
           }
@@ -891,6 +1033,9 @@ export function FeedScreen({
             if (selectedPostId !== null) {
               loadCommentsPage(selectedPostId, 0, true);
             }
+          }}
+          onRefresh={() => {
+            void refreshSelectedPost();
           }}
           onSelectReaction={handleSelectReaction}
           onToggleReactionPicker={handleToggleReactionPicker}
@@ -947,6 +1092,8 @@ export function FeedScreen({
         onEndReachedThreshold={0.5}
         onScroll={handleFeedScroll}
         onScrollBeginDrag={closeReactionPicker}
+        onRefresh={feed.refresh}
+        refreshing={feed.isRefreshing}
         onViewableItemsChanged={handleViewablePostsChanged}
         renderItem={({item}) => {
           const reactions =

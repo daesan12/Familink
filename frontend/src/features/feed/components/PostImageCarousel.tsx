@@ -20,6 +20,8 @@ import {RetryButton} from '../../../shared/components/RetryButton';
 import {PostImageViewer} from './PostImageViewer';
 
 const IMAGE_GAP = 10;
+// 다음 사진이 더 있다는 것을 알리려고 사진을 이만큼 좁게 그린다.
+// 목록 끝에 여백을 더하지 않으므로 마지막 사진에서는 이전 사진이 왼쪽에 걸친다.
 const NEXT_IMAGE_PEEK = 28;
 
 export interface CarouselImage {
@@ -86,9 +88,6 @@ export function PostImageCarousel({
     >
       <FlatList
         bounces={false}
-        contentContainerStyle={
-          usesPeekLayout ? styles.multipleContent : undefined
-        }
         data={images}
         decelerationRate="fast"
         disableIntervalMomentum
@@ -377,9 +376,6 @@ const styles = StyleSheet.create({
     borderRadius: RADII.medium,
     overflow: 'hidden',
     position: 'relative',
-  },
-  multipleContent: {
-    paddingRight: NEXT_IMAGE_PEEK,
   },
   placeholder: {
     alignItems: 'center',

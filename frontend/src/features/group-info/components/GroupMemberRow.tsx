@@ -14,6 +14,7 @@ import {RoleToggle} from './RoleToggle';
 
 interface GroupMemberRowProps {
   member: GroupMember;
+  canEditAlias: boolean;
   // 이 행이 호칭 편집 모드인지.
   isEditing: boolean;
   // 편집 모드에서 입력 중인 호칭 초안.
@@ -30,6 +31,7 @@ interface GroupMemberRowProps {
 // H-1의 구성원 한 행. 호칭 표시/편집(H-2)과 역할 토글을 담는다.
 export function GroupMemberRow({
   aliasDraft,
+  canEditAlias,
   isEditing,
   member,
   onCancelEditAlias,
@@ -92,25 +94,31 @@ export function GroupMemberRow({
           </View>
         ) : (
           <View style={styles.nameLine}>
-            <Text style={styles.displayName}>{displayName}</Text>
-            <Pressable
-              accessibilityLabel={`${member.name} 호칭 수정`}
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={onStartEditAlias}
-              style={styles.editButton}
-            >
-              <MaterialDesignIcons
-                color={COLORS.textSubtle}
-                name="pencil-outline"
-                size={16}
-              />
-            </Pressable>
+            <Text numberOfLines={2} style={styles.displayName}>
+              {displayName}
+            </Text>
+            {canEditAlias ? (
+              <Pressable
+                accessibilityLabel={`${member.name} 호칭 수정`}
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={onStartEditAlias}
+                style={styles.editButton}
+              >
+                <MaterialDesignIcons
+                  color={COLORS.textSubtle}
+                  name="pencil-outline"
+                  size={16}
+                />
+              </Pressable>
+            ) : null}
           </View>
         )}
 
         {isEditing || hasAlias ? (
-          <Text style={styles.realName}>{member.name}</Text>
+          <Text numberOfLines={1} style={styles.realName}>
+            {member.name}
+          </Text>
         ) : null}
         {member.isManager ? (
           <View style={styles.managerTag}>
@@ -163,6 +171,8 @@ const styles = StyleSheet.create({
   },
   displayName: {
     color: COLORS.textStrong,
+    // RN의 flexShrink 기본값은 0이라 이름이 길면 옆의 호칭 수정 버튼을 행 밖으로 밀어낸다.
+    flexShrink: 1,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -202,6 +212,7 @@ const styles = StyleSheet.create({
   },
   realName: {
     color: COLORS.textMuted,
+    flexShrink: 1,
     fontSize: 13,
   },
   row: {

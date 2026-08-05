@@ -25,6 +25,24 @@ public class S3ObjectKeyResolver {
 		return resolve(mediaUrl, this::isPostMediaKey);
 	}
 
+	/**
+	 * 게시글 미디어 URL을 만료되지 않는 저장용 URL로 정규화한다. 조회 응답의 presigned URL을
+	 * 수정 요청이 그대로 되돌려 보내는 경우 호스트와 경로는 유지한 채 서명 쿼리만 제거한다.
+	 * object key를 복원할 수 없는 URL은 원본을 그대로 돌려주며, 그런 URL은 저장 전
+	 * 미디어 검증({@code S3MediaValidator})이 같은 {@link #resolve} 판정으로 이미 거절한다.
+	 */
+	public String normalizePostMediaUrl(String mediaUrl) {
+		if (resolve(mediaUrl).isEmpty()) {
+			return mediaUrl;
+		}
+		int queryStart = mediaUrl.indexOf('?');
+		int fragmentStart = mediaUrl.indexOf('#');
+		int cut = queryStart >= 0 && (fragmentStart < 0 || queryStart < fragmentStart)
+			? queryStart
+			: fragmentStart;
+		return cut >= 0 ? mediaUrl.substring(0, cut) : mediaUrl;
+	}
+
 	public Optional<String> resolveProfileImage(String mediaUrl) {
 		return resolve(mediaUrl, this::isProfileImageKey);
 	}

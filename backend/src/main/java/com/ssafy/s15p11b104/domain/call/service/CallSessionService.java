@@ -108,6 +108,12 @@ public class CallSessionService {
 			);
 			return new CreateCallSessionResponse(preparedCall.callSessionId(), openAiCall.sdpAnswer());
 		} catch (RuntimeException exception) {
+			LOGGER.error(
+				"AI 통화 세션 생성에 실패했습니다. callSessionId={}, personaId={}",
+				preparedCall.callSessionId(),
+				persona.id(),
+				exception
+			);
 			String openAiCallId = openAiCall == null ? null : openAiCall.callId();
 			sidebandSessionManager.close(preparedCall.callSessionId());
 			realtimeGateway.hangUp(openAiCallId);

@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
+import com.ssafy.s15p11b104.domain.calendar.repository.EventParticipantRepository;
 import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.group.dto.JoinRequestCreateRequest;
 import com.ssafy.s15p11b104.domain.group.dto.JoinRequestCreateResponse;
@@ -39,6 +40,7 @@ public class JoinRequestService {
 
 	private final FamilyGroupRepository familyGroupRepository;
 	private final GroupMemberRepository groupMemberRepository;
+	private final EventParticipantRepository eventParticipantRepository;
 	private final GroupJoinRequestRepository groupJoinRequestRepository;
 	private final UserRepository userRepository;
 	private final ConstraintViolationTranslator constraintViolationTranslator;
@@ -48,6 +50,7 @@ public class JoinRequestService {
 	public JoinRequestService(
 		FamilyGroupRepository familyGroupRepository,
 		GroupMemberRepository groupMemberRepository,
+		EventParticipantRepository eventParticipantRepository,
 		GroupJoinRequestRepository groupJoinRequestRepository,
 		UserRepository userRepository,
 		ConstraintViolationTranslator constraintViolationTranslator,
@@ -55,6 +58,7 @@ public class JoinRequestService {
 		MediaDownloadUrlProvider mediaDownloadUrlProvider) {
 		this.familyGroupRepository = familyGroupRepository;
 		this.groupMemberRepository = groupMemberRepository;
+		this.eventParticipantRepository = eventParticipantRepository;
 		this.groupJoinRequestRepository = groupJoinRequestRepository;
 		this.userRepository = userRepository;
 		this.constraintViolationTranslator = constraintViolationTranslator;
@@ -217,6 +221,8 @@ public class JoinRequestService {
 				if (existing.isActive()) {
 					throw new BusinessException(ErrorCode.ALREADY_GROUP_MEMBER);
 				}
+				eventParticipantRepository.deleteAllByGroupIdAndMemberId(
+					joinRequest.getGroup().getId(), existing.getId());
 				existing.rejoin(assignedRole, now);
 				return existing;
 			})

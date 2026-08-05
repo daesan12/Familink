@@ -216,4 +216,45 @@ describe('AiCallScreen', () => {
 
     expect(mockCompleteAccessTokenRefresh).not.toHaveBeenCalled();
   });
+
+  it('updates the native access token when the authenticated user changes', () => {
+    let currentAccessToken = 'first-user-access';
+    const authSession = {
+      getAccessToken: jest.fn(() => currentAccessToken),
+      getRefreshToken: jest.fn().mockReturnValue('refresh-token'),
+      refreshAccessToken: jest.fn(),
+    };
+    let renderer: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(
+        <AiCallScreen
+          authSession={authSession}
+          currentGroup={CURRENT_GROUP}
+          currentUserId={1}
+          role="careReceiver"
+        />,
+        CREATE_OPTIONS,
+      );
+    });
+
+    expect(renderer!.root.findByType(AiCallView).props.accessToken).toBe(
+      'first-user-access',
+    );
+
+    currentAccessToken = 'second-user-access';
+    act(() => {
+      renderer!.update(
+        <AiCallScreen
+          authSession={authSession}
+          currentGroup={CURRENT_GROUP}
+          currentUserId={2}
+          role="careReceiver"
+        />,
+      );
+    });
+
+    expect(renderer!.root.findByType(AiCallView).props.accessToken).toBe(
+      'second-user-access',
+    );
+  });
 });

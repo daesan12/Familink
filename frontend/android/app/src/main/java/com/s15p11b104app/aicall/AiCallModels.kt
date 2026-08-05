@@ -127,16 +127,33 @@ internal val aiPersonasForSelection =
       requireNotNull(aiPersonas.firstOrNull { it.id == personaId })
     }
 
+/** 통화를 시작할 때의 마이크 상태. 켜진 상태로 시작한다. */
+internal const val AI_CALL_DEFAULT_IS_MUTED = false
+
+/**
+ * 통화를 시작할 때의 스피커 상태. 일반 전화와 같이 수화기로 시작하므로 꺼짐이다.
+ * `AiCallWebRtcSession.configureAudioRoute()`의 초기 라우팅과 반드시 같아야 한다.
+ */
+internal const val AI_CALL_DEFAULT_IS_SPEAKER_ON = false
+
 internal data class AiCallUiState(
     val phase: AiCallPhase,
     val persona: AiPersona?,
     val failureReason: AiCallFailureReason = AiCallFailureReason.Connection,
     val durationSeconds: Int = 0,
-    val isMuted: Boolean = false,
-    val isSpeakerOn: Boolean = true,
-    val currentCaption: String? = null,
+    val isMuted: Boolean = AI_CALL_DEFAULT_IS_MUTED,
+    val isSpeakerOn: Boolean = AI_CALL_DEFAULT_IS_SPEAKER_ON,
+    val captionDraft: String = "",
     val captionHistory: List<String> = emptyList(),
 )
+
+/**
+ * 화면에 그릴 자막 줄을 오래된 것부터 최신 순으로 반환한다. 발화 중에는 [AiCallUiState.captionDraft]가
+ * 마지막 줄이 되고 발화가 끝나면 방금 확정된 문장이 마지막 줄이 되므로, 확정 여부에 따라 표시 대상을
+ * 따로 분기할 필요가 없다.
+ */
+internal val AiCallUiState.captionLines: List<String>
+  get() = captionHistory + listOfNotNull(captionDraft.takeIf { it.isNotBlank() })
 
 internal fun formatCallDuration(durationSeconds: Int): String {
   val minutes = durationSeconds / 60

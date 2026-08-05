@@ -13,6 +13,7 @@ export function AiCallScreen({
   authSession,
   accessToken,
   currentGroup,
+  currentUserId,
   onCallResult,
   onFullscreenChange,
   onHeaderVisibilityChange,
@@ -42,7 +43,7 @@ export function AiCallScreen({
     setResolvedAccessToken(previous =>
       previous === latest ? previous : latest,
     );
-  }, [accessToken, authSession]);
+  }, [accessToken, authSession, currentUserId]);
 
   useEffect(() => {
     onHeaderVisibilityChange?.(false);

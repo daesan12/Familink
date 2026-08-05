@@ -11,6 +11,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.s15p11b104app.R
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Before
@@ -112,6 +113,46 @@ class NotificationPresenterInstrumentedTest {
     assertEquals("새 게시글이 올라왔어요", presentation?.title)
     assertEquals("김정호님이 새 게시글을 올렸어요.", presentation?.body)
     assertEquals("45", presentation?.tag)
+  }
+
+  @Test
+  fun `탭_intent에_알림_식별자와_타입을_data_payload와_같은_키로_담는다`() {
+    val presentation =
+        NotificationPresenter.toPresentation(
+            title = "새 게시글",
+            body = "본문",
+            notificationId = "45",
+            type = "NEW_POST",
+        )
+
+    val intent = NotificationPresenter.tapIntent(context, presentation!!)
+
+    assertEquals("45", intent.getStringExtra("notificationId"))
+    assertEquals("NEW_POST", intent.getStringExtra("type"))
+  }
+
+  @Test
+  fun `식별자가_없는_알림의_탭_intent에는_extras를_담지_않는다`() {
+    val presentation =
+        NotificationPresenter.toPresentation(title = "새 게시글", body = "본문", notificationId = null)
+
+    val intent = NotificationPresenter.tapIntent(context, presentation!!)
+
+    assertNull(intent.getStringExtra("notificationId"))
+    assertNull(intent.getStringExtra("type"))
+  }
+
+  @Test
+  fun `알림별로_다른_requestCode를_써서_PendingIntent가_덮어써지지_않는다`() {
+    val first =
+        NotificationPresenter.toPresentation(title = "첫 번째", body = "본문", notificationId = "1")
+    val second =
+        NotificationPresenter.toPresentation(title = "두 번째", body = "본문", notificationId = "2")
+
+    assertNotEquals(
+        NotificationPresenter.tapRequestCode(first!!),
+        NotificationPresenter.tapRequestCode(second!!),
+    )
   }
 
   @Test

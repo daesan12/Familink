@@ -84,13 +84,39 @@ export function CallReportDetailModal({
               />
             ) : null}
 
+            {detail.status === "delayed" ? (
+              <DetailStatus
+                actionLabel="상태 다시 확인"
+                description="처리는 계속될 수 있어요. 잠시 후 상태를 다시 확인해 주세요."
+                icon="clock-alert-outline"
+                onAction={onRetry}
+                title="처리가 예상보다 오래 걸리고 있어요"
+              />
+            ) : null}
+
+            {detail.status === "failed" ? (
+              <DetailStatus
+                description="리포트 생성 중 문제가 발생했어요. 자동으로 다시 생성되지는 않아요."
+                icon="alert-circle-outline"
+                title="리포트 생성에 실패했어요"
+              />
+            ) : null}
+
+            {detail.status === "unavailable" ? (
+              <DetailStatus
+                description="통화 상태나 전사 내용을 확인할 수 없어 이 리포트를 만들 수 없어요."
+                icon="file-remove-outline"
+                title="생성할 수 없는 리포트예요"
+              />
+            ) : null}
+
             {detail.status === "error" ? (
               <DetailStatus
-                actionLabel="다시 시도"
-                description="네트워크 상태를 확인한 뒤 다시 시도해 주세요."
+                actionLabel="상태 다시 확인"
+                description="네트워크 연결을 확인한 뒤 상태를 다시 확인해 주세요."
                 icon="alert-circle-outline"
                 onAction={onRetry}
-                title="리포트를 불러오지 못했어요"
+                title="리포트 상태를 확인하지 못했어요"
               />
             ) : null}
 

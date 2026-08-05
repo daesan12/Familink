@@ -100,7 +100,7 @@ test('거절하면 해당 카드가 사라지고 건수가 줄어든다', async 
   ]);
 });
 
-test('처리에 실패하면 요청 카드를 유지하고 다시 시도할 수 있다', async () => {
+test('일반 처리 실패는 안내 팝업을 보여주고 확인 후 카드를 유지한다', async () => {
   const renderer = await renderScreen(REQUESTS, async () => {
     throw new Error('network');
   });
@@ -108,12 +108,18 @@ test('처리에 실패하면 요청 카드를 유지하고 다시 시도할 수 
   await press(renderer, '손수호 거절');
 
   expect(hasText(renderer, '손수호')).toBe(true);
+  expect(hasText(renderer, '가입 요청을 처리하지 못했습니다.')).toBe(true);
+  expect(hasText(renderer, '잠시 후 다시 시도해 주세요.')).toBe(false);
   expect(
-    hasText(
-      renderer,
-      '가입 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.',
-    ),
-  ).toBe(true);
+    renderer.root.findAllByProps({
+      accessibilityLabel: '가입 요청 처리 실패 안내',
+    }).length,
+  ).toBeGreaterThan(0);
+
+  await press(renderer, '가입 요청 처리 실패 확인');
+
+  expect(hasText(renderer, '가입 요청을 처리하지 못했습니다.')).toBe(false);
+  expect(hasText(renderer, '손수호')).toBe(true);
 });
 
 test('승인하면 역할 선택 모달을 열고, 역할을 고르면 카드가 사라진다', async () => {
@@ -139,7 +145,7 @@ test('승인하면 역할 선택 모달을 열고, 역할을 고르면 카드가
   ]);
 });
 
-test('피보호자 중복 409는 원인 문구를 보여주고 팝업을 닫되 카드는 유지한다', async () => {
+test('피보호자 중복 409는 역할 팝업을 닫고 전용 안내 팝업을 보여준다', async () => {
   const renderer = await renderScreen(REQUESTS, async () => {
     throw new ApiError({
       code: 'CARE_RECEIVER_ALREADY_ACTIVE_IN_OTHER_GROUP',
@@ -155,12 +161,18 @@ test('피보호자 중복 409는 원인 문구를 보여주고 팝업을 닫되 
   // 실패해도 "참여했습니다" 역할 팝업이 남지 않는다.
   expect(hasText(renderer, '가족의 역할을 정해주세요')).toBe(false);
   expect(hasText(renderer, '이종철')).toBe(true);
+  expect(hasText(renderer, '피보호자로 승인할 수 없어요')).toBe(true);
   expect(
     hasText(
       renderer,
       '신청자가 이미 다른 그룹의 피보호자예요. 보호자 역할로만 승인할 수 있어요.',
     ),
   ).toBe(true);
+
+  await press(renderer, '피보호자 승인 제한 확인');
+
+  expect(hasText(renderer, '피보호자로 승인할 수 없어요')).toBe(false);
+  expect(hasText(renderer, '이종철')).toBe(true);
 });
 
 test('이미 처리된 요청 409는 문구를 보여주고 카드를 정리한다', async () => {

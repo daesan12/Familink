@@ -8,6 +8,16 @@ import type { CalendarGateway } from "../types";
 import { CalendarScreen } from "./CalendarScreen";
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
+jest.mock("react-native-safe-area-context", () => {
+  const {View} = jest.requireActual("react-native");
+
+  return {
+    SafeAreaProvider: View,
+    SafeAreaView: View,
+    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
+  };
+});
+
 jest.mock("@react-native-community/datetimepicker", () => ({
   DateTimePickerAndroid: { open: jest.fn() },
 }));
@@ -167,6 +177,26 @@ test("실제 조회 구간으로 일정을 불러와 7개 요일과 기간 막�
   ).toHaveLength(0);
 });
 
+test("알림 딥링크로 이벤트 상세를 열고 닫으면 이벤트 날짜 시트를 표시한다", async () => {
+  const { gateway, renderer } = await renderCalendar(createGateway(), {
+    openCalendarEventId: "12",
+    openCalendarEventRequestId: 1,
+  });
+
+  expect(gateway.getEvent).toHaveBeenCalledWith("12", expect.anything());
+  const detailModal = renderer.root.findByType(CalendarEventDetailModal);
+  expect(detailModal.props.visible).toBe(true);
+  expect(detailModal.props.detail).toMatchObject({ id: "12" });
+
+  // 상세를 닫으면 선택 날짜가 이벤트 날짜로 동기화된 시트가 열린다.
+  await TestRenderer.act(async () => {
+    detailModal.props.onClose();
+  });
+  const sheet = renderer.root.findByType(CalendarEventsSheet);
+  expect(sheet.props.visible).toBe(true);
+  expect(sheet.props.dateKey).toBe("2026-07-17");
+});
+
 test("날짜 바텀시트에서 일정을 열고 작성자·참여자 상세를 표시한다", async () => {
   const { gateway, renderer } = await renderCalendar();
 
@@ -203,6 +233,47 @@ test("날짜 바텀시트에서 일정을 열고 작성자·참여자 상세를 
       accessibilityLabel: "이종철 프로필 사진",
     })
   ).toBeTruthy();
+});
+
+test("활성 구성원에서 사라진 참여자 태그와 편집 선택값을 제거한다", async () => {
+  const gateway = createGateway();
+  gateway.getEvent.mockResolvedValueOnce({
+    creatorMemberId: "7",
+    description: "",
+    endAt: "2026-07-17T07:00:00Z",
+    endDate: "2026-07-17",
+    eventDate: "2026-07-17",
+    groupId: "3",
+    id: "12",
+    participantMemberIds: ["8", "36"],
+    startAt: "2026-07-17T06:00:00Z",
+    title: "홍박사 정형외과",
+  });
+  const {renderer} = await renderCalendar(gateway);
+
+  await openEventDetail(renderer);
+
+  expect(renderer.root.findByProps({children: "홍유라"})).toBeTruthy();
+  expect(
+    renderer.root.findAllByProps({children: "구성원 36"}),
+  ).toHaveLength(0);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({accessibilityLabel: "일정 수정"})
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({accessibilityLabel: "일정 저장"})
+      .props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(gateway.updateEvent).toHaveBeenCalledWith(
+    "12",
+    expect.objectContaining({participantMemberIds: ["8"]}),
+  );
 });
 
 test("상세에서 기존 값으로 수정한 뒤 확인 후 일정을 삭제한다", async () => {

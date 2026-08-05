@@ -103,6 +103,7 @@ class EventReminderServiceTest {
 		when(groupMemberRepository.findAllActiveByGroupIds(java.util.Set.of(10L))).thenReturn(List.of(first, second));
 		when(eventParticipantRepository.findMemberIdsByEventIds(List.of(20L)))
 			.thenReturn(java.util.Collections.singletonList(new Object[] {20L, 12L}));
+		when(event.isParticipantsSpecified()).thenReturn(true);
 
 		reminderService.createDueReminders(NOW);
 
@@ -111,6 +112,34 @@ class EventReminderServiceTest {
 		assertThat(captor.getValue().receiverUserId()).isEqualTo(102L);
 		assertThat(captor.getValue().reminderSlot()).isEqualTo(ReminderSlot.HOUR_BEFORE);
 		assertThat(captor.getValue().body()).isEqualTo("\"복약\" 일정이 1시간 후 시작돼요.");
+	}
+
+	@Test
+	void doesNotNotifyWholeGroupWhenLastExplicitParticipantLinkWasDeleted() {
+		FamilyGroup group = group(10L);
+		CalendarEvent event = event(
+			20L,
+			group,
+			"참여자 없는 약속",
+			LocalDate.of(2026, 8, 2),
+			null,
+			Instant.parse("2026-07-31T23:00:00Z"));
+		GroupMember first = member(11L, 101L);
+		GroupMember second = member(12L, 102L);
+		when(calendarEventRepository.findReminderCandidatesAfterId(
+			NOW,
+			NOW.plusSeconds(3600),
+			LocalDate.of(2026, 8, 2),
+			LocalDate.of(2026, 8, 2), 0L, PageRequest.of(0, 100)))
+			.thenReturn(List.of(event));
+		when(groupMemberRepository.findAllActiveByGroupIds(java.util.Set.of(10L)))
+			.thenReturn(List.of(first, second));
+		when(eventParticipantRepository.findMemberIdsByEventIds(List.of(20L))).thenReturn(List.of());
+		when(event.isParticipantsSpecified()).thenReturn(true);
+
+		reminderService.createDueReminders(NOW);
+
+		verifyNoInteractions(notificationCreationService);
 	}
 
 	@Test

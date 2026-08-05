@@ -15,15 +15,13 @@ export function CallReportRow({ call, onPress }: CallReportRowProps) {
   return (
     <Pressable
       accessibilityLabel={`${call.startedAtLabel} 통화 리포트${
-        isAvailable ? " 열기" : " 준비 중"
+        isAvailable ? " 열기" : " 상태 확인"
       }`}
       accessibilityRole="button"
-      accessibilityState={{ disabled: !isAvailable }}
-      disabled={!isAvailable}
       onPress={() => onPress(call)}
       style={({ pressed }) => [
         styles.row,
-        pressed && isAvailable && styles.pressed,
+        pressed && styles.pressed,
       ]}
     >
       <View style={styles.timeBadge}>
@@ -39,13 +37,11 @@ export function CallReportRow({ call, onPress }: CallReportRowProps) {
           {isAvailable ? "통화 리포트" : "리포트 준비 중"}
         </Text>
       </View>
-      {isAvailable ? (
-        <MaterialDesignIcons
-          color={COLORS.textSubtle}
-          name="chevron-right"
-          size={25}
-        />
-      ) : null}
+      <MaterialDesignIcons
+        color={COLORS.textSubtle}
+        name="chevron-right"
+        size={25}
+      />
     </Pressable>
   );
 }

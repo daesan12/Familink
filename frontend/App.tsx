@@ -3,12 +3,16 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import { Alert, AppState, StatusBar } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  initialWindowMetrics,
+} from "react-native-safe-area-context";
 
 import { AppShell, currentGroupStore } from "./src/app-shell";
 import type {
@@ -94,10 +98,15 @@ import {
 import {
   createNotificationGateway,
   nativeDeviceTokenProvider,
+  nativeNotificationTapProvider,
   NotificationGatewayProvider,
   NotificationsScreen,
+  resolveNotificationTarget,
   type DeviceTokenProvider,
+  type NotificationDeepLinkTarget,
   type NotificationGateway,
+  type NotificationTap,
+  type NotificationTapProvider,
 } from "./src/features/notifications";
 import { createReportGateway, ReportScreen } from "./src/features/reports";
 import type {
@@ -106,11 +115,17 @@ import type {
 } from "./src/features/reports";
 import {
   createProfileGateway,
+  getProfileSaveErrorMessage,
   getProfileWithdrawErrorMessage,
   ProfileTabScreen,
   type ProfileGateway,
+  type ProfileImageAsset,
 } from "./src/features/profile";
-import { API_BASE_URL, ApiError } from "./src/shared/api";
+import {
+  API_BASE_URL,
+  ApiError,
+  subscribeGroupAccessDenied,
+} from "./src/shared/api";
 import { imageDiskCache } from "./src/shared/media/imageDiskCache";
 
 type RootRoute =
@@ -137,6 +152,7 @@ interface AppProps {
   groupMembershipGateway?: GroupMembershipGateway;
   interestGateway?: InterestGateway;
   notificationGateway?: NotificationGateway;
+  notificationTapProvider?: NotificationTapProvider;
   profileGateway?: ProfileGateway;
   deviceTokenProvider?: DeviceTokenProvider;
   groupStore?: CurrentGroupStore;
@@ -613,6 +629,7 @@ export default function App({
   interestGateway = familyInterestGateway,
   joinRequestStore = pendingJoinRequestStore,
   notificationGateway: injectedNotificationGateway,
+  notificationTapProvider = nativeNotificationTapProvider,
   profileGateway,
   deviceTokenProvider = nativeDeviceTokenProvider,
   groupStore = currentGroupStore,
@@ -633,6 +650,7 @@ export default function App({
 }: AppProps) {
   const shouldRestoreSession = initialRootRoute === "welcome";
   const [route, setRoute] = useState<RootRoute>(initialRootRoute);
+  const routeRef = useRef<RootRoute>(initialRootRoute);
   const [groupOnboardingReturnRoute, setGroupOnboardingReturnRoute] =
     useState<Exclude<RootRoute, "groupOnboarding">>("welcome");
   const [groupOnboardingAction, setGroupOnboardingAction] = useState<
@@ -641,15 +659,35 @@ export default function App({
   const [appShellEntryRoute, setAppShellEntryRoute] = useState<AppRoute | undefined>(
     initialShellRoute,
   );
+  // OS 알림 탭 딥링크 상태. 해석 흐름은 아래 notificationTapProvider effect 참고.
+  const [pendingNotificationTap, setPendingNotificationTap] =
+    useState<NotificationTap | null>(null);
+  const [appShellDeepLink, setAppShellDeepLink] = useState<{
+    requestId: number;
+    target: NotificationDeepLinkTarget;
+  } | null>(null);
+  // 소비 후 상태를 비워도 requestId는 단조 증가해야 같은 값 재사용으로 인한
+  // 소비 누락이 생기지 않는다.
+  const deepLinkRequestSeqRef = useRef(0);
+  // 해석 effect는 자기 트리거(pendingNotificationTap)를 즉시 비우므로 cleanup
+  // 기반 무효화를 쓸 수 없다. 로그아웃 등으로 세대가 바뀌면 늦은 결과를 버린다.
+  const tapResolveGenerationRef = useRef(0);
+  const [appShellRecoveryVersion, setAppShellRecoveryVersion] = useState(0);
   const [loginVisible, setLoginVisible] = useState(false);
   // 방금 가입한 로그인 ID. 가입 직후 여는 로그인 시트에 미리 채운다.
   const [signupLoginId, setSignupLoginId] = useState("");
+  const [pendingSignupProfileImage, setPendingSignupProfileImage] = useState<{
+    asset: ProfileImageAsset;
+    loginId: string;
+  } | null>(null);
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [activeGroupId, setActiveGroupId] = useState(initialGroupId);
+  const selectedGroupIdRef = useRef<string | null | undefined>(initialGroupId);
   const [availableGroups, setAvailableGroups] = useState<FamilyGroup[]>(() => [
     ...(groups ??
       (initialRootRoute === "appShell" && __DEV__ ? DEVELOPMENT_GROUPS : [])),
   ]);
+  const availableGroupsRef = useRef<readonly FamilyGroup[]>(availableGroups);
   const [interestGroup, setInterestGroup] = useState<FamilyGroup | null>(null);
   const [interestMemberId, setInterestMemberId] = useState<string | null>(null);
   const [interestInitialValues, setInterestInitialValues] = useState<
@@ -728,11 +766,30 @@ export default function App({
   const withdrawalInFlightRef = useRef<Promise<void> | null>(null);
   // 포그라운드 복귀 갱신 in-flight 가드. 연속 전환에서 그룹 재조회가 겹치지 않게 한다.
   const foregroundGroupRefreshInFlightRef = useRef(false);
+  // 그룹 범위 API의 403이 가리킨 그룹. 진행 중인 목록 갱신이 있으면 그 결과에서도
+  // 내보내기 여부를 판정할 수 있도록 ref에 보존한다.
+  const deniedGroupIdsRef = useRef<Set<string>>(new Set());
   const resolvedGroups = availableGroups;
 
   useEffect(() => {
     joinRequestsRef.current = joinRequests;
   }, [joinRequests]);
+
+  useLayoutEffect(() => {
+    routeRef.current = route;
+  }, [route]);
+
+  useEffect(() => {
+    availableGroupsRef.current = availableGroups;
+  }, [availableGroups]);
+
+  useEffect(() => {
+    selectedGroupIdRef.current = activeGroupId;
+  }, [activeGroupId]);
+
+  const handleCurrentGroupChange = useCallback((groupId: string) => {
+    selectedGroupIdRef.current = groupId;
+  }, []);
 
   const refreshGroupSnapshot = useCallback(async () => {
     if (
@@ -764,13 +821,53 @@ export default function App({
       setJoinRequests(current =>
         reconcileJoinRequests(current, snapshot, trackedRequestIds),
       );
+
+      const deniedGroupIds = deniedGroupIdsRef.current;
+      deniedGroupIdsRef.current = new Set();
+      const selectedGroupId =
+        selectedGroupIdRef.current ??
+        (availableGroupsRef.current.length === 1
+          ? availableGroupsRef.current[0]?.id ?? null
+          : null);
+      const selectedGroupWasRemoved =
+        selectedGroupId !== null &&
+        deniedGroupIds.has(selectedGroupId) &&
+        availableGroupsRef.current.some(group => group.id === selectedGroupId) &&
+        !snapshot.groups.some(group => group.id === selectedGroupId);
+      if (
+        routeRef.current === "appShell" &&
+        selectedGroupWasRemoved
+      ) {
+        const nextGroup = snapshot.groups[0];
+        setAppShellEntryRoute("feed");
+        setAppShellRecoveryVersion(version => version + 1);
+        if (nextGroup === undefined) {
+          selectedGroupIdRef.current = null;
+          setActiveGroupId(null);
+          setRoute("signedInWelcome");
+        } else {
+          selectedGroupIdRef.current = nextGroup.id;
+          setActiveGroupId(nextGroup.id);
+          onGroupChange?.(nextGroup.id);
+          groupStore?.save(nextGroup.id).catch(() => {
+            // 서버가 확정한 대체 그룹 전환은 유지하고 다음 진입에서 다시 저장한다.
+          });
+        }
+      }
     } catch {
       // Keep the current view when a background refresh fails. The next
       // foreground transition or polling tick will retry it.
     } finally {
       foregroundGroupRefreshInFlightRef.current = false;
     }
-  }, [groupGateway, groups, joinRequestStore, user]);
+  }, [
+    groupGateway,
+    groupStore,
+    groups,
+    joinRequestStore,
+    onGroupChange,
+    user,
+  ]);
 
   const cancelLoginAttempt = useCallback(() => {
     loginAttemptIdRef.current += 1;
@@ -795,6 +892,10 @@ export default function App({
     setGroupOnboardingReturnRoute("welcome");
     setGroupOnboardingAction(null);
     setLoginVisible(false);
+    // 이전 사용자의 알림 탭이 다음 로그인 사용자에게 적용되지 않게 비운다.
+    setPendingNotificationTap(null);
+    setAppShellDeepLink(null);
+    tapResolveGenerationRef.current += 1;
     // 로그아웃 후 다른 사용자가 직전 가입 계정 아이디를 보지 않게 미리 채움을 비운다.
     setSignupLoginId("");
     setRoute("welcome");
@@ -961,6 +1062,70 @@ export default function App({
       void registerCurrentDeviceToken(token).catch(() => undefined);
     });
   }, [deviceTokenProvider, registerCurrentDeviceToken, user]);
+
+  // OS 알림 탭 딥링크. 콜드 스타트 보관분을 가져오고 이후 탭 이벤트를 구독한다.
+  // Activity만 재생성된 탭은 네이티브가 보관만 하므로 포그라운드 복귀 때도 pull한다.
+  useEffect(() => {
+    let disposed = false;
+    const pullPendingTap = () => {
+      void notificationTapProvider.consumePendingTap().then(tap => {
+        if (!disposed && tap !== null) {
+          setPendingNotificationTap(tap);
+        }
+      });
+    };
+    pullPendingTap();
+    const tapSubscription = notificationTapProvider.subscribeTap(tap => {
+      setPendingNotificationTap(tap);
+    });
+    const appStateSubscription = AppState.addEventListener("change", nextState => {
+      if (nextState === "active") {
+        pullPendingTap();
+      }
+    });
+    return () => {
+      disposed = true;
+      tapSubscription();
+      appStateSubscription.remove();
+    };
+  }, [notificationTapProvider]);
+
+  // 푸시 payload에는 notificationId·type만 있으므로(스펙) 알림 목록 첫 페이지에서
+  // 해당 알림을 찾아 목적지를 해석한다. 못 찾으면 알림 목록 화면으로 폴백한다.
+  // 인증·그룹 준비 전에는 탭을 보관해 두고 appShell 진입 후 소비한다.
+  useEffect(() => {
+    if (pendingNotificationTap === null || route !== "appShell" || user === null) {
+      return;
+    }
+    const tap = pendingNotificationTap;
+    setPendingNotificationTap(null);
+    const generation = tapResolveGenerationRef.current;
+    void resolvedNotificationGateway
+      .loadPage(0)
+      .then(page => {
+        const notification = page.notifications.find(
+          item => item.id === tap.notificationId
+        );
+        if (notification === undefined) {
+          return null;
+        }
+        void resolvedNotificationGateway
+          .markRead(tap.notificationId)
+          .catch(() => undefined);
+        return resolveNotificationTarget(notification);
+      })
+      .catch(() => null)
+      .then(target => {
+        if (generation !== tapResolveGenerationRef.current) {
+          return;
+        }
+        deepLinkRequestSeqRef.current += 1;
+        setAppShellDeepLink({
+          requestId: deepLinkRequestSeqRef.current,
+          target: target ?? { kind: "notifications" },
+        });
+      });
+  }, [pendingNotificationTap, resolvedNotificationGateway, route, user]);
 
   const enterAuthenticatedState = useCallback(
     async (
@@ -1182,6 +1347,17 @@ export default function App({
     };
   }, [groups, refreshGroupSnapshot, user]);
 
+  useLayoutEffect(() => {
+    if (user === null || groups !== undefined) {
+      return;
+    }
+
+    return subscribeGroupAccessDenied(groupId => {
+      deniedGroupIdsRef.current.add(groupId);
+      refreshGroupSnapshot().catch(() => undefined);
+    });
+  }, [groups, refreshGroupSnapshot, user]);
+
   useEffect(() => {
     if (
       route !== "groupOnboarding" ||
@@ -1206,6 +1382,7 @@ export default function App({
     loginAbortControllerRef.current = controller;
     previousController?.abort();
     const invalidationVersion = authInvalidationVersionRef.current;
+    const pendingProfileImage = pendingSignupProfileImage;
     const isCurrentAttempt = () =>
       loginAttemptIdRef.current === attemptId &&
       loginAbortControllerRef.current === controller &&
@@ -1238,6 +1415,33 @@ export default function App({
       ) {
         return;
       }
+      if (pendingProfileImage !== null) {
+        setPendingSignupProfileImage(current =>
+          current === pendingProfileImage ? null : current,
+        );
+        if (pendingProfileImage.loginId === credentials.loginId) {
+          try {
+            const profileImageUrl =
+              await resolvedProfileGateway.uploadProfileImage(
+                pendingProfileImage.asset,
+              );
+            if (
+              !isCurrentAttempt() ||
+              authInvalidationVersionRef.current !== authenticatedSessionVersion
+            ) {
+              return;
+            }
+            await resolvedProfileGateway.updateCurrentProfile({
+              profileImageUrl,
+            });
+          } catch (error) {
+            Alert.alert(
+              '프로필 사진 저장 실패',
+              `${getProfileSaveErrorMessage(error)}\n마이페이지에서 다시 등록할 수 있어요.`,
+            );
+          }
+        }
+      }
       void registerCurrentDeviceToken().catch(() => undefined);
     } finally {
       if (loginAbortControllerRef.current === controller) {
@@ -1251,6 +1455,7 @@ export default function App({
     setLoginVisible(false);
     // 미리 채움은 가입 직후 1회만 유지한다.
     setSignupLoginId("");
+    setPendingSignupProfileImage(null);
   };
 
   const handleLogout = async () => {
@@ -1913,10 +2118,11 @@ export default function App({
 
   return (
     <GroupInfoIntegrationContext.Provider value={groupInfoIntegration}>
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <NotificationGatewayProvider gateway={resolvedNotificationGateway}>
           <CalendarGatewayProvider gateway={resolvedCalendarGateway}>
-            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            {/* edge-to-edge에서는 상태바 배경색 지정이 무시되므로 barStyle만 사용한다. */}
+            <StatusBar barStyle="dark-content" />
             {route === "welcome" && (
               <>
                 <WelcomeScreen
@@ -1933,10 +2139,18 @@ export default function App({
             )}
             {route === "signup" && (
               <SignupFlowScreen
-                onCancel={() => setRoute("welcome")}
-                onComplete={(loginId) => {
+                onCancel={() => {
+                  setPendingSignupProfileImage(null);
+                  setRoute("welcome");
+                }}
+                onComplete={(loginId, profileImageAsset) => {
                   // 방금 만든 계정을 다시 입력하지 않도록 아이디를 채운 로그인 시트를 바로 연다.
                   setSignupLoginId(loginId);
+                  setPendingSignupProfileImage(
+                    profileImageAsset
+                      ? {asset: profileImageAsset, loginId}
+                      : null,
+                  );
                   setRoute("welcome");
                   setLoginVisible(true);
                 }}
@@ -1944,16 +2158,21 @@ export default function App({
             )}
             {route === "appShell" && (
               <AppShell
+                key={appShellRecoveryVersion}
                 apiBaseUrl={apiBaseUrl}
                 authSession={authSession}
                 accessToken={authSession.getAccessToken()}
                 currentUserId={user?.id}
                 currentUserName={user?.name}
+                deepLinkRequestId={appShellDeepLink?.requestId ?? 0}
+                deepLinkTarget={appShellDeepLink?.target ?? null}
+                onDeepLinkConsumed={() => setAppShellDeepLink(null)}
                 groupStore={groupStore}
                 groups={resolvedGroups}
                 initialGroupId={activeGroupId}
                 initialRoute={appShellEntryRoute}
                 onCreateGroup={() => openGroupOnboarding("appShell", "create")}
+                onCurrentGroupChange={handleCurrentGroupChange}
                 onGroupChange={onGroupChange}
                 onJoinGroup={() => openGroupOnboarding("appShell", "join")}
                 onCallResult={onCallResult}

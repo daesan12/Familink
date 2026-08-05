@@ -71,7 +71,9 @@ export function MyPageProfileCard({
               <Text style={styles.rankBadgeText}>{rank}</Text>
             </View>
           ) : null}
-          <Text style={styles.name}>{name} 님</Text>
+          <Text numberOfLines={2} style={styles.name}>
+            {name} 님
+          </Text>
         </View>
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>나이</Text>
@@ -141,6 +143,8 @@ const styles = StyleSheet.create({
   },
   name: {
     color: COLORS.textStrong,
+    // RN의 flexShrink 기본값은 0이라 긴 이름이 옆의 더보기 버튼을 밀어낸다.
+    flexShrink: 1,
     fontSize: 20,
     fontWeight: '700',
   },

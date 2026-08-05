@@ -43,6 +43,21 @@ export const DEVELOPMENT_NOTIFICATIONS: readonly AppNotification[] = [
     title: '게시글에 새로운 반응이 있어요',
     type: 'POST_ACTIVITY',
   },
+  {
+    avatarText: '알',
+    body: '옥자님의 통화 리포트를 확인해 보세요.',
+    createdAtLabel: '어제',
+    groupId: 'development-guardian-group',
+    id: 'call-report-okja',
+    isRead: true,
+    relatedCallReportId: '31',
+    relatedCallSessionId: '21',
+    relatedCareReceiverMemberId: '11',
+    relatedJoinRequestStatus: null,
+    relatedReportDate: '2026-08-03',
+    title: '통화 리포트가 준비됐어요',
+    type: 'CALL_REPORT',
+  },
 ];
 
 export const EMPTY_NOTIFICATIONS: readonly AppNotification[] = [];

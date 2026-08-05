@@ -1,6 +1,15 @@
 import type { ReactNode } from 'react';
 
+import type { NotificationDeepLinkTarget } from '../features/notifications/deepLink';
+
 export type GroupRole = 'guardian' | 'careReceiver';
+
+// 리포트 화면 딥링크 파라미터. callSessionId가 있으면 해당 통화 상세까지 연다.
+export interface ReportDeepLinkParams {
+  callSessionId?: string;
+  memberId: string;
+  reportDate: string;
+}
 
 export type AiCallResultStatus = 'COMPLETED' | 'CANCELLED' | 'FAILED';
 
@@ -48,11 +57,17 @@ export interface AppScreenProps {
   onNotificationRead?: (notificationId: string) => void;
   onUnreadCountChange?: (count: number) => void;
   onOpenNotifications?: () => void;
+  onOpenNotificationTarget?: (target: NotificationDeepLinkTarget) => void;
   onOpenPost?: (postId: string, groupId?: string) => void;
   onRequestLogout?: () => void;
   onRequestWithdrawal?: () => Promise<void>;
+  openCalendarEventId?: string | null;
+  openCalendarEventRequestId?: number;
+  openJoinApprovalRequestId?: number;
   openPostId?: string | null;
   openPostRequestId?: number;
+  openReportRequestId?: number;
+  openReportTarget?: ReportDeepLinkParams | null;
   readNotificationIds?: readonly string[];
   role: GroupRole;
 }

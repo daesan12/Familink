@@ -44,3 +44,8 @@ export interface CallReportResponseDto {
   guardianMessage: string | null;
   summary: string;
 }
+
+export interface CallReportStatusResponseDto {
+  callSessionId: number;
+  status: "READY" | "GENERATING" | "FAILED" | "UNAVAILABLE";
+}

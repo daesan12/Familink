@@ -19,10 +19,12 @@ class AiCallRuntimeTest {
 
   @Test
   fun `connected media session remains controllable until end`() = runBlocking {
-    val mediaSession = RecordingMediaSession()
+    val endEvents = mutableListOf<String>()
+    val mediaSession = RecordingMediaSession(endEvents = endEvents)
     val client =
         RecordingSessionClient(
             endResults = ArrayDeque(listOf(Result.success(42L))),
+            endEvents = endEvents,
         )
     val runtime =
         AiCallRuntime(
@@ -47,6 +49,7 @@ class AiCallRuntimeTest {
 
     assertEquals(1, mediaSession.closeCount)
     assertEquals(1, client.endCallCount)
+    assertEquals(listOf("server-end", "local-close"), endEvents)
   }
 
   @Test
@@ -80,6 +83,8 @@ class AiCallRuntimeTest {
 
   @Test
   fun `failed end request can be retried with a new HTTP request`() = runBlocking {
+    val endEvents = mutableListOf<String>()
+    val mediaSession = RecordingMediaSession(endEvents = endEvents)
     val client =
         RecordingSessionClient(
             endResults =
@@ -88,7 +93,8 @@ class AiCallRuntimeTest {
                         Result.failure(IllegalStateException("temporary failure")),
                         Result.success(42L),
                     )
-                )
+                ),
+            endEvents = endEvents,
         )
     val runtime =
         AiCallRuntime(
@@ -97,8 +103,11 @@ class AiCallRuntimeTest {
             accessTokenProvider = RecordingAccessTokenProvider(),
             onCaptionUpdate = {},
             onConnectionLost = {},
+            mediaSessionFactory = { _, _, _ -> mediaSession },
+            mediaContext = Dispatchers.Unconfined,
         )
     setCallSessionId(runtime, 42L)
+    setWebRtcSession(runtime, mediaSession)
 
     val exception =
         assertThrows(IllegalStateException::class.java) {
@@ -111,6 +120,8 @@ class AiCallRuntimeTest {
     runtime.end(AiCallTerminationType.UserRequested)
     assertEquals(2, client.endCallCount)
     assertEquals(listOf("access-token-1", "access-token-2"), client.endTokens)
+    assertEquals(1, mediaSession.closeCount)
+    assertEquals(listOf("server-end", "local-close", "server-end"), endEvents)
   }
 
   @Test
@@ -205,12 +216,15 @@ class AiCallRuntimeTest {
 
   @Test
   fun `dispose ends the call with the current token when the bridge is detached`() = runBlocking {
+    val endEvents = mutableListOf<String>()
     val endCompleted = CompletableDeferred<Unit>()
     val client =
         RecordingSessionClient(
             endResults = ArrayDeque(listOf(Result.success(42L))),
+            endEvents = endEvents,
             onEnd = { endCompleted.complete(Unit) },
         )
+    val mediaSession = RecordingMediaSession(endEvents = endEvents)
     val runtime =
         AiCallRuntime(
             context = ContextWrapper(null),
@@ -228,14 +242,18 @@ class AiCallRuntimeTest {
                 },
             onCaptionUpdate = {},
             onConnectionLost = {},
+            mediaContext = Dispatchers.Unconfined,
         )
     setCallSessionId(runtime, 42L)
+    setWebRtcSession(runtime, mediaSession)
 
     runtime.dispose()
     withTimeout(1_000) { endCompleted.await() }
 
     assertEquals(1, client.endCallCount)
     assertEquals(listOf("current-access-token"), client.endTokens)
+    assertEquals(1, mediaSession.closeCount)
+    assertEquals(listOf("server-end", "local-close"), endEvents)
   }
 
   private fun setCallSessionId(runtime: AiCallRuntime, callSessionId: Long) {
@@ -245,8 +263,16 @@ class AiCallRuntimeTest {
     }
   }
 
+  private fun setWebRtcSession(runtime: AiCallRuntime, mediaSession: AiCallMediaSession) {
+    AiCallRuntime::class.java.getDeclaredField("webRtcSession").apply {
+      isAccessible = true
+      set(runtime, mediaSession)
+    }
+  }
+
   private class RecordingSessionClient(
       private val endResults: ArrayDeque<Result<Long>>,
+      private val endEvents: MutableList<String>? = null,
       private val onEnd: () -> Unit = {},
   ) : AiCallSessionClient {
 
@@ -278,6 +304,7 @@ class AiCallRuntimeTest {
     ): Long {
       endCallCount += 1
       endTokens += accessToken
+      endEvents?.add("server-end")
       return endResults.removeFirst().getOrThrow().also { onEnd() }
     }
   }
@@ -326,6 +353,7 @@ class AiCallRuntimeTest {
 
   private class RecordingMediaSession(
       private val connectionFailure: Throwable? = null,
+      private val endEvents: MutableList<String>? = null,
   ) : AiCallMediaSession {
 
     val microphoneStates = mutableListOf<Boolean>()
@@ -351,6 +379,7 @@ class AiCallRuntimeTest {
 
     override fun close() {
       closeCount += 1
+      endEvents?.add("local-close")
     }
   }
 }

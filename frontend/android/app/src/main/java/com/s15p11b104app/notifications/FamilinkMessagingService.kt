@@ -16,8 +16,21 @@ internal class FamilinkMessagingService : FirebaseMessagingService() {
   override fun onMessageReceived(remoteMessage: RemoteMessage) {
     super.onMessageReceived(remoteMessage)
 
+    emitPushReceived()
+
     val presentation = NotificationPresenter.presentationOf(remoteMessage) ?: return
     NotificationPresenter.show(this, presentation)
+  }
+
+  // 표시 판정과 무관하게 알린다. 배지 미읽음 수의 근거는 서버에 저장된 내부 알림이므로
+  // 표시 문구가 비어 OS 알림을 건너뛰는 메시지라도 배지는 갱신 대상이다.
+  private fun emitPushReceived() {
+    val reactContext =
+        (application as? ReactApplication)?.reactHost?.currentReactContext ?: return
+    if (!reactContext.hasActiveReactInstance()) {
+      return
+    }
+    reactContext.emitDeviceEvent(PUSH_RECEIVED_EVENT, null)
   }
 
   // onRegistered가 신규 콜백이지만 register()를 호출한 앱에만 전달된다.
@@ -41,5 +54,8 @@ internal class FamilinkMessagingService : FirebaseMessagingService() {
   companion object {
     /** TypeScript `FCM_TOKEN_REFRESH_EVENT`와 문자열이 같아야 한다. */
     const val TOKEN_REFRESH_EVENT = "FamilinkNotifications:tokenRefresh"
+
+    /** TypeScript `PUSH_RECEIVED_EVENT`와 문자열이 같아야 한다. */
+    const val PUSH_RECEIVED_EVENT = "FamilinkNotifications:pushReceived"
   }
 }

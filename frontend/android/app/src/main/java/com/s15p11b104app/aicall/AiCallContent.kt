@@ -40,13 +40,13 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.CallEnd
@@ -75,10 +75,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -105,6 +110,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 
+/** 최신 자막부터 적용할 투명도. 목록을 넘어선 오래된 자막은 마지막 값을 쓴다. */
+private val CAPTION_ALPHAS = listOf(1f, 0.45f, 0.2f)
+
+/** 자막 영역 위쪽에서 잘린 글자를 감추는 페이드 높이. */
+private val CAPTION_FADE_HEIGHT = 40.dp
+
+private const val CAPTION_PLACEHOLDER = "자막을 기다리는 중입니다."
+
+/** 조작할 수 없는 통화 제어 버튼을 흐리게 보여 줄 때 사용하는 불투명도. */
+private const val DISABLED_CONTROL_ALPHA = 0.45f
+
 @Composable
 internal fun AiCallRoute(
     apiBaseUrl: String?,
@@ -115,10 +131,9 @@ internal fun AiCallRoute(
   var phase by rememberSaveable { mutableStateOf(AiCallPhase.Selecting) }
   var selectedPersonaId by rememberSaveable { mutableStateOf<Long?>(null) }
   var durationSeconds by rememberSaveable { mutableIntStateOf(0) }
-  var isMuted by rememberSaveable { mutableStateOf(false) }
-  var isSpeakerOn by rememberSaveable { mutableStateOf(true) }
+  var isMuted by rememberSaveable { mutableStateOf(AI_CALL_DEFAULT_IS_MUTED) }
+  var isSpeakerOn by rememberSaveable { mutableStateOf(AI_CALL_DEFAULT_IS_SPEAKER_ON) }
   var captionDraft by rememberSaveable { mutableStateOf("") }
-  var currentCaption by rememberSaveable { mutableStateOf<String?>(null) }
   var captionHistory by remember { mutableStateOf(emptyList<String>()) }
   var pendingPersonaId by rememberSaveable { mutableStateOf<Long?>(null) }
   var permissionResult by remember { mutableStateOf<Boolean?>(null) }
@@ -148,12 +163,10 @@ internal fun AiCallRoute(
                       (update.text.ifBlank { captionDraft }).trim()
                   if (completedCaption.isNotBlank()) {
                     captionHistory = (captionHistory + completedCaption).takeLast(3)
-                    currentCaption = completedCaption
                   }
                   captionDraft = ""
                 } else {
                   captionDraft += update.text
-                  currentCaption = captionDraft
                 }
               },
               onConnectionLost = { connectionLostSignal += 1 },
@@ -230,8 +243,11 @@ internal fun AiCallRoute(
       failureReason = AiCallFailureReason.Connection
       durationSeconds = 0
       captionDraft = ""
-      currentCaption = null
       captionHistory = emptyList()
+      // 재시도는 returnToSelection을 거치지 않으므로, 새 세션의 기본 오디오 상태와
+      // 어긋나지 않도록 여기서도 토글을 초기화한다.
+      isMuted = AI_CALL_DEFAULT_IS_MUTED
+      isSpeakerOn = AI_CALL_DEFAULT_IS_SPEAKER_ON
       phase = AiCallPhase.Connecting
       callJob =
           coroutineScope.launch {
@@ -315,10 +331,9 @@ internal fun AiCallRoute(
     phase = AiCallPhase.Selecting
     durationSeconds = 0
     captionDraft = ""
-    currentCaption = null
     captionHistory = emptyList()
-    isMuted = false
-    isSpeakerOn = true
+    isMuted = AI_CALL_DEFAULT_IS_MUTED
+    isSpeakerOn = AI_CALL_DEFAULT_IS_SPEAKER_ON
   }
 
   val finishCallFromPhase: (AiCallPhase) -> Unit = { endingPhase ->
@@ -386,7 +401,7 @@ internal fun AiCallRoute(
               durationSeconds = durationSeconds,
               isMuted = isMuted,
               isSpeakerOn = isSpeakerOn,
-              currentCaption = currentCaption,
+              captionDraft = captionDraft,
               captionHistory = captionHistory,
           ),
       selectedPersonaId = selectedPersonaId,
@@ -875,8 +890,9 @@ private fun ActiveCallScreen(
   val persona = state.persona ?: return
   val isConnecting = state.phase == AiCallPhase.Connecting
   val isEnding = state.phase == AiCallPhase.Ending
-  val currentCaption = state.currentCaption ?: "자막을 기다리는 중입니다."
-  val previousCaption = state.captionHistory.dropLast(1).lastOrNull()
+  // 연결 중·종료 중에는 미디어 세션이 없거나 정리되는 중이므로 마이크·스피커를 바꿀 수 없다.
+  val isControlEnabled = !isConnecting && !isEnding
+  val captionLines = state.captionLines.ifEmpty { listOf(CAPTION_PLACEHOLDER) }
 
   Column(
       modifier =
@@ -927,39 +943,38 @@ private fun ActiveCallScreen(
         contentScale = ContentScale.Crop,
     )
 
-    Spacer(modifier = Modifier.weight(1f))
-    if (!isConnecting && !isEnding) {
-      Column(
-          modifier =
-              Modifier.fillMaxWidth()
-                  .semantics { liveRegion = LiveRegionMode.Polite }
-                  .testTag("live-caption"),
-      ) {
-        if (previousCaption != null) {
-          Text(
-              text = previousCaption,
-              color = AiCallColors.OnDarkMuted,
-              fontSize = 16.sp,
-              lineHeight = 24.sp,
-              maxLines = 2,
-              overflow = TextOverflow.Ellipsis,
-          )
-          Spacer(modifier = Modifier.height(10.dp))
-        }
+    // 자막이 이 영역을 넘겨도 통화 제어 버튼을 밀어낼 수 없도록 weight를 자막 쪽에 준다. weight가 붙은
+    // 자식은 나머지 자식을 모두 배분한 뒤 남은 높이만 받으므로, 버튼은 항상 자기 크기를 먼저 확보한다.
+    Box(
+        modifier =
+            Modifier.fillMaxWidth()
+                .weight(1f)
+                // clip을 켜야 넘친 자막이 그리기뿐 아니라 레이아웃·시맨틱스 경계에서도 잘린다.
+                // 끄면 화면에서 사라진 자막이 접근성 트리에 남아 TalkBack이 함께 읽는다.
+                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen, clip = true)
+                .drawWithContent {
+                  drawContent()
+                  drawRect(
+                      brush =
+                          Brush.verticalGradient(
+                              colors = listOf(Color.Transparent, Color.Black),
+                              startY = 0f,
+                              endY = CAPTION_FADE_HEIGHT.toPx(),
+                          ),
+                      blendMode = BlendMode.DstIn,
+                  )
+                },
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+      if (!isConnecting && !isEnding) {
+        CaptionStack(lines = captionLines)
+      } else {
         Text(
-            text = currentCaption,
-            color = AiCallColors.OnDark,
-            fontSize = 27.sp,
-            fontWeight = FontWeight.Bold,
-            lineHeight = 38.sp,
+            text = if (isEnding) "통화 종료 중입니다." else "잠시만 기다려 주세요.",
+            color = AiCallColors.OnDarkMuted,
+            fontSize = 17.sp,
         )
       }
-    } else {
-      Text(
-          text = if (isEnding) "통화 종료 중입니다." else "잠시만 기다려 주세요.",
-          color = AiCallColors.OnDarkMuted,
-          fontSize = 17.sp,
-      )
     }
 
     Spacer(modifier = Modifier.height(30.dp))
@@ -971,15 +986,13 @@ private fun ActiveCallScreen(
       CallControlButton(
           label = if (state.isSpeakerOn) "스피커 끄기" else "스피커 켜기",
           stateDescription = if (state.isSpeakerOn) "스피커 켜짐" else "스피커 꺼짐",
+          accented = state.isSpeakerOn,
+          enabled = isControlEnabled,
           onClick = onToggleSpeaker,
       ) {
+        // 스피커는 사선 아이콘을 쓰지 않고 색으로만 상태를 구분한다.
         Icon(
-            imageVector =
-                if (state.isSpeakerOn) {
-                  Icons.AutoMirrored.Rounded.VolumeUp
-                } else {
-                  Icons.AutoMirrored.Rounded.VolumeOff
-                },
+            imageVector = Icons.AutoMirrored.Rounded.VolumeUp,
             contentDescription = null,
             modifier = Modifier.size(30.dp),
         )
@@ -988,6 +1001,8 @@ private fun ActiveCallScreen(
           label = "통화 종료",
           containerColor = AiCallColors.CoralRed,
           size = 78.dp,
+          // 종료 중에는 finishCall이 이미 no-op이므로 눌리는 것처럼 보이지 않게 한다.
+          enabled = !isEnding,
           onClick = onEndCall,
       ) {
         Icon(
@@ -999,6 +1014,8 @@ private fun ActiveCallScreen(
       CallControlButton(
           label = if (state.isMuted) "음소거 해제" else "음소거",
           stateDescription = if (state.isMuted) "음소거 켜짐" else "음소거 꺼짐",
+          accented = state.isMuted,
+          enabled = isControlEnabled,
           onClick = onToggleMute,
       ) {
         Icon(
@@ -1016,6 +1033,37 @@ private fun ActiveCallScreen(
   }
 }
 
+/**
+ * 자막을 오래된 것부터 최신 순으로 아래에 붙여 쌓는다. [Modifier.wrapContentHeight]의 `unbounded`가
+ * 높이 제한 없이 측정시키므로 최신 자막은 줄 수와 무관하게 온전히 자리를 잡고, 묶음이 부모 영역보다
+ * 커지면 위쪽의 오래된 자막부터 넘쳐서 잘린다. 크기는 모두 같고 최신에서 멀어질수록 투명해진다.
+ */
+@Composable
+private fun CaptionStack(lines: List<String>) {
+  Column(
+      modifier =
+          Modifier.fillMaxWidth()
+              .wrapContentHeight(align = Alignment.Bottom, unbounded = true)
+              .semantics { liveRegion = LiveRegionMode.Polite }
+              .testTag("live-caption"),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+  ) {
+    lines.forEachIndexed { index, line ->
+      Text(
+          text = line,
+          color =
+              AiCallColors.OnDark.copy(
+                  alpha =
+                      CAPTION_ALPHAS.getOrElse(lines.lastIndex - index) { CAPTION_ALPHAS.last() },
+              ),
+          fontSize = 27.sp,
+          fontWeight = FontWeight.Bold,
+          lineHeight = 38.sp,
+      )
+    }
+  }
+}
+
 @Composable
 private fun CallControlButton(
     label: String,
@@ -1023,23 +1071,26 @@ private fun CallControlButton(
     containerColor: Color = Color.White,
     size: androidx.compose.ui.unit.Dp = 64.dp,
     stateDescription: String? = null,
+    accented: Boolean = false,
+    enabled: Boolean = true,
     icon: @Composable () -> Unit,
 ) {
   Surface(
       modifier =
-          Modifier.size(size).semantics {
+          Modifier.size(size).alpha(if (enabled) 1f else DISABLED_CONTROL_ALPHA).semantics {
             contentDescription = label
             stateDescription?.let { this.stateDescription = it }
           },
       color = containerColor,
       contentColor =
-          if (containerColor == Color.White) {
-            AiCallColors.TextStrong
-          } else {
-            Color.White
+          when {
+            containerColor != Color.White -> Color.White
+            accented -> AiCallColors.BrandPurplePressed
+            else -> AiCallColors.TextStrong
           },
       shape = CircleShape,
       shadowElevation = 5.dp,
+      enabled = enabled,
       onClick = onClick,
   ) {
     Box(contentAlignment = Alignment.Center) { icon() }

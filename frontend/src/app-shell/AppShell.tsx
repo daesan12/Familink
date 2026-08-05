@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../design/tokens';
+import type { NotificationDeepLinkTarget } from '../features/notifications/deepLink';
 import { useNotificationGateway } from '../features/notifications/NotificationGatewayContext';
+import {
+  subscribeNativePushReceived,
+  type SubscribePushReceived,
+} from '../features/notifications/pushReceivedProvider';
 import { useHardwareBack } from '../shared/hooks/useHardwareBack';
 import { BottomTabBar } from './BottomTabBar';
 import { CurrentGroupSwitcher } from './CurrentGroupSwitcher';
@@ -15,6 +20,7 @@ import type {
   AppScreenRegistry,
   CurrentGroupStore,
   FamilyGroup,
+  ReportDeepLinkParams,
 } from './types';
 
 interface AppShellProps {
@@ -31,9 +37,17 @@ interface AppShellProps {
   onGroupChange?: (groupId: string) => void;
   onJoinGroup?: () => void;
   onCallResult?: (status: 'COMPLETED' | 'CANCELLED' | 'FAILED') => void;
+  onCurrentGroupChange?: (groupId: string) => void;
   onRequestLogout?: () => void;
   onRequestWithdrawal?: () => Promise<void>;
   screens?: AppScreenRegistry;
+  // 푸시 알림 탭 딥링크. requestId가 바뀔 때마다 target으로 이동한다.
+  deepLinkTarget?: NotificationDeepLinkTarget | null;
+  deepLinkRequestId?: number;
+  // 딥링크 소비 직후 호출된다. 부모가 상태를 비워 재마운트 때 재소비되지 않게 한다.
+  onDeepLinkConsumed?: () => void;
+  // 앱 실행 중 푸시 도착 구독. 테스트에서 네이티브 브리지 없이 주입할 수 있다.
+  subscribePushReceived?: SubscribePushReceived;
 }
 
 export function AppShell({
@@ -50,9 +64,14 @@ export function AppShell({
   onGroupChange,
   onJoinGroup,
   onCallResult,
+  onCurrentGroupChange,
   onRequestLogout,
   onRequestWithdrawal,
   screens = {},
+  deepLinkTarget,
+  deepLinkRequestId = 0,
+  onDeepLinkConsumed,
+  subscribePushReceived = subscribeNativePushReceived,
 }: AppShellProps) {
   const [activeRoute, setActiveRoute] = useState(initialRoute);
   const [currentGroupId, setCurrentGroupId] = useState(initialGroupId);
@@ -64,6 +83,15 @@ export function AppShell({
   const [isScreenHeaderVisible, setIsScreenHeaderVisible] = useState(true);
   const [openPostId, setOpenPostId] = useState<string | null>(null);
   const [openPostRequestId, setOpenPostRequestId] = useState(0);
+  const [openCalendarEventId, setOpenCalendarEventId] = useState<string | null>(
+    null
+  );
+  const [openCalendarEventRequestId, setOpenCalendarEventRequestId] =
+    useState(0);
+  const [openReportTarget, setOpenReportTarget] =
+    useState<ReportDeepLinkParams | null>(null);
+  const [openReportRequestId, setOpenReportRequestId] = useState(0);
+  const [openJoinApprovalRequestId, setOpenJoinApprovalRequestId] = useState(0);
   const [readNotificationIds, setReadNotificationIds] = useState<
     readonly string[]
   >([]);
@@ -72,6 +100,25 @@ export function AppShell({
   const [screenRefreshNonce, setScreenRefreshNonce] = useState(0);
   // 직전 라우트. 알림 화면 복귀 시 배지 재조회를 건너뛰는 판단에 쓴다.
   const previousRouteRef = useRef<AppRoute | null>(null);
+  // 푸시 딥링크 소비. 라우팅 함수가 렌더 본문(조기 반환 뒤)에서 정의되므로
+  // ref로 최신 참조를 유지하고, 그룹 복원 중에는 소비하지 않고 다음 렌더에 재시도한다.
+  const consumedDeepLinkRequestIdRef = useRef(0);
+  const openNotificationTargetRef = useRef<
+    ((target: NotificationDeepLinkTarget) => void) | null
+  >(null);
+  useEffect(() => {
+    const openTarget = openNotificationTargetRef.current;
+    if (
+      deepLinkTarget != null &&
+      deepLinkRequestId > 0 &&
+      deepLinkRequestId !== consumedDeepLinkRequestIdRef.current &&
+      openTarget !== null
+    ) {
+      consumedDeepLinkRequestIdRef.current = deepLinkRequestId;
+      openTarget(deepLinkTarget);
+      onDeepLinkConsumed?.();
+    }
+  });
   const [isRestoringGroup, setIsRestoringGroup] = useState(
     Boolean(groupStore && !initialGroupId)
   );
@@ -90,6 +137,8 @@ export function AppShell({
   useHardwareBack(() => {
     setIsScreenHeaderVisible(true);
     setOpenPostId(null);
+    setOpenCalendarEventId(null);
+    setOpenReportTarget(null);
     setActiveRoute('feed');
     return true;
   }, canReturnToFeed && !isScreenFullscreen);
@@ -103,6 +152,12 @@ export function AppShell({
       resolveAllowedRoute(currentRole, currentRoute)
     );
   }, [currentRole]);
+
+  useLayoutEffect(() => {
+    if (!isRestoringGroup && currentGroup !== null) {
+      onCurrentGroupChange?.(currentGroup.id);
+    }
+  }, [currentGroup, isRestoringGroup, onCurrentGroupChange]);
 
   useEffect(() => {
     const previousRoute = previousRouteRef.current;
@@ -133,6 +188,49 @@ export function AppShell({
       disposed = true;
     };
   }, [currentUserId, notificationGateway, resolvedRoute, screenRefreshNonce]);
+
+  // 앱 실행 중 푸시가 도착하면 배지를 즉시 갱신한다. 알림 화면에서는 구독하지
+  // 않고 화면이 보고한 값을 유지한다. 알림 화면에서 나온 직후 읽음 API 커밋 전에
+  // 푸시가 도착하는 좁은 경쟁까지는 막지 않으며, 이때는 다음 조회에서 수렴한다.
+  // 연속 푸시는 진행 중 조회 1건 + 후속 조회 1건으로 합쳐 마지막 푸시 이후
+  // 값으로 확정한다(응답 역전으로 오래된 값이 남는 것 방지).
+  useEffect(() => {
+    if (notificationGateway === null || resolvedRoute === 'notifications') {
+      return;
+    }
+
+    let disposed = false;
+    let isFetching = false;
+    let hasPendingRefresh = false;
+    const refreshUnreadCount = () => {
+      if (isFetching) {
+        hasPendingRefresh = true;
+        return;
+      }
+      isFetching = true;
+      notificationGateway
+        .getUnreadCount()
+        .then(count => {
+          if (!disposed) {
+            setUnreadNotificationCount(count);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          isFetching = false;
+          if (hasPendingRefresh && !disposed) {
+            hasPendingRefresh = false;
+            refreshUnreadCount();
+          }
+        });
+    };
+    const unsubscribe = subscribePushReceived(refreshUnreadCount);
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, [notificationGateway, resolvedRoute, subscribePushReceived]);
 
   useEffect(() => {
     if (initialGroupId || !groupStore) {
@@ -190,6 +288,8 @@ export function AppShell({
       setIsGroupMenuOpen(false);
       setOpenPostId(null);
       setOpenPostRequestId(0);
+      setOpenCalendarEventId(null);
+      setOpenReportTarget(null);
     }
   }, [currentGroupId, groups, initialGroupId]);
 
@@ -242,8 +342,11 @@ export function AppShell({
 
   const handleGroupSelect = (groupId: string) => {
     setCurrentGroupId(groupId);
+    onCurrentGroupChange?.(groupId);
     setOpenPostId(null);
     setOpenPostRequestId(0);
+    setOpenCalendarEventId(null);
+    setOpenReportTarget(null);
     setIsGroupMenuOpen(false);
     onGroupChange?.(groupId);
     if (groupStore) {
@@ -272,6 +375,47 @@ export function AppShell({
     setIsScreenHeaderVisible(true);
     setActiveRoute('feed');
   };
+
+  const handleOpenNotificationTarget = (target: NotificationDeepLinkTarget) => {
+    if (target.kind === 'post') {
+      handleOpenPost(target.postId, target.groupId);
+      return;
+    }
+    if (target.kind === 'notifications') {
+      setIsScreenHeaderVisible(true);
+      setActiveRoute('notifications');
+      return;
+    }
+    if (
+      target.groupId &&
+      target.groupId !== currentGroup.id &&
+      groups.some(group => group.id === target.groupId)
+    ) {
+      handleGroupSelect(target.groupId);
+    }
+    setIsScreenHeaderVisible(true);
+    if (target.kind === 'calendarEvent') {
+      setOpenCalendarEventId(target.eventId);
+      setOpenCalendarEventRequestId(requestId => requestId + 1);
+      setActiveRoute('calendar');
+      return;
+    }
+    if (target.kind === 'callReport' || target.kind === 'dailyReport') {
+      setOpenReportTarget({
+        ...(target.kind === 'callReport'
+          ? {callSessionId: target.callSessionId}
+          : {}),
+        memberId: target.memberId,
+        reportDate: target.reportDate,
+      });
+      setOpenReportRequestId(requestId => requestId + 1);
+      setActiveRoute('report');
+      return;
+    }
+    setOpenJoinApprovalRequestId(requestId => requestId + 1);
+    setActiveRoute('groupInfo');
+  };
+  openNotificationTargetRef.current = handleOpenNotificationTarget;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -394,11 +538,17 @@ export function AppShell({
             onNotificationRead={handleNotificationRead}
             onUnreadCountChange={setUnreadNotificationCount}
             onOpenNotifications={() => setActiveRoute('notifications')}
+            onOpenNotificationTarget={handleOpenNotificationTarget}
             onOpenPost={handleOpenPost}
             onRequestLogout={onRequestLogout}
             onRequestWithdrawal={onRequestWithdrawal}
+            openCalendarEventId={openCalendarEventId}
+            openCalendarEventRequestId={openCalendarEventRequestId}
+            openJoinApprovalRequestId={openJoinApprovalRequestId}
             openPostId={openPostId}
             openPostRequestId={openPostRequestId}
+            openReportRequestId={openReportRequestId}
+            openReportTarget={openReportTarget}
             readNotificationIds={readNotificationIds}
             role={currentGroup.role}
           />
@@ -442,6 +592,8 @@ export function AppShell({
             }
             setIsScreenHeaderVisible(true);
             setOpenPostId(null);
+            setOpenCalendarEventId(null);
+            setOpenReportTarget(null);
             // 같은 화면의 탭을 다시 누르면 재마운트해 최신 데이터를 다시 조회한다.
             // 아카이브처럼 탭과 화면이 다른 상태에서는 일반 이동으로 처리한다.
             if (route === resolvedRoute) {

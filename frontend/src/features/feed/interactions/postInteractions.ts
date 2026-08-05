@@ -17,6 +17,7 @@ export const REACTION_OPTIONS: readonly Omit<FeedReaction, 'count'>[] = [
 const LOCAL_COMMENT_ID_PREFIX = 'local-comment-';
 
 export interface PostInteractionsState {
+  commentCountDeltaByPostId: Readonly<Record<string, number>>;
   commentCountByPostId: Readonly<Record<string, number>>;
   commentsByPostId: Readonly<Record<string, readonly PostComment[]>>;
   reactionsByPostId: Readonly<Record<string, readonly FeedReaction[]>>;
@@ -30,6 +31,9 @@ export function createPostInteractionsState(
   commentsByPostId: Readonly<Record<string, readonly PostComment[]>>,
 ): PostInteractionsState {
   return {
+    commentCountDeltaByPostId: Object.fromEntries(
+      posts.map(post => [post.id, 0]),
+    ),
     commentCountByPostId: Object.fromEntries(
       posts.map(post => [
         post.id,
@@ -71,6 +75,11 @@ export function addComment(
 
   return {
     ...state,
+    commentCountDeltaByPostId: {
+      ...state.commentCountDeltaByPostId,
+      [input.postId]:
+        (state.commentCountDeltaByPostId[input.postId] ?? 0) + 1,
+    },
     commentCountByPostId: {
       ...state.commentCountByPostId,
       [input.postId]:
@@ -144,6 +153,40 @@ export function replaceComments(
   };
 }
 
+export function setCommentCount(
+  state: PostInteractionsState,
+  input: {commentCount: number; postId: string},
+): PostInteractionsState {
+  return {
+    ...state,
+    commentCountByPostId: {
+      ...state.commentCountByPostId,
+      [input.postId]: Math.max(
+        0,
+        input.commentCount +
+          (state.commentCountDeltaByPostId[input.postId] ?? 0),
+      ),
+    },
+  };
+}
+
+export function settleCommentCountDelta(
+  state: PostInteractionsState,
+  input: {delta: number; postId: string},
+): PostInteractionsState {
+  if (input.delta === 0) {
+    return state;
+  }
+  return {
+    ...state,
+    commentCountDeltaByPostId: {
+      ...state.commentCountDeltaByPostId,
+      [input.postId]:
+        (state.commentCountDeltaByPostId[input.postId] ?? 0) - input.delta,
+    },
+  };
+}
+
 export function appendComments(
   state: PostInteractionsState,
   input: {comments: readonly PostComment[]; postId: string},
@@ -196,6 +239,11 @@ export function restoreComment(
   }
   return {
     ...state,
+    commentCountDeltaByPostId: {
+      ...state.commentCountDeltaByPostId,
+      [input.postId]:
+        (state.commentCountDeltaByPostId[input.postId] ?? 0) + 1,
+    },
     commentCountByPostId: {
       ...state.commentCountByPostId,
       [input.postId]:
@@ -219,6 +267,12 @@ export function deleteComment(
 
   return {
     ...state,
+    commentCountDeltaByPostId: {
+      ...state.commentCountDeltaByPostId,
+      [input.postId]:
+        (state.commentCountDeltaByPostId[input.postId] ?? 0) -
+        (containsComment ? 1 : 0),
+    },
     commentCountByPostId: {
       ...state.commentCountByPostId,
       [input.postId]: containsComment

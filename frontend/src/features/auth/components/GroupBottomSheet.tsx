@@ -5,7 +5,6 @@ import {
   Easing,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -108,7 +107,7 @@ export function GroupBottomSheet({
           style={StyleSheet.absoluteFill}
         />
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior="padding"
           pointerEvents="box-none"
           style={styles.keyboardArea}>
           <Animated.View

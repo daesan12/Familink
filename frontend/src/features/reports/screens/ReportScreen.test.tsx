@@ -96,6 +96,20 @@ test("건별 리포트만 있으면 일간 리포트 준비 상태와 건별 목
   expect(tree).toContain("리포트 준비 중");
 });
 
+test("상태 API가 없는 fixture에서 생성 대상이 아닌 통화는 생성 불가로 표시한다", () => {
+  const renderer = renderReportScreen([DAILY_PENDING_REPORT_PAGE]);
+
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "18:30 통화 리포트 상태 확인" })
+      .props.onPress();
+  });
+
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "생성할 수 없는 리포트예요"
+  );
+});
+
 test("리포트가 한 건도 없으면 전체 빈 상태를 표시한다", () => {
   const renderer = renderReportScreen([EMPTY_REPORT_PAGE]);
 
