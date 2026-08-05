@@ -229,12 +229,17 @@ internal class AiCallRuntime(
     }
 
     activeStartJob?.cancel()
-    close()
-
     if (existingSessionId != null) {
-      dispatchPendingEndIfRequested()
-    } else if (activeStartJob == null) {
-      completePendingEndWithoutServerSession()
+      try {
+        dispatchPendingEndIfRequested()
+      } finally {
+        close()
+      }
+    } else {
+      close()
+      if (activeStartJob == null) {
+        completePendingEndWithoutServerSession()
+      }
     }
 
     if (activeStartJob != null && !completion.isCompleted) {

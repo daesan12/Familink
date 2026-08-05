@@ -40,6 +40,8 @@ public interface CallTranscriptEventRepository extends JpaRepository<CallTranscr
 
 	long countByCallSessionIdAndStatusNot(Long callSessionId, TranscriptIngestStatus status);
 
+	long countByCallSessionIdAndStatus(Long callSessionId, TranscriptIngestStatus status);
+
 	@Query("""
 		select event.id
 		from CallTranscriptEvent event

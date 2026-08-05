@@ -299,6 +299,13 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
   같은 token·revision과 최신 무결성을 재검사한다. 성공은 `DONE`, 명시적
   Gemini 실패는 `GEMINI_FAILED`다. 1분 주기 batch 20 복구는 `PENDING`과
   만료 `CLAIMED`만 다시 접수한다.
+- 자동 복구는 `GEMINI_FAILED`를 되돌리지 않는다. 장애 원인과 운영 GMS 호출을
+  확인한 운영자만 명시적 `call_session_id`에 대해 `COMPLETED`, 전사 무결성
+  `COMPLETE`, finalization 완료, 공백이 아닌 전사 한 건 이상, 모든 전사 원장 이벤트
+  `APPLIED`, 기존 리포트 없음 조건을 검증해 누락 request를 현재 revision의
+  `PENDING`으로 만들거나 해당 `GEMINI_FAILED`를 `PENDING`으로 되돌릴 수 있다.
+  이때 claim·실패 메타데이터를 지우며 세션 뒤 request 잠금 순서를 지킨다.
+  `INCOMPLETE`·`CANCELLED`·`FAILED`와 불완전 전사는 변경하지 않는다.
 
 ### `daily_reports`
 

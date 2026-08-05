@@ -24,11 +24,13 @@ afterEach(() => {
     renderedScreens.forEach((renderer) => renderer.unmount());
   });
   renderedScreens.clear();
+  jest.useRealTimers();
 });
 
 function createGateway(): jest.Mocked<ReportGateway> {
   return {
     getCallReport: jest.fn(),
+    getCallReportStatus: jest.fn(),
     getDailyReport: jest.fn(),
     getReportDates: jest.fn().mockResolvedValue({
       latestReportDate: null,
@@ -55,6 +57,54 @@ async function renderWithGateway(gateway: ReportGateway, targets = [target]) {
 
   renderedScreens.add(renderer!);
   return renderer!;
+}
+
+function mockDailyReportWithCall(
+  gateway: jest.Mocked<ReportGateway>,
+  reportAvailable = true
+) {
+  gateway.getDailyReport.mockResolvedValue({
+    calls: [
+      {
+        callSessionId: "31",
+        reportAvailable,
+        startedAt: "2026-07-31T00:30:00Z",
+      },
+    ],
+    dailyReport: null,
+    date: "2026-07-31",
+    status: "generating",
+  });
+}
+
+async function openCallReport(renderer: TestRenderer.ReactTestRenderer) {
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "09:30 통화 리포트 열기" })
+      .props.onPress();
+  });
+}
+
+function readyCallReport() {
+  return {
+    callSessionId: "31",
+    createdAt: "2026-07-31T00:35:00Z",
+    guardianMessage: null,
+    status: "ready" as const,
+    summary: "아침 식사와 가족 이야기를 나누셨어요.",
+  };
+}
+
+function isCallReportDetailVisible(renderer: TestRenderer.ReactTestRenderer) {
+  const detailModal = renderer.root
+    .findAllByProps({ statusBarTranslucent: true })
+    .find(
+      (modal) =>
+        modal.findAllByProps({
+          accessibilityLabel: "건별 통화 리포트 상세",
+        }).length > 0
+    );
+  return Boolean(detailModal?.props.visible);
 }
 
 test("일간 조회 실패를 통화 없음과 구분하고 다시 시도할 수 있다", async () => {
@@ -112,6 +162,10 @@ test("건별 행을 누르면 API-REPORTS-003을 조회해 상세를 표시한�
     status: "ready",
     summary: "아침 식사와 가족 이야기를 나누셨어요.",
   });
+  gateway.getCallReportStatus.mockResolvedValue({
+    callSessionId: "31",
+    status: "ready",
+  });
   const renderer = await renderWithGateway(gateway);
 
   await TestRenderer.act(async () => {
@@ -140,7 +194,7 @@ test("건별 404 준비 전 결과는 오류 대신 준비 중으로 표시한�
     date: "2026-07-31",
     status: "generating",
   });
-  gateway.getCallReport.mockResolvedValue({
+  gateway.getCallReportStatus.mockResolvedValue({
     callSessionId: "31",
     status: "generating",
   });
@@ -491,6 +545,10 @@ test("알림 딥링크로 진입하면 해당 날짜·멤버 리포트로 이동
     status: "ready",
     summary: "딥링크로 연 통화 리포트입니다.",
   });
+  gateway.getCallReportStatus.mockResolvedValue({
+    callSessionId: "31",
+    status: "ready",
+  });
 
   let renderer: TestRenderer.ReactTestRenderer;
   await TestRenderer.act(async () => {
@@ -630,4 +688,264 @@ test("리포트 초기 조회의 동시 요청 수를 chunk 상한으로 제한�
   expect(maxActiveRequests).toBeLessThanOrEqual(
     REPORT_PAGE_REQUEST_CONCURRENCY
   );
+});
+
+test("생성 중 상태를 5초 뒤 다시 확인해 완료 리포트를 자동으로 표시한다", async () => {
+  jest.useFakeTimers();
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway);
+  gateway.getCallReportStatus
+    .mockResolvedValueOnce({ callSessionId: "31", status: "generating" })
+    .mockResolvedValueOnce({ callSessionId: "31", status: "ready" });
+  gateway.getCallReport.mockResolvedValue(readyCallReport());
+  const renderer = await renderWithGateway(gateway);
+
+  await openCallReport(renderer);
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "리포트를 준비하고 있어요"
+  );
+
+  await TestRenderer.act(async () => {
+    await jest.advanceTimersByTimeAsync(5_000);
+  });
+
+  expect(gateway.getCallReportStatus).toHaveBeenCalledTimes(2);
+  expect(gateway.getCallReport).toHaveBeenCalledWith("31");
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "아침 식사와 가족 이야기를 나누셨어요."
+  );
+});
+
+test("리포트가 아직 없어도 행을 눌러 생성 상태를 확인할 수 있다", async () => {
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway, false);
+  gateway.getCallReportStatus.mockResolvedValue({
+    callSessionId: "31",
+    status: "generating",
+  });
+  const renderer = await renderWithGateway(gateway);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "09:30 통화 리포트 상태 확인" })
+      .props.onPress();
+  });
+
+  expect(gateway.getCallReportStatus).toHaveBeenCalledWith("31");
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "리포트를 준비하고 있어요"
+  );
+});
+
+test("90초 동안 생성 중이면 자동 확인을 멈추고 수동 상태 확인으로 복구한다", async () => {
+  jest.useFakeTimers();
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway);
+  gateway.getCallReportStatus.mockResolvedValue({
+    callSessionId: "31",
+    status: "generating",
+  });
+  gateway.getCallReport.mockResolvedValue(readyCallReport());
+  const renderer = await renderWithGateway(gateway);
+
+  await openCallReport(renderer);
+  await TestRenderer.act(async () => {
+    await jest.advanceTimersByTimeAsync(90_000);
+  });
+
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "처리가 예상보다 오래 걸리고 있어요"
+  );
+  expect(gateway.getCallReportStatus).toHaveBeenCalledTimes(18);
+
+  gateway.getCallReportStatus.mockResolvedValueOnce({
+    callSessionId: "31",
+    status: "ready",
+  });
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "상태 다시 확인" })
+      .props.onPress();
+  });
+
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "아침 식사와 가족 이야기를 나누셨어요."
+  );
+});
+
+test("상태 조회 응답이 멈춰도 90초 뒤 지연 상태를 표시한다", async () => {
+  jest.useFakeTimers();
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway);
+  gateway.getCallReportStatus.mockImplementation(
+    () => new Promise<never>(() => undefined)
+  );
+  const renderer = await renderWithGateway(gateway);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "09:30 통화 리포트 열기" })
+      .props.onPress();
+    await Promise.resolve();
+  });
+  await TestRenderer.act(async () => {
+    await jest.advanceTimersByTimeAsync(90_000);
+  });
+
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "처리가 예상보다 오래 걸리고 있어요"
+  );
+  expect(gateway.getCallReportStatus).toHaveBeenCalledTimes(1);
+});
+
+test.each([
+  ["failed" as const, "리포트 생성에 실패했어요"],
+  ["unavailable" as const, "생성할 수 없는 리포트예요"],
+])("%s 상태를 고유한 안내로 표시한다", async (status, message) => {
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway);
+  gateway.getCallReportStatus.mockResolvedValue({
+    callSessionId: "31",
+    status,
+  });
+  const renderer = await renderWithGateway(gateway);
+
+  await openCallReport(renderer);
+
+  expect(JSON.stringify(renderer.toJSON())).toContain(message);
+  expect(gateway.getCallReport).not.toHaveBeenCalled();
+});
+
+test("상태 조회 네트워크 오류를 별도 안내하고 다시 확인할 수 있다", async () => {
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway);
+  gateway.getCallReportStatus
+    .mockRejectedValueOnce(new Error("network"))
+    .mockResolvedValueOnce({ callSessionId: "31", status: "ready" });
+  gateway.getCallReport.mockResolvedValue(readyCallReport());
+  const renderer = await renderWithGateway(gateway);
+
+  await openCallReport(renderer);
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "리포트 상태를 확인하지 못했어요"
+  );
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "상태 다시 확인" })
+      .props.onPress();
+  });
+
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "아침 식사와 가족 이야기를 나누셨어요."
+  );
+});
+
+test("상세를 닫은 뒤 도착한 상태 응답은 화면을 다시 열지 않는다", async () => {
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway);
+  let resolveStatus:
+    | ((value: { callSessionId: string; status: "ready" }) => void)
+    | undefined;
+  gateway.getCallReportStatus.mockImplementation(
+    () =>
+      new Promise<{ callSessionId: string; status: "ready" }>((resolve) => {
+        resolveStatus = resolve;
+      })
+  );
+  gateway.getCallReport.mockResolvedValue(readyCallReport());
+  const renderer = await renderWithGateway(gateway);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "09:30 통화 리포트 열기" })
+      .props.onPress();
+    await Promise.resolve();
+  });
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "통화 리포트 상세 닫기" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    resolveStatus?.({ callSessionId: "31", status: "ready" });
+  });
+
+  expect(isCallReportDetailVisible(renderer)).toBe(false);
+  expect(gateway.getCallReport).not.toHaveBeenCalled();
+});
+
+test("상세를 닫으면 예약된 상태 확인 타이머를 취소한다", async () => {
+  jest.useFakeTimers();
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway);
+  gateway.getCallReportStatus.mockResolvedValue({
+    callSessionId: "31",
+    status: "generating",
+  });
+  const renderer = await renderWithGateway(gateway);
+
+  await openCallReport(renderer);
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "통화 리포트 상세 닫기" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await jest.advanceTimersByTimeAsync(10_000);
+  });
+
+  expect(gateway.getCallReportStatus).toHaveBeenCalledTimes(1);
+  expect(isCallReportDetailVisible(renderer)).toBe(false);
+});
+
+test("피보호자를 바꾼 뒤 이전 통화의 늦은 응답을 무시한다", async () => {
+  const gateway = createGateway();
+  const targets = [
+    { displayName: "김말순", memberId: "12" },
+    { displayName: "이정희", memberId: "13" },
+  ];
+  gateway.getDailyReport.mockImplementation(async (_groupId, memberId) => ({
+    calls: [
+      {
+        callSessionId: memberId === "12" ? "31" : "32",
+        reportAvailable: true,
+        startedAt: "2026-07-31T00:30:00Z",
+      },
+    ],
+    dailyReport: null,
+    date: "2026-07-31",
+    status: "generating",
+  }));
+  let resolveStatus:
+    | ((value: { callSessionId: string; status: "ready" }) => void)
+    | undefined;
+  gateway.getCallReportStatus.mockImplementation(
+    () =>
+      new Promise<{ callSessionId: string; status: "ready" }>((resolve) => {
+        resolveStatus = resolve;
+      })
+  );
+  gateway.getCallReport.mockResolvedValue(readyCallReport());
+  const renderer = await renderWithGateway(gateway, targets);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findAllByProps({ accessibilityLabel: "09:30 통화 리포트 열기" })[0]
+      .props.onPress();
+    await Promise.resolve();
+  });
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ testID: "care-receiver-report-pager" })
+      .props.onMomentumScrollEnd({
+        nativeEvent: { contentOffset: { x: 1_000_000 } },
+      });
+  });
+  await TestRenderer.act(async () => {
+    resolveStatus?.({ callSessionId: "31", status: "ready" });
+  });
+
+  expect(isCallReportDetailVisible(renderer)).toBe(false);
+  expect(gateway.getCallReport).not.toHaveBeenCalled();
 });

@@ -13,12 +13,20 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ssafy.s15p11b104.domain.call.entity.CallReport;
 import com.ssafy.s15p11b104.domain.call.entity.CallSession;
 import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
+import com.ssafy.s15p11b104.domain.call.entity.TranscriptIngestStatus;
+import com.ssafy.s15p11b104.domain.call.entity.TranscriptIntegrityStatus;
+import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationRequest;
+import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationRequestRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
+import com.ssafy.s15p11b104.domain.call.repository.CallTranscriptEventRepository;
+import com.ssafy.s15p11b104.domain.call.repository.CallTranscriptRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.report.dto.CallReportResponse;
+import com.ssafy.s15p11b104.domain.report.dto.CallReportStatus;
+import com.ssafy.s15p11b104.domain.report.dto.CallReportStatusResponse;
 import com.ssafy.s15p11b104.domain.report.dto.DailyCallItemResponse;
 import com.ssafy.s15p11b104.domain.report.dto.DailyReportResponse;
 import com.ssafy.s15p11b104.domain.report.dto.DailyReportSummaryResponse;
@@ -31,7 +39,7 @@ import com.ssafy.s15p11b104.global.exception.ErrorCode;
 /**
  * 보호자가 피보호자의 통화 리포트를 조회하는 기능을 담당한다.
  *
- * <p>{@code API-REPORTS-001}~{@code 003}을 구현한다. 세 계약 모두 같은 그룹의 활성 보호자만 허용하고
+ * <p>{@code API-REPORTS-001}~{@code 004}를 구현한다. 모든 계약은 같은 그룹의 활성 보호자만 허용하고
  * 404를 두지 않으므로, 존재하지 않는 그룹·구성원·통화도 {@code FORBIDDEN}으로 응답해 리소스 존재
  * 여부를 노출하지 않는다. 유일한 404는 통화에는 접근할 수 있으나 건별 리포트가 아직 없는
  * {@code CALL_REPORT_NOT_READY}다.
@@ -42,16 +50,25 @@ public class ReportQueryService {
 	private final DailyReportRepository dailyReportRepository;
 	private final CallSessionRepository callSessionRepository;
 	private final CallReportCallRepository callReportRepository;
+	private final CallReportGenerationRequestRepository callReportRequestRepository;
+	private final CallTranscriptEventRepository transcriptEventRepository;
+	private final CallTranscriptRepository callTranscriptRepository;
 	private final GroupMemberRepository groupMemberRepository;
 
 	public ReportQueryService(
 		DailyReportRepository dailyReportRepository,
 		CallSessionRepository callSessionRepository,
 		CallReportCallRepository callReportRepository,
+		CallReportGenerationRequestRepository callReportRequestRepository,
+		CallTranscriptEventRepository transcriptEventRepository,
+		CallTranscriptRepository callTranscriptRepository,
 		GroupMemberRepository groupMemberRepository) {
 		this.dailyReportRepository = dailyReportRepository;
 		this.callSessionRepository = callSessionRepository;
 		this.callReportRepository = callReportRepository;
+		this.callReportRequestRepository = callReportRequestRepository;
+		this.transcriptEventRepository = transcriptEventRepository;
+		this.callTranscriptRepository = callTranscriptRepository;
 		this.groupMemberRepository = groupMemberRepository;
 	}
 
@@ -95,12 +112,7 @@ public class ReportQueryService {
 	 */
 	@Transactional(readOnly = true)
 	public CallReportResponse getCallReport(Long callSessionId, Long authenticatedUserId) {
-		CallSession session = callSessionRepository.findById(callSessionId)
-			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
-		requireGuardianAccessToCareReceiver(
-			session.getGroup().getId(),
-			session.getCareReceiverMember().getId(),
-			authenticatedUserId);
+		findAuthorizedCallSession(callSessionId, authenticatedUserId);
 
 		CallReport report = callReportRepository.findByCallSessionId(callSessionId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.CALL_REPORT_NOT_READY));
@@ -110,6 +122,66 @@ public class ReportQueryService {
 			report.getSummary(),
 			report.getGuardianMessage(),
 			report.getCreatedAt());
+	}
+
+	/**
+	 * 한 통화의 건별 리포트 생성 상태를 내부 처리 정보 없이 반환한다.
+	 */
+	@Transactional(readOnly = true)
+	public CallReportStatusResponse getCallReportStatus(Long callSessionId, Long authenticatedUserId) {
+		CallSession session = findAuthorizedCallSession(callSessionId, authenticatedUserId);
+		return new CallReportStatusResponse(callSessionId, resolveCallReportStatus(session));
+	}
+
+	private CallReportStatus resolveCallReportStatus(CallSession session) {
+		Long callSessionId = session.getId();
+		if (callReportRepository.existsByCallSessionId(callSessionId)) {
+			return CallReportStatus.READY;
+		}
+
+		CallReportGenerationRequest request = callReportRequestRepository.findById(callSessionId).orElse(null);
+		if (request != null) {
+			return switch (request.getStatus()) {
+				case PENDING, CLAIMED -> CallReportStatus.GENERATING;
+				case GEMINI_FAILED -> CallReportStatus.FAILED;
+				case DONE -> CallReportStatus.UNAVAILABLE;
+			};
+		}
+
+		if (session.getStatus() != CallStatus.COMPLETED) {
+			return CallReportStatus.UNAVAILABLE;
+		}
+		if (session.getTranscriptIntegrityStatus() == TranscriptIntegrityStatus.COLLECTING) {
+			return CallReportStatus.GENERATING;
+		}
+		if (session.getTranscriptIntegrityStatus() != TranscriptIntegrityStatus.RECONCILIATION_REQUIRED) {
+			return CallReportStatus.UNAVAILABLE;
+		}
+
+		long unresolvedCount = transcriptEventRepository.countByCallSessionIdAndStatusNot(
+			callSessionId,
+			TranscriptIngestStatus.APPLIED
+		);
+		long readyCount = transcriptEventRepository.countByCallSessionIdAndStatus(
+			callSessionId,
+			TranscriptIngestStatus.READY
+		);
+		boolean hasMaterializedTranscript = callTranscriptRepository.countByCallSessionId(callSessionId) > 0;
+		boolean canMaterializeReadyEvents = unresolvedCount > 0 && unresolvedCount == readyCount;
+		boolean canFinalizeAppliedEvents = unresolvedCount == 0 && hasMaterializedTranscript;
+		return canMaterializeReadyEvents || canFinalizeAppliedEvents
+			? CallReportStatus.GENERATING
+			: CallReportStatus.UNAVAILABLE;
+	}
+
+	private CallSession findAuthorizedCallSession(Long callSessionId, Long authenticatedUserId) {
+		CallSession session = callSessionRepository.findById(callSessionId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+		requireGuardianAccessToCareReceiver(
+			session.getGroup().getId(),
+			session.getCareReceiverMember().getId(),
+			authenticatedUserId);
+		return session;
 	}
 
 	/**

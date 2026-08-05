@@ -88,13 +88,13 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
 		from CallSession session
 		where session.status in :terminalStatuses
 			and session.endedAt <= :cutoff
-			and session.transcriptIntegrityStatus = :collectingStatus
+			and session.transcriptIntegrityStatus = :integrityStatus
 			and session.transcriptFinalizedAt is null
 		order by session.endedAt, session.id
 		""")
 	List<Long> findTranscriptFinalizationCandidateIds(
 		@Param("terminalStatuses") Collection<CallStatus> terminalStatuses,
-		@Param("collectingStatus") TranscriptIntegrityStatus collectingStatus,
+		@Param("integrityStatus") TranscriptIntegrityStatus integrityStatus,
 		@Param("cutoff") Instant cutoff,
 		Pageable pageable
 	);

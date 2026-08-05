@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,11 @@ import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
 import com.ssafy.s15p11b104.domain.call.entity.CallReport;
 import com.ssafy.s15p11b104.domain.call.entity.CallSession;
 import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
+import com.ssafy.s15p11b104.domain.call.entity.CallTranscript;
+import com.ssafy.s15p11b104.domain.call.entity.CallTranscriptEvent;
+import com.ssafy.s15p11b104.domain.call.entity.SpeakerType;
+import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationRequest;
+import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationRequestRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
@@ -81,6 +87,9 @@ class ReportApiTest extends IntegrationTest {
 	@Autowired
 	private CallReportCallRepository callReportRepository;
 
+	@Autowired
+	private CallReportGenerationRequestRepository callReportRequestRepository;
+
 	private User guardianUser;
 	private User careReceiverUser;
 	private User leftGuardianUser;
@@ -99,6 +108,8 @@ class ReportApiTest extends IntegrationTest {
 		entityManager.createNativeQuery("DELETE FROM device_tokens").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM notification_settings").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM call_reports").executeUpdate();
+		entityManager.createNativeQuery("DELETE FROM call_report_generation_requests").executeUpdate();
+		entityManager.createNativeQuery("DELETE FROM call_transcript_events").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM call_transcripts").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM call_sessions").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM daily_reports").executeUpdate();
@@ -362,6 +373,92 @@ class ReportApiTest extends IntegrationTest {
 			.andExpect(jsonPath("$.code").value("CALL_REPORT_NOT_READY"));
 	}
 
+	@Test
+	void callReportStatusReturnsReadyWhenReportExists() throws Exception {
+		Long callSessionId = persistCompletedCall(businessTime(REPORT_DATE, 10, 0));
+		persistCallReport(callSessionId);
+
+		expectCallReportStatus(callSessionId, "READY");
+	}
+
+	@Test
+	void callReportStatusReturnsGeneratingForPendingAndClaimedRequests() throws Exception {
+		Long pendingCallSessionId = persistCompletedCall(businessTime(REPORT_DATE, 10, 0));
+		persistGenerationRequest(pendingCallSessionId);
+
+		Long claimedCallSessionId = persistCompletedCall(businessTime(REPORT_DATE, 11, 0));
+		CallReportGenerationRequest claimedRequest = persistGenerationRequest(claimedCallSessionId);
+		claimedRequest.claim(UUID.randomUUID(), 0L, Instant.now().plusSeconds(60));
+		callReportRequestRepository.save(claimedRequest);
+		entityManager.flush();
+		entityManager.clear();
+
+		expectCallReportStatus(pendingCallSessionId, "GENERATING");
+		expectCallReportStatus(claimedCallSessionId, "GENERATING");
+	}
+
+	@Test
+	void callReportStatusReturnsGeneratingWhileTranscriptFinalizationIsPending() throws Exception {
+		CallSession session = newSession();
+		Instant endedAt = businessTime(REPORT_DATE, 10, 0);
+		session.markConnected(endedAt.minusSeconds(300));
+		session.endByUser(endedAt);
+		Long callSessionId = saveSession(session);
+
+		expectCallReportStatus(callSessionId, "GENERATING");
+	}
+
+	@Test
+	void callReportStatusReturnsGeneratingForFinalizedReconciliationWithOnlyReadyEvents() throws Exception {
+		Long callSessionId = persistReconciliationCall(businessTime(REPORT_DATE, 10, 0));
+		persistReadyTranscriptEvent(callSessionId, "ready-item", 1);
+
+		expectCallReportStatus(callSessionId, "GENERATING");
+	}
+
+	@Test
+	void callReportStatusReturnsGeneratingForUnfinalizedReconciliationWithAppliedTranscript() throws Exception {
+		Long callSessionId = persistUnfinalizedReconciliationCall(businessTime(REPORT_DATE, 10, 0));
+		persistAppliedTranscript(callSessionId, "applied-item", 1);
+
+		expectCallReportStatus(callSessionId, "GENERATING");
+	}
+
+	@Test
+	void callReportStatusReturnsUnavailableForUnrecoverableFinalizedReconciliation() throws Exception {
+		Long failedCallSessionId = persistReconciliationCall(businessTime(REPORT_DATE, 10, 0));
+		persistFailedTranscriptEvent(failedCallSessionId, "failed-item", 1);
+
+		Long mixedCallSessionId = persistReconciliationCall(businessTime(REPORT_DATE, 11, 0));
+		persistReadyTranscriptEvent(mixedCallSessionId, "mixed-ready-item", 1);
+		persistFailedTranscriptEvent(mixedCallSessionId, "mixed-failed-item", 2);
+
+		Long resolvedCallSessionId = persistReconciliationCall(businessTime(REPORT_DATE, 12, 0));
+
+		expectCallReportStatus(failedCallSessionId, "UNAVAILABLE");
+		expectCallReportStatus(mixedCallSessionId, "UNAVAILABLE");
+		expectCallReportStatus(resolvedCallSessionId, "UNAVAILABLE");
+	}
+
+	@Test
+	void callReportStatusReturnsFailedAfterGeminiFailure() throws Exception {
+		Long callSessionId = persistCompletedCall(businessTime(REPORT_DATE, 10, 0));
+		CallReportGenerationRequest request = persistGenerationRequest(callSessionId);
+		request.markGeminiFailed("GEMINI_REQUEST_FAILED", Instant.now());
+		callReportRequestRepository.save(request);
+		entityManager.flush();
+		entityManager.clear();
+
+		expectCallReportStatus(callSessionId, "FAILED");
+	}
+
+	@Test
+	void callReportStatusReturnsUnavailableWithoutRecoverableRequest() throws Exception {
+		Long callSessionId = persistCompletedCall(businessTime(REPORT_DATE, 10, 0));
+
+		expectCallReportStatus(callSessionId, "UNAVAILABLE");
+	}
+
 	// --- 권한 ---
 
 	@Test
@@ -415,6 +512,11 @@ class ReportApiTest extends IntegrationTest {
 				.with(authenticatedAs(guardianUser.getId())))
 			.andExpect(status().isForbidden())
 			.andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+		mockMvc.perform(get("/call-sessions/{callSessionId}/report/status", UNKNOWN_ID)
+				.with(authenticatedAs(guardianUser.getId())))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("FORBIDDEN"));
 	}
 
 	@Test
@@ -450,6 +552,19 @@ class ReportApiTest extends IntegrationTest {
 				.with(authenticatedAs(requesterUserId)))
 			.andExpect(status().isForbidden())
 			.andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+		mockMvc.perform(get("/call-sessions/{callSessionId}/report/status", callSessionId)
+				.with(authenticatedAs(requesterUserId)))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("FORBIDDEN"));
+	}
+
+	private void expectCallReportStatus(Long callSessionId, String expectedStatus) throws Exception {
+		mockMvc.perform(get("/call-sessions/{callSessionId}/report/status", callSessionId)
+				.with(authenticatedAs(guardianUser.getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.callSessionId").value(callSessionId))
+			.andExpect(jsonPath("$.data.status").value(expectedStatus));
 	}
 
 	private Instant businessTime(LocalDate date, int hour, int minute) {
@@ -486,6 +601,67 @@ class ReportApiTest extends IntegrationTest {
 		session.endByUser(endedAt);
 		session.finalizeTranscript(endedAt);
 		return saveSession(session);
+	}
+
+	private Long persistReconciliationCall(Instant endedAt) {
+		CallSession session = newSession();
+		session.markConnected(endedAt.minusSeconds(300));
+		session.endByUser(endedAt);
+		session.requireTranscriptReconciliationAfterDrain(endedAt);
+		return saveSession(session);
+	}
+
+	private Long persistUnfinalizedReconciliationCall(Instant endedAt) {
+		CallSession session = newSession();
+		session.markConnected(endedAt.minusSeconds(300));
+		session.endByUser(endedAt);
+		session.requireTranscriptReconciliation();
+		return saveSession(session);
+	}
+
+	private void persistAppliedTranscript(Long callSessionId, String openAiItemId, int sequenceNumber) {
+		CallSession session = callSessionRepository.findById(callSessionId).orElseThrow();
+		Instant now = Instant.now();
+		CallTranscriptEvent event = new CallTranscriptEvent(
+			session,
+			openAiItemId,
+			SpeakerType.USER,
+			sequenceNumber);
+		event.markReady("전사", "a".repeat(64), now);
+		event.markApplied(now);
+		entityManager.persist(event);
+		entityManager.persist(new CallTranscript(
+			session,
+			SpeakerType.USER,
+			"전사",
+			sequenceNumber,
+			openAiItemId));
+		entityManager.flush();
+		entityManager.clear();
+	}
+
+	private void persistReadyTranscriptEvent(Long callSessionId, String openAiItemId, int sequenceNumber) {
+		CallTranscriptEvent event = new CallTranscriptEvent(
+			callSessionRepository.findById(callSessionId).orElseThrow(),
+			openAiItemId,
+			SpeakerType.USER,
+			sequenceNumber);
+		event.markReady("전사", "a".repeat(64), Instant.now());
+		entityManager.persist(event);
+		entityManager.flush();
+		entityManager.clear();
+	}
+
+	private void persistFailedTranscriptEvent(Long callSessionId, String openAiItemId, int sequenceNumber) {
+		CallTranscriptEvent event = new CallTranscriptEvent(
+			callSessionRepository.findById(callSessionId).orElseThrow(),
+			openAiItemId,
+			SpeakerType.USER,
+			sequenceNumber);
+		event.markFailed("TRANSCRIPT_FAILED");
+		entityManager.persist(event);
+		entityManager.flush();
+		entityManager.clear();
 	}
 
 	private void persistCancelledCall(Instant endedAt) {
@@ -535,6 +711,13 @@ class ReportApiTest extends IntegrationTest {
 			"약을 잘 드셨어요."));
 		entityManager.flush();
 		entityManager.clear();
+	}
+
+	private CallReportGenerationRequest persistGenerationRequest(Long callSessionId) {
+		CallReportGenerationRequest request = callReportRequestRepository.save(
+			new CallReportGenerationRequest(callSessionId, 0L));
+		entityManager.flush();
+		return request;
 	}
 
 	private User user(String loginId, String name) {

@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HexFormat;
 import java.util.List;
@@ -94,8 +95,8 @@ public class CallTranscriptService {
 	) {
 		String normalizedTranscript = transcript == null ? "" : transcript.strip();
 		if (!StringUtils.hasText(normalizedTranscript)) {
-			failItem(callSessionId, openaiItemId, "EMPTY_TRANSCRIPT");
-			return false;
+			return Boolean.TRUE.equals(transactionTemplate.execute(status ->
+				applyEmptyTranscriptInTransaction(callSessionId, speaker, openaiItemId, clock.instant())));
 		}
 
 		String contentHash = sha256(normalizedTranscript);
@@ -118,7 +119,56 @@ public class CallTranscriptService {
 		if (claimedEvent == null) {
 			return true;
 		}
-		return materializeClaimed(claimedEvent.eventId(), claimedEvent.claimToken());
+		return materializeClaimed(claimedEvent.eventId(), claimedEvent.claimToken()).materialized();
+	}
+
+	private boolean applyEmptyTranscriptInTransaction(
+		Long callSessionId,
+		SpeakerType speaker,
+		String openaiItemId,
+		Instant now
+	) {
+		CallSession session = findSessionForUpdate(callSessionId);
+		if (session.isTranscriptFinalized()) {
+			boolean changed = session.requireTranscriptReconciliation();
+			recordRevisionIfChanged(session, changed);
+			return false;
+		}
+
+		CallTranscriptEvent event = StringUtils.hasText(openaiItemId)
+			? transcriptEventRepository.findForUpdate(callSessionId, openaiItemId).orElse(null)
+			: null;
+		String emptyHash = sha256("");
+		if (event == null || !event.matchesReservation(speaker) || event.isFailed()) {
+			boolean changed = false;
+			if (event != null && !event.isFailed()) {
+				event.markFailed("COMPLETION_MISMATCH");
+				changed = true;
+			}
+			changed = session.requireTranscriptReconciliation() || changed;
+			recordRevisionIfChanged(session, changed);
+			return false;
+		}
+		if (event.isApplied()) {
+			if (event.hasContentHash(emptyHash)) {
+				return true;
+			}
+			event.markFailed("CONTENT_HASH_MISMATCH");
+			session.requireTranscriptReconciliation();
+			session.recordTranscriptChange();
+			return false;
+		}
+		if (event.isReady()) {
+			event.markFailed("CONTENT_HASH_MISMATCH");
+			session.requireTranscriptReconciliation();
+			session.recordTranscriptChange();
+			return false;
+		}
+
+		event.markEmptyTranscriptApplied(emptyHash, now);
+		session.recordTranscriptChange();
+		finalizeRecoveredSession(session, now);
+		return true;
 	}
 
 	public void failItem(Long callSessionId, String openaiItemId, String failureCode) {
@@ -159,10 +209,11 @@ public class CallTranscriptService {
 			finalizeInTransaction(callSessionId, drained, clock.instant())));
 	}
 
-	public void reconcileReady() {
+	public List<Long> reconcileReady() {
 		Instant now = clock.instant();
 		failExpiredMaximumAttempts(now);
 		UUID claimToken = UUID.randomUUID();
+		List<Long> dispatchableSessionIds = new ArrayList<>();
 		List<Long> eventIds = transcriptEventClaimStore.claimReady(
 			now,
 			claimToken,
@@ -170,22 +221,42 @@ public class CallTranscriptService {
 			BATCH_SIZE
 		);
 		for (Long eventId : eventIds) {
-			materializeClaimed(eventId, claimToken);
+			Long dispatchableSessionId = materializeClaimed(eventId, claimToken)
+				.dispatchableCallSessionId();
+			if (dispatchableSessionId != null) {
+				dispatchableSessionIds.add(dispatchableSessionId);
+			}
 		}
+		return dispatchableSessionIds;
 	}
 
-	public void reconcileStaleFinalizations() {
+	public List<Long> reconcileStaleFinalizations() {
 		Instant now = clock.instant();
 		Instant cutoff = now.minus(FINALIZATION_GRACE);
-		List<Long> sessionIds = callSessionRepository.findTranscriptFinalizationCandidateIds(
+		List<Long> dispatchableSessionIds = new ArrayList<>();
+		List<Long> collectingSessionIds = callSessionRepository.findTranscriptFinalizationCandidateIds(
 			TERMINAL_STATUSES,
 			TranscriptIntegrityStatus.COLLECTING,
 			cutoff,
 			PageRequest.of(0, BATCH_SIZE)
 		);
-		for (Long sessionId : sessionIds) {
-			transactionTemplate.executeWithoutResult(status -> reconcileStaleSession(sessionId, cutoff, now));
+		List<Long> reconciliationSessionIds = callSessionRepository.findTranscriptFinalizationCandidateIds(
+			TERMINAL_STATUSES,
+			TranscriptIntegrityStatus.RECONCILIATION_REQUIRED,
+			cutoff,
+			PageRequest.of(0, BATCH_SIZE)
+		);
+		for (Long sessionId : collectingSessionIds) {
+			transactionTemplate.executeWithoutResult(status -> reconcileStaleCollectingSession(sessionId, cutoff, now));
 		}
+		for (Long sessionId : reconciliationSessionIds) {
+			boolean dispatchable = Boolean.TRUE.equals(transactionTemplate.execute(status ->
+				recoverStaleReconciliationSession(sessionId, cutoff, now)));
+			if (dispatchable) {
+				dispatchableSessionIds.add(sessionId);
+			}
+		}
+		return List.copyOf(dispatchableSessionIds);
 	}
 
 	public void cleanupExpiredPayloads() {
@@ -335,26 +406,27 @@ public class CallTranscriptService {
 		return new ClaimedEvent(eventId, claimToken);
 	}
 
-	private boolean materializeClaimed(Long eventId, UUID claimToken) {
+	private MaterializationResult materializeClaimed(Long eventId, UUID claimToken) {
 		try {
-			return Boolean.TRUE.equals(transactionTemplate.execute(status ->
-				materializeInTransaction(eventId, claimToken, clock.instant())));
+			MaterializationResult result = transactionTemplate.execute(status ->
+				materializeInTransaction(eventId, claimToken, clock.instant()));
+			return result == null ? MaterializationResult.rejected() : result;
 		} catch (RuntimeException exception) {
 			recordMaterializationFailure(eventId, claimToken, exception);
-			return false;
+			return MaterializationResult.rejected();
 		}
 	}
 
-	private boolean materializeInTransaction(Long eventId, UUID claimToken, Instant now) {
+	private MaterializationResult materializeInTransaction(Long eventId, UUID claimToken, Instant now) {
 		CallTranscriptEvent candidate = transcriptEventRepository.findById(eventId).orElse(null);
 		if (candidate == null) {
-			return false;
+			return MaterializationResult.rejected();
 		}
 		Long callSessionId = candidate.getCallSession().getId();
 		CallSession session = findSessionForUpdate(callSessionId);
 		CallTranscriptEvent event = transcriptEventRepository.findByIdForUpdate(eventId).orElse(null);
 		if (event == null || !event.ownsClaim(claimToken, now)) {
-			return false;
+			return MaterializationResult.rejected();
 		}
 
 		CallTranscript existing = callTranscriptRepository
@@ -365,7 +437,7 @@ public class CallTranscriptService {
 				event.markFailed("TRANSCRIPT_CONFLICT");
 				session.requireTranscriptReconciliation();
 				session.recordTranscriptChange();
-				return false;
+				return MaterializationResult.rejected();
 			}
 		} else {
 			callTranscriptRepository.saveAndFlush(new CallTranscript(
@@ -378,8 +450,8 @@ public class CallTranscriptService {
 		}
 		event.markApplied(now);
 		session.recordTranscriptChange();
-		finalizeRecoveredSession(session, now);
-		return true;
+		boolean dispatchable = finalizeRecoveredSession(session, now);
+		return MaterializationResult.applied(dispatchable ? callSessionId : null);
 	}
 
 	private void recordMaterializationFailure(Long eventId, UUID claimToken, RuntimeException exception) {
@@ -438,23 +510,23 @@ public class CallTranscriptService {
 		return ensureReportGenerationRequest(session);
 	}
 
-	private void finalizeRecoveredSession(CallSession session, Instant now) {
+	private boolean finalizeRecoveredSession(CallSession session, Instant now) {
 		if (session.getTranscriptIntegrityStatus() != TranscriptIntegrityStatus.RECONCILIATION_REQUIRED
 			|| !session.isTranscriptFinalized()) {
-			return;
+			return false;
 		}
 		transcriptEventRepository.flush();
 		if (transcriptEventRepository.countByCallSessionIdAndStatusNot(
 			session.getId(),
 			TranscriptIngestStatus.APPLIED
 		) > 0) {
-			return;
+			return false;
 		}
 
 		Instant finalizedAt = session.getTranscriptFinalizedAt();
 		boolean changed = session.finalizeTranscript(finalizedAt == null ? now : finalizedAt);
 		recordRevisionIfChanged(session, changed);
-		ensureReportGenerationRequest(session);
+		return ensureReportGenerationRequest(session);
 	}
 
 	private boolean ensureReportGenerationRequest(CallSession session) {
@@ -507,7 +579,7 @@ public class CallTranscriptService {
 		}
 	}
 
-	private void reconcileStaleSession(Long sessionId, Instant cutoff, Instant now) {
+	private void reconcileStaleCollectingSession(Long sessionId, Instant cutoff, Instant now) {
 		CallSession session = callSessionRepository.findByIdForUpdate(sessionId).orElse(null);
 		if (session == null
 			|| session.getTranscriptIntegrityStatus() != TranscriptIntegrityStatus.COLLECTING
@@ -527,6 +599,27 @@ public class CallTranscriptService {
 			return;
 		}
 		recordRevisionIfChanged(session, session.requireTranscriptReconciliation());
+	}
+
+	private boolean recoverStaleReconciliationSession(Long sessionId, Instant cutoff, Instant now) {
+		CallSession session = callSessionRepository.findByIdForUpdate(sessionId).orElse(null);
+		if (session == null
+			|| session.getTranscriptIntegrityStatus() != TranscriptIntegrityStatus.RECONCILIATION_REQUIRED
+			|| session.getTranscriptFinalizedAt() != null
+			|| session.getEndedAt() == null
+			|| session.getEndedAt().isAfter(cutoff)
+			|| !TERMINAL_STATUSES.contains(session.getStatus())) {
+			return false;
+		}
+		if (transcriptEventRepository.countByCallSessionIdAndStatusNot(
+			sessionId,
+			TranscriptIngestStatus.APPLIED
+		) > 0) {
+			return false;
+		}
+
+		recordRevisionIfChanged(session, session.finalizeTranscript(now));
+		return ensureReportGenerationRequest(session);
 	}
 
 	private void expirePayloadInTransaction(Long eventId, Instant cutoff) {
@@ -587,6 +680,17 @@ public class CallTranscriptService {
 	}
 
 	private record ClaimedEvent(Long eventId, UUID claimToken) {
+	}
+
+	private record MaterializationResult(boolean materialized, Long dispatchableCallSessionId) {
+
+		private static MaterializationResult applied(Long dispatchableCallSessionId) {
+			return new MaterializationResult(true, dispatchableCallSessionId);
+		}
+
+		private static MaterializationResult rejected() {
+			return new MaterializationResult(false, null);
+		}
 	}
 
 	private record ReadyPreparation(Long eventId, boolean accepted) {
