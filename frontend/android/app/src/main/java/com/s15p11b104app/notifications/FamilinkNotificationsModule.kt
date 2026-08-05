@@ -1,5 +1,6 @@
 package com.s15p11b104app.notifications
 
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -38,6 +39,25 @@ internal class FamilinkNotificationsModule(
     } catch (error: RuntimeException) {
       promise.reject(ERROR_TOKEN_UNAVAILABLE, error.message, error)
     }
+  }
+
+  /**
+   * 콜드 스타트 알림 탭을 가져간다. React Native가 부팅 후 1회 호출한다.
+   * 보관된 탭이 없으면 `null`로 resolve한다.
+   */
+  @ReactMethod
+  fun consumePendingNotificationTap(promise: Promise) {
+    val tap = NotificationTapStore.consume()
+    if (tap == null) {
+      promise.resolve(null)
+      return
+    }
+    promise.resolve(
+        Arguments.createMap().apply {
+          putString("notificationId", tap.notificationId)
+          putString("type", tap.type)
+        },
+    )
   }
 
   companion object {
