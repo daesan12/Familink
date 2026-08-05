@@ -3,6 +3,8 @@ import {Pressable, Text} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import TestRenderer from 'react-test-renderer';
 
+import {NotificationGatewayProvider} from '../features/notifications/NotificationGatewayContext';
+import type {NotificationGateway} from '../features/notifications/types';
 import {mockHardwareBack} from '../shared/testing/hardwareBack';
 import {AppShell} from './AppShell';
 import type {
@@ -461,4 +463,144 @@ test('화면이 전체화면을 보고하면 셸은 뒤로가기를 처리하지
   } finally {
     back.restore();
   }
+});
+
+// 앱 실행 중 푸시 도착 시 미읽음 배지 실시간 갱신
+
+function createNotificationGateway(): jest.Mocked<NotificationGateway> {
+  return {
+    deactivateDeviceToken: jest.fn(),
+    getUnreadCount: jest.fn().mockResolvedValue(0),
+    loadPage: jest.fn(),
+    loadSettings: jest.fn(),
+    markAllRead: jest.fn(),
+    markRead: jest.fn(),
+    registerDeviceToken: jest.fn(),
+    updateSettings: jest.fn(),
+  } as unknown as jest.Mocked<NotificationGateway>;
+}
+
+function createPushReceivedSubscriber() {
+  const listeners = new Set<() => void>();
+  return {
+    emit: () => {
+      for (const listener of [...listeners]) {
+        listener();
+      }
+    },
+    listenerCount: () => listeners.size,
+    subscribe: jest.fn((listener: () => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    }),
+  };
+}
+
+test('앱 실행 중 푸시가 도착하면 미읽음 배지를 다시 조회해 갱신한다', async () => {
+  const gateway = createNotificationGateway();
+  gateway.getUnreadCount.mockResolvedValueOnce(0).mockResolvedValue(3);
+  const subscriber = createPushReceivedSubscriber();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NotificationGatewayProvider gateway={gateway}>
+        <AppShell
+          groups={[GROUP_A]}
+          initialGroupId={GROUP_A.id}
+          screens={screens}
+          subscribePushReceived={subscriber.subscribe}
+        />
+      </NotificationGatewayProvider>,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(1);
+  expect(renderer!.root.findAllByProps({children: 3})).toHaveLength(0);
+
+  await TestRenderer.act(async () => {
+    subscriber.emit();
+  });
+
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(2);
+  expect(
+    renderer!.root.findAllByProps({children: 3}).length,
+  ).toBeGreaterThan(0);
+});
+
+test('연속 푸시는 진행 중 조회와 합쳐 마지막 값으로 배지를 확정한다', async () => {
+  const gateway = createNotificationGateway();
+  gateway.getUnreadCount
+    .mockResolvedValueOnce(0)
+    .mockResolvedValueOnce(1)
+    .mockResolvedValue(3);
+  const subscriber = createPushReceivedSubscriber();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NotificationGatewayProvider gateway={gateway}>
+        <AppShell
+          groups={[GROUP_A]}
+          initialGroupId={GROUP_A.id}
+          screens={screens}
+          subscribePushReceived={subscriber.subscribe}
+        />
+      </NotificationGatewayProvider>,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(1);
+
+  // 조회 응답 전에 푸시 3건이 연달아 도착하면 조회 1건 + 후속 조회 1건으로 합친다.
+  await TestRenderer.act(async () => {
+    subscriber.emit();
+    subscriber.emit();
+    subscriber.emit();
+  });
+
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(3);
+  expect(
+    renderer!.root.findAllByProps({children: 3}).length,
+  ).toBeGreaterThan(0);
+});
+
+test('알림 화면에서는 푸시 도착 구독을 해제해 배지를 조회하지 않는다', async () => {
+  const gateway = createNotificationGateway();
+  const subscriber = createPushReceivedSubscriber();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NotificationGatewayProvider gateway={gateway}>
+        <AppShell
+          groups={[GROUP_A]}
+          initialGroupId={GROUP_A.id}
+          screens={screens}
+          subscribePushReceived={subscriber.subscribe}
+        />
+      </NotificationGatewayProvider>,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(subscriber.listenerCount()).toBe(1);
+
+  // 종 아이콘을 눌러 알림 화면으로 이동하면 구독이 해제된다.
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({accessibilityLabel: '알림'}).props.onPress();
+  });
+
+  expect(subscriber.listenerCount()).toBe(0);
+
+  const callsBefore = gateway.getUnreadCount.mock.calls.length;
+  await TestRenderer.act(async () => {
+    subscriber.emit();
+  });
+
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(callsBefore);
 });

@@ -18,6 +18,10 @@ import {NotificationDecisionModal} from '../components/NotificationDecisionModal
 import {NotificationItem} from '../components/NotificationItem';
 import {DEVELOPMENT_NOTIFICATIONS} from '../fixtures/notificationFixtures';
 import {useNotificationGateway} from '../NotificationGatewayContext';
+import {
+  subscribeNativePushReceived,
+  type SubscribePushReceived,
+} from '../pushReceivedProvider';
 import type {
   AppNotification,
   NotificationGateway,
@@ -29,6 +33,8 @@ export interface NotificationsScreenProps extends AppScreenProps {
   initialNotifications?: readonly AppNotification[];
   // 가입 요청 승인·거절 커맨드 주입(테스트용). 없으면 API-GROUPS-009를 호출한다.
   processJoinRequest?: JoinRequestProcessor;
+  // 앱 실행 중 푸시 도착 구독. 테스트에서 네이티브 브리지 없이 주입할 수 있다.
+  subscribePushReceived?: SubscribePushReceived;
 }
 const NO_READ_IDS: readonly string[] = [];
 // 알림 탭은 알림 목록만 담당한다. 알림 설정(I-6)은 마이페이지에서 진입한다.
@@ -43,6 +49,7 @@ export function NotificationsScreen({
   onOpenPost,
   processJoinRequest,
   readNotificationIds = NO_READ_IDS,
+  subscribePushReceived = subscribeNativePushReceived,
 }: NotificationsScreenProps) {
   const contextGateway = useNotificationGateway();
   const resolvedGateway = gateway ?? contextGateway;
@@ -70,6 +77,9 @@ export function NotificationsScreen({
     null,
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // 초기 조회 경로를 다시 실행하는 트리거. 목록 조회가 실패한 상태에서 푸시가
+  // 도착하면 증분 병합 대신 이 값을 올려 절대값으로 복구한다.
+  const [reloadNonce, setReloadNonce] = useState(0);
   const loadingPageRef = useRef(false);
   const generationRef = useRef(0);
   const readNotificationIdsRef = useRef(readNotificationIds);
@@ -89,6 +99,23 @@ export function NotificationsScreen({
   useEffect(() => {
     readNotificationIdsRef.current = readNotificationIds;
   }, [readNotificationIds]);
+  const notificationsRef = useRef(notifications);
+  useEffect(() => {
+    notificationsRef.current = notifications;
+  }, [notifications]);
+  // 초기 조회가 진행 중인지의 동기 신호. isLoading 상태는 effect로만 미러링하면
+  // 늦게 반영되므로 푸시 병합이 초기 조회와 겹치는지 판정할 때는 이 ref를 쓴다.
+  const isInitialLoadingRef = useRef(false);
+  // 푸시 병합에서 실제로 삽입한 미읽음 개수. 목록 업데이터가 기록하고 같은
+  // 배치의 카운트 업데이터가 읽는다(hook 선언 순서상 목록 업데이터가 먼저 실행).
+  const pendingUnreadDeltaRef = useRef(0);
+  // 초기 조회 중 푸시가 도착한 흔적. 초기 조회 응답이 새 알림 생성보다 먼저
+  // 만들어졌을 수 있으므로, 조회 완료 후 아래 병합 함수를 한 번 흘려준다.
+  const pendingMergeAfterInitialLoadRef = useRef(false);
+  const mergeFreshNotificationsRef = useRef<(() => void) | null>(null);
+  // 마지막 초기 조회에서 목록(page 0)을 성공적으로 받았는지. 실패했다면 목록과
+  // serverUnreadCount가 같은 스냅샷이 아니어서 증분 병합의 전제가 깨진 상태다.
+  const hasLoadedInitialPageRef = useRef(false);
   useEffect(() => {
     onUnreadCountChange?.(displayedUnreadCount);
   }, [displayedUnreadCount, onUnreadCountChange]);
@@ -101,6 +128,9 @@ export function NotificationsScreen({
     const generation = ++generationRef.current;
     let disposed = false;
     loadingPageRef.current = false;
+    isInitialLoadingRef.current = true;
+    // 이 조회가 시작되기 전에 도착한 푸시는 이 조회의 응답이 포함하므로 버린다.
+    pendingMergeAfterInitialLoadRef.current = false;
     setIsLoading(true);
     setErrorMessage(null);
     setPage(0);
@@ -116,6 +146,7 @@ export function NotificationsScreen({
       if (disposed || generationRef.current !== generation) {
         return;
       }
+      hasLoadedInitialPageRef.current = pageResult.status === 'fulfilled';
       if (pageResult.status === 'fulfilled') {
         setNotifications(
           applyReadIds(
@@ -131,14 +162,113 @@ export function NotificationsScreen({
       if (countResult.status === 'fulfilled') {
         setServerUnreadCount(countResult.value);
       }
+      isInitialLoadingRef.current = false;
       setIsLoading(false);
+      // 조회 중 도착한 푸시가 있으면 한 번 병합해, 이 조회의 서버 스냅샷 이후에
+      // 생성된 알림이 화면에서 누락되지 않게 한다.
+      if (pendingMergeAfterInitialLoadRef.current) {
+        pendingMergeAfterInitialLoadRef.current = false;
+        mergeFreshNotificationsRef.current?.();
+      }
     });
     return () => {
       disposed = true;
     };
   }, [
     currentUserId,
+    reloadNonce,
     resolvedGateway,
+    usesInjectedNotifications,
+  ]);
+  // 앱 실행 중 푸시가 도착하면 첫 페이지를 다시 조회해 새 알림만 목록 맨 위에
+  // 끼워 넣는다. 기존 항목은 덮어쓰지 않아 낙관적 읽음 처리·가입 요청 결정
+  // 상태와 스크롤 위치를 유지하고, 미읽음 수는 실제로 삽입한 새 미읽음 개수만큼만
+  // 올린다(읽음 API 커밋 전 서버 값으로 되돌아가는 경쟁 방지). 초기 조회가
+  // 진행 중이면 즉시 병합하지 않고 흔적만 남긴다 — 병합 결과를 초기 조회의
+  // 덮어쓰기가 지울 수 있어서다. 남긴 흔적은 초기 조회 완료 후 한 번 병합해
+  // 조회 스냅샷 이후에 생성된 알림도 놓치지 않는다. 연속 푸시는 진행 중
+  // 조회 1건 + 후속 조회 1건으로 합친다.
+  useEffect(() => {
+    if (resolvedGateway === null || usesInjectedNotifications) {
+      return;
+    }
+    let disposed = false;
+    let isFetching = false;
+    let hasPendingRefresh = false;
+    const mergeFreshNotifications = () => {
+      if (isInitialLoadingRef.current) {
+        pendingMergeAfterInitialLoadRef.current = true;
+        return;
+      }
+      // 목록 조회가 실패한 상태에서는 목록과 serverUnreadCount의 스냅샷이 어긋나
+      // 증분 가산이 이중 계산되므로, 초기 조회 경로를 다시 실행해 절대값으로
+      // 복구한다.
+      if (!hasLoadedInitialPageRef.current) {
+        setReloadNonce(nonce => nonce + 1);
+        return;
+      }
+      if (isFetching) {
+        hasPendingRefresh = true;
+        return;
+      }
+      isFetching = true;
+      resolvedGateway
+        .loadPage(0)
+        .then(result => {
+          if (disposed || isInitialLoadingRef.current) {
+            return;
+          }
+          const knownIds = new Set(
+            notificationsRef.current.map(notification => notification.id),
+          );
+          const fresh = applyReadIds(
+            result.notifications.filter(
+              notification => !knownIds.has(notification.id),
+            ),
+            readNotificationIdsRef.current,
+          );
+          if (fresh.length === 0) {
+            return;
+          }
+          pendingUnreadDeltaRef.current = 0;
+          setNotifications(current => {
+            const currentIds = new Set(
+              current.map(notification => notification.id),
+            );
+            const stillFresh = fresh.filter(
+              notification => !currentIds.has(notification.id),
+            );
+            pendingUnreadDeltaRef.current = stillFresh.filter(
+              notification => !notification.isRead,
+            ).length;
+            return stillFresh.length === 0
+              ? current
+              : [...stillFresh, ...current];
+          });
+          setServerUnreadCount(current =>
+            current === null ? null : current + pendingUnreadDeltaRef.current,
+          );
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          isFetching = false;
+          if (hasPendingRefresh && !disposed) {
+            hasPendingRefresh = false;
+            mergeFreshNotifications();
+          }
+        });
+    };
+    mergeFreshNotificationsRef.current = mergeFreshNotifications;
+    const unsubscribe = subscribePushReceived(mergeFreshNotifications);
+    return () => {
+      disposed = true;
+      mergeFreshNotificationsRef.current = null;
+      unsubscribe();
+    };
+  }, [
+    currentUserId,
+    resolvedGateway,
+    subscribePushReceived,
     usesInjectedNotifications,
   ]);
   const markAsRead = (notificationId: string) => {
@@ -406,6 +536,12 @@ export function NotificationsScreen({
         ListEmptyComponent={
           isLoading ? <LoadingNotificationState /> : <EmptyNotificationState />
         }
+        // 푸시 병합이 목록 맨 위에 항목을 끼워 넣어도 읽고 있던 위치를 유지한다.
+        // 맨 위 근처에서는 자동으로 위로 스크롤해 새 알림을 바로 보여준다.
+        maintainVisibleContentPosition={{
+          autoscrollToTopThreshold: 80,
+          minIndexForVisible: 0,
+        }}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.4}
         renderItem={({item}) => (
