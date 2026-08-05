@@ -188,6 +188,39 @@ class PostApiTest extends IntegrationTest {
 	}
 
 	@Test
+	void updateNormalizesPresignedDownloadUrlToCanonicalUrl() throws Exception {
+		Post post = postRepository.save(new Post(group, authorMember, "사진 유지 수정"));
+		String canonicalFileUrl =
+			"https://s15p11b104-media-580779787807-ap-northeast-2-an.s3.ap-northeast-2.amazonaws.com"
+				+ "/post-media/11111111-1111-1111-1111-111111111111.jpg";
+		String canonicalThumbnailUrl =
+			"https://s15p11b104-media-580779787807-ap-northeast-2-an.s3.ap-northeast-2.amazonaws.com"
+				+ "/post-media/22222222-2222-2222-2222-222222222222.jpg";
+		postMediaRepository.save(new PostMedia(post, MediaType.IMAGE, canonicalFileUrl, 0, null));
+		entityManager.flush();
+
+		// 조회 응답이 돌려주는 presigned URL 형태: canonical URL + 500자를 넘는 서명 쿼리
+		String presignedQuery = "?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=" + "a".repeat(600);
+		String mediaJson = objectMapper.writeValueAsString(Map.of(
+			"fileUrl", canonicalFileUrl + presignedQuery,
+			"thumbnailUrl", canonicalThumbnailUrl + presignedQuery,
+			"displayOrder", 0));
+
+		mockMvc.perform(patch("/posts/{postId}", post.getId())
+				.with(authenticatedAs(authorMember.getUser().getId()))
+				.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+				.content(updateJson("사진은 그대로", "IMAGE", List.of(mediaJson))))
+			.andExpect(status().isOk());
+
+		entityManager.clear();
+		assertThat(postMediaRepository.findAll()).singleElement()
+			.satisfies(media -> {
+				assertThat(media.getFileUrl()).isEqualTo(canonicalFileUrl);
+				assertThat(media.getThumbnailUrl()).isEqualTo(canonicalThumbnailUrl);
+			});
+	}
+
+	@Test
 	void updatingPostResetsExistingAnalysis() throws Exception {
 		Post post = postRepository.save(new Post(group, authorMember, "분석 전 글"));
 		PostAnalysis analysis = postAnalysisRepository.save(new PostAnalysis(post, AnalysisStatus.PENDING));

@@ -48,4 +48,31 @@ class S3ObjectKeyResolverTest {
 		assertThat(resolver.resolve("https://cdn.example.com/posts/legacy.png"))
 			.contains("posts/legacy.png");
 	}
+
+	@Test
+	void normalizeStripsPresignedQueryWhileKeepingHostAndPath() {
+		assertThat(resolver.normalizePostMediaUrl(
+			"https://media-bucket.s3.ap-northeast-2.amazonaws.com/post-media/photo.jpg"
+				+ "?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=abc"))
+			.isEqualTo("https://media-bucket.s3.ap-northeast-2.amazonaws.com/post-media/photo.jpg");
+		assertThat(resolver.normalizePostMediaUrl(
+			"https://cdn.example.com/post-media/photo.jpg?token=abc"))
+			.isEqualTo("https://cdn.example.com/post-media/photo.jpg");
+	}
+
+	@Test
+	void normalizeKeepsUrlsWithoutQueryUnchanged() {
+		assertThat(resolver.normalizePostMediaUrl(
+			"https://media-bucket.s3.ap-northeast-2.amazonaws.com/post-media/photo.jpg"))
+			.isEqualTo("https://media-bucket.s3.ap-northeast-2.amazonaws.com/post-media/photo.jpg");
+	}
+
+	@Test
+	void normalizeReturnsOriginalWhenObjectKeyCannotBeResolved() {
+		assertThat(resolver.normalizePostMediaUrl("https://example.com/post-media/photo.jpg?sig=abc"))
+			.isEqualTo("https://example.com/post-media/photo.jpg?sig=abc");
+		assertThat(resolver.normalizePostMediaUrl("https://cdn.example.com/other/photo.jpg?sig=abc"))
+			.isEqualTo("https://cdn.example.com/other/photo.jpg?sig=abc");
+		assertThat(resolver.normalizePostMediaUrl("not a url")).isEqualTo("not a url");
+	}
 }
