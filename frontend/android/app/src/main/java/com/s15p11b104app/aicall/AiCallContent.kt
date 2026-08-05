@@ -47,7 +47,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.CallEnd
@@ -76,6 +75,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.paint
@@ -118,6 +118,9 @@ private val CAPTION_FADE_HEIGHT = 40.dp
 
 private const val CAPTION_PLACEHOLDER = "자막을 기다리는 중입니다."
 
+/** 조작할 수 없는 통화 제어 버튼을 흐리게 보여 줄 때 사용하는 불투명도. */
+private const val DISABLED_CONTROL_ALPHA = 0.45f
+
 @Composable
 internal fun AiCallRoute(
     apiBaseUrl: String?,
@@ -128,8 +131,8 @@ internal fun AiCallRoute(
   var phase by rememberSaveable { mutableStateOf(AiCallPhase.Selecting) }
   var selectedPersonaId by rememberSaveable { mutableStateOf<Long?>(null) }
   var durationSeconds by rememberSaveable { mutableIntStateOf(0) }
-  var isMuted by rememberSaveable { mutableStateOf(false) }
-  var isSpeakerOn by rememberSaveable { mutableStateOf(true) }
+  var isMuted by rememberSaveable { mutableStateOf(AI_CALL_DEFAULT_IS_MUTED) }
+  var isSpeakerOn by rememberSaveable { mutableStateOf(AI_CALL_DEFAULT_IS_SPEAKER_ON) }
   var captionDraft by rememberSaveable { mutableStateOf("") }
   var captionHistory by remember { mutableStateOf(emptyList<String>()) }
   var pendingPersonaId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -241,6 +244,10 @@ internal fun AiCallRoute(
       durationSeconds = 0
       captionDraft = ""
       captionHistory = emptyList()
+      // 재시도는 returnToSelection을 거치지 않으므로, 새 세션의 기본 오디오 상태와
+      // 어긋나지 않도록 여기서도 토글을 초기화한다.
+      isMuted = AI_CALL_DEFAULT_IS_MUTED
+      isSpeakerOn = AI_CALL_DEFAULT_IS_SPEAKER_ON
       phase = AiCallPhase.Connecting
       callJob =
           coroutineScope.launch {
@@ -325,8 +332,8 @@ internal fun AiCallRoute(
     durationSeconds = 0
     captionDraft = ""
     captionHistory = emptyList()
-    isMuted = false
-    isSpeakerOn = true
+    isMuted = AI_CALL_DEFAULT_IS_MUTED
+    isSpeakerOn = AI_CALL_DEFAULT_IS_SPEAKER_ON
   }
 
   val finishCallFromPhase: (AiCallPhase) -> Unit = { endingPhase ->
@@ -883,6 +890,8 @@ private fun ActiveCallScreen(
   val persona = state.persona ?: return
   val isConnecting = state.phase == AiCallPhase.Connecting
   val isEnding = state.phase == AiCallPhase.Ending
+  // 연결 중·종료 중에는 미디어 세션이 없거나 정리되는 중이므로 마이크·스피커를 바꿀 수 없다.
+  val isControlEnabled = !isConnecting && !isEnding
   val captionLines = state.captionLines.ifEmpty { listOf(CAPTION_PLACEHOLDER) }
 
   Column(
@@ -977,15 +986,13 @@ private fun ActiveCallScreen(
       CallControlButton(
           label = if (state.isSpeakerOn) "스피커 끄기" else "스피커 켜기",
           stateDescription = if (state.isSpeakerOn) "스피커 켜짐" else "스피커 꺼짐",
+          accented = state.isSpeakerOn,
+          enabled = isControlEnabled,
           onClick = onToggleSpeaker,
       ) {
+        // 스피커는 사선 아이콘을 쓰지 않고 색으로만 상태를 구분한다.
         Icon(
-            imageVector =
-                if (state.isSpeakerOn) {
-                  Icons.AutoMirrored.Rounded.VolumeUp
-                } else {
-                  Icons.AutoMirrored.Rounded.VolumeOff
-                },
+            imageVector = Icons.AutoMirrored.Rounded.VolumeUp,
             contentDescription = null,
             modifier = Modifier.size(30.dp),
         )
@@ -994,6 +1001,8 @@ private fun ActiveCallScreen(
           label = "통화 종료",
           containerColor = AiCallColors.CoralRed,
           size = 78.dp,
+          // 종료 중에는 finishCall이 이미 no-op이므로 눌리는 것처럼 보이지 않게 한다.
+          enabled = !isEnding,
           onClick = onEndCall,
       ) {
         Icon(
@@ -1005,6 +1014,8 @@ private fun ActiveCallScreen(
       CallControlButton(
           label = if (state.isMuted) "음소거 해제" else "음소거",
           stateDescription = if (state.isMuted) "음소거 켜짐" else "음소거 꺼짐",
+          accented = state.isMuted,
+          enabled = isControlEnabled,
           onClick = onToggleMute,
       ) {
         Icon(
@@ -1060,23 +1071,26 @@ private fun CallControlButton(
     containerColor: Color = Color.White,
     size: androidx.compose.ui.unit.Dp = 64.dp,
     stateDescription: String? = null,
+    accented: Boolean = false,
+    enabled: Boolean = true,
     icon: @Composable () -> Unit,
 ) {
   Surface(
       modifier =
-          Modifier.size(size).semantics {
+          Modifier.size(size).alpha(if (enabled) 1f else DISABLED_CONTROL_ALPHA).semantics {
             contentDescription = label
             stateDescription?.let { this.stateDescription = it }
           },
       color = containerColor,
       contentColor =
-          if (containerColor == Color.White) {
-            AiCallColors.TextStrong
-          } else {
-            Color.White
+          when {
+            containerColor != Color.White -> Color.White
+            accented -> AiCallColors.BrandPurplePressed
+            else -> AiCallColors.TextStrong
           },
       shape = CircleShape,
       shadowElevation = 5.dp,
+      enabled = enabled,
       onClick = onClick,
   ) {
     Box(contentAlignment = Alignment.Center) { icon() }

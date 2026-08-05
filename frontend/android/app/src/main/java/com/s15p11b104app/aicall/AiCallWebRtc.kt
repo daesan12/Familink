@@ -458,7 +458,8 @@ internal class AiCallWebRtcSession(
     previousAudioMode = manager.mode
     previousSpeakerphoneOn = manager.isSpeakerphoneOn
     manager.mode = AudioManager.MODE_IN_COMMUNICATION
-    manager.isSpeakerphoneOn = true
+    // 통화는 일반 전화와 같이 수화기로 시작한다. 화면의 스피커 기본 상태와 일치해야 한다.
+    manager.isSpeakerphoneOn = AI_CALL_DEFAULT_IS_SPEAKER_ON
   }
 
   private fun restoreAudioRoute() {
