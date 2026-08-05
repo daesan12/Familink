@@ -153,6 +153,7 @@
 - 페르소나 프롬프트는 `Persona`, `Identity Boundary`, `Address`,
   `Speech Style`, `Dialect`, `Variety`, `Sample Phrases`로 구분하고,
   예시 발화는 그대로 반복하지 않고 말투 참고용으로만 사용한다.
+- AI의 대화 답변은 두 문장 이내로 하고, 한 문장은 25자 안쪽으로 유지한다.
 - 통화 시작 프롬프트의 가족 구성원은 `personKey`, `name`,
   `displayName`을 함께 제공한다. 최근 통화 맥락은 현재 그룹·현재
   피보호자의 종료 통화 중 최신 5건까지만 사용하고, 새 리포트 생성
