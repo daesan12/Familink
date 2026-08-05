@@ -38,6 +38,7 @@ function render(target: GroupMember, isEditing = false) {
     renderer = TestRenderer.create(
       <GroupMemberRow
         aliasDraft={isEditing ? target.alias ?? '' : ''}
+        canEditAlias
         isEditing={isEditing}
         member={target}
         onCancelEditAlias={jest.fn()}

@@ -14,6 +14,7 @@ import {RoleToggle} from './RoleToggle';
 
 interface GroupMemberRowProps {
   member: GroupMember;
+  canEditAlias: boolean;
   // 이 행이 호칭 편집 모드인지.
   isEditing: boolean;
   // 편집 모드에서 입력 중인 호칭 초안.
@@ -30,6 +31,7 @@ interface GroupMemberRowProps {
 // H-1의 구성원 한 행. 호칭 표시/편집(H-2)과 역할 토글을 담는다.
 export function GroupMemberRow({
   aliasDraft,
+  canEditAlias,
   isEditing,
   member,
   onCancelEditAlias,
@@ -95,19 +97,21 @@ export function GroupMemberRow({
             <Text numberOfLines={2} style={styles.displayName}>
               {displayName}
             </Text>
-            <Pressable
-              accessibilityLabel={`${member.name} 호칭 수정`}
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={onStartEditAlias}
-              style={styles.editButton}
-            >
-              <MaterialDesignIcons
-                color={COLORS.textSubtle}
-                name="pencil-outline"
-                size={16}
-              />
-            </Pressable>
+            {canEditAlias ? (
+              <Pressable
+                accessibilityLabel={`${member.name} 호칭 수정`}
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={onStartEditAlias}
+                style={styles.editButton}
+              >
+                <MaterialDesignIcons
+                  color={COLORS.textSubtle}
+                  name="pencil-outline"
+                  size={16}
+                />
+              </Pressable>
+            ) : null}
           </View>
         )}
 

@@ -335,6 +335,18 @@ test('연필을 누르면 호칭을 인라인으로 편집하고 저장한다', 
   expect(renderer.root.findAllByType(TextInput)).toHaveLength(0);
 });
 
+test('본인 행에는 호칭 수정 버튼을 표시하지 않는다', () => {
+  const renderer = renderScreen('m-manager');
+
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '이경호 호칭 수정'}),
+  ).toHaveLength(0);
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '손수호 호칭 수정'})
+      .length,
+  ).toBeGreaterThan(0);
+});
+
 test('방장은 역할 토글로 확인 후 구성원 역할을 바꿀 수 있다', () => {
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const renderer = renderScreen('m-manager');

@@ -931,6 +931,7 @@ export function GroupInfoScreen({
                   aliasDraft={
                     editingMemberId === member.memberId ? aliasDraft : ''
                   }
+                  canEditAlias={member.memberId !== viewerMemberId}
                   isEditing={editingMemberId === member.memberId}
                   member={member}
                   onChangeAliasDraft={handleChangeAliasDraft}
