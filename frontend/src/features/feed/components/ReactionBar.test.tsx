@@ -33,3 +33,40 @@ test('선택한 반응 칩을 다시 누르면 같은 반응 ID로 취소 요청
 
   act(() => renderer!.unmount());
 });
+
+test('다른 멤버의 반응 칩도 누르면 해당 반응 선택 콜백을 호출한다', () => {
+  const onSelectReaction = jest.fn();
+  let renderer: ReactTestRenderer;
+
+  act(() => {
+    renderer = create(
+      <ReactionBar
+        canReact
+        isPickerOpen={false}
+        onSelectReaction={onSelectReaction}
+        onTogglePicker={jest.fn()}
+        reactions={[
+          {count: 2, emoji: '?ㅿ툘', id: 'HEART', label: '?щ옉?댁슂'},
+          {count: 1, emoji: '?곕?', id: 'SURPRISE', label: '?깜?쇱?'},
+        ]}
+        selectedReactionId={null}
+      />,
+    );
+  });
+
+  const buttons = renderer!.root.findAllByProps({
+    accessibilityRole: 'button',
+  });
+  const wowButton = buttons.find(button =>
+    button.props.accessibilityLabel?.startsWith('?깜?쇱?'),
+  );
+  expect(wowButton).toBeDefined();
+
+  act(() => {
+    wowButton?.props.onPress();
+  });
+
+  expect(onSelectReaction).toHaveBeenCalledWith('SURPRISE');
+
+  act(() => renderer!.unmount());
+});

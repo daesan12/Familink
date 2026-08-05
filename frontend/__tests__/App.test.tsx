@@ -36,7 +36,10 @@ import type {
   DeviceTokenProvider,
   NotificationGateway,
 } from "../src/features/notifications";
-import type { ProfileGateway } from "../src/features/profile";
+import type {
+  ProfileGateway,
+  ProfileImageAsset,
+} from "../src/features/profile";
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
 
@@ -357,6 +360,49 @@ test("회원가입 시작 화면을 표시하고 기존 회원가입으로 이�
     renderer.root.findByProps({ accessibilityLabel: "로그인 아이디" }).props
       .value
   ).toBe("CaseUser1");
+});
+
+test('회원가입 후 로그인하면 선택한 프로필 사진을 저장한다', async () => {
+  const profileGateway = createProfileGateway();
+  const {renderer} = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    createGroupGateway(),
+    undefined,
+    undefined,
+    profileGateway,
+  );
+  const asset: ProfileImageAsset = {
+    contentType: 'image/jpeg',
+    fileName: 'profile.jpg',
+    sizeBytes: 1024,
+    uri: 'file:///profile.jpg',
+  };
+
+  await TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '회원가입 시작'})
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer.root.findByType(SignupFlowScreen).props.onComplete(
+      'CaseUser1',
+      asset,
+    );
+  });
+  const loginSheet = renderer.root.findByType(LoginBottomSheet);
+  await TestRenderer.act(async () => {
+    await loginSheet.props.onLogin({
+      loginId: 'CaseUser1',
+      password: 'password123',
+    });
+    await flushAsyncWork();
+  });
+
+  expect(profileGateway.uploadProfileImage).toHaveBeenCalledWith(asset);
+  expect(profileGateway.updateCurrentProfile).toHaveBeenCalledWith({
+    profileImageUrl: 'https://cdn.example.com/profile.webp',
+  });
 });
 
 test("로그인 입력을 보존하고 비밀번호 표시 전환을 제공한다", async () => {

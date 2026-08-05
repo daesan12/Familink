@@ -5,6 +5,7 @@ import {
   deleteComment,
   REACTION_OPTIONS,
   replaceComments,
+  setCommentCount,
   updateComment,
 } from './postInteractions';
 import type {FeedPost} from '../types';
@@ -100,9 +101,17 @@ test('postId별 댓글을 작성·수정·삭제하며 다른 게시글 상태�
 
   expect(created.commentsByPostId[post.id]?.[0]?.body).toBe('새 댓글');
   expect(created.commentCountByPostId[post.id]).toBe(1);
+  expect(
+    setCommentCount(created, {commentCount: 0, postId: post.id})
+      .commentCountByPostId[post.id],
+  ).toBe(1);
   expect(updated.commentsByPostId[post.id]?.[0]?.body).toBe('수정 댓글');
   expect(deleted.commentsByPostId[post.id]).toEqual([]);
   expect(deleted.commentCountByPostId[post.id]).toBe(0);
+  expect(
+    setCommentCount(deleted, {commentCount: 0, postId: post.id})
+      .commentCountByPostId[post.id],
+  ).toBe(0);
   expect(deleted.commentsByPostId['post-2']).toEqual([]);
 });
 
@@ -135,4 +144,15 @@ test('댓글 페이지를 갱신해도 저장 중인 임시 댓글을 보존한�
     'comment-2',
     'local-comment-1',
   ]);
+});
+
+test('상세 게시글 응답의 댓글 수를 기존 댓글 목록과 별도로 반영한다', () => {
+  const initial = createPostInteractionsState([post], {});
+  const updated = setCommentCount(initial, {
+    commentCount: 7,
+    postId: post.id,
+  });
+
+  expect(updated.commentCountByPostId[post.id]).toBe(7);
+  expect(updated.commentsByPostId[post.id] ?? []).toEqual([]);
 });

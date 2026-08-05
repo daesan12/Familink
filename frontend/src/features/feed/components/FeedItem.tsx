@@ -38,7 +38,12 @@ export function FeedItem({
   const handlePress = () => onPress(post.id);
 
   return (
-    <View style={styles.container}>
+    <Pressable
+      accessible={false}
+      onPress={handlePress}
+      style={styles.container}
+      testID={`feed-post-card-${post.id}`}
+    >
       <View style={styles.authorRow}>
         {onPressAuthor === undefined ? (
           <FeedAvatar member={post.author} />
@@ -51,19 +56,27 @@ export function FeedItem({
             <FeedAvatar member={post.author} />
           </Pressable>
         )}
-        <View style={styles.authorText}>
+        <Pressable
+          accessibilityLabel={`${post.author.name}의 게시글 상세 보기`}
+          accessibilityRole="button"
+          hitSlop={{bottom: 8, left: 0, right: 8, top: 8}}
+          onPress={handlePress}
+          style={styles.authorText}
+        >
           <Text style={styles.authorName}>{post.author.name}</Text>
           <Text style={styles.createdAt}>
             {formatRelativeTime(post.createdAt)}
           </Text>
-        </View>
+        </Pressable>
       </View>
 
       <Pressable
         accessibilityHint="게시글 상세 화면으로 이동합니다"
         accessibilityLabel={`${post.author.name}님의 게시글: ${post.body}`}
         accessibilityRole="button"
+        hitSlop={{bottom: 8, left: 0, right: 0, top: 8}}
         onPress={handlePress}
+        style={styles.detailBodyPressable}
       >
         <Text style={styles.body}>{post.body}</Text>
       </Pressable>
@@ -96,7 +109,7 @@ export function FeedItem({
           <Text style={styles.commentText}>댓글 {commentCount}</Text>
         </Pressable>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -121,9 +134,9 @@ const styles = StyleSheet.create({
     color: COLORS.textStrong,
     fontSize: 15,
     lineHeight: 21,
-    paddingBottom: 12,
-    paddingHorizontal: 20,
-    paddingTop: 9,
+    paddingBottom: 0,
+    paddingHorizontal: 0,
+    paddingTop: 0,
   },
   commentButton: {
     minHeight: 44,
@@ -146,6 +159,12 @@ const styles = StyleSheet.create({
     color: COLORS.textStrong,
     fontSize: 11,
     lineHeight: 15,
+  },
+  detailBodyPressable: {
+    alignSelf: 'stretch',
+    minHeight: 56,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
   metaRow: {
     alignItems: 'center',
