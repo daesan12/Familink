@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
@@ -18,15 +19,25 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.ssafy.s15p11b104.domain.call.entity.CallReport;
+import com.ssafy.s15p11b104.domain.call.entity.CallSession;
+import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
+import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
+import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupJoinRequest;
+import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 import com.ssafy.s15p11b104.domain.group.entity.JoinRequestStatus;
 import com.ssafy.s15p11b104.domain.group.repository.FamilyGroupRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupJoinRequestRepository;
+import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.file.service.MediaDownloadUrlProvider;
 import com.ssafy.s15p11b104.domain.notification.entity.Notification;
 import com.ssafy.s15p11b104.domain.notification.entity.NotificationType;
+import com.ssafy.s15p11b104.domain.report.entity.DailyReport;
+import com.ssafy.s15p11b104.domain.report.entity.EmotionCategory;
+import com.ssafy.s15p11b104.domain.report.repository.DailyReportRepository;
 
 @AutoConfigureMockMvc
 class NotificationApiTest extends NotificationApiIntegrationTestSupport {
@@ -36,6 +47,18 @@ class NotificationApiTest extends NotificationApiIntegrationTestSupport {
 
 	@Autowired
 	private GroupJoinRequestRepository groupJoinRequestRepository;
+
+	@Autowired
+	private GroupMemberRepository groupMemberRepository;
+
+	@Autowired
+	private CallSessionRepository callSessionRepository;
+
+	@Autowired
+	private CallReportCallRepository callReportRepository;
+
+	@Autowired
+	private DailyReportRepository dailyReportRepository;
 
 	@MockitoBean
 	private MediaDownloadUrlProvider mediaDownloadUrlProvider;
@@ -194,6 +217,65 @@ class NotificationApiTest extends NotificationApiIntegrationTestSupport {
 				.value(joinRequest.getId()))
 			.andExpect(jsonPath("$.data.content[0].relatedJoinRequestStatus")
 				.value(nullValue()));
+	}
+
+	@Test
+	void listExposesReportRoutingKeysOnlyForReportNotifications() throws Exception {
+		TestUser guardian = createUser("reportrecv", "보호자");
+		TestUser careReceiver = createUser("reportcare", "피보호자");
+		FamilyGroup group = familyGroupRepository.saveAndFlush(new FamilyGroup("리포트 그룹", "REP123"));
+		GroupMember careReceiverMember = groupMemberRepository.saveAndFlush(new GroupMember(
+			group,
+			careReceiver.entity(),
+			GroupRole.CARE_RECEIVER,
+			false,
+			Instant.parse("2026-08-01T00:00:00Z")));
+
+		CallSession callSession = new CallSession(group, careReceiverMember, 1L, CallStatus.CONNECTING);
+		callSession.markConnected(Instant.parse("2026-08-03T12:00:00Z"));
+		// KST 22:30 종료 → 리포트 날짜는 다음 날로 넘어가는 경계 케이스
+		callSession.endByUser(Instant.parse("2026-08-03T13:30:00Z"));
+		callSession.finalizeTranscript(Instant.parse("2026-08-03T13:31:00Z"));
+		callSessionRepository.saveAndFlush(callSession);
+		CallReport callReport = callReportRepository.saveAndFlush(new CallReport(
+			callSession, "통화 요약", EmotionCategory.NEUTRAL, "평온", null));
+		DailyReport dailyReport = dailyReportRepository.saveAndFlush(new DailyReport(
+			group, careReceiverMember, LocalDate.of(2026, 8, 3), "하루 요약", EmotionCategory.JOY, "기쁨"));
+
+		Notification postNotification = notificationRepository.saveAndFlush(new Notification(
+			guardian.entity(), NotificationType.NEW_POST, "새 게시글", "내용"));
+		Notification callNotification = notificationRepository.saveAndFlush(new Notification(
+			guardian.entity(), NotificationType.CALL_REPORT, "통화 리포트", "내용"));
+		Notification dailyNotification = notificationRepository.saveAndFlush(new Notification(
+			guardian.entity(), NotificationType.DAILY_REPORT, "일일 리포트", "내용"));
+		jdbcTemplate.update(
+			"update notifications set related_call_report_id = ? where id = ?",
+			callReport.getId(),
+			callNotification.getId());
+		jdbcTemplate.update(
+			"update notifications set related_daily_report_id = ? where id = ?",
+			dailyReport.getId(),
+			dailyNotification.getId());
+
+		mockMvc.perform(authorized(getRequest("/notifications"), guardian))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.content.length()").value(3))
+			.andExpect(jsonPath("$.data.content[0].id").value(dailyNotification.getId()))
+			.andExpect(jsonPath("$.data.content[0].relatedDailyReportId").value(dailyReport.getId()))
+			.andExpect(jsonPath("$.data.content[0].relatedCallSessionId").value(nullValue()))
+			.andExpect(jsonPath("$.data.content[0].relatedCareReceiverMemberId")
+				.value(careReceiverMember.getId()))
+			.andExpect(jsonPath("$.data.content[0].relatedReportDate").value("2026-08-03"))
+			.andExpect(jsonPath("$.data.content[1].id").value(callNotification.getId()))
+			.andExpect(jsonPath("$.data.content[1].relatedCallReportId").value(callReport.getId()))
+			.andExpect(jsonPath("$.data.content[1].relatedCallSessionId").value(callSession.getId()))
+			.andExpect(jsonPath("$.data.content[1].relatedCareReceiverMemberId")
+				.value(careReceiverMember.getId()))
+			.andExpect(jsonPath("$.data.content[1].relatedReportDate").value("2026-08-04"))
+			.andExpect(jsonPath("$.data.content[2].id").value(postNotification.getId()))
+			.andExpect(jsonPath("$.data.content[2].relatedCallSessionId").value(nullValue()))
+			.andExpect(jsonPath("$.data.content[2].relatedCareReceiverMemberId").value(nullValue()))
+			.andExpect(jsonPath("$.data.content[2].relatedReportDate").value(nullValue()));
 	}
 
 	@Test

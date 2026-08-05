@@ -20,7 +20,8 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
 	long countByReceiver_IdAndReadAtIsNull(Long receiverId);
 
-	@EntityGraph(attributePaths = {"actor", "relatedJoinRequest"})
+	@EntityGraph(attributePaths = {
+		"actor", "relatedJoinRequest", "relatedCallReport.callSession", "relatedDailyReport"})
 	@Query("select notification from Notification notification where notification.receiver.id = :receiverId")
 	Page<Notification> findPageByReceiverId(
 		@Param("receiverId") Long receiverId,
