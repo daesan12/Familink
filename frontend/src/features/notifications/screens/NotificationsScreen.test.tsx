@@ -67,6 +67,150 @@ test('알림을 읽음 처리하고 연결된 게시글을 연다', () => {
   ).toBe(true);
 });
 
+test('일정 알림을 탭하면 이벤트 상세 목적지로 라우팅한다', () => {
+  const onOpenNotificationTarget = jest.fn();
+  const notifications: readonly AppNotification[] = [
+    {
+      avatarText: '알',
+      body: '일정이 변경됐어요.',
+      createdAtLabel: '방금',
+      groupId: 'group-1',
+      id: 'event-changed-1',
+      isRead: false,
+      relatedEventId: '7',
+      relatedJoinRequestStatus: null,
+      title: '일정 변경',
+      type: 'EVENT_CHANGED',
+    },
+  ];
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        initialNotifications={notifications}
+        onOpenNotificationTarget={onOpenNotificationTarget}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '일정 변경, 방금'})
+      .props.onPress();
+  });
+
+  expect(onOpenNotificationTarget).toHaveBeenCalledWith({
+    eventId: '7',
+    groupId: 'group-1',
+    kind: 'calendarEvent',
+  });
+});
+
+test('리포트 알림을 탭하면 통화 상세 목적지로 라우팅한다', () => {
+  const onOpenNotificationTarget = jest.fn();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        initialNotifications={DEVELOPMENT_NOTIFICATIONS}
+        onOpenNotificationTarget={onOpenNotificationTarget}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '통화 리포트가 준비됐어요, 어제'})
+      .props.onPress();
+  });
+
+  expect(onOpenNotificationTarget).toHaveBeenCalledWith({
+    callSessionId: '21',
+    groupId: 'development-guardian-group',
+    kind: 'callReport',
+    memberId: '11',
+    reportDate: '2026-08-03',
+  });
+});
+
+test('가입 요청 알림 행을 탭하면 가입 승인 목적지로 라우팅한다', () => {
+  const onOpenNotificationTarget = jest.fn();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        initialNotifications={DEVELOPMENT_NOTIFICATIONS}
+        onOpenNotificationTarget={onOpenNotificationTarget}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '수호님의 그룹 승인 요청, 방금'})
+      .props.onPress();
+  });
+
+  expect(onOpenNotificationTarget).toHaveBeenCalledWith({
+    groupId: 'development-guardian-group',
+    kind: 'joinApproval',
+  });
+});
+
+test('이동 참조가 결손인 알림은 읽음 처리만 하고 라우팅하지 않는다', () => {
+  const onOpenNotificationTarget = jest.fn();
+  const onOpenPost = jest.fn();
+  const notifications: readonly AppNotification[] = [
+    {
+      avatarText: '알',
+      body: '삭제된 일정 알림',
+      createdAtLabel: '방금',
+      groupId: 'group-1',
+      id: 'event-orphan-1',
+      isRead: false,
+      relatedJoinRequestStatus: null,
+      title: '일정 변경',
+      type: 'EVENT_CHANGED',
+    },
+  ];
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        initialNotifications={notifications}
+        onOpenNotificationTarget={onOpenNotificationTarget}
+        onOpenPost={onOpenPost}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '일정 변경, 방금'})
+      .props.onPress();
+  });
+
+  expect(onOpenNotificationTarget).not.toHaveBeenCalled();
+  expect(onOpenPost).not.toHaveBeenCalled();
+  expect(
+    renderer!.root
+      .findAllByType(Text)
+      .some(node => node.props.children?.join?.('') === '읽지 않은 알림 0개'),
+  ).toBe(true);
+});
+
 test('보존된 읽음 id는 다시 진입해도 읽음으로 표시한다', () => {
   let renderer: TestRenderer.ReactTestRenderer;
 

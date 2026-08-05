@@ -1,6 +1,7 @@
 package com.ssafy.s15p11b104.domain.notification.dto;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 import com.ssafy.s15p11b104.domain.group.entity.JoinRequestStatus;
@@ -21,6 +22,9 @@ public record NotificationListResponse(List<Item> content, boolean hasNext) {
 		Long relatedEventId,
 		Long relatedCallReportId,
 		Long relatedDailyReportId,
+		Long relatedCallSessionId,
+		Long relatedCareReceiverMemberId,
+		LocalDate relatedReportDate,
 		Instant readAt,
 		Instant createdAt
 	) {

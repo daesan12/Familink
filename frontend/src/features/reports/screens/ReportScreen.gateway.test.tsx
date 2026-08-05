@@ -455,6 +455,75 @@ test("어르신별 캘린더 날짜를 분리하고 화면 로딩 때 받은 현
   expect(currentMonthRequestCount()).toBe(2);
 });
 
+test("알림 딥링크로 진입하면 해당 날짜·멤버 리포트로 이동해 통화 상세까지 연다", async () => {
+  const gateway = createGateway();
+  const targets = [
+    { displayName: "김수호", memberId: "11" },
+    { displayName: "이말순", memberId: "12" },
+  ];
+  gateway.getDailyReport.mockImplementation(
+    async (_groupId, memberId, date) => ({
+      calls:
+        memberId === "12" && date === "2026-07-17"
+          ? [
+              {
+                callSessionId: "31",
+                reportAvailable: true,
+                startedAt: "2026-07-17T00:30:00Z",
+              },
+            ]
+          : [],
+      dailyReport: {
+        emotionCategory: "NEUTRAL",
+        emotionSubcategory: "평온",
+        guardianMessageSummary: null,
+        id: `daily-${memberId}`,
+        summary: `${memberId}번 ${date} 리포트`,
+      },
+      date,
+      status: "ready",
+    })
+  );
+  gateway.getCallReport.mockResolvedValue({
+    callSessionId: "31",
+    createdAt: "2026-07-17T00:35:00Z",
+    guardianMessage: null,
+    status: "ready",
+    summary: "딥링크로 연 통화 리포트입니다.",
+  });
+
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <ReportScreen
+        careReceiverTargets={targets}
+        currentGroup={currentGroup}
+        openReportRequestId={1}
+        openReportTarget={{
+          callSessionId: "31",
+          memberId: "12",
+          reportDate: "2026-07-17",
+        }}
+        reportDate="2026-07-31"
+        reportGateway={gateway}
+        role="guardian"
+      />
+    );
+  });
+  renderedScreens.add(renderer!);
+  await TestRenderer.act(async () => {});
+
+  expect(gateway.getDailyReport).toHaveBeenCalledWith(
+    "group-1",
+    "12",
+    "2026-07-17"
+  );
+  expect(gateway.getCallReport).toHaveBeenCalledWith("31");
+  const tree = JSON.stringify(renderer!.toJSON());
+  expect(tree).toContain("딥링크로 연 통화 리포트입니다.");
+  expect(tree).toContain("12번 2026-07-17 리포트");
+});
+
 test("한 피보호자 조회 실패에도 성공한 페이지를 유지하고 실패한 대상만 다시 시도한다", async () => {
   const gateway = createGateway();
   const targets = [

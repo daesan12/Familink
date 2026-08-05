@@ -1,6 +1,6 @@
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
 import type { ComponentProps } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -64,6 +64,8 @@ export function ReportScreen({
   careReceiverTargets,
   careReceiverTargetsLoader,
   currentGroup,
+  openReportRequestId,
+  openReportTarget,
   reportDate = getKoreaReportDate(),
   reportGateway,
 }: ReportScreenProps) {
@@ -133,6 +135,14 @@ export function ReportScreen({
   const calendarLoadGeneration = useRef(0);
   const calendarRequests = useRef(new Map<string, number>());
   const callRequestId = useRef(0);
+  const pagerRef = useRef<ScrollView>(null);
+  const lastOpenReportRequestId = useRef(0);
+  // 알림 딥링크로 진입할 멤버·통화. 목적지 날짜의 페이지 로드가 끝난 뒤 적용한다.
+  const pendingDeepLinkRef = useRef<{
+    callSessionId?: string;
+    memberId: string;
+    reportDate: string;
+  } | null>(null);
 
   const calendarMonthKey = calendarTarget
     ? createCalendarMonthKey(
@@ -261,43 +271,46 @@ export function ReportScreen({
     setCurrentIndex(nextIndex);
   };
 
-  const handleOpenCall = async (call: CallReportView) => {
-    if (!reportGateway) {
-      setSelectedDetail({
-        call,
-        status: call.summary === null ? "generating" : "ready",
-      });
-      return;
-    }
-
-    const requestId = ++callRequestId.current;
-    setSelectedDetail({ call, status: "loading" });
-
-    try {
-      const report = await reportGateway.getCallReport(call.callSessionId);
-      if (requestId !== callRequestId.current) {
+  const handleOpenCall = useCallback(
+    async (call: CallReportView) => {
+      if (!reportGateway) {
+        setSelectedDetail({
+          call,
+          status: call.summary === null ? "generating" : "ready",
+        });
         return;
       }
 
-      if (report.status === "generating") {
-        setSelectedDetail({ call, status: "generating" });
-        return;
-      }
+      const requestId = ++callRequestId.current;
+      setSelectedDetail({ call, status: "loading" });
 
-      setSelectedDetail({
-        call: {
-          ...call,
-          guardianMessage: report.guardianMessage,
-          summary: report.summary,
-        },
-        status: "ready",
-      });
-    } catch {
-      if (requestId === callRequestId.current) {
-        setSelectedDetail({ call, status: "error" });
+      try {
+        const report = await reportGateway.getCallReport(call.callSessionId);
+        if (requestId !== callRequestId.current) {
+          return;
+        }
+
+        if (report.status === "generating") {
+          setSelectedDetail({ call, status: "generating" });
+          return;
+        }
+
+        setSelectedDetail({
+          call: {
+            ...call,
+            guardianMessage: report.guardianMessage,
+            summary: report.summary,
+          },
+          status: "ready",
+        });
+      } catch {
+        if (requestId === callRequestId.current) {
+          setSelectedDetail({ call, status: "error" });
+        }
       }
-    }
-  };
+    },
+    [reportGateway]
+  );
 
   const handleCloseDetail = () => {
     callRequestId.current += 1;
@@ -364,6 +377,74 @@ export function ReportScreen({
     }
   };
 
+  useEffect(() => {
+    const requestId = openReportRequestId ?? 0;
+    if (
+      openReportTarget &&
+      requestId > 0 &&
+      requestId !== lastOpenReportRequestId.current
+    ) {
+      lastOpenReportRequestId.current = requestId;
+      pendingDeepLinkRef.current = {
+        ...(openReportTarget.callSessionId === undefined
+          ? {}
+          : { callSessionId: openReportTarget.callSessionId }),
+        memberId: openReportTarget.memberId,
+        reportDate: openReportTarget.reportDate,
+      };
+      handleSelectReportDate(openReportTarget.reportDate);
+    }
+  }, [openReportTarget, openReportRequestId]);
+
+  // 페이지 로드가 끝나면 딥링크 대상 멤버로 페이저를 이동하고,
+  // callSessionId가 지정된 경우 해당 통화 상세까지 연다.
+  useEffect(() => {
+    const pending = pendingDeepLinkRef.current;
+    if (!pending || reportItems.length === 0 || width <= 0) {
+      return;
+    }
+    // 날짜 변경 직후의 effect 실행은 아직 이전 날짜의 페이지를 들고 있으므로
+    // 선택 날짜가 목적지 날짜로 반영된 뒤에만 적용한다.
+    if (pending.reportDate !== selectedReportDate) {
+      return;
+    }
+    if (hasRemoteSource && remotePages.status !== "ready") {
+      return;
+    }
+    const index = reportItems.findIndex(
+      (item) => item.target.memberId === pending.memberId
+    );
+    if (index < 0) {
+      pendingDeepLinkRef.current = null;
+      return;
+    }
+    const item = reportItems[index];
+    if (item.status === "loading") {
+      return;
+    }
+    pendingDeepLinkRef.current = null;
+    pagerRef.current?.scrollTo({ animated: false, x: index * width });
+    setCurrentIndex(index);
+    if (item.status === "ready" && pending.callSessionId !== undefined) {
+      const call = item.page.todayCalls.find(
+        (todayCall) => todayCall.callSessionId === pending.callSessionId
+      );
+      if (call) {
+        void handleOpenCall(call);
+      }
+    }
+    // 이미 같은 날짜를 보고 있으면 페이지 재로딩이 없어 openReportRequestId 변화로
+    // 트리거된다. pendingDeepLinkRef 가드로 1회만 적용한다.
+  }, [
+    reportItems,
+    width,
+    hasRemoteSource,
+    remotePages.status,
+    handleOpenCall,
+    openReportRequestId,
+    selectedReportDate,
+  ]);
+
   if (shouldLoadTargets && targetState.status === "loading") {
     return (
       <ReportLoadState
@@ -421,6 +502,7 @@ export function ReportScreen({
         key={pageIdentity}
         onMomentumScrollEnd={handlePageChange}
         pagingEnabled
+        ref={pagerRef}
         showsHorizontalScrollIndicator={false}
         testID="care-receiver-report-pager"
       >

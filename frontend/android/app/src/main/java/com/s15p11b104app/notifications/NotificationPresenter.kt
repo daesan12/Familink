@@ -22,14 +22,20 @@ internal object NotificationPresenter {
   /** 알림을 갱신 단위로 묶는 고정 ID. 서로 다른 알림은 [Presentation.tag]로 구분한다. */
   private const val NOTIFICATION_ID = 0
 
-  /** 서버가 data payload에 담는 알림 식별자 키. `NotificationPushService`와 같아야 한다. */
-  private const val DATA_NOTIFICATION_ID = "notificationId"
+  /**
+   * 서버가 data payload에 담는 키. `NotificationPushService`와 같아야 한다.
+   * 탭 intent extras에도 같은 키를 써서, FCM SDK가 data를 launch intent extras에
+   * 그대로 싣는 백그라운드 경로와 키가 일치하게 한다.
+   */
+  const val DATA_NOTIFICATION_ID = "notificationId"
+  const val DATA_TYPE = "type"
 
   /** 표시할 알림 내용. 제목과 본문 중 최소 하나는 비어 있지 않다. */
   internal data class Presentation(
     val tag: String?,
     val title: String,
     val body: String,
+    val type: String? = null,
   )
 
   /**
@@ -59,13 +65,19 @@ internal object NotificationPresenter {
           title = remoteMessage.notification?.title,
           body = remoteMessage.notification?.body,
           notificationId = remoteMessage.data[DATA_NOTIFICATION_ID],
+          type = remoteMessage.data[DATA_TYPE],
       )
 
   /**
    * 표시 대상을 판정한다. 제목과 본문이 모두 비어 있으면 표시할 내용이 없으므로 `null`을
    * 반환하며 대체 문구를 만들지 않는다.
    */
-  fun toPresentation(title: String?, body: String?, notificationId: String?): Presentation? {
+  fun toPresentation(
+    title: String?,
+    body: String?,
+    notificationId: String?,
+    type: String? = null,
+  ): Presentation? {
     val resolvedTitle = title?.trim().orEmpty()
     val resolvedBody = body?.trim().orEmpty()
     if (resolvedTitle.isEmpty() && resolvedBody.isEmpty()) {
@@ -75,6 +87,7 @@ internal object NotificationPresenter {
       tag = notificationId?.trim()?.takeIf { it.isNotEmpty() },
       title = resolvedTitle,
       body = resolvedBody,
+      type = type?.trim()?.takeIf { it.isNotEmpty() },
     )
   }
 
@@ -89,7 +102,7 @@ internal object NotificationPresenter {
         .setAutoCancel(true)
         // Android 8 미만에서는 채널 중요도가 없어 헤드업 여부를 이 값이 결정한다.
         .setPriority(NotificationCompat.PRIORITY_HIGH)
-        .setContentIntent(contentIntent(context))
+        .setContentIntent(contentIntent(context, presentation))
     if (presentation.title.isNotEmpty()) {
       builder.setContentTitle(presentation.title)
     }
@@ -100,14 +113,29 @@ internal object NotificationPresenter {
       .notify(presentation.tag, NOTIFICATION_ID, builder.build())
   }
 
-  private fun contentIntent(context: Context): PendingIntent {
+  /** 탭 시 MainActivity로 전달할 intent. extras 키는 FCM 백그라운드 경로와 같다. */
+  internal fun tapIntent(context: Context, presentation: Presentation): Intent {
     val intent =
       Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-    return PendingIntent.getActivity(
-      context,
-      NOTIFICATION_ID,
-      intent,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
+    if (presentation.tag != null) {
+      intent.putExtra(DATA_NOTIFICATION_ID, presentation.tag)
+      presentation.type?.let { intent.putExtra(DATA_TYPE, it) }
+    }
+    return intent
   }
+
+  /**
+   * requestCode가 같으면 FLAG_UPDATE_CURRENT가 모든 알림의 PendingIntent를 마지막
+   * extras로 덮어쓴다. 알림(tag)별로 분리해 각자 자신의 알림으로 이동하게 한다.
+   */
+  internal fun tapRequestCode(presentation: Presentation): Int =
+      presentation.tag?.hashCode() ?: NOTIFICATION_ID
+
+  private fun contentIntent(context: Context, presentation: Presentation): PendingIntent =
+      PendingIntent.getActivity(
+        context,
+        tapRequestCode(presentation),
+        tapIntent(context, presentation),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+      )
 }

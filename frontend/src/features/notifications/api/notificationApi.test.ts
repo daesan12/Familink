@@ -124,6 +124,92 @@ test('알림 목록 응답을 화면 모델로 변환하고 페이지 파라미�
   expect(client.get).toHaveBeenCalledWith('/notifications?page=2&size=10');
 });
 
+test('리포트 알림의 이동용 조회 키를 파싱하고 부재나 잘못된 형식도 허용한다', async () => {
+  const client = createClient();
+  client.get.mockResolvedValueOnce(
+    success({
+      content: [
+        {
+          actor: null,
+          body: '통화 리포트가 준비됐어요.',
+          createdAt: '2026-08-03T14:00:00Z',
+          groupId: 3,
+          id: 31,
+          readAt: null,
+          relatedCallReportId: 41,
+          relatedCallSessionId: 51,
+          relatedCareReceiverMemberId: 61,
+          relatedDailyReportId: null,
+          relatedEventId: null,
+          relatedJoinRequestId: null,
+          relatedJoinRequestStatus: null,
+          relatedPostId: null,
+          relatedReportDate: '2026-08-04',
+          title: '통화 리포트',
+          type: 'CALL_REPORT',
+        },
+        {
+          actor: null,
+          body: '이동 키가 없는 구버전 응답',
+          createdAt: '2026-08-02T14:00:00Z',
+          groupId: 3,
+          id: 32,
+          readAt: null,
+          relatedCallReportId: null,
+          relatedDailyReportId: 42,
+          relatedEventId: null,
+          relatedJoinRequestId: null,
+          relatedJoinRequestStatus: null,
+          relatedPostId: null,
+          title: '일일 리포트',
+          type: 'DAILY_REPORT',
+        },
+      ],
+      hasNext: false,
+    }),
+  );
+
+  const page = await createNotificationGateway({client}).loadPage(0);
+  expect(page.notifications[0]).toMatchObject({
+    relatedCallReportId: '41',
+    relatedCallSessionId: '51',
+    relatedCareReceiverMemberId: '61',
+    relatedReportDate: '2026-08-04',
+  });
+  expect(page.notifications[1].relatedCallSessionId).toBeUndefined();
+  expect(page.notifications[1].relatedCareReceiverMemberId).toBeUndefined();
+  expect(page.notifications[1].relatedReportDate).toBeUndefined();
+
+  const invalidClient = createClient();
+  invalidClient.get.mockResolvedValueOnce(
+    success({
+      content: [
+        {
+          actor: null,
+          body: '형식이 잘못된 날짜',
+          createdAt: '2026-08-02T14:00:00Z',
+          groupId: 3,
+          id: 33,
+          readAt: null,
+          relatedCallReportId: null,
+          relatedDailyReportId: 42,
+          relatedEventId: null,
+          relatedJoinRequestId: null,
+          relatedJoinRequestStatus: null,
+          relatedPostId: null,
+          relatedReportDate: '08/04/2026',
+          title: '일일 리포트',
+          type: 'DAILY_REPORT',
+        },
+      ],
+      hasNext: false,
+    }),
+  );
+  await expect(
+    createNotificationGateway({client: invalidClient}).loadPage(0),
+  ).rejects.toBeInstanceOf(ApiError);
+});
+
 test('누락되거나 알 수 없는 가입 요청 상태는 null로 읽고 처리 동작을 숨긴다', async () => {
   const baseNotification = {
     actor: {name: '수호', profileImageUrl: null, userId: 8},

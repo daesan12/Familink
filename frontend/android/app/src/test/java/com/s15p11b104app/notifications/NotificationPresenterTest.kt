@@ -73,4 +73,28 @@ class NotificationPresenterTest {
         NotificationPresenter.toPresentation(title = "새 게시글", body = null, notificationId = "  ")
             ?.tag)
   }
+
+  @Test
+  fun `알림 타입을 공백 정리해 담고 없으면 비운다`() {
+    assertEquals(
+        "NEW_POST",
+        NotificationPresenter.toPresentation(
+                title = "새 게시글",
+                body = null,
+                notificationId = "1024",
+                type = " NEW_POST ",
+            )
+            ?.type)
+    assertNull(
+        NotificationPresenter.toPresentation(title = "새 게시글", body = null, notificationId = "1024")
+            ?.type)
+    assertNull(
+        NotificationPresenter.toPresentation(
+                title = "새 게시글",
+                body = null,
+                notificationId = "1024",
+                type = "  ",
+            )
+            ?.type)
+  }
 }

@@ -5,6 +5,7 @@ import {
   AppState,
   Image,
   Modal,
+  Text,
 } from "react-native";
 import TestRenderer from "react-test-renderer";
 import { clearAllMockStorages } from "@react-native-async-storage/async-storage/jest";
@@ -3858,4 +3859,119 @@ test("그룹 선택 바텀시트에서 빈 피드 그룹으로 전환한다", as
 
   mountedRenderers.push(renderer!);
   jest.useRealTimers();
+});
+
+// OS 푸시 알림 탭 2단 해석: 탭 → 앱 셸 진입 후 알림 목록에서 알림을 찾아 목적지로 이동한다.
+
+function createNotificationTapProvider(tap: {
+  notificationId: string;
+  type?: string;
+} | null) {
+  return {
+    consumePendingTap: jest.fn().mockResolvedValue(tap),
+    subscribeTap: jest.fn().mockReturnValue(() => {}),
+  };
+}
+
+async function renderAppWithPendingTap(options: {
+  notificationGateway: jest.Mocked<NotificationGateway>;
+  screens: Record<string, (props: AppScreenProps) => React.ReactNode>;
+  tap: { notificationId: string; type?: string };
+}) {
+  const groupGateway = createGroupGateway();
+  groupGateway.loadGroups.mockResolvedValueOnce({
+    groups: [
+      {
+        id: "101",
+        isManager: true,
+        memberCount: 2,
+        myMemberId: "201",
+        name: "서버 가족",
+        role: "guardian",
+      },
+    ],
+    joinRequests: [],
+  });
+  const tapProvider = createNotificationTapProvider(options.tap);
+  // 세션 복원 경로를 쓴다. 미인증(signedOut) 복원은 clearAuthenticationState가
+  // 이전 사용자의 보류 탭을 비우므로 콜드 스타트 푸시 탭 시나리오와 다르다.
+  const authSession = createAuthSessionCoordinator({
+    status: "authenticated",
+    user: { id: 7, name: "복원 사용자" },
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <App
+        authGateway={createAuthGateway()}
+        authSession={authSession}
+        groupGateway={groupGateway}
+        notificationGateway={options.notificationGateway}
+        notificationTapProvider={tapProvider}
+        screens={options.screens}
+      />
+    );
+  });
+  await resolveAuthRestore(authSession);
+  mountedRenderers.push(renderer!);
+  await TestRenderer.act(async () => {});
+  await TestRenderer.act(async () => {});
+
+  return { renderer: renderer!, tapProvider };
+}
+
+test("푸시 탭은 앱 셸 진입 후 알림을 해석해 목적지로 이동하고 읽음 처리한다", async () => {
+  const notificationGateway = createNotificationGateway();
+  notificationGateway.loadPage.mockResolvedValue({
+    hasNext: false,
+    notifications: [
+      {
+        avatarText: "알",
+        body: "일정이 변경됐어요.",
+        createdAtLabel: "방금",
+        groupId: "101",
+        id: "77",
+        isRead: false,
+        relatedEventId: "9",
+        relatedJoinRequestStatus: null,
+        title: "일정 변경",
+        type: "EVENT_CHANGED",
+      },
+    ],
+  });
+
+  const { renderer, tapProvider } = await renderAppWithPendingTap({
+    notificationGateway,
+    screens: {
+      calendar: (props) => (
+        <Text>{`screen:calendar:${props.openCalendarEventId ?? "none"}`}</Text>
+      ),
+    },
+    tap: { notificationId: "77", type: "EVENT_CHANGED" },
+  });
+
+  expect(tapProvider.consumePendingTap).toHaveBeenCalled();
+  expect(notificationGateway.loadPage).toHaveBeenCalledWith(0);
+  expect(notificationGateway.markRead).toHaveBeenCalledWith("77");
+  expect(JSON.stringify(renderer.toJSON())).toContain("screen:calendar:9");
+});
+
+test("푸시 탭의 알림을 첫 페이지에서 찾지 못하면 알림 목록으로 폴백한다", async () => {
+  const notificationGateway = createNotificationGateway();
+  notificationGateway.loadPage.mockResolvedValue({
+    hasNext: false,
+    notifications: [],
+  });
+
+  const { renderer } = await renderAppWithPendingTap({
+    notificationGateway,
+    screens: {
+      notifications: () => <Text>screen:notifications</Text>,
+    },
+    tap: { notificationId: "404", type: "NEW_POST" },
+  });
+
+  expect(notificationGateway.markRead).not.toHaveBeenCalled();
+  expect(JSON.stringify(renderer.toJSON())).toContain("screen:notifications");
 });
