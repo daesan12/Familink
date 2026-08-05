@@ -2,7 +2,9 @@ import type { ReactNode } from 'react';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
 import type { FeedStackParamList } from '../features/feed/navigationTypes';
+import type { GroupInfoStackParamList } from '../features/group-info/navigationTypes';
 import type { NotificationDeepLinkTarget } from '../features/notifications/deepLink';
+import type { ProfileStackParamList } from '../features/profile/navigationTypes';
 
 export type GroupRole = 'guardian' | 'careReceiver';
 
@@ -78,13 +80,15 @@ export interface AppScreenProps {
 // notifications·archive는 탭이 아니라 ShellStack에서 탭 위로 쌓이는 화면이다.
 export type MainTabRoute = Exclude<AppRoute, 'notifications' | 'archive'>;
 
-// feed 탭만 내부 스택(FeedStack)을 가진다. 딥링크가 중첩 params로
-// PostDetail까지 도달할 수 있도록 params 타입을 연결한다.
+// feed·groupInfo·profile 탭은 내부 스택을 가진다. 딥링크·재탭 정규화가
+// 중첩 params로 스택 화면까지 도달할 수 있도록 params 타입을 연결한다.
 export type MainTabsParamList = Omit<
   Record<MainTabRoute, undefined>,
-  'feed'
+  'feed' | 'groupInfo' | 'profile'
 > & {
   feed: NavigatorScreenParams<FeedStackParamList> | undefined;
+  groupInfo: NavigatorScreenParams<GroupInfoStackParamList> | undefined;
+  profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
 };
 
 export type ShellStackParamList = {
