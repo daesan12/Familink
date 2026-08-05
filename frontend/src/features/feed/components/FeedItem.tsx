@@ -7,6 +7,13 @@ import {FeedAvatar} from './FeedAvatar';
 import {PostImageCarousel} from './PostImageCarousel';
 import {ReactionBar, type ReactionAnchor} from './ReactionBar';
 
+// 본문·사진·반응은 모두 프로필 사진 왼쪽 끝에 맞춘다.
+// 사진은 가로 폭을 직접 계산하므로 본문만 들여쓰면 왼쪽 선이 어긋난다.
+const SCREEN_PADDING = 20;
+
+// 댓글 수는 화면 끝에 붙지 않도록 글쓰기 버튼 여백만큼 한 번 더 들여쓴다.
+const META_RIGHT_PADDING = SCREEN_PADDING * 2;
+
 interface FeedItemProps {
   canInteract: boolean;
   commentCount: number;
@@ -121,7 +128,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21,
     paddingBottom: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: SCREEN_PADDING,
     paddingTop: 9,
   },
   commentButton: {
@@ -150,6 +157,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingLeft: SCREEN_PADDING,
+    paddingRight: META_RIGHT_PADDING,
   },
 });
