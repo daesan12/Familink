@@ -129,14 +129,7 @@ import {
   subscribeGroupAccessDenied,
 } from "./src/shared/api";
 import { imageDiskCache } from "./src/shared/media/imageDiskCache";
-
-type RootRoute =
-  | "welcome"
-  | "signup"
-  | "signedInWelcome"
-  | "groupOnboarding"
-  | "interestSetup"
-  | "appShell";
+import type { RootRoute } from "./src/navigation/types";
 
 type FamilyGroupWithMemberId = FamilyGroup & {
   myMemberId?: string;
