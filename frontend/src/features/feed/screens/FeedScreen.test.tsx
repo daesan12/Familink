@@ -1,4 +1,5 @@
 import React from 'react';
+import {NavigationContainer} from '@react-navigation/native';
 import TestRenderer from 'react-test-renderer';
 
 import type {FeedPost, ReactionId} from '../types';
@@ -6,14 +7,24 @@ import {FeedScreen} from './FeedScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
 jest.mock('react-native-safe-area-context', () => {
+  const mockReact = jest.requireActual('react');
   const {View} = jest.requireActual('react-native');
+  const insets = {bottom: 0, left: 0, right: 0, top: 0};
 
   return {
+    // FeedStack(native-stack)의 SafeAreaProviderCompat이 이 컨텍스트를 구독한다.
+    SafeAreaInsetsContext: mockReact.createContext(insets),
     SafeAreaProvider: View,
     SafeAreaView: View,
-    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
+    initialWindowMetrics: null,
+    useSafeAreaInsets: () => insets,
   };
 });
+
+// FeedScreen이 내부에 FeedStack 내비게이터를 렌더하므로 컨테이너가 필요하다.
+function withNav(element: React.ReactElement) {
+  return <NavigationContainer>{element}</NavigationContainer>;
+}
 
 jest.mock('react-native-image-picker', () => ({
   launchImageLibrary: jest.fn(),
@@ -103,14 +114,16 @@ test('D-2와 D-3가 같은 postId의 반응 상태를 공유한다', async () =>
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <FeedScreen
-        currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
-        currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
-        initialCommentsByPostId={{'post-1': []}}
-        loader={jest.fn().mockResolvedValue([post])}
-        onChangeReaction={onChangeReaction}
-        role="guardian"
-      />,
+      withNav(
+        <FeedScreen
+          currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+          currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+          initialCommentsByPostId={{'post-1': []}}
+          loader={jest.fn().mockResolvedValue([post])}
+          onChangeReaction={onChangeReaction}
+          role="guardian"
+        />,
+      ),
       {
         createNodeMock: () => ({
           measureInWindow: (
@@ -196,15 +209,17 @@ test('알림에서 전달된 postId의 게시글 상세를 바로 연다', async
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <FeedScreen
-        currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
-        currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
-        initialCommentsByPostId={{'post-1': []}}
-        loader={jest.fn().mockResolvedValue([post])}
-        openPostId="post-1"
-        openPostRequestId={1}
-        role="guardian"
-      />,
+      withNav(
+        <FeedScreen
+          currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+          currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+          initialCommentsByPostId={{'post-1': []}}
+          loader={jest.fn().mockResolvedValue([post])}
+          openPostId="post-1"
+          openPostRequestId={1}
+          role="guardian"
+        />,
+      ),
     );
     await Promise.resolve();
     await Promise.resolve();
@@ -244,15 +259,17 @@ test('작성자 아바타를 누르면 그룹정보와 동일한 프로필 팝�
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <FeedScreen
-        currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
-        currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
-        initialCommentsByPostId={{'post-1': []}}
-        loader={jest.fn().mockResolvedValue([post])}
-        memberProfileLoader={memberProfileLoader}
-        membersLoader={membersLoader}
-        role="guardian"
-      />,
+      withNav(
+        <FeedScreen
+          currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+          currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+          initialCommentsByPostId={{'post-1': []}}
+          loader={jest.fn().mockResolvedValue([post])}
+          memberProfileLoader={memberProfileLoader}
+          membersLoader={membersLoader}
+          role="guardian"
+        />,
+      ),
     );
   });
 

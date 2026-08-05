@@ -1,4 +1,5 @@
 import React from 'react';
+import {NavigationContainer} from '@react-navigation/native';
 import TestRenderer from 'react-test-renderer';
 
 import type {
@@ -72,13 +73,15 @@ test('게시글 저장 성공 후 작성 화면을 닫고 피드를 다시 조�
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <FeedScreen
-        createPostRequestId={0}
-        currentGroup={{id: '11', name: '우리 가족', role: 'guardian'}}
-        loader={loader}
-        onSubmitPost={onSubmitPost}
-        role="guardian"
-      />,
+      <NavigationContainer>
+        <FeedScreen
+          createPostRequestId={0}
+          currentGroup={{id: '11', name: '우리 가족', role: 'guardian'}}
+          loader={loader}
+          onSubmitPost={onSubmitPost}
+          role="guardian"
+        />
+      </NavigationContainer>,
     );
     await Promise.resolve();
     await Promise.resolve();
@@ -86,13 +89,15 @@ test('게시글 저장 성공 후 작성 화면을 닫고 피드를 다시 조�
 
   await TestRenderer.act(async () => {
     renderer!.update(
-      <FeedScreen
-        createPostRequestId={1}
-        currentGroup={{id: '11', name: '우리 가족', role: 'guardian'}}
-        loader={loader}
-        onSubmitPost={onSubmitPost}
-        role="guardian"
-      />,
+      <NavigationContainer>
+        <FeedScreen
+          createPostRequestId={1}
+          currentGroup={{id: '11', name: '우리 가족', role: 'guardian'}}
+          loader={loader}
+          onSubmitPost={onSubmitPost}
+          role="guardian"
+        />
+      </NavigationContainer>,
     );
     await Promise.resolve();
     await Promise.resolve();

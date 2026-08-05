@@ -1,4 +1,5 @@
 import React from 'react';
+import {NavigationContainer} from '@react-navigation/native';
 import TestRenderer from 'react-test-renderer';
 
 import type {FeedPost} from '../types';
@@ -6,12 +7,17 @@ import {FeedScreen} from './FeedScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
 jest.mock('react-native-safe-area-context', () => {
+  const mockReact = jest.requireActual('react');
   const {View} = jest.requireActual('react-native');
+  const insets = {bottom: 0, left: 0, right: 0, top: 0};
 
   return {
+    // FeedStack(native-stack)의 SafeAreaProviderCompat이 이 컨텍스트를 구독한다.
+    SafeAreaInsetsContext: mockReact.createContext(insets),
     SafeAreaProvider: View,
     SafeAreaView: View,
-    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
+    initialWindowMetrics: null,
+    useSafeAreaInsets: () => insets,
   };
 });
 
@@ -40,15 +46,17 @@ test('상세 API는 목록에 없는 postId도 조회한다', async () => {
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <FeedScreen
-        currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
-        commentsLoader={commentsLoader}
-        detailLoader={detailLoader}
-        loader={jest.fn().mockResolvedValue([])}
-        openPostId="post-detail"
-        openPostRequestId={1}
-        role="guardian"
-      />,
+      <NavigationContainer>
+        <FeedScreen
+          currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+          commentsLoader={commentsLoader}
+          detailLoader={detailLoader}
+          loader={jest.fn().mockResolvedValue([])}
+          openPostId="post-detail"
+          openPostRequestId={1}
+          role="guardian"
+        />
+      </NavigationContainer>,
     );
     await Promise.resolve();
     await Promise.resolve();
