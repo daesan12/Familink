@@ -1,5 +1,10 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {StackActions, useIsFocused} from '@react-navigation/native';
+import {
+  createNativeStackNavigator,
+  type NativeStackNavigationProp,
+} from '@react-navigation/native-stack';
 import {
   Alert,
   ActivityIndicator,
@@ -58,6 +63,7 @@ import type {
 } from '../api/groupMemberApi';
 import {usePendingJoinCount} from '../hooks/usePendingJoinCount';
 import {useWeeklyRanking} from '../hooks/useWeeklyRanking';
+import type {GroupInfoStackParamList} from '../navigationTypes';
 import type {GroupMember} from '../types';
 import {ChangeManagerScreen} from './ChangeManagerScreen';
 import {GroupCodeScreen} from './GroupCodeScreen';
@@ -91,14 +97,47 @@ export interface GroupInfoScreenProps extends AppScreenProps {
   onRenameGroup?: (name: string) => Promise<void> | void;
 }
 
-// 그룹정보에서 전체화면으로 여는 하위 화면.
-type SubScreen =
-  | 'groupCode'
-  | 'joinApproval'
-  | 'changeManager'
-  | 'removeMember'
-  | 'leaveGroup'
-  | 'renameGroup';
+// 그룹정보 탭 내부 스택. 하위 화면 6종이 얼리 리턴 대신 스택 화면으로 열린다.
+const GroupInfoStack = createNativeStackNavigator<GroupInfoStackParamList>();
+
+type GroupInfoNavigation = NativeStackNavigationProp<GroupInfoStackParamList>;
+
+// 그룹정보에서 전체화면으로 여는 하위 화면(라우트 이름 기준).
+type SubScreenRoute = Exclude<keyof GroupInfoStackParamList, 'GroupInfoHome'>;
+
+// 멤버십이 바뀔 수 있는 하위 화면. 복귀(언마운트) 시 구성원 목록·그룹 상세를
+// 다시 조회해 승인·위임·내보내기 등 화면 밖에서 생긴 변경이 반영되게 한다.
+const MEMBERSHIP_SUB_SCREENS: readonly SubScreenRoute[] = [
+  'JoinApproval',
+  'ChangeManager',
+  'RemoveMember',
+];
+
+// 하위 화면 라우트의 포커스·언마운트를 focusedSubScreen 미러로 동기화한다.
+// 반드시 모듈 레벨 유지 — 렌더 본문 안에서 정의하면 매 렌더 리마운트된다.
+// unmount cleanup(onClosed)이 기존 closeSubScreen의 복귀 재조회를 대체한다:
+// 헤더 뒤로가기·하드웨어 뒤로가기·성공 복귀가 모두 pop 한 번으로 수렴한다.
+function SubScreenRouteSync({
+  name,
+  onClosed,
+  onOpened,
+}: {
+  name: SubScreenRoute;
+  onClosed: (name: SubScreenRoute) => void;
+  onOpened: (name: SubScreenRoute) => void;
+}) {
+  const isFocused = useIsFocused();
+
+  useEffect(() => {
+    if (isFocused) {
+      onOpened(name);
+    }
+  }, [isFocused, name, onOpened]);
+
+  useEffect(() => () => onClosed(name), [name, onClosed]);
+
+  return null;
+}
 
 const EMPTY_MEMBERS: readonly GroupMember[] = [];
 
@@ -162,7 +201,10 @@ export function GroupInfoScreen({
   const [isRankingOpen, setIsRankingOpen] = useState(false);
   const [isManagerAccessNoticeOpen, setIsManagerAccessNoticeOpen] =
     useState(false);
-  const [subScreen, setSubScreen] = useState<SubScreen | null>(null);
+  // 스택에서 현재 포커스된 하위 화면의 미러. 풀스크린 신호·하드웨어 백
+  // 게이트·복귀 재조회가 이 값 하나로 구동된다(FeedScreen selectedPostId 선례).
+  const [focusedSubScreen, setFocusedSubScreen] =
+    useState<SubScreenRoute | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [scopedGroupId, setScopedGroupId] = useState(currentGroup.id);
   const [membersLoadState, setMembersLoadState] = useState<
@@ -197,6 +239,12 @@ export function GroupInfoScreen({
   const [detailReloadCount, setDetailReloadCount] = useState(0);
   const detailRequestVersion = useRef(0);
 
+  // 이동 함수가 effect·핸들러에서도 스택을 조작할 수 있게 렌더 중 ref로
+  // 캡처한다(AppShell shellNavRef 관용구). 모든 화면에서 캡처 — 중첩 params로
+  // JoinApproval이 초기 포커스 화면이 될 수 있다.
+  const groupInfoNavRef = useRef<GroupInfoNavigation | null>(null);
+  const previousGroupIdRef = useRef(currentGroup.id);
+
   const membersRequestVersion = useRef(0);
   const profileRequestVersion = useRef(0);
   // 마지막으로 조회를 마친 그룹. 같은 그룹의 재조회는 기존 데이터를 유지한 채 갱신한다.
@@ -209,10 +257,10 @@ export function GroupInfoScreen({
 
   // 하위 전체화면에 들어가면 하단 탭을 숨긴다(피드 상세·컴포저와 같은 방식).
   useEffect(() => {
-    onFullscreenChange?.(subScreen !== null);
+    onFullscreenChange?.(focusedSubScreen !== null);
 
     return () => onFullscreenChange?.(false);
-  }, [subScreen, onFullscreenChange]);
+  }, [focusedSubScreen, onFullscreenChange]);
 
   // 가입 요청 알림 딥링크로 진입하면 가입 승인 화면을 바로 연다.
   // 알림 수신자는 관리자이고 목록·처리 API가 권한을 강제하므로 사전 검사는 생략한다.
@@ -221,9 +269,35 @@ export function GroupInfoScreen({
     const requestId = openJoinApprovalRequestId ?? 0;
     if (requestId > 0 && requestId !== lastJoinApprovalRequestId.current) {
       lastJoinApprovalRequestId.current = requestId;
-      setSubScreen('joinApproval');
+      groupInfoNavRef.current?.navigate('JoinApproval', {
+        groupId: currentGroup.id,
+      });
     }
-  }, [openJoinApprovalRequestId]);
+  }, [currentGroup.id, openJoinApprovalRequestId]);
+
+  // 그룹을 전환하면 열려 있던 하위 화면을 홈으로 되돌린다(미러 정리는
+  // SubScreenRouteSync cleanup이 이어받는다). 그룹 전환이 동반된 가입 승인
+  // 딥링크는 params.groupId가 새 그룹과 일치하므로 지우지 않는다 — 같은
+  // 커밋에 push된 목적지를 죽이지 않기 위한 판별자다(FeedScreen 선례).
+  useEffect(() => {
+    if (previousGroupIdRef.current === currentGroup.id) {
+      return;
+    }
+    previousGroupIdRef.current = currentGroup.id;
+    const stackState = groupInfoNavRef.current?.getState();
+    const topRoute = stackState?.routes[stackState.index];
+    if (
+      topRoute !== undefined &&
+      topRoute.name !== 'GroupInfoHome' &&
+      !(
+        topRoute.name === 'JoinApproval' &&
+        (topRoute.params as {groupId?: string} | undefined)?.groupId ===
+          currentGroup.id
+      )
+    ) {
+      groupInfoNavRef.current?.dispatch(StackActions.popToTop());
+    }
+  }, [currentGroup.id]);
 
   useEffect(() => {
     if (membersLoader === undefined || initialMembers !== undefined) {
@@ -421,7 +495,6 @@ export function GroupInfoScreen({
     setProfileLoadError(null);
     setIsRankingOpen(false);
     setIsManagerAccessNoticeOpen(false);
-    setSubScreen(null);
     setIsDeleteOpen(false);
     setGroupDetail(null);
   }
@@ -510,21 +583,20 @@ export function GroupInfoScreen({
     setAliasDraft('');
   };
 
-  // 시스템 뒤로가기는 한 단계씩 되돌린다. 호칭 인라인 편집은 Modal이 아니라
-  // 뒤로가기가 JS로 내려오므로 하위 화면보다 먼저 처리한다.
+  // 호칭 인라인 편집은 Modal이 아니라 뒤로가기가 JS로 내려오므로 여기서
+  // 처리한다. 하위 화면의 뒤로가기는 컨테이너 useBackButton이 스택 pop으로
+  // 처리하므로 이 핸들러는 홈 포커스 중에만 활성화한다 — 게이트가 없으면
+  // 리스너 LIFO 순서 때문에 하위 화면 위에서 홈의 호칭 편집이 보이지 않게
+  // 취소된다.
   useHardwareBack(() => {
     // 저장 중에는 소비만 해 화면을 유지한다(ProfileEditScreen과 같은 관례).
     if (updatingAliasMemberId !== null) {
       return true;
     }
-    if (editingMemberId !== null) {
-      handleCancelEditAlias();
-      return true;
-    }
-
-    setSubScreen(null);
+    handleCancelEditAlias();
     return true;
-  }, editingMemberId !== null || subScreen !== null);
+  }, (editingMemberId !== null || updatingAliasMemberId !== null) &&
+    focusedSubScreen === null);
 
   const applyRoleSelection = (member: GroupMember, role: GroupRole) => {
     if (onUpdateMemberRole !== undefined) {
@@ -601,23 +673,24 @@ export function GroupInfoScreen({
     );
   };
 
-  // 멤버십이 바뀔 수 있는 하위 화면. 복귀 시 구성원 목록·그룹 상세를 다시 조회해
-  // 승인·위임·내보내기 등 화면 밖에서 생긴 변경이 목록·인원 수·후보에 반영되게 한다.
-  const membershipSubScreens: readonly SubScreen[] = [
-    'joinApproval',
-    'changeManager',
-    'removeMember',
-  ];
+  // 하위 화면 라우트 동기화 콜백. cleanup(onClosed)이 기존 closeSubScreen의
+  // 멤버십 복귀 재조회를 대체한다 — 어떤 경로(헤더 뒤로가기·하드웨어
+  // 뒤로가기·성공 복귀)로 닫혀도 재조회가 항상 따라온다.
+  const handleSubScreenOpened = useCallback((name: SubScreenRoute) => {
+    setFocusedSubScreen(name);
+  }, []);
 
-  const closeSubScreen = () => {
-    if (subScreen !== null && membershipSubScreens.includes(subScreen)) {
+  const handleSubScreenClosed = useCallback((name: SubScreenRoute) => {
+    setFocusedSubScreen(current => (current === name ? null : current));
+    if (MEMBERSHIP_SUB_SCREENS.includes(name)) {
       setMembersReloadCount(count => count + 1);
       setDetailReloadCount(count => count + 1);
     }
-    setSubScreen(null);
-  };
+  }, []);
 
-  // 새 관리자로 위임한다. API 성공 후 로컬 목록의 관리자 표시를 옮기고 복귀한다.
+  // 새 관리자로 위임한다. API 성공 후 로컬 목록의 관리자 표시를 옮긴다.
+  // 화면 복귀는 하위 화면이 성공 시 스스로 onBack(=goBack)을 호출하므로
+  // 여기서 pop하지 않는다 — 하면 이중 pop이 된다.
   const handleChangeManager = (memberId: string) => {
     const result = onChangeManager?.(memberId);
     const apply = () => {
@@ -636,7 +709,6 @@ export function GroupInfoScreen({
               managerMemberId: memberId,
             },
       );
-      setSubScreen(null);
     };
 
     if (isPromiseLike(result)) {
@@ -670,7 +742,6 @@ export function GroupInfoScreen({
           };
         });
       }
-      setSubScreen(null);
     };
 
     if (isPromiseLike(result)) {
@@ -679,13 +750,8 @@ export function GroupInfoScreen({
     apply();
   };
 
-  const handleLeaveGroup = () => {
-    const result = onLeaveGroup?.();
-    if (isPromiseLike(result)) {
-      return result.then(() => setSubScreen(null));
-    }
-    setSubScreen(null);
-  };
+  // 화면 복귀는 LeaveGroupScreen이 성공 시 스스로 onBack을 호출한다.
+  const handleLeaveGroup = () => onLeaveGroup?.();
 
   const handleDeleteGroup = (confirmationName = resolvedGroupName) => {
     const result = onDeleteGroup?.(confirmationName);
@@ -704,10 +770,13 @@ export function GroupInfoScreen({
     setDetailReloadCount(count => count + 1);
   };
 
-  // 관리자 전용 진입점은 한 곳에서 검사해 화면별 권한 문구와 분기가 어긋나지 않게 한다.
+  // 관리자 전용 진입점은 한 곳에서 검사해 화면별 권한 문구와 분기가 어긋나지 않게
+  // 한다. 게이트가 navigate 앞에서 실행되므로 실패 시 화면이 push되지 않고
+  // 풀스크린 신호도 발화하지 않는다. 하위 화면에서 재진입을 시도했다면
+  // (그룹 나가기 → 관리자 변경) 홈으로 걷어낸 뒤 안내한다 — 홈에서는 no-op.
   const openManagerOnly = (open: () => void) => {
     if (!canManageRoles) {
-      setSubScreen(null);
+      groupInfoNavRef.current?.dispatch(StackActions.popToTop());
       setIsManagerAccessNoticeOpen(true);
       return;
     }
@@ -757,13 +826,18 @@ export function GroupInfoScreen({
       description: '그룹 코드로 초대',
       key: 'invite-code',
       label: '그룹 코드',
-      onPress: () => setSubScreen('groupCode'),
+      onPress: () => groupInfoNavRef.current?.navigate('GroupCode'),
     },
     {
       description: waitingDescription,
       key: 'join-requests',
       label: '가입 승인 대기',
-      onPress: () => openManagerOnly(() => setSubScreen('joinApproval')),
+      onPress: () =>
+        openManagerOnly(() =>
+          groupInfoNavRef.current?.navigate('JoinApproval', {
+            groupId: currentGroup.id,
+          }),
+        ),
     },
   ];
 
@@ -772,13 +846,17 @@ export function GroupInfoScreen({
       description: '관리자 권한을 다른 구성원에게 넘깁니다',
       key: 'change-manager',
       label: '그룹관리자 변경',
-      onPress: () => openManagerOnly(() => setSubScreen('changeManager')),
+      onPress: () =>
+        openManagerOnly(() =>
+          groupInfoNavRef.current?.navigate('ChangeManager'),
+        ),
     },
     {
       description: '그룹 연결을 해제합니다',
       key: 'remove-member',
       label: '구성원 내보내기',
-      onPress: () => openManagerOnly(() => setSubScreen('removeMember')),
+      onPress: () =>
+        openManagerOnly(() => groupInfoNavRef.current?.navigate('RemoveMember')),
     },
     {
       description: '그룹을 떠납니다',
@@ -789,7 +867,7 @@ export function GroupInfoScreen({
           setIsDeleteOpen(true);
           return;
         }
-        setSubScreen('leaveGroup');
+        groupInfoNavRef.current?.navigate('LeaveGroup');
       },
     },
     {
@@ -802,80 +880,14 @@ export function GroupInfoScreen({
       description: '그룹의 이름을 변경합니다',
       key: 'rename-group',
       label: '그룹명 변경',
-      onPress: () => openManagerOnly(() => setSubScreen('renameGroup')),
+      onPress: () =>
+        openManagerOnly(() => groupInfoNavRef.current?.navigate('RenameGroup')),
     },
   ];
 
-  if (subScreen === 'changeManager') {
-    return (
-      <ChangeManagerScreen
-        currentMemberId={viewerMemberId}
-        members={members}
-        onBack={closeSubScreen}
-        onChangeManager={handleChangeManager}
-      />
-    );
-  }
-
-  if (subScreen === 'removeMember') {
-    return (
-      <RemoveMemberScreen
-        currentMemberId={viewerMemberId}
-        members={members}
-        onBack={closeSubScreen}
-        onRemoveMember={handleRemoveMember}
-      />
-    );
-  }
-
-  if (subScreen === 'leaveGroup') {
-    return (
-      <LeaveGroupScreen
-        groupName={resolvedGroupName}
-        isViewerManager={canManageRoles}
-        managerName={resolveManagerName(members)}
-        memberCount={resolvedMemberCount}
-        onBack={closeSubScreen}
-        onGoToChangeManager={() =>
-          openManagerOnly(() => setSubScreen('changeManager'))
-        }
-        onLeaveGroup={handleLeaveGroup}
-      />
-    );
-  }
-
-  if (subScreen === 'renameGroup') {
-    return (
-      <RenameGroupScreen
-        currentName={resolvedGroupName}
-        onBack={closeSubScreen}
-        onRenameGroup={handleRenameGroup}
-      />
-    );
-  }
-
-  if (subScreen === 'groupCode') {
-    return (
-      <GroupCodeScreen
-        groupId={currentGroup.id}
-        loader={inviteCodeLoader}
-        onBack={closeSubScreen}
-      />
-    );
-  }
-
-  if (subScreen === 'joinApproval') {
-    return (
-      <JoinApprovalScreen
-        groupId={currentGroup.id}
-        loader={joinRequestsLoader}
-        onBack={closeSubScreen}
-        onProcess={onProcessJoinRequest}
-      />
-    );
-  }
-
-  return (
+  // 홈 본문. 하위 화면이 열려도 스택 아래에서 마운트를 유지하므로 모달 4종과
+  // 스크롤 위치가 보존된다(기존 얼리 리턴과 달리 언마운트되지 않음).
+  const homeScreenContent = (
     <KeyboardAvoidingView behavior="padding" style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title}>그룹 정보</Text>
@@ -981,6 +993,145 @@ export function GroupInfoScreen({
         visible={isDeleteOpen}
       />
     </KeyboardAvoidingView>
+  );
+
+  return (
+    <GroupInfoStack.Navigator
+      screenOptions={{animation: 'none', headerShown: false}}>
+      <GroupInfoStack.Screen name="GroupInfoHome">
+        {({navigation}) => {
+          groupInfoNavRef.current = navigation;
+          return homeScreenContent;
+        }}
+      </GroupInfoStack.Screen>
+      <GroupInfoStack.Screen name="GroupCode">
+        {({navigation}) => {
+          groupInfoNavRef.current = navigation;
+          return (
+            <>
+              <SubScreenRouteSync
+                name="GroupCode"
+                onClosed={handleSubScreenClosed}
+                onOpened={handleSubScreenOpened}
+              />
+              <GroupCodeScreen
+                groupId={currentGroup.id}
+                loader={inviteCodeLoader}
+                onBack={() => navigation.goBack()}
+              />
+            </>
+          );
+        }}
+      </GroupInfoStack.Screen>
+      <GroupInfoStack.Screen name="JoinApproval">
+        {({navigation}) => {
+          groupInfoNavRef.current = navigation;
+          return (
+            <>
+              <SubScreenRouteSync
+                name="JoinApproval"
+                onClosed={handleSubScreenClosed}
+                onOpened={handleSubScreenOpened}
+              />
+              <JoinApprovalScreen
+                groupId={currentGroup.id}
+                loader={joinRequestsLoader}
+                onBack={() => navigation.goBack()}
+                onProcess={onProcessJoinRequest}
+              />
+            </>
+          );
+        }}
+      </GroupInfoStack.Screen>
+      <GroupInfoStack.Screen name="ChangeManager">
+        {({navigation}) => {
+          groupInfoNavRef.current = navigation;
+          return (
+            <>
+              <SubScreenRouteSync
+                name="ChangeManager"
+                onClosed={handleSubScreenClosed}
+                onOpened={handleSubScreenOpened}
+              />
+              <ChangeManagerScreen
+                currentMemberId={viewerMemberId}
+                members={members}
+                onBack={() => navigation.goBack()}
+                onChangeManager={handleChangeManager}
+              />
+            </>
+          );
+        }}
+      </GroupInfoStack.Screen>
+      <GroupInfoStack.Screen name="RemoveMember">
+        {({navigation}) => {
+          groupInfoNavRef.current = navigation;
+          return (
+            <>
+              <SubScreenRouteSync
+                name="RemoveMember"
+                onClosed={handleSubScreenClosed}
+                onOpened={handleSubScreenOpened}
+              />
+              <RemoveMemberScreen
+                currentMemberId={viewerMemberId}
+                members={members}
+                onBack={() => navigation.goBack()}
+                onRemoveMember={handleRemoveMember}
+              />
+            </>
+          );
+        }}
+      </GroupInfoStack.Screen>
+      <GroupInfoStack.Screen name="LeaveGroup">
+        {({navigation}) => {
+          groupInfoNavRef.current = navigation;
+          return (
+            <>
+              <SubScreenRouteSync
+                name="LeaveGroup"
+                onClosed={handleSubScreenClosed}
+                onOpened={handleSubScreenOpened}
+              />
+              <LeaveGroupScreen
+                groupName={resolvedGroupName}
+                isViewerManager={canManageRoles}
+                managerName={resolveManagerName(members)}
+                memberCount={resolvedMemberCount}
+                onBack={() => navigation.goBack()}
+                onGoToChangeManager={() =>
+                  // 기존 의미론 유지: 관리자 변경에서 뒤로가면 그룹 나가기가
+                  // 아니라 그룹정보 루트로 돌아간다 — push 대신 replace.
+                  openManagerOnly(() =>
+                    navigation.dispatch(StackActions.replace('ChangeManager')),
+                  )
+                }
+                onLeaveGroup={handleLeaveGroup}
+              />
+            </>
+          );
+        }}
+      </GroupInfoStack.Screen>
+      <GroupInfoStack.Screen name="RenameGroup">
+        {({navigation}) => {
+          groupInfoNavRef.current = navigation;
+          return (
+            <>
+              <SubScreenRouteSync
+                name="RenameGroup"
+                onClosed={handleSubScreenClosed}
+                onOpened={handleSubScreenOpened}
+              />
+              <RenameGroupScreen
+                currentName={resolvedGroupName}
+                onBack={() => navigation.goBack()}
+                onRenameGroup={handleRenameGroup}
+              />
+            </>
+          );
+        }}
+      </GroupInfoStack.Screen>
+    </GroupInfoStack.Navigator>
   );
 }
 
