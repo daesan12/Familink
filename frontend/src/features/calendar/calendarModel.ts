@@ -1,5 +1,7 @@
 import type {
+  CalendarEventDetail,
   CalendarEventSummary,
+  CalendarMember,
   DateKey,
 } from './types';
 
@@ -56,6 +58,32 @@ export interface WeekEventLayout {
   overflowByDate: Readonly<Record<DateKey, number>>;
   segments: readonly EventSegment[];
   week: CalendarWeek;
+}
+
+/**
+ * 일정 상세의 참여자 중 현재 활성 구성원 목록에 존재하는 ID만 유지한다.
+ *
+ * 구성원 목록이 아직 로딩 중이거나 조회에 실패해 비어 있으면 상세 응답을 그대로
+ * 유지한다. 활성 구성원 목록을 받은 뒤에는 이탈한 멤버십 ID가 상세 태그나 편집
+ * 요청으로 다시 노출되지 않게 제거한다.
+ */
+export function retainActiveEventParticipants(
+  detail: CalendarEventDetail,
+  members: readonly CalendarMember[],
+): CalendarEventDetail {
+  if (members.length === 0) {
+    return detail;
+  }
+
+  const activeMemberIds = new Set(members.map(member => member.memberId));
+  const participantMemberIds = detail.participantMemberIds.filter(memberId =>
+    activeMemberIds.has(memberId),
+  );
+  if (participantMemberIds.length === detail.participantMemberIds.length) {
+    return detail;
+  }
+
+  return {...detail, participantMemberIds};
 }
 
 export function createCalendarMonth(

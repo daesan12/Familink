@@ -4,10 +4,15 @@ import {
   eventsForDate,
   formatEventTime,
   getTodayDateKey,
+  retainActiveEventParticipants,
   shiftMonth,
   shiftSelectedDateToMonth,
 } from './calendarModel';
-import type {CalendarEventSummary} from './types';
+import type {
+  CalendarEventDetail,
+  CalendarEventSummary,
+  CalendarMember,
+} from './types';
 
 const event = (
   overrides: Partial<CalendarEventSummary>,
@@ -19,6 +24,44 @@ const event = (
   startAt: null,
   title: '가족 모임',
   ...overrides,
+});
+
+const detail: CalendarEventDetail = {
+  ...event({}),
+  creatorMemberId: '7',
+  description: '',
+  groupId: '3',
+  participantMemberIds: ['8', '36'],
+};
+
+const members: readonly CalendarMember[] = [
+  {
+    displayName: '이종철',
+    isManager: true,
+    memberId: '7',
+    profileImageUrl: null,
+    role: 'careReceiver',
+    userId: '70',
+  },
+  {
+    displayName: '홍유라',
+    isManager: false,
+    memberId: '8',
+    profileImageUrl: null,
+    role: 'guardian',
+    userId: '80',
+  },
+];
+
+test('활성 구성원 목록에서 사라진 일정 참여자는 상세와 편집 데이터에서 제거한다', () => {
+  expect(retainActiveEventParticipants(detail, members)).toEqual({
+    ...detail,
+    participantMemberIds: ['8'],
+  });
+});
+
+test('구성원 목록이 아직 비어 있으면 참여자 상세를 성급하게 제거하지 않는다', () => {
+  expect(retainActiveEventParticipants(detail, [])).toBe(detail);
 });
 
 test('월간 그리드는 이전·다음 달을 포함한 6주 42일을 만든다', () => {

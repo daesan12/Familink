@@ -21,6 +21,7 @@ import {
   formatMonthLabel,
   getTodayDateKey,
   parseDateKey,
+  retainActiveEventParticipants,
   shiftMonth,
   shiftSelectedDateToMonth,
   WEEKDAY_LABELS,
@@ -122,11 +123,18 @@ export function CalendarScreen({
           null,
     [currentUserId, members]
   );
+  const visibleDetail = useMemo(
+    () =>
+      detailState.detail
+        ? retainActiveEventParticipants(detailState.detail, members)
+        : null,
+    [detailState.detail, members]
+  );
   const canManageSelectedEvent = Boolean(
-    detailState.detail &&
+    visibleDetail &&
       currentMember &&
       (currentMember.isManager ||
-        currentMember.memberId === detailState.detail.creatorMemberId)
+        currentMember.memberId === visibleDetail.creatorMemberId)
   );
 
   useEffect(() => {
@@ -339,8 +347,8 @@ export function CalendarScreen({
   };
 
   const handleEditDetail = () => {
-    if (detailState.detail && canManageSelectedEvent) {
-      setEditorState({ detail: detailState.detail });
+    if (visibleDetail && canManageSelectedEvent) {
+      setEditorState({ detail: visibleDetail });
       setDetailState(CLOSED_DETAIL);
       setIsSheetVisible(false);
     }
@@ -508,7 +516,7 @@ export function CalendarScreen({
         canManage={canManageSelectedEvent}
         deleteErrorMessage={detailState.deleteErrorMessage}
         deleting={detailState.deleting}
-        detail={detailState.detail}
+        detail={visibleDetail}
         errorMessage={detailState.errorMessage}
         loading={detailState.loading}
         members={members}
