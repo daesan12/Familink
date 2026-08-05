@@ -8,8 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   StyleSheet,
   Text,
   Vibration,
@@ -283,7 +281,6 @@ export function FeedScreen({
   const previousGroupId = useRef(currentGroup.id);
   const isDeleteConfirmationOpen = useRef(false);
   const isDeleteSubmitting = useRef(false);
-  const feedScrollOffset = useRef(0);
   const handleViewablePostsChanged = useRef(
     ({viewableItems}: {viewableItems: readonly ViewToken<FeedPost>[]}) => {
       setVisiblePostIds(
@@ -696,12 +693,6 @@ export function FeedScreen({
     });
   };
 
-  const handleFeedScroll = (
-    event: NativeSyntheticEvent<NativeScrollEvent>,
-  ) => {
-    feedScrollOffset.current = event.nativeEvent.contentOffset.y;
-  };
-
   const handleCreateComment = async (
     input: CreateCommentInput,
   ): Promise<void> => {
@@ -1012,7 +1003,6 @@ export function FeedScreen({
                         feed.posts.length === 0 && styles.emptyListContent,
                       ]}
                       contentInsetAdjustmentBehavior="automatic"
-                      contentOffset={{x: 0, y: feedScrollOffset.current}}
                       data={feed.posts}
                       keyExtractor={post => post.id}
                       ListEmptyComponent={<EmptyFeedState />}
@@ -1026,7 +1016,6 @@ export function FeedScreen({
                       }
                       onEndReached={feed.loadMore}
                       onEndReachedThreshold={0.5}
-                      onScroll={handleFeedScroll}
                       onScrollBeginDrag={closeReactionPicker}
                       onRefresh={feed.refresh}
                       refreshing={feed.isRefreshing}
@@ -1063,7 +1052,6 @@ export function FeedScreen({
                           />
                         );
                       }}
-                      scrollEventThrottle={16}
                       showsVerticalScrollIndicator={false}
                     />
                     {isHomeFocused ? (
