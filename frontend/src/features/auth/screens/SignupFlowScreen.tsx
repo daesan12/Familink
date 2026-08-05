@@ -2,6 +2,7 @@ import MaterialDesignIcons from '@react-native-vector-icons/material-design-icon
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {
   Animated,
+  Alert,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -13,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {launchImageLibrary} from 'react-native-image-picker';
 
 import {ApiError} from '../../../shared/api';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
@@ -38,6 +40,11 @@ import type {
   SignupDraft,
   SignupStep,
 } from '../types';
+import {
+  parsePickedProfileImage,
+  type ProfileImageValidationError,
+} from '../../profile/profileModel';
+import type {ProfileImageAsset} from '../../profile/types';
 import {
   canSubmitSignup,
   doPasswordsMatch,
@@ -77,6 +84,7 @@ const NETWORK_ERROR_MESSAGE =
 const SIGNUP_ERROR_MESSAGE =
   '회원가입에 실패했습니다. 잠시 후 다시 시도해주세요.';
 const INITIAL_DRAFT: SignupDraft = {
+  profileImageAsset: null,
   profileImageUri: null,
   name: '',
   loginId: '',
@@ -90,7 +98,7 @@ interface SignupFlowScreenProps {
   gateway?: SignupGateway;
   onCancel: () => void;
   // 방금 가입한 로그인 ID를 전달해 로그인 화면에서 재입력을 줄인다.
-  onComplete: (loginId: string) => void;
+  onComplete: (loginId: string, profileImageAsset?: ProfileImageAsset) => void;
 }
 
 // 생년월일 휠 첫 진입 기본값. 당해로 두면 고령 사용자가 수십 년을 스크롤해야 한다.
@@ -350,6 +358,52 @@ export function SignupFlowScreen({
               }}
               onCheckLoginId={handleCheckLoginId}
               onNext={handleBasicInfoNext}
+              onPickProfileImage={async () => {
+                try {
+                  const result = await launchImageLibrary({
+                    mediaType: 'photo',
+                    restrictMimeTypes: [
+                      'image/jpeg',
+                      'image/png',
+                      'image/webp',
+                    ],
+                    selectionLimit: 1,
+                  });
+                  if (result.didCancel) {
+                    return;
+                  }
+                  if (result.errorCode !== undefined) {
+                    Alert.alert(
+                      '프로필 사진을 선택할 수 없어요',
+                      result.errorMessage ?? '사진 접근 권한을 확인해 주세요.',
+                    );
+                    return;
+                  }
+                  const picked = result.assets?.[0];
+                  if (picked === undefined) {
+                    return;
+                  }
+                  const parsed = parsePickedProfileImage(picked);
+                  if (parsed.error !== null) {
+                    Alert.alert(
+                      '프로필 사진을 사용할 수 없어요',
+                      getProfileImageValidationMessage(parsed.error),
+                    );
+                    return;
+                  }
+                  updateDraft('profileImageAsset', parsed.asset);
+                  updateDraft('profileImageUri', parsed.asset.uri);
+                } catch {
+                  Alert.alert(
+                    '프로필 사진을 선택할 수 없어요',
+                    '잠시 후 다시 시도해 주세요.',
+                  );
+                }
+              }}
+              onRemoveProfileImage={() => {
+                updateDraft('profileImageAsset', null);
+                updateDraft('profileImageUri', null);
+              }}
             />
           )}
           {step === 2 && (
@@ -400,7 +454,13 @@ export function SignupFlowScreen({
             />
           )}
           {step === 5 && (
-            <CompleteStep onComplete={() => onComplete(draft.loginId)} />
+            <CompleteStep
+              onComplete={() =>
+                draft.profileImageAsset == null
+                  ? onComplete(draft.loginId)
+                  : onComplete(draft.loginId, draft.profileImageAsset)
+              }
+            />
           )}
         </Animated.View>
       </KeyboardAvoidingView>
@@ -459,6 +519,19 @@ function getSignupErrorMessage(error: unknown): string {
   return SIGNUP_ERROR_MESSAGE;
 }
 
+function getProfileImageValidationMessage(
+  error: ProfileImageValidationError,
+): string {
+  switch (error) {
+    case 'size':
+      return '프로필 사진은 10MB 이하만 사용할 수 있어요.';
+    case 'type':
+      return 'JPEG, PNG, WebP 사진만 사용할 수 있어요.';
+    default:
+      return '사진 정보를 읽을 수 없어요. 다른 사진을 선택해 주세요.';
+  }
+}
+
 interface BasicInfoStepProps {
   availability: LoginIdAvailability;
   draft: SignupDraft;
@@ -469,6 +542,8 @@ interface BasicInfoStepProps {
   onChangeName: (value: string) => void;
   onCheckLoginId: () => void;
   onNext: () => void;
+  onPickProfileImage: () => void;
+  onRemoveProfileImage: () => void;
 }
 
 function BasicInfoStep({
@@ -481,6 +556,8 @@ function BasicInfoStep({
   onChangeName,
   onCheckLoginId,
   onNext,
+  onPickProfileImage,
+  onRemoveProfileImage,
 }: BasicInfoStepProps) {
   const canContinue =
     isValidName(draft.name) && availability === 'available';
@@ -501,15 +578,42 @@ function BasicInfoStep({
         step={1}
         title={'기본 정보를\n입력해주세요'}
       />
-      <View style={styles.profileStage}>
-        <Image
-          resizeMode="cover"
-          source={PROFILE_PLACEHOLDER}
-          style={styles.profileImage}
-        />
+      <View style={styles.profileStageContainer}>
+        <Pressable
+          accessibilityLabel="프로필 사진 선택"
+          accessibilityRole="button"
+          onPress={onPickProfileImage}
+          style={styles.profileStage}>
+          <Image
+            resizeMode="cover"
+            source={
+              draft.profileImageUri
+                ? {uri: draft.profileImageUri}
+                : PROFILE_PLACEHOLDER
+            }
+            style={styles.profileImage}
+          />
+          <View style={styles.profileImageBadge}>
+            <MaterialDesignIcons
+              color="#FFFFFF"
+              name={draft.profileImageUri ? 'pencil' : 'camera-plus'}
+              size={18}
+            />
+          </View>
+        </Pressable>
+        {draft.profileImageUri && (
+          <Pressable
+            accessibilityLabel="선택한 프로필 사진 삭제"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={onRemoveProfileImage}
+            style={styles.profileImageRemove}>
+            <MaterialDesignIcons color="#FFFFFF" name="close" size={14} />
+          </Pressable>
+        )}
       </View>
       <Text style={styles.profileHint}>
-        {'프로필 사진은 가입 후 마이페이지에서 등록할 수 있어요'}
+        {'선택 사항 · 가입 후 마이페이지에서 다시 등록할 수 있어요'}
       </Text>
       <View style={styles.basicFields}>
         <FormField
@@ -1035,6 +1139,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: AUTH_LAYOUT.horizontalPadding,
   },
+  profileStageContainer: {
+    alignSelf: 'center',
+    height: 160,
+    marginTop: 20,
+    position: 'relative',
+    width: 160,
+  },
   profileStage: {
     alignItems: 'center',
     alignSelf: 'center',
@@ -1045,7 +1156,6 @@ const styles = StyleSheet.create({
     boxShadow: '0px 7px 14px rgba(102, 83, 188, 0.12)',
     height: 160,
     justifyContent: 'center',
-    marginTop: 20,
     padding: 3,
     width: 160,
   },
@@ -1055,6 +1165,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 148,
     width: 148,
+  },
+  profileImageBadge: {
+    alignItems: 'center',
+    backgroundColor: AUTH_COLORS.primary,
+    borderColor: AUTH_COLORS.background,
+    borderRadius: 16,
+    borderWidth: 2,
+    bottom: 4,
+    height: 32,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 4,
+    width: 32,
+  },
+  profileImageRemove: {
+    alignItems: 'center',
+    backgroundColor: '#454957',
+    borderColor: AUTH_COLORS.background,
+    borderRadius: 12,
+    borderWidth: 2,
+    height: 24,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    width: 24,
   },
   profileHint: {
     color: AUTH_COLORS.muted,

@@ -115,9 +115,11 @@ import type {
 } from "./src/features/reports";
 import {
   createProfileGateway,
+  getProfileSaveErrorMessage,
   getProfileWithdrawErrorMessage,
   ProfileTabScreen,
   type ProfileGateway,
+  type ProfileImageAsset,
 } from "./src/features/profile";
 import {
   API_BASE_URL,
@@ -674,6 +676,10 @@ export default function App({
   const [loginVisible, setLoginVisible] = useState(false);
   // 방금 가입한 로그인 ID. 가입 직후 여는 로그인 시트에 미리 채운다.
   const [signupLoginId, setSignupLoginId] = useState("");
+  const [pendingSignupProfileImage, setPendingSignupProfileImage] = useState<{
+    asset: ProfileImageAsset;
+    loginId: string;
+  } | null>(null);
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [activeGroupId, setActiveGroupId] = useState(initialGroupId);
   const selectedGroupIdRef = useRef<string | null | undefined>(initialGroupId);
@@ -1376,6 +1382,7 @@ export default function App({
     loginAbortControllerRef.current = controller;
     previousController?.abort();
     const invalidationVersion = authInvalidationVersionRef.current;
+    const pendingProfileImage = pendingSignupProfileImage;
     const isCurrentAttempt = () =>
       loginAttemptIdRef.current === attemptId &&
       loginAbortControllerRef.current === controller &&
@@ -1408,6 +1415,33 @@ export default function App({
       ) {
         return;
       }
+      if (pendingProfileImage !== null) {
+        setPendingSignupProfileImage(current =>
+          current === pendingProfileImage ? null : current,
+        );
+        if (pendingProfileImage.loginId === credentials.loginId) {
+          try {
+            const profileImageUrl =
+              await resolvedProfileGateway.uploadProfileImage(
+                pendingProfileImage.asset,
+              );
+            if (
+              !isCurrentAttempt() ||
+              authInvalidationVersionRef.current !== authenticatedSessionVersion
+            ) {
+              return;
+            }
+            await resolvedProfileGateway.updateCurrentProfile({
+              profileImageUrl,
+            });
+          } catch (error) {
+            Alert.alert(
+              '프로필 사진 저장 실패',
+              `${getProfileSaveErrorMessage(error)}\n마이페이지에서 다시 등록할 수 있어요.`,
+            );
+          }
+        }
+      }
       void registerCurrentDeviceToken().catch(() => undefined);
     } finally {
       if (loginAbortControllerRef.current === controller) {
@@ -1421,6 +1455,7 @@ export default function App({
     setLoginVisible(false);
     // 미리 채움은 가입 직후 1회만 유지한다.
     setSignupLoginId("");
+    setPendingSignupProfileImage(null);
   };
 
   const handleLogout = async () => {
@@ -2104,10 +2139,18 @@ export default function App({
             )}
             {route === "signup" && (
               <SignupFlowScreen
-                onCancel={() => setRoute("welcome")}
-                onComplete={(loginId) => {
+                onCancel={() => {
+                  setPendingSignupProfileImage(null);
+                  setRoute("welcome");
+                }}
+                onComplete={(loginId, profileImageAsset) => {
                   // 방금 만든 계정을 다시 입력하지 않도록 아이디를 채운 로그인 시트를 바로 연다.
                   setSignupLoginId(loginId);
+                  setPendingSignupProfileImage(
+                    profileImageAsset
+                      ? {asset: profileImageAsset, loginId}
+                      : null,
+                  );
                   setRoute("welcome");
                   setLoginVisible(true);
                 }}

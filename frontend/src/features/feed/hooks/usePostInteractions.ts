@@ -9,7 +9,9 @@ import {
   replaceComment,
   replaceComments,
   restoreComment,
+  setCommentCount,
   setReaction,
+  settleCommentCountDelta,
   updateComment,
 } from '../interactions/postInteractions';
 import type {
@@ -55,6 +57,11 @@ export function usePostInteractions(
         }),
       );
     },
+    settleCommentCountDelta: (postId: string, delta: number) => {
+      setState(current =>
+        settleCommentCountDelta(current, {delta, postId}),
+      );
+    },
     appendComments: (postId: string, comments: readonly PostComment[]) => {
       setState(current => appendComments(current, {comments, postId}));
     },
@@ -82,6 +89,11 @@ export function usePostInteractions(
     ) => {
       setState(current =>
         replaceComments(current, {comments, postId, preserveCount}),
+      );
+    },
+    setCommentCount: (postId: string, commentCount: number) => {
+      setState(current =>
+        setCommentCount(current, {commentCount, postId}),
       );
     },
     restoreComment: (postId: string, comment: PostComment) => {
