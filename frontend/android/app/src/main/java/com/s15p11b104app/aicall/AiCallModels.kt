@@ -127,13 +127,22 @@ internal val aiPersonasForSelection =
       requireNotNull(aiPersonas.firstOrNull { it.id == personaId })
     }
 
+/** 통화를 시작할 때의 마이크 상태. 켜진 상태로 시작한다. */
+internal const val AI_CALL_DEFAULT_IS_MUTED = false
+
+/**
+ * 통화를 시작할 때의 스피커 상태. 일반 전화와 같이 수화기로 시작하므로 꺼짐이다.
+ * `AiCallWebRtcSession.configureAudioRoute()`의 초기 라우팅과 반드시 같아야 한다.
+ */
+internal const val AI_CALL_DEFAULT_IS_SPEAKER_ON = false
+
 internal data class AiCallUiState(
     val phase: AiCallPhase,
     val persona: AiPersona?,
     val failureReason: AiCallFailureReason = AiCallFailureReason.Connection,
     val durationSeconds: Int = 0,
-    val isMuted: Boolean = false,
-    val isSpeakerOn: Boolean = true,
+    val isMuted: Boolean = AI_CALL_DEFAULT_IS_MUTED,
+    val isSpeakerOn: Boolean = AI_CALL_DEFAULT_IS_SPEAKER_ON,
     val captionDraft: String = "",
     val captionHistory: List<String> = emptyList(),
 )
