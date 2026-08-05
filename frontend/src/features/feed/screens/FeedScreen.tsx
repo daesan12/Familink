@@ -7,6 +7,7 @@ import {
   type NativeSyntheticEvent,
   StyleSheet,
   Text,
+  Vibration,
   View,
   type ViewToken,
 } from 'react-native';
@@ -486,6 +487,7 @@ export function FeedScreen({
     const nextReactionId =
       previousReactionId === reactionId ? null : reactionId;
     pendingReactionPostIds.current.add(postId);
+    Vibration.vibrate(previousReactionId === reactionId ? 6 : 10);
     interactions.changeReaction(postId, reactionId);
     const input: ChangeReactionInput = {
       nextReactionId,

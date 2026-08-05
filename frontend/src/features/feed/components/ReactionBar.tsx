@@ -1,6 +1,12 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useRef} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {useEffect, useRef} from 'react';
+import {
+  Animated,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import type {FeedReaction, ReactionId} from '../types';
@@ -14,6 +20,7 @@ export interface ReactionAnchor {
 
 interface ReactionBarProps {
   canReact: boolean;
+  isVisible?: boolean;
   isPickerOpen: boolean;
   onSelectReaction: (reactionId: ReactionId) => void;
   onTogglePicker: (anchor: ReactionAnchor) => void;
@@ -23,6 +30,7 @@ interface ReactionBarProps {
 
 export function ReactionBar({
   canReact,
+  isVisible = true,
   isPickerOpen,
   onSelectReaction,
   onTogglePicker,
@@ -30,6 +38,52 @@ export function ReactionBar({
   selectedReactionId,
 }: ReactionBarProps) {
   const addButtonRef = useRef<View>(null);
+  const visibilityProgress = useRef(new Animated.Value(0)).current;
+  const reactionPulse = useRef(new Animated.Value(1)).current;
+  const previousSelectedReactionId = useRef<
+    ReactionId | null | undefined
+  >(undefined);
+
+  useEffect(() => {
+    if (!isVisible) {
+      visibilityProgress.setValue(0);
+      return;
+    }
+
+    Animated.spring(visibilityProgress, {
+      bounciness: 5,
+      speed: 18,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  }, [isVisible, visibilityProgress]);
+
+  useEffect(() => {
+    const previousReactionId = previousSelectedReactionId.current;
+    previousSelectedReactionId.current = selectedReactionId;
+
+    if (
+      previousReactionId === undefined ||
+      previousReactionId === selectedReactionId
+    ) {
+      return;
+    }
+
+    reactionPulse.setValue(1);
+    Animated.sequence([
+      Animated.timing(reactionPulse, {
+        duration: 90,
+        toValue: 1.05,
+        useNativeDriver: true,
+      }),
+      Animated.spring(reactionPulse, {
+        bounciness: 4,
+        speed: 20,
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [reactionPulse, selectedReactionId]);
 
   const handleTogglePicker = () => {
     if (!canReact) {
@@ -46,7 +100,32 @@ export function ReactionBar({
   };
 
   return (
-    <View accessibilityRole="summary" style={styles.container}>
+    <Animated.View
+      accessibilityRole="summary"
+      style={[
+        styles.container,
+        {
+          opacity: visibilityProgress,
+          transform: [
+            {
+              translateY: visibilityProgress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [6, 0],
+              }),
+            },
+            {
+              scale: Animated.multiply(
+                visibilityProgress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.96, 1],
+                }),
+                reactionPulse,
+              ),
+            },
+          ],
+        },
+      ]}
+    >
       {reactions
         .filter(reaction => reaction.count > 0)
         .map(reaction => {
@@ -112,7 +191,7 @@ export function ReactionBar({
           </View>
         </Pressable>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 
