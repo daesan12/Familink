@@ -891,7 +891,7 @@ export function GroupInfoScreen({
           onPress={() => setIsRankingOpen(true)}
           style={styles.rankingCard}>
           <Text style={styles.rankingText}>
-            이번주 우리 가족 효자{'\n'}랭킹 조회하기
+            이번주 우리 가족{'\n'}효자 랭킹 조회하기
           </Text>
           <View style={styles.rankingChevron}>
             <MaterialDesignIcons
