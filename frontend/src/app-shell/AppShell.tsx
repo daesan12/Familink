@@ -19,6 +19,7 @@ import {
 import { useHardwareBack } from '../shared/hooks/useHardwareBack';
 import { BottomTabBar } from './BottomTabBar';
 import { CurrentGroupSwitcher } from './CurrentGroupSwitcher';
+import type { FeedStackParamList } from '../features/feed/navigationTypes';
 import { getTabsForRole, resolveAllowedRoute, resolveCurrentGroup } from './navigation';
 import type {
   AppRoute,
@@ -104,13 +105,10 @@ export function AppShell({
   const shellNavRef = useRef<ShellNavigation | null>(null);
   const [currentGroupId, setCurrentGroupId] = useState(initialGroupId);
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
-  const [createPostRequestId, setCreatePostRequestId] = useState(0);
   const [createCalendarEventRequestId, setCreateCalendarEventRequestId] =
     useState(0);
   const [isScreenFullscreen, setIsScreenFullscreen] = useState(false);
   const [isScreenHeaderVisible, setIsScreenHeaderVisible] = useState(true);
-  const [openPostId, setOpenPostId] = useState<string | null>(null);
-  const [openPostRequestId, setOpenPostRequestId] = useState(0);
   const [openCalendarEventId, setOpenCalendarEventId] = useState<string | null>(
     null
   );
@@ -174,6 +172,24 @@ export function AppShell({
     setVisibleRoute(route);
     shellNavRef.current?.navigate(route);
   }, []);
+  // 피드 탭 내부 FeedStack의 화면까지 한 번의 dispatch로 도달한다(오버레이
+  // pop + 탭 전환 + 중첩 화면 push). initial:false가 없으면 피드 탭 콜드
+  // 마운트에서 [PostDetail] 단독 스택이 되어 뒤로가기가 앱 종료로 이어진다.
+  const navigateInFeedTab = useCallback(
+    (
+      screen: 'PostComposer' | 'PostDetail',
+      params: FeedStackParamList['PostComposer'] | FeedStackParamList['PostDetail'],
+    ) => {
+      setVisibleRoute('feed');
+      shellNavRef.current?.dispatch(
+        StackActions.popTo('MainTabs', {
+          params: { initial: false, params, screen },
+          screen: 'feed',
+        })
+      );
+    },
+    []
+  );
   const handleFocusedRouteChange = useCallback((route: AppRoute) => {
     setVisibleRoute(route);
   }, []);
@@ -188,7 +204,6 @@ export function AppShell({
 
   useHardwareBack(() => {
     setIsScreenHeaderVisible(true);
-    setOpenPostId(null);
     setOpenCalendarEventId(null);
     setOpenReportTarget(null);
     goToTab('feed');
@@ -341,8 +356,6 @@ export function AppShell({
       setIsScreenFullscreen(false);
       setIsScreenHeaderVisible(true);
       setIsGroupMenuOpen(false);
-      setOpenPostId(null);
-      setOpenPostRequestId(0);
       setOpenCalendarEventId(null);
       setOpenReportTarget(null);
     }
@@ -396,8 +409,6 @@ export function AppShell({
   const handleGroupSelect = (groupId: string) => {
     setCurrentGroupId(groupId);
     onCurrentGroupChange?.(groupId);
-    setOpenPostId(null);
-    setOpenPostRequestId(0);
     setOpenCalendarEventId(null);
     setOpenReportTarget(null);
     setIsGroupMenuOpen(false);
@@ -416,17 +427,18 @@ export function AppShell({
   };
 
   const handleOpenPost = (postId: string, groupId?: string) => {
-    if (
-      groupId &&
-      groupId !== currentGroup.id &&
-      groups.some(group => group.id === groupId)
-    ) {
-      handleGroupSelect(groupId);
+    const targetGroupId =
+      groupId && groups.some(group => group.id === groupId)
+        ? groupId
+        : currentGroup.id;
+    if (targetGroupId !== currentGroup.id) {
+      handleGroupSelect(targetGroupId);
     }
-    setOpenPostId(postId);
-    setOpenPostRequestId(requestId => requestId + 1);
     setIsScreenHeaderVisible(true);
-    goToTab('feed');
+    navigateInFeedTab('PostDetail', {
+      groupId: targetGroupId,
+      postId,
+    });
   };
 
   const handleOpenNotificationTarget = (target: NotificationDeepLinkTarget) => {
@@ -488,7 +500,6 @@ export function AppShell({
     apiBaseUrl,
     authSession,
     createCalendarEventRequestId,
-    createPostRequestId,
     currentGroup,
     currentUserId,
     currentUserName,
@@ -508,8 +519,6 @@ export function AppShell({
     openCalendarEventId,
     openCalendarEventRequestId,
     openJoinApprovalRequestId,
-    openPostId,
-    openPostRequestId,
     openReportRequestId,
     openReportTarget,
     readNotificationIds,
@@ -686,7 +695,7 @@ export function AppShell({
           <Pressable
             accessibilityLabel="새 게시글 작성"
             accessibilityRole="button"
-            onPress={() => setCreatePostRequestId(requestId => requestId + 1)}
+            onPress={() => navigateInFeedTab('PostComposer', { mode: 'create' })}
             style={({ pressed }) => [
               styles.feedFab,
               pressed && styles.feedFabPressed,
@@ -714,7 +723,6 @@ export function AppShell({
               return;
             }
             setIsScreenHeaderVisible(true);
-            setOpenPostId(null);
             setOpenCalendarEventId(null);
             setOpenReportTarget(null);
             // 같은 화면의 탭을 다시 누르면 재마운트해 최신 데이터를 다시 조회한다.
@@ -723,6 +731,17 @@ export function AppShell({
               // AI 전화는 재마운트하면 네이티브 통화 선택 상태를 잃으므로 제외한다.
               if (route !== 'aiCall') {
                 setScreenRefreshNonce(nonce => nonce + 1);
+                if (route === 'feed') {
+                  // key 리마운트는 같은 커밋이라 새 FeedStack이 지워지기 전의
+                  // 구 스택 상태([FeedHome, PostDetail])를 재수화한다. pop:true로
+                  // FeedHome 위 화면을 함께 정리해 "재탭 = 초기화"를 보장한다.
+                  shellNavRef.current?.dispatch(
+                    StackActions.popTo('MainTabs', {
+                      params: { pop: true, screen: 'FeedHome' },
+                      screen: 'feed',
+                    })
+                  );
+                }
               }
               return;
             }

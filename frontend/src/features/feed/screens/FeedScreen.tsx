@@ -170,7 +170,6 @@ interface CommentsState {
 }
 
 export function FeedScreen({
-  createPostRequestId = 0,
   currentGroup,
   currentMemberId,
   commentsLoader,
@@ -187,8 +186,6 @@ export function FeedScreen({
   onOpenNotifications,
   onSubmitPost,
   onUpdateComment,
-  openPostId,
-  openPostRequestId = 0,
   pageLoader,
   membersLoader,
   memberProfileLoader,
@@ -282,8 +279,6 @@ export function FeedScreen({
   const commentsLoading = useRef(false);
   const pendingReactionPostIds = useRef(new Set<string>());
   const nextLocalCommentId = useRef(1);
-  const lastCreateRequestId = useRef(createPostRequestId);
-  const lastOpenPostRequestId = useRef(0);
   const detailRequestId = useRef(0);
   const previousGroupId = useRef(currentGroup.id);
   const isDeleteConfirmationOpen = useRef(false);
@@ -325,35 +320,6 @@ export function FeedScreen({
       feedNavRef.current?.dispatch(StackActions.popTo('FeedHome'));
     }
   }, [currentGroup.id]);
-
-  useEffect(() => {
-    if (
-      createPostRequestId > 0 &&
-      createPostRequestId !== lastCreateRequestId.current
-    ) {
-      lastCreateRequestId.current = createPostRequestId;
-      pendingUploadPayload.current = null;
-      setUploadState({status: 'idle'});
-      setOpenReactionPicker(null);
-      composerEditInitialValueRef.current = null;
-      feedNavRef.current?.navigate('PostComposer', {mode: 'create'});
-    }
-  }, [createPostRequestId]);
-
-  useEffect(() => {
-    if (
-      openPostId &&
-      openPostRequestId > 0 &&
-      openPostRequestId !== lastOpenPostRequestId.current
-    ) {
-      lastOpenPostRequestId.current = openPostRequestId;
-      setOpenReactionPicker(null);
-      feedNavRef.current?.navigate('PostDetail', {
-        groupId: currentGroup.id,
-        postId: openPostId,
-      });
-    }
-  }, [currentGroup.id, openPostId, openPostRequestId]);
 
   const loadCommentsPage = useCallback(
     (postId: string, page: number, replace: boolean) => {

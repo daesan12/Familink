@@ -1,7 +1,12 @@
 import React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
 import TestRenderer from 'react-test-renderer';
 
+import {mockHardwareBack} from '../../../shared/testing/hardwareBack';
+import type {FeedStackParamList} from '../navigationTypes';
 import type {FeedPost, ReactionId} from '../types';
 import {FeedScreen} from './FeedScreen';
 
@@ -204,24 +209,28 @@ test('D-2와 D-3가 같은 postId의 반응 상태를 공유한다', async () =>
   });
 });
 
-test('알림에서 전달된 postId의 게시글 상세를 바로 연다', async () => {
+test('내비게이션으로 전달된 postId의 게시글 상세를 바로 연다', async () => {
+  const navRef = createNavigationContainerRef<FeedStackParamList>();
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      withNav(
+      <NavigationContainer ref={navRef}>
         <FeedScreen
           currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
           currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
           initialCommentsByPostId={{'post-1': []}}
           loader={jest.fn().mockResolvedValue([post])}
-          openPostId="post-1"
-          openPostRequestId={1}
           role="guardian"
-        />,
-      ),
+        />
+      </NavigationContainer>,
     );
     await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  await TestRenderer.act(async () => {
+    navRef.navigate('PostDetail', {groupId: 'group-1', postId: 'post-1'});
     await Promise.resolve();
   });
 
@@ -234,6 +243,58 @@ test('알림에서 전달된 postId의 게시글 상세를 바로 연다', async
   await TestRenderer.act(() => {
     renderer!.unmount();
   });
+});
+
+test('상세에서 하드웨어 뒤로가기는 목록으로 돌아간다', async () => {
+  // 상세는 마운트 후에 연다 — 초기 커밋에 열면 jest에서 컨테이너 리스너
+  // 등록 순서가 프로덕션과 역전된다.
+  const back = mockHardwareBack();
+  const navRef = createNavigationContainerRef<FeedStackParamList>();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  try {
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        <NavigationContainer ref={navRef}>
+          <FeedScreen
+            currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+            currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+            initialCommentsByPostId={{'post-1': []}}
+            loader={jest.fn().mockResolvedValue([post])}
+            role="guardian"
+          />
+        </NavigationContainer>,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await TestRenderer.act(async () => {
+      navRef.navigate('PostDetail', {groupId: 'group-1', postId: 'post-1'});
+      await Promise.resolve();
+    });
+    expect(
+      renderer!.root.findByProps({accessibilityLabel: '피드로 돌아가기'}),
+    ).toBeTruthy();
+
+    let handled = false;
+    await TestRenderer.act(async () => {
+      handled = back.press();
+      await Promise.resolve();
+    });
+
+    // 컨테이너의 useBackButton이 FeedStack을 pop해 상세를 닫는다.
+    expect(handled).toBe(true);
+    expect(
+      renderer!.root.findAllByProps({accessibilityLabel: '피드로 돌아가기'}),
+    ).toHaveLength(0);
+
+    await TestRenderer.act(() => {
+      renderer!.unmount();
+    });
+  } finally {
+    back.restore();
+  }
 });
 
 test('작성자 아바타를 누르면 그룹정보와 동일한 프로필 팝업을 연다', async () => {

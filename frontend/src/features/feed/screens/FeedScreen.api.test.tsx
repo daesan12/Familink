@@ -1,7 +1,11 @@
 import React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
 import TestRenderer from 'react-test-renderer';
 
+import type {FeedStackParamList} from '../navigationTypes';
 import type {FeedPost} from '../types';
 import {FeedScreen} from './FeedScreen';
 
@@ -42,22 +46,27 @@ test('상세 API는 목록에 없는 postId도 조회한다', async () => {
   const commentsLoader = jest
     .fn()
     .mockResolvedValue({comments: [], hasNext: false});
+  const navRef = createNavigationContainerRef<FeedStackParamList>();
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <NavigationContainer>
+      <NavigationContainer ref={navRef}>
         <FeedScreen
           currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
           commentsLoader={commentsLoader}
           detailLoader={detailLoader}
           loader={jest.fn().mockResolvedValue([])}
-          openPostId="post-detail"
-          openPostRequestId={1}
           role="guardian"
         />
       </NavigationContainer>,
     );
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  await TestRenderer.act(async () => {
+    navRef.navigate('PostDetail', {groupId: 'group-1', postId: 'post-detail'});
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
