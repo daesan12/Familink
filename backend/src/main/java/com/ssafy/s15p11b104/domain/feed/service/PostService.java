@@ -26,6 +26,7 @@ import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
 import com.ssafy.s15p11b104.domain.carnation.service.CarnationService;
 import com.ssafy.s15p11b104.domain.file.config.S3Properties;
 import com.ssafy.s15p11b104.domain.file.service.S3MediaValidator;
+import com.ssafy.s15p11b104.domain.file.service.S3ObjectKeyResolver;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.notification.event.DomainNotificationEvent;
@@ -41,6 +42,7 @@ public class PostService {
 	private final PostAnalysisRepository postAnalysisRepository;
 	private final S3Properties s3Properties;
 	private final S3MediaValidator s3MediaValidator;
+	private final S3ObjectKeyResolver s3ObjectKeyResolver;
 	private final CarnationService carnationService;
 	private final ApplicationEventPublisher eventPublisher;
 
@@ -51,6 +53,7 @@ public class PostService {
 		PostAnalysisRepository postAnalysisRepository,
 		S3Properties s3Properties,
 		S3MediaValidator s3MediaValidator,
+		S3ObjectKeyResolver s3ObjectKeyResolver,
 		CarnationService carnationService,
 		ApplicationEventPublisher eventPublisher) {
 		this.groupMemberRepository = groupMemberRepository;
@@ -59,6 +62,7 @@ public class PostService {
 		this.postAnalysisRepository = postAnalysisRepository;
 		this.s3Properties = s3Properties;
 		this.s3MediaValidator = s3MediaValidator;
+		this.s3ObjectKeyResolver = s3ObjectKeyResolver;
 		this.carnationService = carnationService;
 		this.eventPublisher = eventPublisher;
 	}
@@ -174,6 +178,10 @@ public class PostService {
 		}
 	}
 
+	/**
+	 * 조회 응답의 presigned URL이 수정 요청으로 되돌아오는 경우가 있어, 저장 전에 서명 쿼리를
+	 * 제거한 만료되지 않는 canonical URL로 정규화한다.
+	 */
 	private void replaceMedia(Post post, MediaType mediaType, List<PostMediaRequest> media) {
 		removeMedia(post);
 		if (media == null || media.isEmpty()) {
@@ -184,9 +192,11 @@ public class PostService {
 			.map(item -> new PostMedia(
 				post,
 				mediaType,
-				item.fileUrl(),
+				s3ObjectKeyResolver.normalizePostMediaUrl(item.fileUrl()),
 				item.displayOrder(),
-				item.thumbnailUrl()))
+				item.thumbnailUrl() == null
+					? null
+					: s3ObjectKeyResolver.normalizePostMediaUrl(item.thumbnailUrl())))
 			.toList());
 	}
 
