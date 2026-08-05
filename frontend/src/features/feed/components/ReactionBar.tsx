@@ -145,16 +145,22 @@ export function ReactionBar({
             </>
           );
 
-          if (canReact && isSelected) {
+          if (canReact) {
             return (
               <Pressable
-                accessibilityHint="다시 누르면 이 반응이 취소됩니다."
-                accessibilityLabel={`${reaction.label} 반응 ${reaction.count}개, 내가 선택함`}
+                accessibilityHint={
+                  isSelected
+                    ? '다시 누르면 이 반응이 취소됩니다.'
+                    : '누르면 이 반응을 선택합니다.'
+                }
+                accessibilityLabel={`${reaction.label} 반응 ${reaction.count}개${
+                  isSelected ? ', 내가 선택함' : ''
+                }`}
                 accessibilityRole="button"
                 hitSlop={8}
                 key={reaction.id}
                 onPress={() => onSelectReaction(reaction.id)}
-                style={[styles.chip, styles.selectedChip]}
+                style={[styles.chip, isSelected && styles.selectedChip]}
               >
                 {chipContent}
               </Pressable>

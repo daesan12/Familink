@@ -44,6 +44,23 @@ function State({ids, status}: {ids: string[]; status: string}) {
   return React.createElement('state', {ids, status});
 }
 
+function RefreshHarness({loader}: {loader: FeedPageLoader}) {
+  const feed = useFeed('group-1', undefined, loader);
+  const [requested, setRequested] = useState(false);
+
+  useEffect(() => {
+    if (feed.status === 'success' && !requested) {
+      setRequested(true);
+      feed.refresh();
+    }
+  }, [feed.refresh, feed.status, requested]);
+
+  return React.createElement(State, {
+    ids: feed.status === 'success' ? feed.posts.map(post => post.id) : [],
+    status: feed.status,
+  });
+}
+
 test('페이지 추가 로딩은 다음 페이지를 한 번만 붙이고 중복 게시글을 제거한다', async () => {
   const loader = jest
     .fn<ReturnType<FeedPageLoader>, Parameters<FeedPageLoader>>()
@@ -68,6 +85,30 @@ test('페이지 추가 로딩은 다음 페이지를 한 번만 붙이고 중복
     'post-1',
     'post-2',
   ]);
+
+  await TestRenderer.act(() => {
+    renderer!.unmount();
+  });
+});
+
+test('피드 당겨서 새로고침은 첫 페이지를 다시 받아 최신 게시글을 반영한다', async () => {
+  const loader = jest
+    .fn<ReturnType<FeedPageLoader>, Parameters<FeedPageLoader>>()
+    .mockResolvedValueOnce({hasNext: false, posts: [firstPost]})
+    .mockResolvedValueOnce({hasNext: false, posts: [secondPost]});
+
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(<RefreshHarness loader={loader} />);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(loader).toHaveBeenNthCalledWith(1, 'group-1', 0, 20, undefined);
+  expect(loader).toHaveBeenNthCalledWith(2, 'group-1', 0, 20, undefined);
+  expect(renderer!.root.findByType(State).props.ids).toEqual(['post-2']);
 
   await TestRenderer.act(() => {
     renderer!.unmount();

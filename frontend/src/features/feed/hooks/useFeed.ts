@@ -14,12 +14,19 @@ export function useFeed(
   loader?: FeedLoader,
   pageLoader?: FeedPageLoader,
   currentMemberId?: string,
-): FeedLoadState & {loadMore: () => void; retry: () => void} {
+): FeedLoadState & {
+  isRefreshing: boolean;
+  loadMore: () => void;
+  refresh: () => void;
+  retry: () => void;
+} {
   const [reloadCount, setReloadCount] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [state, setState] = useState<FeedLoadState>({status: 'loading'});
   const stateRef = useRef(state);
   const nextPageRef = useRef(0);
   const loadingMoreRef = useRef(false);
+  const refreshingRef = useRef(false);
   const generationRef = useRef(0);
 
   useEffect(() => {
@@ -32,6 +39,8 @@ export function useFeed(
     generationRef.current = generation;
     nextPageRef.current = 0;
     loadingMoreRef.current = false;
+    refreshingRef.current = false;
+    setIsRefreshing(false);
     setState({status: 'loading'});
 
     if (pageLoader !== undefined) {
@@ -149,5 +158,56 @@ export function useFeed(
     setReloadCount(count => count + 1);
   }, []);
 
-  return {loadMore, ...state, retry};
+  const refresh = useCallback(() => {
+    if (
+      refreshingRef.current ||
+      stateRef.current.status !== 'success'
+    ) {
+      return;
+    }
+
+    const generation = generationRef.current + 1;
+    generationRef.current = generation;
+    nextPageRef.current = 0;
+    loadingMoreRef.current = false;
+    refreshingRef.current = true;
+    setIsRefreshing(true);
+
+    const request =
+      pageLoader !== undefined
+        ? pageLoader(groupId, 0, FEED_PAGE_SIZE, currentMemberId).then(
+            page => ({
+              hasNext: page.hasNext,
+              posts: normalizeFeedPosts(page.posts),
+            }),
+          )
+        : (loader ?? loadFeed)(groupId).then(posts => ({
+            hasNext: false,
+            posts: normalizeFeedPosts(posts),
+          }));
+
+    request
+      .then(page => {
+        if (generationRef.current !== generation) {
+          return;
+        }
+        setState({
+          hasNext: page.hasNext,
+          isLoadingMore: false,
+          posts: page.posts,
+          status: 'success',
+        });
+      })
+      .catch(() => {
+        // Keep the current feed visible when a pull-to-refresh request fails.
+      })
+      .finally(() => {
+        if (generationRef.current === generation) {
+          refreshingRef.current = false;
+          setIsRefreshing(false);
+        }
+      });
+  }, [currentMemberId, groupId, loader, pageLoader]);
+
+  return {isRefreshing, loadMore, refresh, ...state, retry};
 }

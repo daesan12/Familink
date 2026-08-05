@@ -3,6 +3,7 @@ export type Gender = 'MALE' | 'FEMALE';
 export type SignupStep = 1 | 2 | 3 | 4 | 5;
 
 export interface SignupDraft {
+  profileImageAsset?: import('../profile/types').ProfileImageAsset | null;
   profileImageUri: string | null;
   name: string;
   loginId: string;
