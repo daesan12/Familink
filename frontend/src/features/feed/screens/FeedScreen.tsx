@@ -850,7 +850,10 @@ export function FeedScreen({
       if (controller.signal.aborted) {
         return;
       }
-      setUploadState({status: 'success'});
+      // 같은 커밋에 popToTop으로 작성 화면이 언마운트되므로 success 카드는
+      // 보이지 않는다(기존 동작 동일). idle로 되돌려야 다음 작성 진입에서
+      // 이전 업로드의 완료 카드가 잔존하지 않는다.
+      setUploadState({status: 'idle'});
       pendingUploadPayload.current = null;
       // 작성·수정 완료 시 상세까지 닫고 목록으로 돌아간다(기존 동작).
       // 미러 정리는 라우트 unmount cleanup이 이어받는다.
