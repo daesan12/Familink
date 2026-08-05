@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 
 import type { NotificationDeepLinkTarget } from '../features/notifications/deepLink';
 
@@ -71,6 +72,18 @@ export interface AppScreenProps {
   readNotificationIds?: readonly string[];
   role: GroupRole;
 }
+
+// 셸 내부 내비게이션 화면 이름 집합 (S15P11B104-320).
+// notifications·archive는 탭이 아니라 ShellStack에서 탭 위로 쌓이는 화면이다.
+export type MainTabRoute = Exclude<AppRoute, 'notifications' | 'archive'>;
+
+export type MainTabsParamList = Record<MainTabRoute, undefined>;
+
+export type ShellStackParamList = {
+  MainTabs: NavigatorScreenParams<MainTabsParamList> | undefined;
+  archive: undefined;
+  notifications: undefined;
+};
 
 export type AppScreenRenderer = (props: AppScreenProps) => ReactNode;
 
