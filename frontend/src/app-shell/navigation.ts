@@ -1,4 +1,4 @@
-import type {AppRoute, FamilyGroup, GroupRole} from './types.ts';
+import type {AppRoute, FamilyGroup, GroupRole, MainTabRoute} from './types.ts';
 
 export type TabIconName =
   | 'calendar'
@@ -11,7 +11,8 @@ export type TabIconName =
 export interface TabDefinition {
   icon: TabIconName;
   label: string;
-  route: AppRoute;
+  // 하단 탭에는 탭 라우트만 올 수 있다. notifications·archive는 탭이 아니다.
+  route: MainTabRoute;
 }
 
 const COMMON_START_TABS: readonly TabDefinition[] = [
