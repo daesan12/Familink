@@ -503,6 +503,37 @@ test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다',
   expect(hasText(renderer!, 'screen:notifications')).toBe(true);
 });
 
+// 스펙 D-3(docs/specs/UI_AND_NAVIGATION.md: 상세 진입 중에도 역할별 하단 탭
+// 유지)의 첫 회귀 테스트. 게시글 상세는 헤더 숨김만 보고하고 풀스크린은
+// 보고하지 않으므로 탭바가 유지되어야 하며, 풀스크린(작성·AI 통화)에서만
+// 탭바가 사라진다.
+test('헤더 숨김 화면에서는 하단 탭을 유지하고 풀스크린에서만 숨긴다', () => {
+  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
+    BottomTabBar: () => null;
+  };
+
+  function HeaderHiddenScreen({onHeaderVisibilityChange}: AppScreenProps) {
+    React.useEffect(() => {
+      onHeaderVisibilityChange?.(false);
+    }, [onHeaderVisibilityChange]);
+    return <Text>screen:feed</Text>;
+  }
+
+  const headerHiddenRenderer = renderForBack('feed', CARE_RECEIVER_GROUP, {
+    ...createBackTestScreens(),
+    feed: HeaderHiddenScreen,
+  });
+  expect(
+    headerHiddenRenderer.root.findAllByType(MockTabBar).length,
+  ).toBeGreaterThan(0);
+
+  const fullscreenRenderer = renderForBack('aiCall', CARE_RECEIVER_GROUP, {
+    ...createBackTestScreens(),
+    aiCall: FullscreenScreen,
+  });
+  expect(fullscreenRenderer.root.findAllByType(MockTabBar)).toHaveLength(0);
+});
+
 test('화면이 전체화면을 보고하면 셸은 뒤로가기를 처리하지 않는다', () => {
   // AI 전화 통화 중에는 네이티브 화면이 뒤로가기를 처리하므로 셸이 가로채면 안 된다.
   const back = mockHardwareBack();
