@@ -88,17 +88,17 @@ beforeEach(() => {
 });
 
 jest.mock("react-native-safe-area-context", () => {
+  const mockReact = jest.requireActual("react");
   const { View } = jest.requireActual("react-native");
+  const insets = { bottom: 0, left: 0, right: 0, top: 0 };
 
   return {
+    // react-navigation의 SafeAreaProviderCompat이 이 컨텍스트를 직접 구독한다.
+    SafeAreaInsetsContext: mockReact.createContext(insets),
     SafeAreaProvider: View,
     SafeAreaView: View,
-    useSafeAreaInsets: () => ({
-      bottom: 0,
-      left: 0,
-      right: 0,
-      top: 0,
-    }),
+    initialWindowMetrics: null,
+    useSafeAreaInsets: () => insets,
   };
 });
 
