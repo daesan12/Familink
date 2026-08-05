@@ -26,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -176,6 +177,52 @@ class CallSessionServiceTest {
 			eq(references),
 			any()
 		);
+	}
+
+	@Test
+	void mapsOpenAiCreateFailureToAiConnectionFailedAndTearsDown() {
+		PersonaDefinition persona = new PersonaCatalog().get(1L);
+		AiCallPromptContext promptContext = new AiCallPromptContext(
+			new AiCallPromptContext.CareReceiverContext(
+				"피보호자",
+				List.of(),
+				LocalDate.of(2026, 7, 30)
+			),
+			List.of(),
+			List.of(),
+			List.of()
+		);
+		when(personaCatalog.get(1L)).thenReturn(persona);
+		when(groupMemberRepository.findActiveForUpdate(CARE_RECEIVER_MEMBER_ID))
+			.thenReturn(Optional.of(careReceiver));
+		when(careReceiver.getId()).thenReturn(CARE_RECEIVER_MEMBER_ID);
+		when(careReceiver.getRole()).thenReturn(GroupRole.CARE_RECEIVER);
+		when(careReceiver.getGroup()).thenReturn(familyGroup);
+		when(careReceiver.getUser()).thenReturn(user);
+		when(user.getGender()).thenReturn(UserGender.FEMALE);
+		when(callSession.getId()).thenReturn(CALL_SESSION_ID);
+		when(callSessionRepository.save(any(CallSession.class))).thenReturn(callSession);
+		when(promptContextProvider.load(careReceiver))
+			.thenReturn(new AiCallSessionContext(promptContext, Map.of()));
+		when(promptComposer.compose(persona, UserGender.FEMALE, promptContext)).thenReturn("instructions");
+		when(realtimeGateway.createCall(anyString(), eq(persona), eq("instructions"), eq(CARE_RECEIVER_MEMBER_ID)))
+			.thenThrow(new OpenAiRealtimeException("OPENAI_API_KEY가 설정되지 않았습니다."));
+		when(sidebandSessionManager.activeSessionIds()).thenReturn(Set.of());
+		when(callSessionLeaseService.expiresAt(NOW)).thenReturn(LEASE_EXPIRES_AT);
+		when(callSessionRepository.findByIdForUpdate(CALL_SESSION_ID)).thenReturn(Optional.of(callSession));
+		when(callSession.getStatus()).thenReturn(CallStatus.CONNECTING, CallStatus.FAILED);
+		when(callTranscriptService.finalizeSession(CALL_SESSION_ID, true)).thenReturn(false);
+
+		assertThatThrownBy(
+			() -> callSessionService.create(new CreateCallSessionRequest(1L, "v=0\r\ns=browser\r\n"))
+		).isInstanceOfSatisfying(CallApiException.class, exception -> {
+			assertThat(exception.getCode()).isEqualTo("AI_CONNECTION_FAILED");
+			assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY);
+		});
+
+		verify(sidebandSessionManager).close(CALL_SESSION_ID);
+		verify(realtimeGateway).hangUp(null);
+		verify(callSession).markUnexpectedDisconnect(NOW);
 	}
 
 	@Test
