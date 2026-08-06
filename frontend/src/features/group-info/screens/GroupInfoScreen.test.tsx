@@ -1065,8 +1065,10 @@ test('그룹 코드 카드를 누르면 그룹 코드 화면으로 이동한다'
     renderer!.root.findByProps({accessibilityLabel: '그룹 코드 176203'}),
   ).toBeTruthy();
 
-  // 뒤로 가면 그룹정보로 돌아온다.
+  // 뒤로 가면 그룹정보로 돌아온다. 홈은 하위 화면 아래에서도 마운트를
+  // 유지하므로 홈 텍스트 존재가 아니라 하위 화면 텍스트 부재로 단언한다.
   press(renderer!, '뒤로 가기');
+  expect(hasText(renderer!, '가족을 초대해 보세요')).toBe(false);
   expect(hasText(renderer!, '그룹 정보')).toBe(true);
 });
 
