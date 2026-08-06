@@ -5,6 +5,7 @@ import {
 } from '@react-navigation/native';
 import TestRenderer from 'react-test-renderer';
 
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import {mockHardwareBack} from '../../../shared/testing/hardwareBack';
 import type {FeedStackParamList} from '../navigationTypes';
 import type {FeedPost, ReactionId} from '../types';
@@ -112,6 +113,75 @@ const post: FeedPost = {
   isOwnedByCurrentUser: false,
   reactions: [],
 };
+
+test('댓글 작성 직후 서버가 준 작성자 프로필 사진을 보여준다', async () => {
+  // 화면이 들고 있는 currentUser에는 프로필 URL이 없다. 서버 서명 URL이라
+  // 클라이언트가 만들 수 없으므로 생성 응답의 author로 교체해야 한다.
+  const navRef = createNavigationContainerRef<FeedStackParamList>();
+  const onCreateComment = jest.fn().mockResolvedValue({
+    author: {
+      avatarText: '다',
+      id: 'current-user',
+      name: '다영',
+      profileImageUrl: 'https://signed.example/me.jpg',
+    },
+    content: '새 댓글',
+    createdAt: '2026-07-30T13:00:00Z',
+    id: 'comment-1',
+    postId: 'post-1',
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NavigationContainer ref={navRef}>
+        <FeedScreen
+          currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+          currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+          initialCommentsByPostId={{'post-1': []}}
+          loader={jest.fn().mockResolvedValue([post])}
+          onCreateComment={onCreateComment}
+          role="guardian"
+        />
+      </NavigationContainer>,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  await TestRenderer.act(async () => {
+    navRef.navigate('PostDetail', {groupId: 'group-1', postId: 'post-1'});
+    await Promise.resolve();
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '댓글 입력'})
+      .props.onChangeText('새 댓글');
+    await Promise.resolve();
+  });
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '댓글 등록'})
+      .props.onPress();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(onCreateComment).toHaveBeenCalledWith({
+    body: '새 댓글',
+    postId: 'post-1',
+  });
+  expect(
+    renderer!.root
+      .findAllByType(CachedRemoteImage)
+      .map(node => node.props.source.uri),
+  ).toContain('https://signed.example/me.jpg');
+
+  await TestRenderer.act(() => {
+    renderer!.unmount();
+  });
+});
 
 test('D-2와 D-3가 같은 postId의 반응 상태를 공유한다', async () => {
   const onChangeReaction = jest.fn();

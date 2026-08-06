@@ -2,6 +2,7 @@ package com.ssafy.s15p11b104.domain.feed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -126,6 +127,11 @@ class CommentApiTest extends IntegrationTest {
 			.andExpect(jsonPath("$.success").value(true))
 			.andExpect(jsonPath("$.data.id").isNumber())
 			.andExpect(jsonPath("$.data.postId").value(post.getId()))
+			// 생성 직후 화면이 서명된 프로필 URL을 그대로 쓸 수 있어야 한다.
+			.andExpect(jsonPath("$.data.author.memberId").value(viewer.getId()))
+			.andExpect(jsonPath("$.data.author.displayName").value("조회자"))
+			.andExpect(jsonPath("$.data.author.profileImageUrl")
+				.value("https://signed.example/commenter.jpg"))
 			.andExpect(jsonPath("$.data.content").value("새 댓글"))
 			.andExpect(jsonPath("$.data.createdAt").isString());
 
@@ -139,7 +145,8 @@ class CommentApiTest extends IntegrationTest {
 			.andExpect(jsonPath("$.data.content[0].content").value("새 댓글"))
 			.andExpect(jsonPath("$.data.content[0].updatedAt").isString());
 
-		verify(mediaDownloadUrlProvider).issueProfileImageDownloadUrl(
+		// 생성 응답과 목록 응답에서 각각 한 번씩 발급한다.
+		verify(mediaDownloadUrlProvider, times(2)).issueProfileImageDownloadUrl(
 			"https://cdn/profile-image/commenter.jpg");
 		assertThat(userRepository.findById(viewer.getUser().getId()).orElseThrow().getProfileImageUrl())
 			.isEqualTo("https://cdn/profile-image/commenter.jpg");
