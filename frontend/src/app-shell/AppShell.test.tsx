@@ -812,3 +812,162 @@ test('알림 화면에서는 푸시 도착 구독을 해제해 배지를 조회�
 
   expect(gateway.getUnreadCount).toHaveBeenCalledTimes(callsBefore);
 });
+
+// 알림·보관함 화면의 셸 계약 동결(S15P11B104-366). 아래 테스트는 현재 동작을
+// 그대로 못 박는다. 이 계약들은 지금 라우트 이름 분기(resolvedRoute ===
+// 'notifications' 등)에만 의존하고 있어, 두 화면이 탭 스택 안으로 들어가면
+// (S15P11B104-367) 에러 없이 조용히 깨진다.
+
+const SUB_SCREEN_ROUTES: readonly ('archive' | 'notifications')[] = [
+  'notifications',
+  'archive',
+];
+
+// 피드 헤더의 종·폴더 아이콘으로 하위 화면을 연다. 프로덕션 진입 경로와 같다.
+const SUB_SCREEN_OPENER_LABEL: Record<'archive' | 'notifications', string> = {
+  archive: '게시글 보관함',
+  notifications: '알림',
+};
+
+function renderFeedShell(registry: AppScreenRegistry) {
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      withNav(
+        <AppShell
+          groups={[GROUP_A]}
+          initialGroupId={GROUP_A.id}
+          initialRoute="feed"
+          screens={registry}
+        />,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+  return renderer!;
+}
+
+function openSubScreen(
+  renderer: TestRenderer.ReactTestRenderer,
+  route: 'archive' | 'notifications',
+) {
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: SUB_SCREEN_OPENER_LABEL[route]})
+      .props.onPress();
+  });
+}
+
+function selectTab(
+  renderer: TestRenderer.ReactTestRenderer,
+  route: AppRoute,
+) {
+  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
+    BottomTabBar: () => null;
+  };
+  TestRenderer.act(() => {
+    renderer.root.findByType(MockTabBar).props.onSelect(route);
+  });
+}
+
+test.each(SUB_SCREEN_ROUTES)(
+  '%s 화면에서는 셸 헤더와 새 게시글 FAB를 렌더하지 않는다',
+  route => {
+    const renderer = renderFeedShell(screens);
+
+    expect(renderer.root.findAllByProps({testID: 'app-shell-header'}).length)
+      .toBeGreaterThan(0);
+
+    openSubScreen(renderer, route);
+
+    expect(
+      renderer.root.findAllByProps({testID: 'app-shell-header'}),
+    ).toHaveLength(0);
+    expect(
+      renderer.root.findAllByProps({accessibilityLabel: '새 게시글 작성'}),
+    ).toHaveLength(0);
+  },
+);
+
+// 스펙 D-3: 알림·보관함이 열려 있어도 하단 탭바는 계속 보인다.
+test.each(SUB_SCREEN_ROUTES)('%s 화면에서도 하단 탭바는 유지된다', route => {
+  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
+    BottomTabBar: () => null;
+  };
+  const renderer = renderFeedShell(screens);
+
+  openSubScreen(renderer, route);
+
+  expect(renderer.root.findAllByType(MockTabBar).length).toBeGreaterThan(0);
+});
+
+test('알림 화면에서 피드로 돌아오면 미읽음 배지를 다시 조회하지 않는다', async () => {
+  const gateway = createNotificationGateway();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      withNav(
+        <NotificationGatewayProvider gateway={gateway}>
+          <AppShell
+            groups={[GROUP_A]}
+            initialGroupId={GROUP_A.id}
+            initialRoute="feed"
+            screens={screens}
+          />
+        </NotificationGatewayProvider>,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(1);
+
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({accessibilityLabel: '알림'}).props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    selectTab(renderer!, 'feed');
+  });
+
+  // 읽음 API가 커밋되기 전 값으로 배지가 되돌아가는 경쟁을 막는 유일한 방어선이다.
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(1);
+});
+
+test('알림 화면이 보고한 미읽음 수를 피드로 돌아온 뒤에도 유지한다', async () => {
+  const gateway = createNotificationGateway();
+  function NotificationsScreen({onUnreadCountChange}: AppScreenProps) {
+    React.useEffect(() => {
+      onUnreadCountChange?.(5);
+    }, [onUnreadCountChange]);
+    return <Text>screen:notifications</Text>;
+  }
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      withNav(
+        <NotificationGatewayProvider gateway={gateway}>
+          <AppShell
+            groups={[GROUP_A]}
+            initialGroupId={GROUP_A.id}
+            initialRoute="feed"
+            screens={{...screens, notifications: NotificationsScreen}}
+          />
+        </NotificationGatewayProvider>,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({accessibilityLabel: '알림'}).props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    selectTab(renderer!, 'feed');
+  });
+
+  expect(
+    renderer!.root.findAllByProps({children: 5}).length,
+  ).toBeGreaterThan(0);
+});
