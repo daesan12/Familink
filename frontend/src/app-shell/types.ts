@@ -49,7 +49,6 @@ export interface AppScreenProps {
   authSession?: AppAuthSession;
   accessToken?: string | null;
   onCallResult?: (status: AiCallResultStatus) => void;
-  createPostRequestId?: number;
   currentGroup: FamilyGroup;
   currentUserId?: number;
   currentUserName?: string;
@@ -65,9 +64,6 @@ export interface AppScreenProps {
   onOpenPost?: (postId: string, groupId?: string) => void;
   onRequestLogout?: () => void;
   onRequestWithdrawal?: () => Promise<void>;
-  openJoinApprovalRequestId?: number;
-  openPostId?: string | null;
-  openPostRequestId?: number;
   readNotificationIds?: readonly string[];
   role: GroupRole;
 }
