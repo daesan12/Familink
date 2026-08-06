@@ -46,14 +46,15 @@ function State({ids, status}: {ids: string[]; status: string}) {
 
 function RefreshHarness({loader}: {loader: FeedPageLoader}) {
   const feed = useFeed('group-1', undefined, loader);
+  const {refresh, status} = feed;
   const [requested, setRequested] = useState(false);
 
   useEffect(() => {
-    if (feed.status === 'success' && !requested) {
+    if (status === 'success' && !requested) {
       setRequested(true);
-      feed.refresh();
+      refresh();
     }
-  }, [feed.refresh, feed.status, requested]);
+  }, [refresh, requested, status]);
 
   return React.createElement(State, {
     ids: feed.status === 'success' ? feed.posts.map(post => post.id) : [],

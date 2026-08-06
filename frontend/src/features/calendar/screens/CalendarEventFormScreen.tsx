@@ -43,8 +43,6 @@ type DatePickerField = "startDate" | "endDate";
 type TimePickerField = "startTime" | "endTime";
 
 interface CalendarEventFormScreenProps {
-  currentMember: CalendarMember | null;
-  currentUserName: string;
   gateway: CalendarGateway;
   groupId: string;
   initialDate: DateKey;
@@ -59,8 +57,6 @@ interface CalendarEventFormScreenProps {
 }
 
 export function CalendarEventFormScreen({
-  currentMember,
-  currentUserName,
   gateway,
   groupId,
   initialDate,
@@ -138,7 +134,6 @@ export function CalendarEventFormScreen({
     }
   };
 
-  const authorName = currentMember?.displayName ?? currentUserName;
   const memberById = new Map(
     members.map((member) => [member.memberId, member])
   );
@@ -262,14 +257,6 @@ export function CalendarEventFormScreen({
           </View>
           {errors.date ? <ErrorText message={errors.date} /> : null}
           {errors.time ? <ErrorText message={errors.time} /> : null}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.label}>작성자</Text>
-          <PersonChip
-            imageUrl={currentMember?.profileImageUrl ?? null}
-            name={authorName}
-          />
         </View>
 
         <View style={styles.card}>

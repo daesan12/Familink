@@ -56,8 +56,6 @@ test("제목·시간·참여자를 입력해 실제 생성 API 폼으로 저장�
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
       <CalendarEventFormScreen
-        currentMember={members[0] ?? null}
-        currentUserName="이종철"
         gateway={gateway}
         groupId="3"
         initialDate="2026-07-31"
@@ -68,6 +66,8 @@ test("제목·시간·참여자를 입력해 실제 생성 API 폼으로 저장�
       />
     );
   });
+
+  expect(renderer!.root.findAllByProps({ children: "작성자" })).toHaveLength(0);
 
   await TestRenderer.act(async () => {
     renderer!.root
@@ -120,8 +120,6 @@ test("제목이 비어 있으면 API를 호출하지 않고 입력 오류를 표
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
       <CalendarEventFormScreen
-        currentMember={members[0] ?? null}
-        currentUserName="이종철"
         gateway={gateway}
         groupId="3"
         initialDate="2026-07-31"
@@ -152,8 +150,6 @@ test("시간 버튼은 서비스 팝업을 열고 확인한 시간만 폼에 반
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
       <CalendarEventFormScreen
-        currentMember={members[0] ?? null}
-        currentUserName="이종철"
         gateway={gateway}
         groupId="3"
         initialDate="2026-07-31"
@@ -206,8 +202,6 @@ test("종료 시간이 시작 시간보다 빠르면 팝업에서 확인을 막�
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
       <CalendarEventFormScreen
-        currentMember={members[0] ?? null}
-        currentUserName="이종철"
         gateway={gateway}
         groupId="3"
         initialDate="2026-07-31"
@@ -252,6 +246,60 @@ test("종료 시간이 시작 시간보다 빠르면 팝업에서 확인을 막�
   expect(
     renderer!.root.findByProps({ accessibilityLabel: "시간 선택 확인" })
   ).toBeTruthy();
+
+  TestRenderer.act(() => renderer!.unmount());
+});
+
+test("수정 화면은 작성자를 표시하지 않고 기존 일정으로 저장한다", async () => {
+  const gateway = createGateway();
+  const onSaved = jest.fn();
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <CalendarEventFormScreen
+        gateway={gateway}
+        groupId="3"
+        initialDate="2026-07-31"
+        initialDetail={{
+          creatorMemberId: "8",
+          description: "수호 할아버지 병원",
+          endAt: null,
+          endDate: "2026-07-31",
+          eventDate: "2026-07-31",
+          groupId: "3",
+          id: "12",
+          participantMemberIds: [],
+          startAt: null,
+          title: "정기 검진",
+        }}
+        members={members}
+        onCancel={jest.fn()}
+        onSaved={onSaved}
+      />
+    );
+  });
+
+  expect(renderer!.root.findByProps({ children: "일정 수정" })).toBeTruthy();
+  expect(renderer!.root.findAllByProps({ children: "작성자" })).toHaveLength(0);
+  expect(renderer!.root.findByProps({ children: "참여자" })).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "일정 저장" })
+      .props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(gateway.updateEvent).toHaveBeenCalledWith("12", {
+    description: "수호 할아버지 병원",
+    endAt: null,
+    endDate: "2026-07-31",
+    eventDate: "2026-07-31",
+    participantMemberIds: [],
+    startAt: null,
+    title: "정기 검진",
+  });
+  expect(onSaved).toHaveBeenCalledWith("12");
 
   TestRenderer.act(() => renderer!.unmount());
 });
