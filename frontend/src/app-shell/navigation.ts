@@ -50,10 +50,12 @@ export function isRouteAllowed(role: GroupRole, route: AppRoute): boolean {
   );
 }
 
-export function resolveAllowedRoute(
+// 탭 라우트를 넣으면 탭 라우트가 나온다(폴백 'feed'도 탭 라우트다). 셸이
+// 하위 화면과 탭을 분리해 다루므로 입력 타입을 그대로 좁혀 돌려준다.
+export function resolveAllowedRoute<Route extends AppRoute>(
   role: GroupRole,
-  requestedRoute: AppRoute
-): AppRoute {
+  requestedRoute: Route
+): Route | 'feed' {
   return isRouteAllowed(role, requestedRoute) ? requestedRoute : 'feed';
 }
 

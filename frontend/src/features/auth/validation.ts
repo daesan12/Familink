@@ -108,6 +108,8 @@ export function canSubmitSignup(draft: SignupDraft): boolean {
 export function canSubmitLogin(credentials: LoginCredentials): boolean {
   return (
     credentials.loginId.trim().length > 0 &&
-    credentials.password.trim().length > 0
+    credentials.loginId.length <= SIGNUP_LIMITS.loginIdMax &&
+    credentials.password.trim().length > 0 &&
+    credentials.password.length <= SIGNUP_LIMITS.passwordMax
   );
 }

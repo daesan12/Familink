@@ -68,8 +68,16 @@ public class DailyReportGenerationClaim extends CreatedAtEntity {
 		return inputLatestReportId;
 	}
 
+	public boolean isActiveAt(Instant now) {
+		return claimExpiresAt.isAfter(now);
+	}
+
+	public boolean isOwnedBy(UUID token) {
+		return claimToken.equals(token);
+	}
+
 	public boolean isAvailableTo(UUID token, Instant now) {
-		return claimToken.equals(token) || !claimExpiresAt.isAfter(now);
+		return isOwnedBy(token) || !isActiveAt(now);
 	}
 
 	public boolean owns(UUID token, int expectedCount, long expectedLatestReportId, Instant now) {

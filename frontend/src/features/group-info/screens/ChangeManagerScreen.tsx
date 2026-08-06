@@ -16,7 +16,6 @@ import {GroupMemberAvatar} from '../components/GroupMemberAvatar';
 import {
   currentManagerId,
   isManagerChangeSaveable,
-  managerCandidates,
 } from '../groupManagementModel';
 import {getGroupManagementErrorMessage} from '../api/groupManagementApi';
 import type {GroupMember} from '../types';
@@ -35,14 +34,14 @@ const CONFIRM_NOTES: readonly string[] = [
   '가족 기록과 구성원 정보는 그대로 유지돼요.',
 ];
 
-// H-6 그룹관리자 변경. 보호자 구성원 중 한 명을 새 관리자로 선택해 위임한다.
+// H-6 그룹관리자 변경. 활성 구성원 중 한 명을 새 관리자로 선택해 위임한다.
+// 관리자 여부는 구성원 역할과 독립이므로 피보호자도 후보다. 현재 관리자만 선택할 수 없다.
 export function ChangeManagerScreen({
   members,
   currentMemberId,
   onBack,
   onChangeManager,
 }: ChangeManagerScreenProps) {
-  const candidates = managerCandidates(members);
   const managerId = currentManagerId(members);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -97,7 +96,7 @@ export function ChangeManagerScreen({
         </Text>
 
         <View style={styles.list}>
-          {candidates.map((member) => {
+          {members.map((member) => {
             const isCurrentManager = member.memberId === managerId;
             const isSelected = member.memberId === selectedId;
             const subtitle =

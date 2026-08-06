@@ -297,14 +297,23 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 | API ID | Method · Path | 백엔드·권한 | 핵심 요청 | 성공 결과 | 명시 오류 |
 |---|---|---|---|---|---|
 | `API-REPORTS-001` | `GET /groups/{groupId}/care-receivers/{memberId}/reports/calendar` | Spring Boot · 같은 그룹 활성 보호자 | path `groupId`, `memberId`; query `year`, `month` | `200`: `yearMonth`, `reportDates[]`, `latestReportDate` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
-| `API-REPORTS-002` | `GET /groups/{groupId}/members/{memberId}/reports/daily/{reportDate}` | Spring Boot · 같은 그룹 활성 보호자 | path `groupId`, `memberId`, `reportDate` | `200`: `date`, `dailyReport{id,summary,emotionCategory,emotionSubcategory,guardianMessageSummary}` 또는 `dailyReport=null`, `calls[{callSessionId,startedAt,reportAvailable}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-REPORTS-002` | `GET /groups/{groupId}/members/{memberId}/reports/daily/{reportDate}` | Spring Boot · 같은 그룹 활성 보호자 | path `groupId`, `memberId`, `reportDate` | `200`: `date`, `generationStatus(NOT_READY\|AVAILABLE\|GENERATING\|READY)`, `dailyReport{id,summary,emotionCategory,emotionSubcategory,guardianMessageSummary}` 또는 `dailyReport=null`, `calls[{callSessionId,startedAt,reportAvailable}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-REPORTS-003` | `GET /call-sessions/{callSessionId}/report` | Spring Boot · 같은 그룹 활성 보호자 | path `callSessionId` | `200`: `callSessionId`, `summary`, `guardianMessage`, `createdAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `404 CALL_REPORT_NOT_READY` |
 | `API-REPORTS-004` | `GET /call-sessions/{callSessionId}/report/status` | Spring Boot · 같은 그룹 활성 보호자 | path `callSessionId` | `200`: `callSessionId`, `status(READY\|GENERATING\|FAILED\|UNAVAILABLE)` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-REPORTS-005` | `POST /groups/{groupId}/members/{memberId}/reports/daily/generation-requests` | Spring Boot · 같은 그룹 활성 보호자 | path `groupId`, `memberId`; body 없음; 서버가 `Asia/Seoul` 오늘 날짜 결정 | `202`: `reportDate`, `generationStatus=GENERATING`; 이미 생성 중이면 같은 응답, 이미 생성됐으면 `200`: `generationStatus=READY` | `401 UNAUTHORIZED`; `403 FORBIDDEN`; `409 DAILY_REPORT_INPUT_NOT_READY`; `503 DAILY_REPORT_GENERATION_BUSY` |
 | `API-CARNATION-001` | `GET /groups/{groupId}/grass` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; 선택 query `startDate`, `endDate`(둘 다 지정하거나 둘 다 생략) | `200`: `weekStart`, `weekEnd`, `rankings[{memberId,displayName,carnationCount,previousWeekWinner}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-CARNATION-002` | `GET /groups/{groupId}/members/{memberId}/carnations` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`, `memberId`; query `startDate`, `endDate` | `200`: `memberId`, `startDate`, `endDate`, `earnedDates[]` | 명시 없음 |
 
 - `API-REPORTS-002`의 `guardianMessageSummary`는 일일 대표 보호자 전달
   메모 단일 문자열이며 전달할 내용이 없으면 `null`이다.
+- `API-REPORTS-002.generationStatus`는 요청한 `reportDate`의 상태다. 일일 리포트가
+  있으면 `READY`, 만료되지 않은 `daily_report_generation_claims`가 있으면
+  `GENERATING`, 저장된 건별 리포트가 하나 이상이면 `AVAILABLE`, 그렇지 않으면
+  `NOT_READY`다. 이전 최신 일일 리포트의 표시 여부와 독립적으로 계산한다.
+- `API-REPORTS-005`는 스토어 배포 전 시연용이며 오늘 날짜와 path의 피보호자만
+  처리한다. `AVAILABLE` 입력은 준비된 건별 리포트만 포함하며 같은 구간의 다른
+  건별 리포트가 준비되지 않았어도 요청할 수 있다. 활성 claim과 DB Unique로
+  중복 AI 호출·저장을 막고, 실행기 접수 실패 시 claim을 해제한다.
 - `API-REPORTS-001`의 `reportDates[]`는 요청 월에 존재하는 일일 리포트 날짜만
   반환한다. `latestReportDate`는 요청 월과 관계없이 해당 피보호자의 전체
   `daily_reports.report_date` 중 최댓값이며, 일일 리포트가 한 건도 없으면

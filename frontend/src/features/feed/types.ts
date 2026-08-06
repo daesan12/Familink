@@ -3,6 +3,10 @@ import type {ImageSourcePropType} from 'react-native';
 export const MAX_POST_IMAGES = 4;
 export const MAX_COMMENT_LENGTH = 50;
 
+// 탈퇴한 사용자는 이름이 익명화되지만 게시글·댓글은 보존된다. 서버도 같은 문구를 내려주며,
+// 이름이 비어 오더라도 목록 전체를 버리지 않도록 이 값으로 대체한다.
+export const WITHDRAWN_MEMBER_NAME = '탈퇴한 사용자';
+
 // 백엔드 REACTION_TYPE(post_reactions.reaction_type)과 동일한 값을 사용해
 // 반응은 별도 매핑 없이 API 응답을 그대로 주고받는다.
 export type ReactionId =

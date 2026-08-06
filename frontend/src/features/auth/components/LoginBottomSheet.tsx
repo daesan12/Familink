@@ -1,13 +1,8 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {useEffect, useRef, useState} from 'react';
 import {
-  AccessibilityInfo,
-  Animated,
-  Easing,
   Keyboard,
   KeyboardAvoidingView,
-  Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -16,10 +11,11 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {ApiError} from '../../../shared/api';
 import type {LoginCredentials} from '../types';
-import {canSubmitLogin} from '../validation';
+import {canSubmitLogin, SIGNUP_LIMITS} from '../validation';
 import {COLORS} from '../../../design/tokens';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 import {AnimatedPressable} from './AnimatedPressable';
+import {DraggableBottomSheet} from '../../../shared/components/DraggableBottomSheet';
 import {FormField} from './FormField';
 import {PrimaryButton} from './PrimaryButton';
 import {ValidationMessage} from './ValidationMessage';
@@ -53,21 +49,8 @@ export function LoginBottomSheet({
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
   const insets = useSafeAreaInsets();
   const submittingRef = useRef(false);
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const sheetTranslateY = useRef(new Animated.Value(32)).current;
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReduceMotion,
-    );
-
-    return () => subscription.remove();
-  }, []);
 
   useEffect(() => {
     if (!visible) {
@@ -87,39 +70,15 @@ export function LoginBottomSheet({
     submittingRef.current = false;
   }, [initialLoginId, visible]);
 
-  useEffect(() => {
-    if (!visible) {
-      return;
-    }
-
-    backdropOpacity.setValue(0);
-    sheetTranslateY.setValue(reduceMotion ? 0 : 32);
-
-    Animated.parallel([
-      Animated.timing(backdropOpacity, {
-        duration: reduceMotion ? 120 : 220,
-        easing: Easing.out(Easing.cubic),
-        toValue: 1,
-        useNativeDriver: true,
-      }),
-      Animated.timing(sheetTranslateY, {
-        duration: reduceMotion ? 0 : 260,
-        easing: Easing.bezier(0.23, 1, 0.32, 1),
-        toValue: 0,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [
-    backdropOpacity,
-    reduceMotion,
-    sheetTranslateY,
-    visible,
-  ]);
 
   const loginIdInvalid =
-    loginIdTouched && credentials.loginId.trim().length === 0;
+    loginIdTouched &&
+    (credentials.loginId.trim().length === 0 ||
+      credentials.loginId.length > SIGNUP_LIMITS.loginIdMax);
   const passwordInvalid =
-    passwordTouched && credentials.password.trim().length === 0;
+    passwordTouched &&
+    (credentials.password.trim().length === 0 ||
+      credentials.password.length > SIGNUP_LIMITS.passwordMax);
   const canLogin = canSubmitLogin(credentials);
 
   const handleDismiss = () => {
@@ -166,38 +125,18 @@ export function LoginBottomSheet({
     }
   };
 
-  if (!visible) {
-    return null;
-  }
-
   return (
-    <Modal
-      animationType="none"
-      onRequestClose={handleRequestClose}
-      statusBarTranslucent
-      transparent
+    <DraggableBottomSheet
+      accessibilityLabel="로그인 입력 바텀시트"
+      backdropVisible={false}
+      dismissDisabled={submitting}
+      onClose={handleRequestClose}
+      sheetStyle={styles.sheet}
       visible={visible}>
-      <View accessibilityViewIsModal style={styles.modal}>
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.backdrop, {opacity: backdropOpacity}]}
-        />
-        <Pressable
-          accessibilityElementsHidden
-          disabled={submitting}
-          importantForAccessibility="no-hide-descendants"
-          onPress={handleDismiss}
-          style={StyleSheet.absoluteFill}
-        />
         <KeyboardAvoidingView
           behavior="padding"
           pointerEvents="box-none"
           style={styles.keyboardArea}>
-          <Animated.View
-            style={[
-              styles.sheet,
-              {transform: [{translateY: sheetTranslateY}]},
-            ]}>
             <ScrollView
               contentContainerStyle={[
                 styles.content,
@@ -230,6 +169,7 @@ export function LoginBottomSheet({
                   autoFocus={!hasPrefilledLoginId}
                   editable={!submitting}
                   invalid={loginIdInvalid}
+                  maxLength={SIGNUP_LIMITS.loginIdMax}
                   onBlur={() => setLoginIdTouched(true)}
                   onChangeText={value => {
                     setCredentials(current => ({
@@ -244,7 +184,11 @@ export function LoginBottomSheet({
                 />
                 {loginIdInvalid && (
                   <ValidationMessage
-                    message="아이디를 입력해주세요."
+                    message={
+                      credentials.loginId.trim().length === 0
+                        ? '아이디를 입력해주세요.'
+                        : `아이디는 ${SIGNUP_LIMITS.loginIdMax}자 이내로 입력해주세요.`
+                    }
                     variant="error"
                   />
                 )}
@@ -256,6 +200,7 @@ export function LoginBottomSheet({
                   autoFocus={hasPrefilledLoginId}
                   editable={!submitting}
                   invalid={passwordInvalid}
+                  maxLength={SIGNUP_LIMITS.passwordMax}
                   onBlur={() => setPasswordTouched(true)}
                   onChangeText={value => {
                     setCredentials(current => ({
@@ -293,7 +238,11 @@ export function LoginBottomSheet({
                 />
                 {passwordInvalid && (
                   <ValidationMessage
-                    message="비밀번호를 입력해주세요."
+                    message={
+                      credentials.password.trim().length === 0
+                        ? '비밀번호를 입력해주세요.'
+                        : `비밀번호는 ${SIGNUP_LIMITS.passwordMax}자 이내로 입력해주세요.`
+                    }
                     variant="error"
                   />
                 )}
@@ -315,30 +264,15 @@ export function LoginBottomSheet({
                 />
               </View>
             </ScrollView>
-          </Animated.View>
         </KeyboardAvoidingView>
-      </View>
-    </Modal>
+    </DraggableBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  modal: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    backgroundColor: 'rgba(15, 23, 42, 0.48)',
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-  },
   keyboardArea: {
     flex: 1,
     justifyContent: 'flex-end',
-    zIndex: 1,
   },
   sheet: {
     backgroundColor: AUTH_COLORS.background,

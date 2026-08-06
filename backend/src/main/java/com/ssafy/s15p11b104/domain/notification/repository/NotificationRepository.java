@@ -20,6 +20,8 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
 	long countByReceiver_IdAndReadAtIsNull(Long receiverId);
 
+	long countByReceiver_Id(Long receiverId);
+
 	@EntityGraph(attributePaths = {
 		"actor", "relatedJoinRequest", "relatedCallReport.callSession", "relatedDailyReport"})
 	@Query("select notification from Notification notification where notification.receiver.id = :receiverId")
@@ -28,6 +30,16 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 		Pageable pageable);
 
 	Optional<Notification> findByIdAndReceiver_Id(Long id, Long receiverId);
+
+	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Query("delete from Notification notification where notification.id = :notificationId and notification.receiver.id = :receiverId")
+	int deleteByIdAndReceiverId(
+		@Param("notificationId") Long notificationId,
+		@Param("receiverId") Long receiverId);
+
+	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Query("delete from Notification notification where notification.receiver.id = :receiverId")
+	int deleteAllByReceiverId(@Param("receiverId") Long receiverId);
 
 	@Modifying(clearAutomatically = true, flushAutomatically = true)
 	@Query("""

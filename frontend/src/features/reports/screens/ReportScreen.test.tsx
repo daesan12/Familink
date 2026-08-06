@@ -76,6 +76,7 @@ function createLatestOnlyPage(): CareReceiverReportPage {
       summary: "가족들의 안부를 궁금해하며 편안하게 하루를 보내셨어요.",
     },
     memberId: "care-receiver-latest-only",
+    selectedDateGenerationStatus: "notReady",
     todayCalls: [],
   };
 }

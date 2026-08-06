@@ -1,5 +1,6 @@
 package com.ssafy.s15p11b104.domain.report.service;
 
+import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -28,10 +29,12 @@ import com.ssafy.s15p11b104.domain.report.dto.CallReportResponse;
 import com.ssafy.s15p11b104.domain.report.dto.CallReportStatus;
 import com.ssafy.s15p11b104.domain.report.dto.CallReportStatusResponse;
 import com.ssafy.s15p11b104.domain.report.dto.DailyCallItemResponse;
+import com.ssafy.s15p11b104.domain.report.dto.DailyReportGenerationStatus;
 import com.ssafy.s15p11b104.domain.report.dto.DailyReportResponse;
 import com.ssafy.s15p11b104.domain.report.dto.DailyReportSummaryResponse;
 import com.ssafy.s15p11b104.domain.report.dto.ReportCalendarResponse;
 import com.ssafy.s15p11b104.domain.report.entity.DailyReport;
+import com.ssafy.s15p11b104.domain.report.repository.DailyReportGenerationClaimRepository;
 import com.ssafy.s15p11b104.domain.report.repository.DailyReportRepository;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
 import com.ssafy.s15p11b104.global.exception.ErrorCode;
@@ -48,28 +51,34 @@ import com.ssafy.s15p11b104.global.exception.ErrorCode;
 public class ReportQueryService {
 
 	private final DailyReportRepository dailyReportRepository;
+	private final DailyReportGenerationClaimRepository claimRepository;
 	private final CallSessionRepository callSessionRepository;
 	private final CallReportCallRepository callReportRepository;
 	private final CallReportGenerationRequestRepository callReportRequestRepository;
 	private final CallTranscriptEventRepository transcriptEventRepository;
 	private final CallTranscriptRepository callTranscriptRepository;
 	private final GroupMemberRepository groupMemberRepository;
+	private final Clock clock;
 
 	public ReportQueryService(
 		DailyReportRepository dailyReportRepository,
+		DailyReportGenerationClaimRepository claimRepository,
 		CallSessionRepository callSessionRepository,
 		CallReportCallRepository callReportRepository,
 		CallReportGenerationRequestRepository callReportRequestRepository,
 		CallTranscriptEventRepository transcriptEventRepository,
 		CallTranscriptRepository callTranscriptRepository,
-		GroupMemberRepository groupMemberRepository) {
+		GroupMemberRepository groupMemberRepository,
+		Clock clock) {
 		this.dailyReportRepository = dailyReportRepository;
+		this.claimRepository = claimRepository;
 		this.callSessionRepository = callSessionRepository;
 		this.callReportRepository = callReportRepository;
 		this.callReportRequestRepository = callReportRequestRepository;
 		this.transcriptEventRepository = transcriptEventRepository;
 		this.callTranscriptRepository = callTranscriptRepository;
 		this.groupMemberRepository = groupMemberRepository;
+		this.clock = clock;
 	}
 
 	/**
@@ -103,8 +112,34 @@ public class ReportQueryService {
 			.findByCareReceiverMemberIdAndReportDate(memberId, reportDate)
 			.map(this::toSummary)
 			.orElse(null);
+		List<DailyCallItemResponse> calls = findCalls(memberId, reportDate);
 
-		return new DailyReportResponse(reportDate, dailyReport, findCalls(memberId, reportDate));
+		return new DailyReportResponse(
+			reportDate,
+			resolveDailyReportGenerationStatus(memberId, reportDate, dailyReport, calls),
+			dailyReport,
+			calls);
+	}
+
+	private DailyReportGenerationStatus resolveDailyReportGenerationStatus(
+		Long memberId,
+		LocalDate reportDate,
+		DailyReportSummaryResponse dailyReport,
+		List<DailyCallItemResponse> calls
+	) {
+		if (dailyReport != null) {
+			return DailyReportGenerationStatus.READY;
+		}
+		boolean isGenerating = claimRepository
+			.findByCareReceiverMemberIdAndReportDate(memberId, reportDate)
+			.filter(claim -> claim.isActiveAt(clock.instant()))
+			.isPresent();
+		if (isGenerating) {
+			return DailyReportGenerationStatus.GENERATING;
+		}
+		return calls.stream().anyMatch(DailyCallItemResponse::reportAvailable)
+			? DailyReportGenerationStatus.AVAILABLE
+			: DailyReportGenerationStatus.NOT_READY;
 	}
 
 	/**

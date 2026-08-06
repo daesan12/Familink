@@ -250,6 +250,70 @@ class PostReadApiTest extends IntegrationTest {
 	}
 
 	@Test
+	void withdrawnAuthorIsDisplayedWithFallbackNameInListAndDetail() throws Exception {
+		author.getUser().updateProfileImageUrl("https://cdn/profile-image/author.jpg");
+		given(mediaDownloadUrlProvider.issueProfileImageDownloadUrl(
+			"https://cdn/profile-image/author.jpg"))
+			.willReturn("https://signed.example/author.jpg");
+		author.leave(Instant.now());
+		author.getUser().withdraw(Instant.now());
+		entityManager.flush();
+
+		mockMvc.perform(get("/groups/{groupId}/posts", group.getId())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.content.length()").value(2))
+			.andExpect(jsonPath("$.data.content[0].author.displayName").value("탈퇴한 사용자"))
+			.andExpect(jsonPath("$.data.content[0].author.profileImageUrl").doesNotExist());
+
+		mockMvc.perform(get("/posts/{postId}", imagePost.getId())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.author.displayName").value("탈퇴한 사용자"));
+	}
+
+	@Test
+	void authorWhoOnlyLeftTheGroupKeepsRealName() throws Exception {
+		author.leave(Instant.now());
+		entityManager.flush();
+
+		mockMvc.perform(get("/posts/{postId}", imagePost.getId())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.author.displayName").value("Author"));
+	}
+
+	@Test
+	void withdrawnAuthorIgnoresViewerAlias() throws Exception {
+		memberAliasRepository.save(new MemberAlias(group, viewer, author, "Mom"));
+		author.leave(Instant.now());
+		author.getUser().withdraw(Instant.now());
+		entityManager.flush();
+
+		mockMvc.perform(get("/groups/{groupId}/posts", group.getId())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.content[0].author.displayName").value("탈퇴한 사용자"));
+
+		mockMvc.perform(get("/posts/{postId}", imagePost.getId())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.author.displayName").value("탈퇴한 사용자"));
+	}
+
+	@Test
+	void aliasIsKeptForAuthorWhoOnlyLeftTheGroup() throws Exception {
+		memberAliasRepository.save(new MemberAlias(group, viewer, author, "Mom"));
+		author.leave(Instant.now());
+		entityManager.flush();
+
+		mockMvc.perform(get("/posts/{postId}", imagePost.getId())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.author.displayName").value("Mom"));
+	}
+
+	@Test
 	void archiveCanFilterByType() throws Exception {
 		mockMvc.perform(get("/groups/{groupId}/archive", group.getId())
 				.param("type", "IMAGE")

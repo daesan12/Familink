@@ -62,6 +62,27 @@ describe('commentApi', () => {
     );
   });
 
+  it('탈퇴한 작성자의 이름이 비어 있어도 댓글 목록을 버리지 않는다', async () => {
+    jest.spyOn(apiClient, 'get').mockResolvedValueOnce(
+      success({
+        content: [
+          {
+            author: {displayName: null, memberId: 21, profileImageUrl: null},
+            content: '탈퇴 전 댓글',
+            createdAt: '2026-08-01T00:00:00Z',
+            id: 11,
+            updatedAt: '2026-08-01T00:00:00Z',
+          },
+        ],
+        hasNext: false,
+      }),
+    );
+
+    const page = await loadComments('91', 0, 20);
+
+    expect(page.comments[0].author.name).toBe('탈퇴한 사용자');
+  });
+
   it('댓글 생성·수정·삭제가 상태 코드와 요청 본문을 검증한다', async () => {
     const postSpy = jest
       .spyOn(apiClient, 'post')

@@ -173,20 +173,20 @@ public class PostReadService {
 
 	private PostAuthorResponse authorOf(Post post, GroupMember viewer) {
 		GroupMember author = post.getAuthorMember();
-		String displayName = memberAliasRepository
+		String alias = memberAliasRepository
 			.findByGroupIdAndOwnerMemberIdAndTargetMemberId(
 				post.getGroup().getId(), viewer.getId(), author.getId())
-			.map(alias -> alias.getAlias())
-			.orElse(author.getUser().getName());
+			.map(memberAlias -> memberAlias.getAlias())
+			.orElse(null);
 		return PostAuthorResponse.from(
 			author,
-			displayName,
+			author.getUser().resolveDisplayName(alias),
 			mediaDownloadUrlProvider.issueProfileImageDownloadUrl(author.getUser().getProfileImageUrl()));
 	}
 
 	private PostAuthorResponse authorOf(Post post, GroupMember viewer, Map<Long, String> aliasesByTarget) {
 		GroupMember author = post.getAuthorMember();
-		String displayName = aliasesByTarget.getOrDefault(author.getId(), author.getUser().getName());
+		String displayName = author.getUser().resolveDisplayName(aliasesByTarget.get(author.getId()));
 		return PostAuthorResponse.from(
 			author,
 			displayName,

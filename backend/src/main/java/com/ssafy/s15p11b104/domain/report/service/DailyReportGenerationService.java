@@ -24,6 +24,7 @@ import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.notification.event.DomainNotificationEvent;
+import com.ssafy.s15p11b104.domain.report.dto.DailyReportGenerationStatus;
 import com.ssafy.s15p11b104.domain.report.entity.DailyReport;
 import com.ssafy.s15p11b104.domain.report.entity.DailyReportGenerationClaim;
 import com.ssafy.s15p11b104.domain.report.repository.DailyReportGenerationClaimRepository;
@@ -82,33 +83,111 @@ public class DailyReportGenerationService {
 
 		for (Long careReceiverMemberId : reportsByMember.keySet()) {
 			if (!membersWithMissingReports.contains(careReceiverMemberId)) {
-				generateForMember(reportDate, careReceiverMemberId, window);
+				generateForMember(
+					reportDate,
+					careReceiverMemberId,
+					window,
+					UUID.randomUUID(),
+					true);
 			}
 		}
+	}
+
+	ManualClaim claimManual(LocalDate reportDate, Long careReceiverMemberId) {
+		Objects.requireNonNull(reportDate, "reportDate must not be null");
+		Objects.requireNonNull(careReceiverMemberId, "careReceiverMemberId must not be null");
+		DailyReportWindow window = DailyReportWindow.forReportDate(reportDate);
+		ManualClaim result = transactionTemplate.execute(status -> {
+			GroupMember member = groupMemberRepository.findByIdForUpdate(careReceiverMemberId).orElse(null);
+			if (member == null || !member.isActive()) {
+				return ManualClaim.notReady();
+			}
+			if (dailyReportRepository.existsByCareReceiverMemberIdAndReportDate(
+				careReceiverMemberId, reportDate)) {
+				return ManualClaim.ready();
+			}
+
+			InputSnapshot snapshot = loadSnapshot(careReceiverMemberId, window);
+			if (snapshot == null) {
+				return ManualClaim.notReady();
+			}
+			var existing = claimRepository.findForUpdate(careReceiverMemberId, reportDate);
+			var now = clock.instant();
+			if (existing.isPresent() && existing.get().isActiveAt(now)) {
+				return ManualClaim.generating();
+			}
+
+			UUID token = UUID.randomUUID();
+			DailyReportGenerationClaim claim = existing.orElseGet(() -> new DailyReportGenerationClaim(
+				careReceiverMemberId,
+				reportDate,
+				token,
+				now.plus(CLAIM_LEASE),
+				snapshot.count(),
+				snapshot.latestReportId()));
+			claim.renew(token, now.plus(CLAIM_LEASE), snapshot.count(), snapshot.latestReportId());
+			claimRepository.save(claim);
+			return ManualClaim.claimed(token);
+		});
+		return result == null ? ManualClaim.notReady() : result;
+	}
+
+	void generateManual(LocalDate reportDate, Long careReceiverMemberId, UUID token) {
+		generateForMember(
+			reportDate,
+			careReceiverMemberId,
+			DailyReportWindow.forReportDate(reportDate),
+			token,
+			false);
+	}
+
+	void releaseManualClaim(LocalDate reportDate, Long careReceiverMemberId, UUID token) {
+		transactionTemplate.execute(status -> {
+			groupMemberRepository.findByIdForUpdate(careReceiverMemberId);
+			DailyReportGenerationClaim claim = claimRepository
+				.findForUpdate(careReceiverMemberId, reportDate)
+				.orElse(null);
+			if (claim != null && claim.isOwnedBy(token)) {
+				claimRepository.delete(claim);
+			}
+			return null;
+		});
 	}
 
 	private void generateForMember(
 		LocalDate reportDate,
 		Long careReceiverMemberId,
-		DailyReportWindow window
+		DailyReportWindow window,
+		UUID token,
+		boolean requireCompleteInput
 	) {
-		UUID token = UUID.randomUUID();
-		ClaimedInput claimedInput = acquireOrRenew(reportDate, careReceiverMemberId, window, token);
+		ClaimedInput claimedInput = acquireOrRenew(
+			reportDate, careReceiverMemberId, window, token, requireCompleteInput);
 		while (claimedInput != null) {
 			DailyReportAnalysis analysis;
 			try {
 				analysis = analyzer.analyze(claimedInput.snapshot().input());
 			} catch (RuntimeException exception) {
 				logFailure(reportDate, careReceiverMemberId, exception);
+				if (!requireCompleteInput) {
+					releaseManualClaim(reportDate, careReceiverMemberId, token);
+				}
 				return;
 			}
 
 			FinalizeResult result = finalizeReport(
-				reportDate, careReceiverMemberId, window, token, claimedInput.snapshot(), analysis);
+				reportDate,
+				careReceiverMemberId,
+				window,
+				token,
+				claimedInput.snapshot(),
+				analysis,
+				requireCompleteInput);
 			if (result != FinalizeResult.STALE_INPUT) {
 				return;
 			}
-			claimedInput = acquireOrRenew(reportDate, careReceiverMemberId, window, token);
+			claimedInput = acquireOrRenew(
+				reportDate, careReceiverMemberId, window, token, requireCompleteInput);
 		}
 	}
 
@@ -116,14 +195,16 @@ public class DailyReportGenerationService {
 		LocalDate reportDate,
 		Long careReceiverMemberId,
 		DailyReportWindow window,
-		UUID token
+		UUID token,
+		boolean requireCompleteInput
 	) {
 		return transactionTemplate.execute(status -> {
 			GroupMember member = groupMemberRepository.findByIdForUpdate(careReceiverMemberId).orElse(null);
 			if (member == null
 				|| dailyReportRepository.existsByCareReceiverMemberIdAndReportDate(
 					careReceiverMemberId, reportDate)
-				|| findMembersWithMissingReports(window).contains(careReceiverMemberId)) {
+				|| (requireCompleteInput
+					&& findMembersWithMissingReports(window).contains(careReceiverMemberId))) {
 				return null;
 			}
 
@@ -156,7 +237,8 @@ public class DailyReportGenerationService {
 		DailyReportWindow window,
 		UUID token,
 		InputSnapshot expected,
-		DailyReportAnalysis analysis
+		DailyReportAnalysis analysis,
+		boolean requireCompleteInput
 	) {
 		FinalizeResult result = transactionTemplate.execute(status -> {
 			GroupMember member = groupMemberRepository.findByIdForUpdate(careReceiverMemberId).orElse(null);
@@ -175,7 +257,8 @@ public class DailyReportGenerationService {
 				claimRepository.delete(claim);
 				return FinalizeResult.STOP;
 			}
-			if (findMembersWithMissingReports(window).contains(careReceiverMemberId)) {
+			if (requireCompleteInput
+				&& findMembersWithMissingReports(window).contains(careReceiverMemberId)) {
 				return FinalizeResult.STOP;
 			}
 
@@ -246,6 +329,29 @@ public class DailyReportGenerationService {
 	}
 
 	private record ClaimedInput(InputSnapshot snapshot) {
+	}
+
+	record ManualClaim(DailyReportGenerationStatus status, UUID token) {
+
+		private static ManualClaim ready() {
+			return new ManualClaim(DailyReportGenerationStatus.READY, null);
+		}
+
+		private static ManualClaim notReady() {
+			return new ManualClaim(DailyReportGenerationStatus.NOT_READY, null);
+		}
+
+		private static ManualClaim generating() {
+			return new ManualClaim(DailyReportGenerationStatus.GENERATING, null);
+		}
+
+		private static ManualClaim claimed(UUID token) {
+			return new ManualClaim(DailyReportGenerationStatus.GENERATING, token);
+		}
+
+		boolean needsDispatch() {
+			return token != null;
+		}
 	}
 
 	private record InputSnapshot(DailyReportInput input, int count, long latestReportId) {

@@ -17,6 +17,10 @@ import jakarta.persistence.LockModeType;
 public interface DailyReportGenerationClaimRepository
 	extends JpaRepository<DailyReportGenerationClaim, Long> {
 
+	Optional<DailyReportGenerationClaim> findByCareReceiverMemberIdAndReportDate(
+		Long careReceiverMemberId,
+		LocalDate reportDate);
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 		select claim

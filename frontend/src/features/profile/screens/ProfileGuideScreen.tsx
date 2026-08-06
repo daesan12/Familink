@@ -13,7 +13,7 @@ export function ProfileGuideScreen({onBack}: ProfileGuideScreenProps) {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <BackButton onPress={onBack} />
+        <BackButton onPress={onBack} style={styles.backButton} />
         <Text style={styles.headerTitle}>이용 가이드</Text>
       </View>
 
@@ -55,14 +55,8 @@ export function ProfileGuideScreen({onBack}: ProfileGuideScreenProps) {
 
 const styles = StyleSheet.create({
   backButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceMuted,
-    borderRadius: RADII.pill,
-    height: 36,
-    justifyContent: 'center',
     left: 20,
     position: 'absolute',
-    width: 36,
     zIndex: 1,
   },
   content: {

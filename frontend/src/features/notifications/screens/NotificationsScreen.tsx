@@ -1,6 +1,15 @@
 import BellOff from 'lucide-react-native/icons/bell-off';
+import Trash2 from 'lucide-react-native/icons/trash-2';
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
+import {
+  FlatList,
+  LayoutAnimation,
+  Pressable,
+  StyleSheet,
+  Text,
+  UIManager,
+  View,
+} from 'react-native';
 import type {AppScreenProps, GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
@@ -77,6 +86,11 @@ export function NotificationsScreen({
     null,
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [deleteAllArmed, setDeleteAllArmed] = useState(false);
+  const deleteAllTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deleteAnimationTimersRef = useRef<
+    ReturnType<typeof setTimeout>[]
+  >([]);
   // 초기 조회 경로를 다시 실행하는 트리거. 목록 조회가 실패한 상태에서 푸시가
   // 도착하면 증분 병합 대신 이 값을 올려 절대값으로 복구한다.
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -113,6 +127,18 @@ export function NotificationsScreen({
   // 만들어졌을 수 있으므로, 조회 완료 후 아래 병합 함수를 한 번 흘려준다.
   const pendingMergeAfterInitialLoadRef = useRef(false);
   const mergeFreshNotificationsRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+    return () => {
+      if (deleteAllTimerRef.current !== null) {
+        clearTimeout(deleteAllTimerRef.current);
+      }
+      deleteAnimationTimersRef.current.forEach(clearTimeout);
+      deleteAnimationTimersRef.current = [];
+    };
+  }, []);
   // 마지막 초기 조회에서 목록(page 0)을 성공적으로 받았는지. 실패했다면 목록과
   // serverUnreadCount가 같은 스냅샷이 아니어서 증분 병합의 전제가 깨진 상태다.
   const hasLoadedInitialPageRef = useRef(false);
@@ -320,10 +346,38 @@ export function NotificationsScreen({
     }
     // 게시글은 기존 콜백 경로를 유지하고, 나머지 목적지는 공용 라우팅에 위임한다.
     if (target.kind === 'post') {
-      onOpenPost?.(target.postId, target.groupId);
+      onOpenPost?.(target.postId, target.groupId, 'notification');
       return;
     }
     onOpenNotificationTarget?.(target);
+  };
+  const handleDeleteNotification = (notificationId: string) => {
+    const target = notifications.find(
+      notification => notification.id === notificationId,
+    );
+    if (target === undefined) {
+      return;
+    }
+    setErrorMessage(null);
+    const remove = () => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setNotifications(current =>
+        current.filter(notification => notification.id !== notificationId),
+      );
+      if (!target.isRead) {
+        setServerUnreadCount(current =>
+          current === null ? null : Math.max(0, current - 1),
+        );
+      }
+    };
+    if (resolvedGateway !== null && !usesInjectedNotifications) {
+      void resolvedGateway
+        .deleteNotification(notificationId)
+        .then(remove)
+        .catch(error => setErrorMessage(toNotificationErrorMessage(error)));
+      return;
+    }
+    remove();
   };
   const usesRemoteDecisions =
     resolvedGateway !== null && !usesInjectedNotifications;
@@ -446,36 +500,63 @@ export function NotificationsScreen({
       setDecision(null);
     }
   };
-  const handleReadAll = () => {
-    if (displayedUnreadCount === 0) {
+  const handleDeleteAll = () => {
+    if (notifications.length === 0) {
       return;
     }
-    const previous = notifications;
-    const previousServerUnreadCount = serverUnreadCount;
-    const unreadNotificationIds = notifications
-      .filter(notification => !notification.isRead)
-      .map(notification => notification.id);
-    setNotifications(current =>
-      current.map(notification => ({...notification, isRead: true})),
-    );
-    setServerUnreadCount(0);
+    if (!deleteAllArmed) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setDeleteAllArmed(true);
+      if (deleteAllTimerRef.current !== null) {
+        clearTimeout(deleteAllTimerRef.current);
+      }
+      deleteAllTimerRef.current = setTimeout(
+        () => setDeleteAllArmed(false),
+        3_000,
+      );
+      return;
+    }
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setDeleteAllArmed(false);
+    setErrorMessage(null);
+    deleteAnimationTimersRef.current.forEach(clearTimeout);
+    deleteAnimationTimersRef.current = [];
+    const deleteIds = notificationsRef.current.map(notification => notification.id);
+    const animateRemoveAll = () => {
+      const ids = deleteIds;
+      ids.forEach((id, index) => {
+        const timer = setTimeout(() => {
+          LayoutAnimation.configureNext(
+            LayoutAnimation.Presets.easeInEaseOut,
+          );
+          setNotifications(current =>
+            current.filter(notification => notification.id !== id),
+          );
+        }, index * 90);
+        deleteAnimationTimersRef.current.push(timer);
+      });
+      const finalTimer = setTimeout(() => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setNotifications(current =>
+          current.filter(notification => !ids.includes(notification.id)),
+        );
+        deleteAnimationTimersRef.current = [];
+      }, Math.max(ids.length * 90, 1));
+      deleteAnimationTimersRef.current.push(finalTimer);
+    };
     if (resolvedGateway !== null && !usesInjectedNotifications) {
       void resolvedGateway
-        .markAllRead()
+        .deleteAllNotifications()
         .then(() => {
-          unreadNotificationIds.forEach(notificationId =>
-            onNotificationRead?.(notificationId),
-          );
+          animateRemoveAll();
+          setServerUnreadCount(0);
         })
         .catch(error => {
-          setNotifications(previous);
-          setServerUnreadCount(previousServerUnreadCount);
           setErrorMessage(toNotificationErrorMessage(error));
         });
     } else {
-      unreadNotificationIds.forEach(notificationId =>
-        onNotificationRead?.(notificationId),
-      );
+      animateRemoveAll();
+      setServerUnreadCount(0);
     }
   };
   const handleLoadMore = () => {
@@ -503,7 +584,13 @@ export function NotificationsScreen({
   };
   return (
     <View style={styles.screen}>
-      <ScreenHeader onBack={onCloseNotifications} title="알림" />
+      <ScreenHeader
+        canDelete={notifications.length > 0}
+        deleteAllArmed={deleteAllArmed}
+        onBack={onCloseNotifications}
+        onDeleteAll={handleDeleteAll}
+        title="알림"
+      />
       <View style={styles.summary}>
         <View>
           <Text style={styles.sectionTitle}>최근 알림</Text>
@@ -511,21 +598,7 @@ export function NotificationsScreen({
             읽지 않은 알림 {displayedUnreadCount}개
           </Text>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          disabled={displayedUnreadCount === 0}
-          onPress={handleReadAll}
-          style={styles.readAllButton}
-        >
-          <Text
-            style={[
-              styles.readAllText,
-              displayedUnreadCount === 0 && styles.disabledText,
-            ]}
-          >
-            모두 읽음
-          </Text>
-        </Pressable>
+        <View />
       </View>
       <FlatList
         contentContainerStyle={
@@ -549,6 +622,7 @@ export function NotificationsScreen({
             decisionDisabled={processingDecisionId !== null}
             notification={item}
             onApprove={id => handleDecision(id, 'approve')}
+            onDelete={handleDeleteNotification}
             onPress={handleNotificationPress}
             onReject={id => handleDecision(id, 'reject')}
           />
@@ -601,12 +675,41 @@ function toNotificationErrorMessage(error: unknown): string {
   }
   return '알림을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
 }
-function ScreenHeader({onBack, title}: {onBack?: () => void; title: string}) {
+function ScreenHeader({
+  canDelete,
+  deleteAllArmed,
+  onBack,
+  onDeleteAll,
+  title,
+}: {
+  canDelete: boolean;
+  deleteAllArmed: boolean;
+  onBack?: () => void;
+  onDeleteAll: () => void;
+  title: string;
+}) {
   return (
     <View style={styles.header}>
-      <BackButton accessibilityLabel="알림 화면 닫기" onPress={onBack} />
+      <View style={styles.headerSide}>
+        <BackButton accessibilityLabel="알림 화면 닫기" onPress={onBack} />
+      </View>
       <Text style={styles.headerTitle}>{title}</Text>
-      <View style={styles.headerButton} />
+      <Pressable
+        accessibilityLabel={deleteAllArmed ? '전체 지우기' : '알림 삭제'}
+        accessibilityRole="button"
+        disabled={!canDelete}
+        onPress={onDeleteAll}
+        style={styles.headerButton}
+      >
+        {deleteAllArmed ? (
+          <Text style={styles.deleteAllText}>전체 지우기</Text>
+        ) : (
+          <Trash2
+            color={canDelete ? COLORS.purpleDeep : COLORS.textDisabled}
+            size={21}
+          />
+        )}
+      </Pressable>
     </View>
   );
 }
@@ -681,7 +784,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: 44,
     justifyContent: 'center',
-    width: 44,
+    width: 86,
+  },
+  deleteAllText: {
+    color: COLORS.purpleDeep,
+    fontSize: 14,
+    fontWeight: '700',
+    paddingHorizontal: 6,
   },
   headerTitle: {
     color: COLORS.textStrong,
@@ -690,19 +799,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
+  headerSide: {
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    width: 86,
+  },
   listContent: {
     paddingBottom: 24,
-  },
-  readAllButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 4,
-  },
-  readAllText: {
-    color: COLORS.purpleDeep,
-    fontSize: 14,
-    fontWeight: '700',
   },
   screen: {
     backgroundColor: COLORS.background,

@@ -204,6 +204,8 @@ function createGroupGateway(): jest.Mocked<FamilyGroupGateway> {
 
 function createNotificationGateway(): jest.Mocked<NotificationGateway> {
   return {
+    deleteAllNotifications: jest.fn().mockResolvedValue(undefined),
+    deleteNotification: jest.fn().mockResolvedValue(undefined),
     deactivateDeviceToken: jest.fn().mockResolvedValue(undefined),
     getUnreadCount: jest.fn().mockResolvedValue(0),
     loadPage: jest.fn().mockResolvedValue({hasNext: false, notifications: []}),
@@ -1641,7 +1643,7 @@ test("저장된 가입 요청은 재실행 후 승인 카드로 복원하고 입
       <App
         authSession={authSession}
         groupGateway={groupGateway}
-        initialShellRoute="archive"
+        initialShellRoute="calendar"
         joinRequestStore={joinRequestStore}
       />,
     );
@@ -3574,12 +3576,12 @@ test("피드에 진입하거나 피드를 다시 누르면 미읽음 배지를 �
 });
 
 test("아카이브 화면에서 피드 탭을 누르면 재탭이 아니라 피드로 복귀한다", async () => {
-  const mountLog: number[] = [];
+  // 재탭이면 셸이 pop:true 중첩 params를 함께 dispatch해 스택 루트로 정규화한다.
+  // 아카이브는 피드 탭 위에 쌓인 하위 화면이므로 재탭이 아닌 일반 이동이어야 한다.
   function FeedProbe() {
-    React.useEffect(() => {
-      mountLog.push(1);
-    }, []);
-    return null;
+    const route = useRoute();
+    const nested = route.params as { pop?: boolean } | undefined;
+    return <Text>{`feed:${String(nested?.pop ?? "none")}`}</Text>;
   }
   let renderer: TestRenderer.ReactTestRenderer;
 
@@ -3587,22 +3589,31 @@ test("아카이브 화면에서 피드 탭을 누르면 재탭이 아니라 피�
     renderer = TestRenderer.create(
       <App
         initialRootRoute="appShell"
-        initialShellRoute="archive"
-        screens={{ archive: () => null, feed: FeedProbe }}
+        screens={{ archive: () => <Text>screen:archive</Text>, feed: FeedProbe }}
       />
     );
   });
   mountedRenderers.push(renderer!);
 
-  // 아카이브 상태에서는 피드 화면이 아직 마운트되지 않았다.
-  expect(mountLog).toHaveLength(0);
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "게시글 보관함" })
+      .props.onPress();
+  });
+  expect(
+    renderer!.root.findAllByProps({ children: "screen:archive" }).length,
+  ).toBeGreaterThan(0);
 
   await TestRenderer.act(() => {
     renderer!.root.findByProps({ accessibilityLabel: "피드 탭" }).props.onPress();
   });
 
-  // 탭 하이라이트는 피드였지만 화면은 아카이브였으므로 일반 이동으로 처리한다.
-  expect(mountLog).toHaveLength(1);
+  expect(
+    renderer!.root.findAllByProps({ children: "screen:archive" }),
+  ).toHaveLength(0);
+  expect(
+    renderer!.root.findAllByProps({ children: "feed:none" }).length,
+  ).toBeGreaterThan(0);
 });
 
 test("AI 전화 탭은 다시 눌러도 재마운트하지 않는다", async () => {
@@ -3759,13 +3770,14 @@ test("앱에 주입한 리포트 Gateway와 현재 그룹 피보호자를 조회
         summary: "가족 이야기를 나누며 즐거워하셨어요.",
       },
       date: "2026-07-31",
-      status: "ready",
+      generationStatus: "ready",
     }),
     getReportDates: jest.fn().mockResolvedValue({
       latestReportDate: "2026-07-31",
       reportDates: ["2026-07-31"],
       yearMonth: "2026-07",
     }),
+    requestDailyReportGeneration: jest.fn(),
   };
   let renderer: TestRenderer.ReactTestRenderer;
 
@@ -3839,13 +3851,14 @@ test("현재 그룹 구성원 API에서 피보호자만 리포트 조회 대상�
       calls: [],
       dailyReport: null,
       date: "2026-08-01",
-      status: "noCalls",
+      generationStatus: "notReady",
     }),
     getReportDates: jest.fn().mockResolvedValue({
       latestReportDate: null,
       reportDates: [],
       yearMonth: "2026-08",
     }),
+    requestDailyReportGeneration: jest.fn(),
   };
   let renderer: TestRenderer.ReactTestRenderer;
 

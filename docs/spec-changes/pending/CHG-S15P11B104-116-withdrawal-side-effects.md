@@ -5,7 +5,7 @@
 - 작성일: 2026-07-29
 - 차단 변경: 아니오
 - 영향 스펙·계약: `domains/ACCOUNT_AND_PROFILE.md` 「확정된 동작」 8번, `contracts/API.md` `API-USERS-003`, `contracts/DATA_MODEL.md` `group_members`·탈퇴 정책, `COMMON.md` 「인증과 요청 경계」의 블랙리스트 키와 인증 필터 규정. 미결 질문 1번은 `contracts/API.md` `API-GROUPS-013`과 `domains/GROUPS_AND_MEMBERSHIP.md` 「확정된 동작」 10·11번에도 걸친다.
-- 관련 작업: S15P11B104-116, S15P11B104-120(미결 질문 1번 보강), S15P11B104-194(사용자 단위 차단 구현)
+- 관련 작업: S15P11B104-116, S15P11B104-120(미결 질문 1번 보강), S15P11B104-194(사용자 단위 차단 구현), S15P11B104-348(미결 질문 2번 보강)
 - 관련 제안: [`CHG-S15P11B104-114-auth-token-storage-and-ttl.md`](./CHG-S15P11B104-114-auth-token-storage-and-ttl.md), [`CHG-S15P11B104-116-profile-partial-update.md`](./CHG-S15P11B104-116-profile-partial-update.md)
 
 ## 기존 내용
@@ -50,6 +50,7 @@ Notion에도 정의되지 않아 이번 구현에서 판단한 사항은 다음 
 
 - 영향 도메인: 계정·프로필의 탈퇴, 그룹·구성원의 활성 구성원 집계
 - 영향 계약: `contracts/API.md` `API-USERS-003`에 처리 규칙과 `MANAGER_TRANSFER_REQUIRED` 발생 조건을 추가한다. `domains/ACCOUNT_AND_PROFILE.md` 「확정된 동작」 8번에 활성 멤버십 종료와 토큰 폐기를 추가한다. `contracts/DATA_MODEL.md` 「탈퇴 정책」에 `group_members.left_at` 기록을 추가한다. `COMMON.md` 「인증과 요청 경계」의 블랙리스트 규정에 사용자 단위 키 `blacklist:user:{userId}`와 인증 필터의 두 단계 확인을 추가한다. Method, Path, 요청·응답 형식과 테이블 구성은 변경하지 않는다.
+- 영향 계약(2026-08-06 보강): 미결 질문 2번이 확정되면 `contracts/API.md`의 `API-POSTS-001`·`API-POSTS-002`·`API-COMMENTS-001`에 작성자 이름이 항상 비어 있지 않다는 문장과 탈퇴 작성자 고정 문구를, `domains/FEED_AND_MEDIA.md` 「구현 규칙」에 같은 표시 규칙을 추가한다. 필드 구성과 타입은 바뀌지 않는다.
 - 영향 화면: 확인 필요. 프로필 화면의 탈퇴 흐름에서 관리자인 사용자에게 「관리자 권한을 먼저 위임해야 한다」는 안내가 필요하다. Notion의 화면·이벤트 매핑에도 호출 조건이 「관리자 그룹 처리 조건 충족」으로 적혀 있다.
 - 검증 범위: `UserApiTest`에서 익명화 6개 컬럼, `withdrawn_at`, `left_at` 기록, Access Token 차단, Refresh Token 폐기, 로그인 ID 재사용 가능, 관리자 `409`와 비관리자 성공을 검증했다. `WithdrawalTokenRevocationTest`에서 재발급 이전 Access Token이 `API-FILES-001`을 호출하지 못하는 것을 검증했다. 활성 구성원 목록·인원수 API는 아직 구현되지 않아 실제 집계 영향은 해당 API 구현 시점에 확인해야 한다.
 
@@ -58,6 +59,10 @@ Notion에도 정의되지 않아 이번 구현에서 판단한 사항은 다음 
 - 그룹의 유일한 활성 구성원인 관리자는 위임할 대상이 없어 탈퇴할 수 없다. 이 경우 그룹을 먼저 삭제(`API-GROUPS-014`)하도록 안내할지, 아니면 마지막 구성원의 탈퇴는 그룹 삭제를 함께 수행할지 결정이 필요하다. 현재 구현은 Notion 규칙을 문자 그대로 적용해 `409 MANAGER_TRANSFER_REQUIRED`를 반환한다.
   - 2026-07-30 보강(S15P11B104-120): 같은 결정이 그룹 탈퇴 `API-GROUPS-013`에도 그대로 적용된다. 이 계약의 「명시 오류」에도 `409 MANAGER_TRANSFER_REQUIRED` 하나만 정의되어 있어, `domains/GROUPS_AND_MEMBERSHIP.md` 「확정된 동작」 10번(다른 구성원이 있으면 먼저 위임)과 11번(관리자가 혼자면 그룹 삭제 확인으로 연결)이 서로 다른 후속 화면을 요구하는데도 서버 응답이 구분되지 않는다. 현재 구현(`GroupService.leave`)은 두 경우 모두 `409 MANAGER_TRANSFER_REQUIRED`를 반환하며, 계약이 이 엔드포인트에 허용한 유일한 `409`이므로 계약 위반은 아니다. 클라이언트는 `API-GROUPS-004`의 `memberCount`로 단독 여부를 판별할 수 있어 흐름이 막히지는 않는다. 결정이 필요한 것은 두 경우에 서로 다른 오류 코드를 둘지, 아니면 단일 코드를 유지하고 분기를 클라이언트에 맡길지이며, 이는 회원 탈퇴 경로와 같은 결정으로 함께 판단해야 한다. 검증 위치: `backend/src/main/java/com/ssafy/s15p11b104/domain/group/service/GroupService.java`의 `leave()`, `backend/src/test/java/com/ssafy/s15p11b104/domain/group/GroupApiTest.java`의 `managerCannotLeaveBeforeTransferringManagerRole`·`soleManagerCannotLeaveEither`.
 - 탈퇴한 사용자가 남긴 게시글·댓글의 작성자를 화면에 어떻게 표시할지. 2026-07-29 백엔드 담당자가 확인한 의도는 「탈퇴한 사용자」와 기본 프로필 이미지를 표시하는 것이다. 이때 판별 기준은 `group_members.left_at`이 아니라 `users.withdrawn_at`이어야 한다. 그룹만 나간 사용자는 `users`의 이름·프로필이 그대로 남아 있어 기존처럼 표시되지만, 탈퇴한 사용자는 이름이 NULL이므로 `left_at`만 확인하는 로직은 빈 이름을 노출한다. 이 표시 규칙은 피드 API를 구현하는 작업에서 확정해야 한다.
+  - 2026-08-06 보강(S15P11B104-348): 이 질문이 실제 결함으로 확인되어 위 의도대로 구현했다. 남은 것은 표시 문구와 계약 문장의 승인이다. 재현 결과 `API-POSTS-001`은 `500`이 아니라 `200`으로 응답하지만 `author.displayName`이 `null`이며, 앱은 이 값을 필수로 파싱해 게시글 한 건 때문에 피드 페이지 전체를 `INVALID_API_RESPONSE`로 버렸다(`frontend/src/features/feed/api/feedApi.ts`의 `parseAuthor`·`parseFeedPage`, `frontend/src/features/group-info/api/groupApi.ts`의 `parseApiEnvelope`). 댓글 목록도 같은 구조다.
+  - 확정이 필요한 계약 문장: `contracts/API.md`의 `API-POSTS-001`·`API-POSTS-002`·`API-COMMENTS-001` 응답에서 `author.displayName`은 항상 비어 있지 않으며, 작성자가 탈퇴했으면 조회자의 호칭보다 고정 문구 `탈퇴한 사용자`를 우선한다. `profileImageUrl`은 기존대로 `null`을 허용하고 클라이언트가 기본 프로필 이미지를 표시한다. 같은 문서 353~355행이 알림 응답의 `name`을 nullable로 명시한 것과 달리 게시글·댓글 작성자 이름에는 nullable 규정이 없어, 지금은 계약이 모호하다.
+  - 구현과 검증 위치: `backend/src/main/java/com/ssafy/s15p11b104/domain/account/entity/User.java`의 `resolveDisplayName()`(판별 기준은 위 문장대로 `withdrawn_at`), 이를 사용하는 `PostReadService`·`CommentService`·`AiCallPromptContextProvider`, `backend/src/test/java/com/ssafy/s15p11b104/domain/feed/PostReadApiTest.java`의 `withdrawnAuthorIsDisplayedWithFallbackNameInListAndDetail`·`viewerAliasStillOverridesWithdrawnAuthorName`, `CommentApiTest.java`의 `withdrawnCommentAuthorIsDisplayedWithFallbackName`, `frontend/src/features/feed/api/feedApi.test.ts`·`commentApi.test.ts`의 탈퇴 작성자 케이스.
+  - 호칭 우선순위: 2026-08-06 담당자 결정으로 탈퇴한 작성자는 조회자가 탈퇴 전에 등록해 둔 호칭도 사용하지 않고 고정 문구로 통일한다. 남은 기록에서 개인을 다시 식별할 수 없게 하기 위함이다. 그룹만 나간 구성원은 호칭과 실명을 그대로 유지한다. 두 경우 모두 테스트로 고정했다.
 - 탈퇴 시 활성 `group_join_requests`(`PENDING_ADMIN`)를 어떻게 처리할지. Notion과 로컬 스펙 모두 정의하지 않으며, 이번 범위에서는 손대지 않았다.
 - 사용자 단위 차단 키(`blacklist:user:{userId}`)를 확정 설계로 받아들일지. 2026-07-30에 이 잔여 위험이 실제 취약점으로 확인되어 위 「제안 내용」의 두 번째 항목으로 구현했고, 남은 것은 키 설계 승인이다.
   - 최초 기록에서 「현재 구현된 API 중에는 해당 경로가 없다」고 판단했으나 이 서술은 더 이상 맞지 않는다. 이후 추가된 `API-FILES-001`(`FileUploadService.issue`)은 인증 주체의 ID를 받기만 하고 계정 활성 여부도, 그룹 멤버십도 확인하지 않는다. 재발급 이전 Access Token으로 이 API를 호출하면 탈퇴한 계정이 최대 30분 동안 업로드 URL을 계속 발급받을 수 있었다. 수정 전 코드에서 이 경로가 `201`을 반환하는 것을 테스트로 확인했다.
