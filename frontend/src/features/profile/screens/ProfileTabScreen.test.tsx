@@ -1,4 +1,5 @@
 import React from 'react';
+import {NavigationContainer} from '@react-navigation/native';
 import {Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
@@ -19,6 +20,20 @@ jest.mock('../../auth', () => ({
   getInterestErrorMessage: (_error: unknown, fallback: string) => fallback,
   InterestSelectionScreen: () => null,
 }));
+jest.mock('react-native-safe-area-context', () => {
+  const mockReact = jest.requireActual('react');
+  const {View} = jest.requireActual('react-native');
+  const insets = {bottom: 0, left: 0, right: 0, top: 0};
+
+  return {
+    // ProfileStack(native-stack)의 SafeAreaProviderCompat이 이 컨텍스트를 구독한다.
+    SafeAreaInsetsContext: mockReact.createContext(insets),
+    SafeAreaProvider: View,
+    SafeAreaView: View,
+    initialWindowMetrics: null,
+    useSafeAreaInsets: () => insets,
+  };
+});
 
 const baseProps = {
   currentGroup: {id: 'group-1', name: '우리 가족', role: 'guardian'} as const,
@@ -36,7 +51,10 @@ function render(role: 'guardian' | 'careReceiver') {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <ProfileTabScreen {...baseProps} role={role} />,
+      // 역할별 마이페이지가 내부에 ProfileStack 내비게이터를 렌더한다.
+      <NavigationContainer>
+        <ProfileTabScreen {...baseProps} role={role} />
+      </NavigationContainer>,
     );
   });
   mountedRenderers.push(renderer!);

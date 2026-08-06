@@ -1,10 +1,15 @@
 import React from 'react';
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
 import {Alert, Text, TextInput} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import {mockHardwareBack} from '../../../shared/testing/hardwareBack';
+import type {GroupInfoStackParamList} from '../navigationTypes';
 import type {GroupMember, WeeklyRankingSnapshot} from '../types';
-import {GroupInfoScreen} from './GroupInfoScreen';
+import {GroupInfoScreen as GroupInfoScreenBase} from './GroupInfoScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
 jest.mock('@react-native-clipboard/clipboard', () => ({
@@ -13,6 +18,33 @@ jest.mock('@react-native-clipboard/clipboard', () => ({
 jest.mock('react-native-config', () => ({
   API_BASE_URL: 'http://localhost',
 }));
+jest.mock('react-native-safe-area-context', () => {
+  const mockReact = jest.requireActual('react');
+  const {View} = jest.requireActual('react-native');
+  const insets = {bottom: 0, left: 0, right: 0, top: 0};
+
+  return {
+    // GroupInfoStack(native-stack)의 SafeAreaProviderCompat이 이 컨텍스트를 구독한다.
+    SafeAreaInsetsContext: mockReact.createContext(insets),
+    SafeAreaProvider: View,
+    SafeAreaView: View,
+    initialWindowMetrics: null,
+    useSafeAreaInsets: () => insets,
+  };
+});
+
+// GroupInfoScreen이 내부에 GroupInfoStack 내비게이터를 렌더하므로 컨테이너가
+// 필요하다. 모든 렌더 지점이 그대로 동작하도록 같은 이름의 래퍼로 감싼다 —
+// renderer.update에서도 컨테이너 identity가 유지돼 스택 상태가 보존된다.
+function GroupInfoScreen(
+  props: React.ComponentProps<typeof GroupInfoScreenBase>,
+) {
+  return (
+    <NavigationContainer>
+      <GroupInfoScreenBase {...props} />
+    </NavigationContainer>
+  );
+}
 
 const baseProps = {
   currentGroup: {id: 'group-1', name: '우리 가족', role: 'guardian'} as const,
@@ -1033,42 +1065,52 @@ test('그룹 코드 카드를 누르면 그룹 코드 화면으로 이동한다'
     renderer!.root.findByProps({accessibilityLabel: '그룹 코드 176203'}),
   ).toBeTruthy();
 
-  // 뒤로 가면 그룹정보로 돌아온다.
+  // 뒤로 가면 그룹정보로 돌아온다. 홈은 하위 화면 아래에서도 마운트를
+  // 유지하므로 홈 텍스트 존재가 아니라 하위 화면 텍스트 부재로 단언한다.
   press(renderer!, '뒤로 가기');
+  expect(hasText(renderer!, '가족을 초대해 보세요')).toBe(false);
   expect(hasText(renderer!, '그룹 정보')).toBe(true);
 });
 
-test('가입 요청 알림 딥링크로 진입하면 가입 승인 화면을 바로 연다', async () => {
+test('내비게이션으로 전달된 가입 승인 딥링크는 승인 화면을 바로 연다', async () => {
+  // 셸의 중첩 navigate(딥링크)가 도달하는 경로를 컨테이너 ref로 재현한다.
+  const navRef = createNavigationContainerRef<GroupInfoStackParamList>();
   let renderer: TestRenderer.ReactTestRenderer;
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <GroupInfoScreen
-        {...baseProps}
-        currentMemberId="m-manager"
-        initialMembers={MEMBERS}
-        joinRequestsLoader={() =>
-          Promise.resolve([
-            {
-              joinRequestId: 'jr-1',
-              applicantUserId: 'u-1',
-              applicantName: '손수호',
-              profileImageUrl: null,
-              status: 'PENDING_ADMIN' as const,
-              assignedRole: null,
-              processedAt: null,
-              createdAt: '2026-07-30T09:12:00Z',
-            },
-          ])
-        }
-        openJoinApprovalRequestId={1}
-        pendingJoinCount={1}
-        rankingLoader={PENDING_RANKING_LOADER}
-      />,
+      <NavigationContainer ref={navRef}>
+        <GroupInfoScreenBase
+          {...baseProps}
+          currentMemberId="m-manager"
+          initialMembers={MEMBERS}
+          joinRequestsLoader={() =>
+            Promise.resolve([
+              {
+                joinRequestId: 'jr-1',
+                applicantUserId: 'u-1',
+                applicantName: '손수호',
+                profileImageUrl: null,
+                status: 'PENDING_ADMIN' as const,
+                assignedRole: null,
+                processedAt: null,
+                createdAt: '2026-07-30T09:12:00Z',
+              },
+            ])
+          }
+          pendingJoinCount={1}
+          rankingLoader={PENDING_RANKING_LOADER}
+        />
+      </NavigationContainer>,
     );
   });
   mountedRenderers.push(renderer!);
-  await TestRenderer.act(async () => {});
 
+  await TestRenderer.act(async () => {
+    navRef.navigate('JoinApproval', {groupId: 'group-1'});
+    await Promise.resolve();
+  });
+
+  expect(navRef.getCurrentRoute()?.name).toBe('JoinApproval');
   expect(hasText(renderer!, '승인 요청 1건')).toBe(true);
   expect(hasText(renderer!, '손수호')).toBe(true);
 });
@@ -1325,6 +1367,175 @@ test('하위 화면에서 돌아오면 구성원 목록과 그룹 상세를 다�
     await Promise.resolve();
   });
   expect(membersLoader).toHaveBeenCalledTimes(2);
+});
+
+test('하위 화면을 시스템 Back으로 닫아도 구성원 목록과 그룹 상세를 다시 조회한다', async () => {
+  // 기존에는 헤더 뒤로가기만 재조회했지만, 스택 전환으로 닫힘 경로가 pop
+  // 하나로 수렴해 시스템 Back도 같은 재조회 계약을 따른다.
+  const back = mockHardwareBack();
+  const membersLoader = jest.fn().mockResolvedValue([
+    {
+      age: null,
+      alias: null,
+      avatarText: '아',
+      gender: null,
+      isManager: true,
+      memberId: 'm-manager',
+      name: '아빠',
+      role: 'guardian' as const,
+      userId: 'u-manager',
+    },
+  ]);
+  const groupDetailLoader = jest.fn().mockResolvedValue({
+    careReceiverCount: 0,
+    guardianCount: 1,
+    id: 'group-1',
+    isManager: true,
+    managerMemberId: 'm-manager',
+    memberCount: 1,
+    name: '우리 가족',
+  });
+  const joinRequestsLoader = jest.fn().mockResolvedValue([]);
+
+  try {
+    let renderer: TestRenderer.ReactTestRenderer;
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        <GroupInfoScreen
+          {...baseProps}
+          currentMemberId="m-manager"
+          groupDetailLoader={groupDetailLoader}
+          joinRequestsLoader={joinRequestsLoader}
+          membersLoader={membersLoader}
+          pendingJoinCount={0}
+          rankingLoader={PENDING_RANKING_LOADER}
+        />,
+      );
+      await Promise.resolve();
+    });
+    mountedRenderers.push(renderer!);
+    expect(membersLoader).toHaveBeenCalledTimes(1);
+
+    await TestRenderer.act(async () => {
+      renderer!.root
+        .findByProps({accessibilityLabel: '가입 승인 대기'})
+        .props.onPress();
+      await Promise.resolve();
+    });
+
+    let handled = false;
+    await TestRenderer.act(async () => {
+      handled = back.press();
+      await Promise.resolve();
+    });
+
+    // 컨테이너의 useBackButton이 GroupInfoStack을 pop해 하위 화면을 닫는다.
+    expect(handled).toBe(true);
+    expect(membersLoader).toHaveBeenCalledTimes(2);
+    expect(groupDetailLoader).toHaveBeenCalledTimes(2);
+  } finally {
+    back.restore();
+  }
+});
+
+test('그룹 나가기에서 이동한 관리자 변경 화면의 뒤로 가기는 그룹 정보로 돌아온다', () => {
+  const renderer = renderScreen();
+
+  press(renderer, '그룹 나가기');
+  press(renderer, '그룹관리자 변경하기');
+  expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(true);
+
+  press(renderer, '뒤로 가기');
+
+  // push였다면 그룹 나가기 화면으로 돌아간다 — 기존 얼리 리턴과 같은
+  // "관리자 변경에서 뒤로 = 그룹 정보 루트" 의미론(replace)을 고정한다.
+  expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(false);
+  expect(hasText(renderer, '정말 그룹을 나가시겠어요?')).toBe(false);
+});
+
+test('그룹을 바꾸면 열려 있던 하위 화면이 닫힌다', () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        currentGroup={GROUP_A}
+        currentMemberId="m-manager"
+        initialMembers={MEMBERS}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+        role="guardian"
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '그룹관리자 변경');
+  expect(hasText(renderer!, '새 그룹관리자를 선택하세요')).toBe(true);
+
+  TestRenderer.act(() => {
+    renderer!.update(
+      <GroupInfoScreen
+        currentGroup={GROUP_B}
+        currentMemberId="b-lead"
+        initialMembers={MEMBERS_B}
+        pendingJoinCount={0}
+        rankingLoader={PENDING_RANKING_LOADER}
+        role="guardian"
+      />,
+    );
+  });
+
+  expect(hasText(renderer!, '새 그룹관리자를 선택하세요')).toBe(false);
+});
+
+test('그룹 전환과 함께 도착한 새 그룹의 가입 승인 딥링크는 닫지 않는다', async () => {
+  const navRef = createNavigationContainerRef<GroupInfoStackParamList>();
+  const joinRequestsLoader = jest.fn().mockResolvedValue([]);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NavigationContainer ref={navRef}>
+        <GroupInfoScreenBase
+          currentGroup={GROUP_A}
+          currentMemberId="m-manager"
+          initialMembers={MEMBERS}
+          joinRequestsLoader={joinRequestsLoader}
+          pendingJoinCount={0}
+          rankingLoader={PENDING_RANKING_LOADER}
+          role="guardian"
+        />
+      </NavigationContainer>,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  // 그룹 전환이 동반된 딥링크: 새 그룹(g-b)의 승인 화면이 먼저 push된다.
+  await TestRenderer.act(async () => {
+    navRef.navigate('JoinApproval', {groupId: GROUP_B.id});
+    await Promise.resolve();
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.update(
+      <NavigationContainer ref={navRef}>
+        <GroupInfoScreenBase
+          currentGroup={GROUP_B}
+          currentMemberId="b-lead"
+          initialMembers={MEMBERS_B}
+          joinRequestsLoader={joinRequestsLoader}
+          pendingJoinCount={0}
+          rankingLoader={PENDING_RANKING_LOADER}
+          role="guardian"
+        />
+      </NavigationContainer>,
+    );
+    await Promise.resolve();
+  });
+
+  // params.groupId가 새 그룹과 일치하므로 그룹 전환 정리(popToTop)에서 제외된다.
+  expect(navRef.getCurrentRoute()?.name).toBe('JoinApproval');
 });
 
 test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공 후 상태를 갱신한다', async () => {

@@ -1,4 +1,5 @@
 export {ProfileTabScreen} from './screens/ProfileTabScreen';
+export type {ProfileStackParamList} from './navigationTypes';
 export {
   createProfileGateway,
   getProfileSaveErrorMessage,
