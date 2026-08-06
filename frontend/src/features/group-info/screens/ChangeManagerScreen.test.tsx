@@ -41,13 +41,14 @@ afterEach(() => {
 function render(
   onChangeManager?: (id: string) => void,
   onBack: () => void = () => {},
+  members: readonly GroupMember[] = MEMBERS,
 ) {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
       <ChangeManagerScreen
         currentMemberId="m-manager"
-        members={MEMBERS}
+        members={members}
         onBack={onBack}
         onChangeManager={onChangeManager}
       />,
@@ -73,13 +74,45 @@ function press(renderer: TestRenderer.ReactTestRenderer, label: string) {
   });
 }
 
-test('보호자만 후보로 보여주고 피보호자는 제외한다', () => {
+test('피보호자도 후보로 보여준다', () => {
   const renderer = render();
 
   expect(hasText(renderer, '이경호')).toBe(true);
   expect(hasText(renderer, '손수호')).toBe(true);
-  // 피보호자 홍유라는 후보가 아니다.
-  expect(hasText(renderer, '홍유라')).toBe(false);
+  // 관리자 여부는 역할과 독립이라 피보호자 홍유라도 후보다.
+  expect(hasText(renderer, '홍유라')).toBe(true);
+});
+
+test('피보호자를 골라도 변경할 수 있다', () => {
+  const submitted: string[] = [];
+  const renderer = render((id) => submitted.push(id));
+
+  // 목록에 보이기만 하고 현재 관리자처럼 비활성이면 안 된다.
+  press(renderer, '홍유라 선택');
+  const sisterRow = renderer.root.findByProps({accessibilityLabel: '홍유라 선택'});
+  expect(sisterRow.props.accessibilityState.disabled).toBe(false);
+  expect(sisterRow.props.accessibilityState.selected).toBe(true);
+  expect(
+    renderer.root.findByProps({accessibilityLabel: '그룹관리자 변경하기'}).props
+      .accessibilityState.disabled,
+  ).toBe(false);
+
+  press(renderer, '그룹관리자 변경하기');
+  expect(submitted).toEqual(['m-sister']);
+});
+
+test('관리자 외 전원이 피보호자여도 위임할 수 있다', () => {
+  // 이 구성에서 후보가 0명이면 관리자는 위임도 그룹 나가기도 못 하는 상태에 갇힌다.
+  const submitted: string[] = [];
+  const renderer = render((id) => submitted.push(id), () => {}, [
+    member({memberId: 'm-manager', name: '이경호', isManager: true}),
+    member({memberId: 'm-sister', name: '홍유라', role: 'careReceiver'}),
+  ]);
+
+  press(renderer, '홍유라 선택');
+  press(renderer, '그룹관리자 변경하기');
+
+  expect(submitted).toEqual(['m-sister']);
 });
 
 test('현재 관리자는 라벨과 함께 선택할 수 없다', () => {

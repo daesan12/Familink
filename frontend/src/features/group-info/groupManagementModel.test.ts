@@ -4,7 +4,6 @@ import {
   formatJoinedDate,
   isGroupNameSaveable,
   isManagerChangeSaveable,
-  managerCandidates,
   removableMembers,
   resolveManagerName,
 } from './groupManagementModel';
@@ -49,13 +48,6 @@ describe('그룹명 유효성', () => {
 });
 
 describe('그룹관리자 변경 후보', () => {
-  test('보호자만 후보로 추린다', () => {
-    expect(managerCandidates(MEMBERS).map((m) => m.memberId)).toEqual([
-      'm-manager',
-      'm-dad',
-    ]);
-  });
-
   test('현재 관리자 memberId를 찾는다', () => {
     expect(currentManagerId(MEMBERS)).toBe('m-manager');
     expect(currentManagerId([])).toBeNull();
@@ -66,6 +58,8 @@ describe('그룹관리자 변경 후보', () => {
     // 현재 관리자 본인을 고르면 변경이 아니다.
     expect(isManagerChangeSaveable(MEMBERS, 'm-manager')).toBe(false);
     expect(isManagerChangeSaveable(MEMBERS, 'm-dad')).toBe(true);
+    // 관리자 여부는 역할과 독립이라 피보호자도 고를 수 있다.
+    expect(isManagerChangeSaveable(MEMBERS, 'm-sister')).toBe(true);
   });
 });
 
