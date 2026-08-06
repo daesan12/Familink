@@ -1,4 +1,5 @@
 import React from 'react';
+import {NavigationContainer} from '@react-navigation/native';
 import {Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
@@ -6,10 +7,11 @@ import type {
   CarnationCalendar,
   CarnationGateway,
 } from '../../group-info';
+import {mockHardwareBack} from '../../../shared/testing/hardwareBack';
 import {CarnationStamp} from '../components/CarnationStamp';
 import {MyPageProfileCard} from '../components/MyPageProfileCard';
 import {GUARDIAN_PROFILE} from '../fixtures/profileFixtures';
-import {MyPageScreen} from './MyPageScreen';
+import {MyPageScreen as MyPageScreenBase} from './MyPageScreen';
 import {ProfileEditScreen} from './ProfileEditScreen';
 import type {ProfileGateway} from '../api/profileApi';
 
@@ -23,7 +25,37 @@ jest.mock('react-native-image-picker', () => ({
   launchImageLibrary: jest.fn(),
 }));
 // 프로필 편집 진입 시 로드되는 생년월일 스크롤 선택기는 스텁으로 대체한다.
-jest.mock('../../auth', () => ({DatePickerSheet: () => null}));
+// 이름 검증(저장 중 Back 테스트)은 실제 규칙을 그대로 쓴다.
+jest.mock('../../auth', () => {
+  const {SIGNUP_LIMITS, isValidName} = jest.requireActual(
+    '../../auth/validation',
+  );
+  return {DatePickerSheet: () => null, SIGNUP_LIMITS, isValidName};
+});
+jest.mock('react-native-safe-area-context', () => {
+  const mockReact = jest.requireActual('react');
+  const {View} = jest.requireActual('react-native');
+  const insets = {bottom: 0, left: 0, right: 0, top: 0};
+
+  return {
+    // ProfileStack(native-stack)의 SafeAreaProviderCompat이 이 컨텍스트를 구독한다.
+    SafeAreaInsetsContext: mockReact.createContext(insets),
+    SafeAreaProvider: View,
+    SafeAreaView: View,
+    initialWindowMetrics: null,
+    useSafeAreaInsets: () => insets,
+  };
+});
+
+// MyPageScreen이 내부에 ProfileStack 내비게이터를 렌더하므로 컨테이너가
+// 필요하다. 모든 렌더 지점이 그대로 동작하도록 같은 이름의 래퍼로 감싼다.
+function MyPageScreen(props: React.ComponentProps<typeof MyPageScreenBase>) {
+  return (
+    <NavigationContainer>
+      <MyPageScreenBase {...props} />
+    </NavigationContainer>
+  );
+}
 
 const baseProps = {
   currentGroup: {id: 'group-1', name: '우리 가족', role: 'guardian'} as const,
@@ -614,6 +646,96 @@ test('월간 네트워크 오류는 재시도로 다시 조회한다', async () 
       .findAllByType(CarnationStamp)
       .some(stamp => stamp.props.filled),
   ).toBe(true);
+});
+
+test('이용가이드에서 시스템 Back은 마이페이지로 돌아온다', () => {
+  const back = mockHardwareBack();
+
+  try {
+    const renderer = render();
+    TestRenderer.act(() => {
+      renderer.root
+        .findByProps({accessibilityLabel: '이용가이드'})
+        .props.onPress();
+    });
+    expect(hasText(renderer, '처음 시작하시나요?')).toBe(true);
+
+    let handled = false;
+    TestRenderer.act(() => {
+      handled = back.press();
+    });
+
+    // 컨테이너의 useBackButton이 ProfileStack을 pop해 서브 화면을 닫는다.
+    expect(handled).toBe(true);
+    expect(hasText(renderer, '처음 시작하시나요?')).toBe(false);
+    expect(hasText(renderer, '마이페이지')).toBe(true);
+  } finally {
+    back.restore();
+  }
+});
+
+test('서브 화면 진입·복귀에 맞춰 풀스크린 신호를 보고한다', () => {
+  const onFullscreenChange = jest.fn();
+  const renderer = render({onFullscreenChange});
+  onFullscreenChange.mockClear();
+
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '이용가이드'})
+      .props.onPress();
+  });
+  expect(onFullscreenChange).toHaveBeenLastCalledWith(true);
+
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '뒤로 가기'})
+      .props.onPress();
+  });
+  expect(onFullscreenChange).toHaveBeenLastCalledWith(false);
+});
+
+test('프로필 저장 중 시스템 Back은 편집 화면을 유지한다', async () => {
+  const back = mockHardwareBack();
+
+  try {
+    const renderer = render();
+    TestRenderer.act(() => {
+      renderer.root
+        .findByProps({accessibilityLabel: '프로필 편집'})
+        .props.onPress();
+    });
+
+    // 변경이 있어야 저장이 시작된다(변경 없음은 저장 자체가 거부된다).
+    TestRenderer.act(() => {
+      renderer.root
+        .findByProps({accessibilityLabel: '이름 입력'})
+        .props.onChangeText('이종수');
+    });
+
+    // 저장을 시작한다. 완료 콜백은 마이크로태스크라 아직 실행되지 않는다.
+    TestRenderer.act(() => {
+      renderer.root
+        .findByProps({accessibilityLabel: '프로필 저장'})
+        .props.onPress();
+    });
+
+    let handled = false;
+    TestRenderer.act(() => {
+      handled = back.press();
+    });
+
+    // 편집 화면 자체 리스너가 소비만 하고 화면을 유지한다(CHG-270 규칙 3).
+    expect(handled).toBe(true);
+    expect(renderer.root.findAllByType(ProfileEditScreen)).toHaveLength(1);
+
+    // 저장이 끝나면 스스로 뒤로 가 마이페이지로 돌아온다.
+    await TestRenderer.act(async () => {
+      await flushPromises();
+    });
+    expect(renderer.root.findAllByType(ProfileEditScreen)).toHaveLength(0);
+  } finally {
+    back.restore();
+  }
 });
 
 function deferred<T>() {
