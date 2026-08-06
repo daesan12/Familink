@@ -2,6 +2,7 @@ import React from 'react';
 import {AccessibilityInfo, Alert, StyleSheet, Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
+import {COLORS} from '../../../design/tokens';
 import {AUTH_COLORS} from '../theme';
 import {GroupOnboardingScreen} from './GroupOnboardingScreen';
 
@@ -49,7 +50,18 @@ test('가입 승인 대기 요청이 있으면 대기 카드를 표시한다', a
   expect(renderer!.root.findByProps({children: '우리 가족'})).toBeTruthy();
   expect(renderer!.root.findByProps({children: '대기 중'})).toBeTruthy();
   expect(
-    renderer!.root.findByProps({children: '승인 요청 대기'}),
+    renderer!.root.findByProps({children: '나의 그룹 모음'}),
+  ).toBeTruthy();
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({children: '나의 그룹 모음'}).props.style,
+    ).fontWeight,
+  ).toBe('600');
+  expect(
+    renderer!.root.findByProps({children: '우리 가족을\n연결해볼까요?'}),
+  ).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({children: '코드로 참여하기'}),
   ).toBeTruthy();
   expect(
     renderer!.root.findAllByProps({children: '그룹 참여 방법'}),
@@ -60,10 +72,31 @@ test('가입 승인 대기 요청이 있으면 대기 카드를 표시한다', a
   ).toBe(true);
   expect(
     StyleSheet.flatten(
+      renderer!.root.findByProps({testID: 'join-request-carousel'}).props.style,
+    ).marginTop,
+  ).toBe(18);
+  expect(
+    StyleSheet.flatten(renderer!.root.findByProps({children: '대기 중'}).props.style)
+      .marginTop,
+  ).toBe(8);
+  expect(
+    StyleSheet.flatten(
       renderer!.root.findByProps({testID: 'join-request-card-request-1'})
         .props.style,
     ).backgroundColor,
-  ).toBe('#F5F5F5');
+  ).toBe(COLORS.background);
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({testID: 'join-request-card-request-1'})
+        .props.style,
+    ),
+  ).toMatchObject({
+    borderColor: COLORS.inactive,
+    borderWidth: StyleSheet.hairlineWidth,
+    boxShadow: '0px 3px 14px rgba(18, 23, 41, 0.055)',
+    height: 128,
+    width: 100,
+  });
   expect(
     renderer!.root.findByProps({children: '우리 가족'}).props.numberOfLines,
   ).toBe(2);
@@ -73,6 +106,50 @@ test('가입 승인 대기 요청이 있으면 대기 카드를 표시한다', a
   expect(
     renderer!.root.findAllByProps({name: 'chevron-right'}),
   ).toHaveLength(0);
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({testID: 'group-action-card-lavender'})
+        .props.style,
+    ).backgroundColor,
+  ).toBe(COLORS.lavenderSurface);
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({testID: 'group-action-card-lemon'}).props
+        .style,
+    ).backgroundColor,
+  ).toBe(COLORS.lemon);
+});
+
+test('최대 10자 그룹명은 두 줄 표시 영역을 사용한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupOnboardingScreen
+        onBack={jest.fn()}
+        onCreateGroup={jest.fn()}
+        onJoinByCode={jest.fn()}
+        pendingRequests={[
+          {
+            groupName: 'QQQQQQQQQQ',
+            id: 'request-10-characters',
+            status: 'PENDING_ADMIN',
+          },
+        ]}
+      />,
+    );
+  });
+
+  expect(
+    renderer!.root.findByProps({children: 'QQQQQQQQQQ'}).props.numberOfLines,
+  ).toBe(2);
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({
+        testID: 'request-name-request-10-characters',
+      }).props.style,
+    ).width,
+  ).toBe(92);
 });
 
 test('그룹이 없는 사용자의 빈 상태는 참가 안내 문구를 표시한다', async () => {
@@ -437,17 +514,20 @@ test('승인된 그룹 카드를 누르면 해당 그룹 진입을 요청한다'
 
   expect(JSON.stringify(renderer!.toJSON())).toContain('환영해요!');
   expect(
-    renderer!.root.findByProps({children: '승인 요청 대기'}),
+    renderer!.root.findByProps({children: '나의 그룹 모음'}),
   ).toBeTruthy();
   expect(
     renderer!.root.findAllByProps({name: 'check-circle-outline'}),
   ).toHaveLength(1);
   expect(
+    renderer!.root.findByProps({name: 'check-circle-outline'}).props.color,
+  ).toBe(COLORS.purpleDeep);
+  expect(
     StyleSheet.flatten(
       renderer!.root.findByProps({testID: 'join-request-card-request-1'})
         .props.style,
     ).backgroundColor,
-  ).toBe(AUTH_COLORS.action);
+  ).toBe(COLORS.background);
   expect(onOpenApprovedGroup).toHaveBeenCalledWith(request);
 });
 

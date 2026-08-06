@@ -124,22 +124,24 @@ export function GroupOnboardingScreen({
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}>
-          <AppText style={styles.title}>{'가족과\n연결해볼까요?'}</AppText>
+          <AppText style={styles.title}>{'우리 가족을\n연결해볼까요?'}</AppText>
 
           <View style={styles.options}>
             <GroupActionCard
               description="우리 가족만의 공간을 시작해요"
               label="새 그룹 만들기"
               onPress={() => setCreateGroupVisible(true)}
+              tone="lavender"
             />
             <GroupActionCard
               description="받은 코드로 기존 그룹에 참여해요"
-              label="코드로 참여"
+              label="코드로 참여하기"
               onPress={() => setJoinGroupVisible(true)}
+              tone="lemon"
             />
           </View>
 
-          <AppText style={styles.pendingTitle}>승인 요청 대기</AppText>
+          <AppText style={styles.pendingTitle}>나의 그룹 모음</AppText>
           {visibleRequests.length === 0 ? (
             <View
               accessibilityLiveRegion="polite"
@@ -223,25 +225,39 @@ interface GroupActionCardProps {
   description: string;
   label: string;
   onPress: () => void;
+  tone: 'lavender' | 'lemon';
 }
 
 function GroupActionCard({
   description,
   label,
   onPress,
+  tone,
 }: GroupActionCardProps) {
+  const isLemon = tone === 'lemon';
+
   return (
     <AnimatedPressable
       accessibilityHint={description}
       accessibilityRole="button"
       containerStyle={styles.optionContainer}
       onPress={onPress}>
-      <View style={styles.optionCard}>
+      <View
+        style={[
+          styles.optionCard,
+          isLemon ? styles.lemonOptionCard : styles.lavenderOptionCard,
+        ]}
+        testID={`group-action-card-${tone}`}>
         <View style={styles.optionCopy}>
           <AppText style={styles.optionLabel}>{label}</AppText>
           <AppText style={styles.optionDescription}>{description}</AppText>
         </View>
-        <View style={styles.optionArrow}>
+        <View
+          style={[
+            styles.optionArrow,
+            isLemon ? styles.lemonOptionArrow : styles.lavenderOptionArrow,
+          ]}
+          testID={`group-action-arrow-${tone}`}>
           <MaterialDesignIcons
             color={AUTH_COLORS.background}
             name="arrow-right"
@@ -274,7 +290,9 @@ function JoinRequestCard({
       }
       style={[styles.pendingCard, approved && styles.approvedCard]}
       testID={`join-request-card-${request.id}`}>
-      <View style={styles.requestNameArea}>
+      <View
+        style={styles.requestNameArea}
+        testID={`request-name-${request.id}`}>
         <AppText
           numberOfLines={2}
           style={[
@@ -284,12 +302,19 @@ function JoinRequestCard({
           {request.groupName}
         </AppText>
       </View>
-      <MaterialDesignIcons
-        color={approved ? AUTH_COLORS.black : AUTH_COLORS.muted}
-        name={approved ? 'check-circle-outline' : 'clock-outline'}
-        size={34}
-        style={styles.requestStatusIcon}
-      />
+      <View
+        style={[
+          styles.requestStatusIconContainer,
+          approved
+            ? styles.approvedStatusIconContainer
+            : styles.pendingStatusIconContainer,
+        ]}>
+        <MaterialDesignIcons
+          color={approved ? COLORS.purpleDeep : COLORS.textMuted}
+          name={approved ? 'check-circle-outline' : 'clock-outline'}
+          size={30}
+        />
+      </View>
       <AppText
         style={[
           styles.requestStatusText,
@@ -351,9 +376,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 36,
     paddingHorizontal: AUTH_LAYOUT.horizontalPadding,
+    paddingTop: 30,
   },
   title: {
-    color: AUTH_COLORS.black,
+    color: COLORS.text,
     fontSize: 32,
     fontWeight: '600',
     letterSpacing: -0.4,
@@ -369,7 +395,6 @@ const styles = StyleSheet.create({
   },
   optionCard: {
     alignItems: 'center',
-    backgroundColor: AUTH_COLORS.surfaceTint,
     borderCurve: 'continuous',
     borderRadius: 20,
     flexDirection: 'row',
@@ -377,26 +402,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 24,
   },
+  lavenderOptionCard: {
+    backgroundColor: COLORS.lavenderSurface,
+  },
+  lemonOptionCard: {
+    backgroundColor: COLORS.lemon,
+  },
   optionCopy: {
     alignSelf: 'stretch',
     flex: 1,
     paddingTop: 21,
   },
   optionLabel: {
-    color: AUTH_COLORS.black,
+    color: COLORS.text,
     fontSize: 27,
     fontWeight: '600',
     lineHeight: 36,
   },
   optionDescription: {
-    color: AUTH_COLORS.black,
+    color: COLORS.text,
     fontSize: 15,
     lineHeight: 21,
     marginTop: 17,
   },
   optionArrow: {
     alignItems: 'center',
-    backgroundColor: AUTH_COLORS.black,
     borderCurve: 'continuous',
     borderRadius: 16,
     bottom: 29,
@@ -406,13 +436,19 @@ const styles = StyleSheet.create({
     right: 20,
     width: 32,
   },
+  lavenderOptionArrow: {
+    backgroundColor: COLORS.lavender,
+  },
+  lemonOptionArrow: {
+    backgroundColor: AUTH_COLORS.actionPressed,
+  },
   pendingTitle: {
-    color: AUTH_COLORS.black,
+    color: COLORS.text,
     fontSize: 18,
-    fontWeight: '500',
+    fontWeight: '600',
     lineHeight: 26,
     marginLeft: 5,
-    marginTop: 43,
+    marginTop: 55,
   },
   emptyState: {
     alignItems: 'center',
@@ -432,33 +468,37 @@ const styles = StyleSheet.create({
   },
   pendingScroller: {
     marginHorizontal: -AUTH_LAYOUT.horizontalPadding,
-    marginTop: 8,
+    marginTop: 18,
   },
   pendingCardContainer: {
-    width: 114,
+    width: 100,
   },
   pendingCard: {
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.inactive,
     borderCurve: 'continuous',
-    borderRadius: 25,
-    height: 138,
-    paddingBottom: 11,
-    paddingHorizontal: 8,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    boxShadow: '0px 3px 14px rgba(18, 23, 41, 0.055)',
+    height: 128,
+    paddingBottom: 9,
+    paddingHorizontal: 4,
     paddingTop: 11,
-    width: 114,
+    width: 100,
   },
   approvedCard: {
-    backgroundColor: AUTH_COLORS.action,
+    backgroundColor: COLORS.background,
   },
   requestNameArea: {
     alignItems: 'center',
-    height: 50,
+    height: 44,
     justifyContent: 'center',
-    width: 98,
+    transform: [{translateY: -5}],
+    width: 92,
   },
   pendingGroupName: {
-    color: '#6A6A6A',
+    color: COLORS.textMuted,
     fontSize: 18,
     fontWeight: '500',
     letterSpacing: -0.2,
@@ -466,22 +506,32 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   approvedGroupName: {
-    color: AUTH_COLORS.black,
+    color: COLORS.purpleDeep,
     fontSize: 20,
     lineHeight: 26,
   },
-  requestStatusIcon: {
-    marginTop: 4,
+  requestStatusIconContainer: {
+    alignItems: 'center',
+    borderRadius: 20,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  approvedStatusIconContainer: {
+    backgroundColor: COLORS.lavenderSurface,
+  },
+  pendingStatusIconContainer: {
+    backgroundColor: COLORS.surfaceMuted,
   },
   requestStatusText: {
-    color: '#6A6A6A',
+    color: COLORS.textMuted,
     fontSize: 11,
     fontWeight: '700',
     lineHeight: 15,
-    marginTop: 2,
+    marginTop: 8,
     textAlign: 'center',
   },
   approvedStatusText: {
-    color: AUTH_COLORS.black,
+    color: COLORS.purpleDeep,
   },
 });
