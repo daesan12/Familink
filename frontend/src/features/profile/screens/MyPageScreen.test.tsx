@@ -597,6 +597,71 @@ test('월 이동은 선택 월을 재조회하고 이전 월의 늦은 응답은
   ).toHaveLength(1);
 });
 
+test('월간 달력을 닫았다가 다시 열면 현재 월로 초기화한다', async () => {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
+  const loadMemberCarnations = jest.fn(
+    (_groupId: string, _memberId: string, startDate: string, endDate: string) =>
+      Promise.resolve(calendar(startDate, endDate)),
+  );
+  const carnationGateway: CarnationGateway = {
+    loadMemberCarnations,
+    loadWeeklyRanking: jest.fn().mockResolvedValue({
+      rankings: [],
+      weekEnd: '2026-08-02',
+      weekStart: '2026-07-27',
+    }),
+  };
+  const renderer = render({
+    carnationGateway,
+    currentGroup: {
+      ...baseProps.currentGroup,
+      myMemberId: 'member-1',
+    },
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '월간 효자 도장 보기'})
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+  TestRenderer.act(() => {
+    renderer.root.findByProps({accessibilityLabel: '이전 달'}).props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+  expect(hasText(renderer, '2026년 7월')).toBe(true);
+
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '월간 효자 도장 닫기'})
+      .props.onPress();
+  });
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '월간 효자 도장 보기'})
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await flushPromises();
+  });
+
+  expect(hasText(renderer, '2026년 8월')).toBe(true);
+  expect(loadMemberCarnations).toHaveBeenLastCalledWith(
+    'group-1',
+    'member-1',
+    '2026-08-01',
+    '2026-08-31',
+  );
+});
+
 test('월간 네트워크 오류는 재시도로 다시 조회한다', async () => {
   const loadMemberCarnations = jest
     .fn()
