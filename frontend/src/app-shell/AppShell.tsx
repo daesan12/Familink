@@ -723,6 +723,20 @@ export function AppShell({
                 </View>
               ) : null}
             </Pressable>
+          ) : resolvedTabRoute === 'report' ? (
+            <Pressable
+              accessibilityHint="생성된 일간 리포트 날짜를 월별로 확인합니다"
+              accessibilityLabel="리포트 캘린더"
+              accessibilityRole="button"
+              onPress={() => navigateToReportTab({openCalendar: true})}
+              style={styles.headerSide}
+            >
+              <MaterialDesignIcons
+                color={COLORS.textStrong}
+                name="calendar-blank-outline"
+                size={27}
+              />
+            </Pressable>
           ) : (
             <View style={styles.headerSide} />
           )}

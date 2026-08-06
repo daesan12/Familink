@@ -1,6 +1,11 @@
 import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  useNavigation,
+  type NavigationProp,
+} from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import {Pressable} from "react-native";
 import TestRenderer from "react-test-renderer";
 
 import type { MainTabsParamList } from "../../../app-shell";
@@ -9,6 +14,7 @@ import { REPORT_PAGE_REQUEST_CONCURRENCY } from "../hooks/useReportPages";
 import { ReportScreen } from "./ReportScreen";
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
+jest.mock("lucide-react-native", () => ({Phone: "PhoneIcon"}));
 jest.mock("react-native-safe-area-context", () => {
   const mockReact = jest.requireActual("react");
   const { View } = jest.requireActual("react-native");
@@ -37,7 +43,21 @@ const target = {
 
 // ReportScreen이 useRoute로 리포트 탭 route params를 읽으므로, 단독 렌더도
 // 셸과 같은 'report' route 이름의 화면으로 감싼다.
-const RouteStack = createNativeStackNavigator();
+type ReportTestParamList = Pick<MainTabsParamList, "report">;
+
+const RouteStack = createNativeStackNavigator<ReportTestParamList>();
+
+function ReportCalendarTrigger() {
+  const navigation =
+    useNavigation<NavigationProp<ReportTestParamList, "report">>();
+
+  return (
+    <Pressable
+      accessibilityLabel="리포트 캘린더"
+      onPress={() => navigation.setParams({openCalendar: true})}
+    />
+  );
+}
 
 function withReportRoute(
   element: React.ReactElement,
@@ -47,7 +67,12 @@ function withReportRoute(
     <NavigationContainer>
       <RouteStack.Navigator screenOptions={{ headerShown: false }}>
         <RouteStack.Screen initialParams={params} name="report">
-          {() => element}
+          {() => (
+            <>
+              <ReportCalendarTrigger />
+              {element}
+            </>
+          )}
         </RouteStack.Screen>
       </RouteStack.Navigator>
     </NavigationContainer>
@@ -170,7 +195,7 @@ test("일간 조회 실패를 통화 없음과 구분하고 다시 시도할 수
 
   expect(gateway.getDailyReport).toHaveBeenCalledTimes(2);
   expect(JSON.stringify(renderer.toJSON())).toContain(
-    "건별 리포트 준비 중"
+    "아직 일간 리포트가 생성되지 않았어요"
   );
 }, 10_000);
 
@@ -627,12 +652,16 @@ test("어르신별 캘린더 날짜를 분리하고 화면 로딩 때 받은 현
     ).length;
 
   expect(currentMonthRequestCount()).toBe(2);
-  const calendarButtons = renderer.root
+  const calendarButton = renderer.root
     .findAllByProps({ accessibilityLabel: "리포트 캘린더" })
-    .filter((button) => typeof button.props.onPress === "function");
+    .find((button) => typeof button.props.onPress === "function");
+
+  if (!calendarButton) {
+    throw new Error("리포트 캘린더 버튼을 찾지 못했습니다.");
+  }
 
   await TestRenderer.act(async () => {
-    calendarButtons[0].props.onPress();
+    calendarButton.props.onPress();
   });
   expect(
     renderer.root.findByProps({
@@ -649,7 +678,14 @@ test("어르신별 캘린더 날짜를 분리하고 화면 로딩 때 받은 현
     renderer.root
       .findByProps({ accessibilityLabel: "리포트 캘린더 닫기" })
       .props.onPress();
-    calendarButtons[1].props.onPress();
+    renderer.root
+      .findByProps({testID: "care-receiver-report-pager"})
+      .props.onMomentumScrollEnd({
+        nativeEvent: {contentOffset: {x: 750, y: 0}},
+      });
+  });
+  await TestRenderer.act(async () => {
+    calendarButton.props.onPress();
   });
   expect(
     renderer.root.findByProps({
