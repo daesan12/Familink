@@ -204,6 +204,8 @@ function createGroupGateway(): jest.Mocked<FamilyGroupGateway> {
 
 function createNotificationGateway(): jest.Mocked<NotificationGateway> {
   return {
+    deleteAllNotifications: jest.fn().mockResolvedValue(undefined),
+    deleteNotification: jest.fn().mockResolvedValue(undefined),
     deactivateDeviceToken: jest.fn().mockResolvedValue(undefined),
     getUnreadCount: jest.fn().mockResolvedValue(0),
     loadPage: jest.fn().mockResolvedValue({hasNext: false, notifications: []}),

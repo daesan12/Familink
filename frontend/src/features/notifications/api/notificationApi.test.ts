@@ -293,6 +293,19 @@ test('읽지 않은 개수와 읽음 API를 계약 경로로 호출한다', asyn
   );
 });
 
+test('알림 단건·전체 삭제 API를 204 계약으로 호출한다', async () => {
+  const client = createClient();
+  client.delete
+    .mockResolvedValueOnce(response(null, 204))
+    .mockResolvedValueOnce(response(null, 204));
+  const gateway = createNotificationGateway({client});
+
+  await expect(gateway.deleteNotification('12')).resolves.toBeUndefined();
+  await expect(gateway.deleteAllNotifications()).resolves.toBeUndefined();
+  expect(client.delete).toHaveBeenNthCalledWith(1, '/notifications/12');
+  expect(client.delete).toHaveBeenNthCalledWith(2, '/notifications');
+});
+
 test('7개 설정을 서버 모델과 화면 모델 사이에서 변환한다', async () => {
   const client = createClient();
   client.get.mockResolvedValueOnce(

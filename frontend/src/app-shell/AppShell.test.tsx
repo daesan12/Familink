@@ -375,6 +375,7 @@ test('피드 루트에서는 아무도 처리하지 않아 앱이 종료된다',
 // 목적지 화면 목은 전달받은 딥링크 prop을 텍스트로 렌더한다.
 const DEEP_LINK_GROUP_A: FamilyGroup = {
   id: 'group-a',
+  isManager: true,
   name: '가족A',
   role: 'guardian',
 };
@@ -389,13 +390,13 @@ function FeedParamsProbe(props: AppScreenProps) {
   const nested = route.params as
     | {
         initial?: boolean;
-        params?: {postId?: string};
+        params?: {entrySource?: string; postId?: string};
         screen?: string;
       }
     | undefined;
   return (
     <Text>
-      {`feed:${props.currentGroup.id}:${nested?.screen ?? 'none'}:${nested?.params?.postId ?? 'none'}:${String(nested?.initial ?? 'none')}`}
+      {`feed:${props.currentGroup.id}:${nested?.screen ?? 'none'}:${nested?.params?.postId ?? 'none'}:${nested?.params?.entrySource ?? 'none'}:${String(nested?.initial ?? 'none')}`}
     </Text>
   );
 }
@@ -538,7 +539,9 @@ test('게시글 목적지는 그룹을 전환하고 피드 탭에 중첩 PostDet
   pressText(renderer, 'open-post');
 
   // initial:false가 함께 전달되어야 콜드 마운트에서 FeedHome이 스택 밑에 깔린다.
-  expect(hasText(renderer, 'feed:group-b:PostDetail:42:false')).toBe(true);
+  expect(hasText(renderer, 'feed:group-b:PostDetail:42:notification:false')).toBe(
+    true,
+  );
 });
 
 test('일정 목적지는 그룹을 전환하고 캘린더 탭에 중첩 CalendarHome params를 전달한다', () => {

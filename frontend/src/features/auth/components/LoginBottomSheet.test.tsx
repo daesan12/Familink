@@ -3,6 +3,7 @@ import {AccessibilityInfo, Keyboard, Modal} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import {LoginBottomSheet} from './LoginBottomSheet';
+import {DraggableBottomSheet} from '../../../shared/components/DraggableBottomSheet';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
 jest.mock('react-native-safe-area-context', () => {
@@ -65,6 +66,9 @@ test('미리 채울 값이 없으면 빈 입력으로 시작한다', () => {
   const renderer = render();
 
   expect(fieldValue(renderer, '로그인 아이디')).toBe('');
+  expect(
+    renderer.root.findByType(DraggableBottomSheet).props.backdropVisible,
+  ).toBe(false);
 });
 
 test('키보드가 열려 있으면 시스템 Back 1회는 시트를 닫지 않고 키보드만 닫는다', () => {

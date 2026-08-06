@@ -3,11 +3,13 @@ package com.ssafy.s15p11b104.domain.notification.controller;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
 
 import com.ssafy.s15p11b104.domain.notification.dto.NotificationListResponse;
 import com.ssafy.s15p11b104.domain.notification.dto.NotificationReadAllResponse;
@@ -80,5 +82,22 @@ public class NotificationController {
 		return ApiResponse.success(
 			READ_ALL_MESSAGE,
 			notificationService.markAllRead(user.id()));
+	}
+
+	@DeleteMapping("/{notificationId}")
+	public ResponseEntity<Void> deleteNotification(
+		@AuthenticationPrincipal AuthenticatedUser user,
+		@PathVariable @Positive Long notificationId
+	) {
+		notificationService.deleteNotification(user.id(), notificationId);
+		return ResponseEntity.noContent().build();
+	}
+
+	@DeleteMapping
+	public ResponseEntity<Void> deleteAllNotifications(
+		@AuthenticationPrincipal AuthenticatedUser user
+	) {
+		notificationService.deleteAllNotifications(user.id());
+		return ResponseEntity.noContent().build();
 	}
 }
