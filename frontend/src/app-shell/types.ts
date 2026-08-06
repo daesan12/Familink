@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
+import type { CalendarStackParamList } from '../features/calendar/navigationTypes';
 import type { FeedStackParamList } from '../features/feed/navigationTypes';
 import type { GroupInfoStackParamList } from '../features/group-info/navigationTypes';
 import type { NotificationDeepLinkTarget } from '../features/notifications/deepLink';
@@ -80,15 +81,19 @@ export interface AppScreenProps {
 // notifications·archive는 탭이 아니라 ShellStack에서 탭 위로 쌓이는 화면이다.
 export type MainTabRoute = Exclude<AppRoute, 'notifications' | 'archive'>;
 
-// feed·groupInfo·profile 탭은 내부 스택을 가진다. 딥링크·재탭 정규화가
+// feed·calendar·groupInfo·profile 탭은 내부 스택을 가진다. 딥링크·재탭 정규화가
 // 중첩 params로 스택 화면까지 도달할 수 있도록 params 타입을 연결한다.
+// report는 스택 없이 탭 route params로 딥링크를 받는다 — 통화 상세가 화면
+// 내부 상태라 스택 승격 없이 params 소비로 충분하다.
 export type MainTabsParamList = Omit<
   Record<MainTabRoute, undefined>,
-  'feed' | 'groupInfo' | 'profile'
+  'feed' | 'calendar' | 'groupInfo' | 'profile' | 'report'
 > & {
+  calendar: NavigatorScreenParams<CalendarStackParamList> | undefined;
   feed: NavigatorScreenParams<FeedStackParamList> | undefined;
   groupInfo: NavigatorScreenParams<GroupInfoStackParamList> | undefined;
   profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
+  report: ReportDeepLinkParams | undefined;
 };
 
 export type ShellStackParamList = {
