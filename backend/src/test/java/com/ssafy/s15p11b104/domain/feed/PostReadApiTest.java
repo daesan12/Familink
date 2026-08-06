@@ -284,10 +284,27 @@ class PostReadApiTest extends IntegrationTest {
 	}
 
 	@Test
-	void viewerAliasStillOverridesWithdrawnAuthorName() throws Exception {
+	void withdrawnAuthorIgnoresViewerAlias() throws Exception {
 		memberAliasRepository.save(new MemberAlias(group, viewer, author, "Mom"));
 		author.leave(Instant.now());
 		author.getUser().withdraw(Instant.now());
+		entityManager.flush();
+
+		mockMvc.perform(get("/groups/{groupId}/posts", group.getId())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.content[0].author.displayName").value("탈퇴한 사용자"));
+
+		mockMvc.perform(get("/posts/{postId}", imagePost.getId())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.author.displayName").value("탈퇴한 사용자"));
+	}
+
+	@Test
+	void aliasIsKeptForAuthorWhoOnlyLeftTheGroup() throws Exception {
+		memberAliasRepository.save(new MemberAlias(group, viewer, author, "Mom"));
+		author.leave(Instant.now());
 		entityManager.flush();
 
 		mockMvc.perform(get("/posts/{postId}", imagePost.getId())

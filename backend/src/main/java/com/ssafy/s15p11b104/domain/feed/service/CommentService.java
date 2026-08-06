@@ -114,7 +114,7 @@ public class CommentService {
 			comment.getId(),
 			PostAuthorResponse.from(
 				author,
-				aliasesByTarget.getOrDefault(author.getId(), author.getUser().resolveDisplayName()),
+				author.getUser().resolveDisplayName(aliasesByTarget.get(author.getId())),
 				mediaDownloadUrlProvider.issueProfileImageDownloadUrl(author.getUser().getProfileImageUrl())),
 			comment.getContent(),
 			comment.getCreatedAt(),
