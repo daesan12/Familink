@@ -77,7 +77,7 @@ function render(
   return renderer!;
 }
 
-// 변경사항이 없으면 저장이 막히므로, 저장 흐름을 검증하는 테스트는 먼저 이름을 바꾼다.
+// 변경사항이 없으면 저장하지 않고 닫히므로, 저장 흐름을 검증하는 테스트는 먼저 이름을 바꾼다.
 function editName(renderer: TestRenderer.ReactTestRenderer, value: string) {
   TestRenderer.act(() => {
     renderer.root
@@ -292,7 +292,8 @@ test('이름을 비운 채 저장하면 OS 팝업 없이 입력칸 아래에 안
 
 test('이름이 2자 미만이면 회원가입과 같은 문구로 저장을 막는다', () => {
   const onSave = jest.fn().mockResolvedValue(undefined);
-  const renderer = render(onSave);
+  const onBack = jest.fn();
+  const renderer = render(onSave, onBack);
 
   editName(renderer, '이');
   TestRenderer.act(() => {
@@ -301,6 +302,7 @@ test('이름이 2자 미만이면 회원가입과 같은 문구로 저장을 막
 
   expect(nameErrorMessages(renderer)).toContain('이름은 2 ~ 10자로 입력해주세요.');
   expect(onSave).not.toHaveBeenCalled();
+  expect(onBack).not.toHaveBeenCalled();
 });
 
 test('10자를 넘겨 입력하면 10자에서 멈추고 즉시 안내한다', () => {
@@ -339,7 +341,7 @@ test('프로필 이미지 아래 + 버튼도 사진 선택을 연다', async () 
   expect(mockLaunchImageLibrary).toHaveBeenCalledTimes(1);
 });
 
-test('변경사항이 없으면 저장을 막고 동일한 이름임을 안내한다', () => {
+test('변경사항이 없으면 저장하지 않고 편집 화면을 닫는다', () => {
   const onSave = jest.fn().mockResolvedValue(undefined);
   const onBack = jest.fn();
   const renderer = render(onSave, onBack);
@@ -348,9 +350,23 @@ test('변경사항이 없으면 저장을 막고 동일한 이름임을 안내�
     renderer.root.findByProps({accessibilityLabel: '프로필 저장'}).props.onPress();
   });
 
-  expect(nameErrorMessages(renderer)).toContain('기존과 동일한 이름입니다.');
+  expect(nameErrorMessages(renderer)).not.toContain('기존과 동일한 이름입니다.');
   expect(onSave).not.toHaveBeenCalled();
-  expect(onBack).not.toHaveBeenCalled();
+  expect(onBack).toHaveBeenCalledTimes(1);
+});
+
+test('이름의 앞뒤 공백만 달라지면 저장하지 않고 편집 화면을 닫는다', () => {
+  const onSave = jest.fn().mockResolvedValue(undefined);
+  const onBack = jest.fn();
+  const renderer = render(onSave, onBack);
+
+  editName(renderer, `  ${GUARDIAN_PROFILE.name}  `);
+  TestRenderer.act(() => {
+    renderer.root.findByProps({accessibilityLabel: '프로필 저장'}).props.onPress();
+  });
+
+  expect(onSave).not.toHaveBeenCalled();
+  expect(onBack).toHaveBeenCalledTimes(1);
 });
 
 test('이름은 그대로여도 다른 항목을 바꾸면 저장할 수 있다', () => {
