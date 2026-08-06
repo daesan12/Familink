@@ -349,6 +349,7 @@ interface GroupInfoIntegration {
   deleteGroup(groupId: string, confirmationName: string): Promise<void>;
   leaveGroup(groupId: string): Promise<void>;
   renameGroup(groupId: string, name: string): Promise<void>;
+  syncGroupName(groupId: string, name: string): void;
   updateMemberRole(
     groupId: string,
     memberId: string,
@@ -411,6 +412,7 @@ function ConnectedGroupInfoScreen(screenProps: AppScreenProps) {
       onRenameGroup={(name) =>
         integration.renameGroup(screenProps.currentGroup.id, name)
       }
+      onGroupNameLoaded={integration.syncGroupName}
       onProcessJoinRequest={(groupId, input) =>
         integration.membership.processJoinRequest(groupId, input)
       }
@@ -1994,6 +1996,20 @@ export default function App({
     [groupGateway]
   );
 
+  // 그룹 상세 조회가 확인해 준 이름을 그룹 목록에 반영한다. 표시용 그룹명의
+  // 단일 출처를 이 목록으로 유지해, 다른 구성원이 바꾼 이름도 상세를 불러온
+  // 시점부터 셸 헤더·전환 시트·게시글 상세가 함께 같은 값을 보이게 한다.
+  // 새 네트워크 호출을 만들지 않는다.
+  const handleGroupNameLoaded = useCallback((groupId: string, name: string) => {
+    setAvailableGroups((current) =>
+      current.some((group) => group.id === groupId && group.name !== name)
+        ? current.map((group) =>
+            group.id === groupId ? { ...group, name } : group
+          )
+        : current
+    );
+  }, []);
+
   const handleUpdateMemberRole = useCallback(
     async (groupId: string, memberId: string, role: FamilyGroup["role"]) => {
       const result = await groupMemberGateway.updateMemberRole(
@@ -2063,6 +2079,7 @@ export default function App({
       deleteGroup: handleDeleteGroup,
       leaveGroup: handleLeaveGroup,
       renameGroup: handleRenameGroup,
+      syncGroupName: handleGroupNameLoaded,
       updateMemberRole: handleUpdateMemberRole,
     }),
     [
@@ -2071,6 +2088,7 @@ export default function App({
       groupMemberGateway,
       groupMembershipGateway,
       handleDeleteGroup,
+      handleGroupNameLoaded,
       handleLeaveGroup,
       handleRenameGroup,
       handleUpdateMemberRole,

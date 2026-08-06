@@ -100,6 +100,9 @@ export interface GroupInfoScreenProps extends AppScreenProps {
   onLeaveGroup?: () => unknown;
   onDeleteGroup?: (confirmationName: string) => unknown;
   onRenameGroup?: (name: string) => Promise<void> | void;
+  // 상세 조회가 확인해 준 그룹명을 상위 그룹 목록으로 올린다. 이 화면은 그룹명을
+  // 직접 표시하지 않고 currentGroup.name을 쓰므로, 상세의 이름은 이 경로로만 흐른다.
+  onGroupNameLoaded?: (groupId: string, name: string) => void;
 }
 
 // 그룹정보 탭 내부 스택. 하위 화면 6종이 얼리 리턴 대신 스택 화면으로 열린다.
@@ -166,6 +169,7 @@ export function GroupInfoScreen({
   onLeaveGroup,
   onDeleteGroup,
   onRenameGroup,
+  onGroupNameLoaded,
   onFullscreenChange,
 }: GroupInfoScreenProps) {
   // 현재 그룹 기준 데이터. props 오버라이드(테스트)가 없으면 그룹 ID로 목업을 조회한다.
@@ -258,6 +262,13 @@ export function GroupInfoScreen({
   useEffect(() => {
     membersRef.current = members;
   }, [members]);
+
+  // 상세 조회 effect가 deps에 콜백을 넣지 않고 최신 참조를 쓰도록 미러링한다.
+  // deps에 넣으면 상위가 인라인 함수를 넘기는 순간 재조회 루프가 된다.
+  const onGroupNameLoadedRef = useRef(onGroupNameLoaded);
+  useEffect(() => {
+    onGroupNameLoadedRef.current = onGroupNameLoaded;
+  }, [onGroupNameLoaded]);
 
   // 하위 전체화면에 들어가면 하단 탭을 숨긴다(피드 상세·컴포저와 같은 방식).
   useEffect(() => {
@@ -448,6 +459,10 @@ export function GroupInfoScreen({
         if (isActive && detailRequestVersion.current === requestVersion) {
           lastLoadedDetailGroupId.current = currentGroup.id;
           setGroupDetail(detail);
+          // 표시용 그룹명은 상위 그룹 목록 하나만 쓴다. 상세가 확인해 준 이름은
+          // 화면이 직접 읽지 않고 이 경로로만 올려 화면 간 불일치를 없앤다.
+          // stale 가드 안이라 늦게 도착한 옛 이름이 올라가지 않는다.
+          onGroupNameLoadedRef.current?.(currentGroup.id, detail.name);
         }
       })
       .catch(() => {
@@ -513,7 +528,9 @@ export function GroupInfoScreen({
     joinRequestsLoader === undefined
       ? `승인 요청 ${scoped.pendingJoinCount}건`
       : formatPendingJoinDescription(pendingJoinCountState);
-  const resolvedGroupName = groupDetail?.name ?? currentGroup.name;
+  // 표시용 그룹명은 상위 그룹 목록 하나만 쓴다. 상세 응답의 이름은
+  // onGroupNameLoaded로 그 목록에 반영되므로 여기서 다시 읽지 않는다.
+  const resolvedGroupName = currentGroup.name;
   const resolvedMemberCount = groupDetail?.memberCount ?? members.length;
   const memberCounts = groupDetail
     ? `피보호자 ${groupDetail.careReceiverCount}명, 보호자 ${groupDetail.guardianCount}명`
@@ -754,10 +771,10 @@ export function GroupInfoScreen({
 
   const handleRenameGroup = async (name: string) => {
     await onRenameGroup?.(name);
+    // 표시용 이름은 상위 그룹 목록이 서버 응답으로 이미 갱신했다. 여기서는
+    // 상세의 나머지 필드만 다시 맞춘다. 변경 전에 출발한 상세 응답이 옛 이름을
+    // 목록으로 되돌리지 않도록 먼저 무효화한다.
     detailRequestVersion.current += 1;
-    setGroupDetail(current =>
-      current === null ? current : {...current, name},
-    );
     setDetailReloadCount(count => count + 1);
   };
 

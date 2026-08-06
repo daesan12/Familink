@@ -672,7 +672,7 @@ test("로그인 후 A-10을 거쳐 B-3으로 이동하고 다시 돌아온다", 
   });
 
   expect(
-    renderer.root.findByProps({ children: "가족과\n연결해볼까요?" })
+    renderer.root.findByProps({ children: "우리 가족을\n연결해볼까요?" })
   ).toBeTruthy();
   expect(JSON.stringify(renderer.toJSON())).toContain(
     "아직 참가한 그룹이 없어요"
@@ -1796,7 +1796,7 @@ test("실제 3초 폴링은 그룹 요약이 함께 보일 때 승인 카드로 
     expect(
       renderer!.root.findAllByProps({accessibilityLabel: "폴링 가족 열기"}),
     ).toHaveLength(0);
-    expect(JSON.stringify(renderer!.toJSON())).toContain("승인 요청 대기");
+    expect(JSON.stringify(renderer!.toJSON())).toContain("폴링 가족, 대기 중");
 
     await TestRenderer.act(async () => {
       jest.advanceTimersByTime(3_000);
@@ -1984,7 +1984,7 @@ test("피드의 생성·참여 버튼은 시트를 바로 열고 취소하면 �
     renderer!.root.findByType(AppShell).props.onJoinGroup();
   });
   expect(
-    renderer!.root.findByProps({ children: "가족과\n연결해볼까요?" })
+    renderer!.root.findByProps({ children: "우리 가족을\n연결해볼까요?" })
   ).toBeTruthy();
   expect(
     renderer!.root.findByProps({ accessibilityLabel: "6자리 초대 코드" })
@@ -2239,6 +2239,152 @@ test("그룹 이름 변경 API가 성공하면 현재 그룹 이름도 갱신한
   });
   expect(renderer!.root.findByProps({ children: "새 가족" })).toBeTruthy();
 });
+
+test("그룹명 변경은 입력값이 아니라 서버가 돌려준 이름을 반영한다", async () => {
+  const groupGateway = createGroupGateway();
+  // 서버가 보낸 값과 클라이언트가 입력한 값이 반드시 달라지도록 목을 만든다.
+  // 화면이 입력값을 그대로 쓰면 이 테스트가 깨진다.
+  let storedName = "기존 가족";
+  let detailCalls = 0;
+  groupGateway.getGroupDetail.mockImplementation(async (groupId) => {
+    detailCalls += 1;
+    // 변경 후 재조회는 끝내지 않는다. 재조회가 덮어 주기 전에도 화면이
+    // 서버 값을 보여야 한다는 것이 이 테스트의 요지다.
+    if (detailCalls > 1) {
+      return new Promise(() => {});
+    }
+    return {
+      careReceiverCount: 0,
+      guardianCount: 1,
+      id: groupId,
+      isManager: true,
+      managerMemberId: "member-manager",
+      memberCount: 1,
+      name: storedName,
+    };
+  });
+  groupGateway.renameGroup.mockImplementation(async (groupId, name) => {
+    storedName = `${name.trim()}(서버)`;
+    return {
+      id: groupId,
+      name: storedName,
+      updatedAt: "2026-08-07T02:03:04Z",
+    };
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <App
+        groupGateway={groupGateway}
+        groups={[{ id: "101", name: "기존 가족", role: "guardian" }]}
+        initialGroupId="101"
+        initialRootRoute="appShell"
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹정보 탭" })
+      .props.onPress();
+    await Promise.resolve();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹명 변경" })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹 이름 입력" })
+      .props.onChangeText("  새 가족  ");
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "변경하기" })
+      .props.onPress();
+  });
+
+  expect(groupGateway.renameGroup).toHaveBeenCalledWith("101", "새 가족");
+
+  // 그룹정보에 머문 채 다시 열어도 서버가 확정한 이름이 초기값이어야 한다.
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹명 변경" })
+      .props.onPress();
+  });
+  expect(
+    renderer!.root.findByProps({ accessibilityLabel: "그룹 이름 입력" }).props
+      .value
+  ).toBe("새 가족(서버)");
+
+  await TestRenderer.act(() => {
+    renderer!.root.findByProps({ accessibilityLabel: "뒤로 가기" }).props
+      .onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "피드 탭" })
+      .props.onPress();
+  });
+  // 셸 헤더도 같은 값을 보인다.
+  expect(
+    renderer!.root.findAllByProps({ children: "새 가족(서버)" }).length
+  ).toBeGreaterThan(0);
+  expect(renderer!.root.findAllByProps({ children: "새 가족" })).toHaveLength(0);
+});
+
+test("다른 구성원이 바꾼 그룹명은 그룹정보 진입 뒤 셸 헤더와 전환 시트에도 반영된다", async () => {
+  // "다른 구성원" 시나리오의 관찰 가능한 정의: 목록은 옛 이름인데 상세는 새 이름을
+  // 주고, 이 기기는 변경을 호출한 적이 없다.
+  const groupGateway = createGroupGateway();
+  groupGateway.getGroupDetail.mockResolvedValue({
+    careReceiverCount: 0,
+    guardianCount: 1,
+    id: "101",
+    isManager: true,
+    managerMemberId: "member-manager",
+    memberCount: 1,
+    name: "새 가족",
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <App
+        groupGateway={groupGateway}
+        groups={[{ id: "101", name: "옛 가족", role: "guardian" }]}
+        initialGroupId="101"
+        initialRootRoute="appShell"
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  // 그룹정보 탭 진입이 이 티켓이 규정하는 갱신 시점이다.
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹정보 탭" })
+      .props.onPress();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "피드 탭" })
+      .props.onPress();
+  });
+
+  // 셸 헤더와 전환 시트가 모두 새 이름을 보여야 한다.
+  expect(renderer!.root.findAllByProps({ children: "새 가족" }).length)
+    .toBeGreaterThan(0);
+  expect(renderer!.root.findAllByProps({ children: "옛 가족" })).toHaveLength(0);
+  // 본인 변경 경로와 구분한다.
+  expect(groupGateway.renameGroup).not.toHaveBeenCalled();
+});
+
 
 test("현재 사용자의 역할 변경 성공은 하단 탭 권한을 즉시 갱신한다", async () => {
   const groupGateway = createGroupGateway();

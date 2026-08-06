@@ -12,6 +12,24 @@ jest.mock('react-native-config', () => ({
 // host component in tests.
 jest.mock('lucide-react-native/icons/trash-2', () => 'Trash2');
 
+// 패키지 루트도 ESM이라 같은 이유로 파싱에 실패한다. 아이콘 이름을 그대로
+// host 컴포넌트로 돌려주어 앱 셸을 포함한 통합 테스트가 실행되게 한다.
+jest.mock('lucide-react-native', () => {
+  return new Proxy(
+    {__esModule: true},
+    {
+      get: (target, property) => {
+        if (property in target) {
+          return target[property];
+        }
+        // 심볼 키까지 문자열로 돌려주면 Symbol.toPrimitive·Symbol.iterator가
+        // 문자열이 되어 이 모듈을 출력하거나 펼치는 순간 TypeError가 난다.
+        return typeof property === 'string' ? property : undefined;
+      },
+    },
+  );
+});
+
 jest.mock('@react-native-clipboard/clipboard', () => ({
   getString: jest.fn().mockResolvedValue(''),
   setString: jest.fn(),
