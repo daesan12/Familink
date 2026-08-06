@@ -1,6 +1,7 @@
 export {FeedScreen} from './screens/FeedScreen';
 export {PostDetailScreen} from './screens/PostDetailScreen';
 export type {FeedScreenProps} from './screens/FeedScreen';
+export type {FeedStackParamList} from './navigationTypes';
 export type {
   ChangeReactionInput,
   CreateCommentInput,

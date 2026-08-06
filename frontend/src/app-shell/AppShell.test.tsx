@@ -1,5 +1,5 @@
 import React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
+import {NavigationContainer, useRoute} from '@react-navigation/native';
 import {Pressable, Text} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import TestRenderer from 'react-test-renderer';
@@ -330,6 +330,22 @@ const DEEP_LINK_GROUP_B: FamilyGroup = {
   role: 'guardian',
 };
 
+function FeedParamsProbe(props: AppScreenProps) {
+  const route = useRoute();
+  const nested = route.params as
+    | {
+        initial?: boolean;
+        params?: {postId?: string};
+        screen?: string;
+      }
+    | undefined;
+  return (
+    <Text>
+      {`feed:${props.currentGroup.id}:${nested?.screen ?? 'none'}:${nested?.params?.postId ?? 'none'}:${String(nested?.initial ?? 'none')}`}
+    </Text>
+  );
+}
+
 function createDeepLinkScreens(): AppScreenRegistry {
   return {
     calendar: (props: AppScreenProps) => (
@@ -337,7 +353,9 @@ function createDeepLinkScreens(): AppScreenRegistry {
         {`calendar:${props.currentGroup.id}:${props.openCalendarEventId ?? 'none'}:${props.openCalendarEventRequestId ?? 0}`}
       </Text>
     ),
-    feed: (props: AppScreenProps) => <Text>{`feed:${props.currentGroup.id}`}</Text>,
+    // 게시글 딥링크는 피드 탭 route의 중첩 params(FeedStack PostDetail)로
+    // 전달된다. 목 화면이 params를 렌더해 전달 계약을 단언할 수 있게 한다.
+    feed: (props: AppScreenProps) => <FeedParamsProbe {...props} />,
     groupInfo: (props: AppScreenProps) => (
       <Text>{`groupInfo:${props.openJoinApprovalRequestId ?? 0}`}</Text>
     ),
@@ -374,6 +392,17 @@ function createDeepLinkScreens(): AppScreenRegistry {
         >
           <Text>open-join-approval</Text>
         </Pressable>
+        <Pressable
+          onPress={() =>
+            props.onOpenNotificationTarget?.({
+              groupId: 'group-b',
+              kind: 'post',
+              postId: '42',
+            })
+          }
+        >
+          <Text>open-post</Text>
+        </Pressable>
       </>
     ),
     report: (props: AppScreenProps) => (
@@ -401,6 +430,15 @@ function renderForDeepLink() {
   mountedRenderers.push(renderer!);
   return renderer!;
 }
+
+test('게시글 목적지는 그룹을 전환하고 피드 탭에 중첩 PostDetail params를 전달한다', () => {
+  const renderer = renderForDeepLink();
+
+  pressText(renderer, 'open-post');
+
+  // initial:false가 함께 전달되어야 콜드 마운트에서 FeedHome이 스택 밑에 깔린다.
+  expect(hasText(renderer, 'feed:group-b:PostDetail:42:false')).toBe(true);
+});
 
 test('일정 목적지는 그룹을 전환하고 캘린더로 이동하며 이벤트 id를 전달한다', () => {
   const renderer = renderForDeepLink();
@@ -463,6 +501,37 @@ test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다',
   });
 
   expect(hasText(renderer!, 'screen:notifications')).toBe(true);
+});
+
+// 스펙 D-3(docs/specs/UI_AND_NAVIGATION.md: 상세 진입 중에도 역할별 하단 탭
+// 유지)의 첫 회귀 테스트. 게시글 상세는 헤더 숨김만 보고하고 풀스크린은
+// 보고하지 않으므로 탭바가 유지되어야 하며, 풀스크린(작성·AI 통화)에서만
+// 탭바가 사라진다.
+test('헤더 숨김 화면에서는 하단 탭을 유지하고 풀스크린에서만 숨긴다', () => {
+  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
+    BottomTabBar: () => null;
+  };
+
+  function HeaderHiddenScreen({onHeaderVisibilityChange}: AppScreenProps) {
+    React.useEffect(() => {
+      onHeaderVisibilityChange?.(false);
+    }, [onHeaderVisibilityChange]);
+    return <Text>screen:feed</Text>;
+  }
+
+  const headerHiddenRenderer = renderForBack('feed', CARE_RECEIVER_GROUP, {
+    ...createBackTestScreens(),
+    feed: HeaderHiddenScreen,
+  });
+  expect(
+    headerHiddenRenderer.root.findAllByType(MockTabBar).length,
+  ).toBeGreaterThan(0);
+
+  const fullscreenRenderer = renderForBack('aiCall', CARE_RECEIVER_GROUP, {
+    ...createBackTestScreens(),
+    aiCall: FullscreenScreen,
+  });
+  expect(fullscreenRenderer.root.findAllByType(MockTabBar)).toHaveLength(0);
 });
 
 test('화면이 전체화면을 보고하면 셸은 뒤로가기를 처리하지 않는다', () => {
