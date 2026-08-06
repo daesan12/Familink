@@ -12,6 +12,7 @@ export type NotificationDeepLinkTarget =
       groupId?: string;
     }
   | {kind: 'dailyReport'; memberId: string; reportDate: string; groupId?: string}
+  | {kind: 'groupInfo'; groupId?: string}
   | {kind: 'joinApproval'; groupId?: string}
   // 푸시 탭에서 알림을 특정하지 못했을 때의 폴백. 해석기는 만들지 않는다.
   | {kind: 'notifications'};
@@ -55,6 +56,8 @@ export function resolveNotificationTarget(
             groupId,
           };
     case 'GROUP_JOIN_REQUEST':
-      return {kind: 'joinApproval', groupId};
+      return notification.relatedJoinRequestStatus === 'PENDING_ADMIN'
+        ? {kind: 'joinApproval', groupId}
+        : {kind: 'groupInfo', groupId};
   }
 }

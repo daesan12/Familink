@@ -89,6 +89,11 @@ describe('commentApi', () => {
       .mockResolvedValueOnce(
         success(
           {
+            author: {
+              displayName: 'Yura',
+              memberId: 21,
+              profileImageUrl: 'https://signed.example/yura.jpg',
+            },
             content: '새 댓글',
             createdAt: '2026-08-01T00:00:00Z',
             id: 12,
@@ -108,7 +113,14 @@ describe('commentApi', () => {
       .spyOn(apiClient, 'delete')
       .mockResolvedValueOnce({status: 204} as never);
 
+    // 생성 직후 아바타를 그리려면 서버가 발급한 프로필 URL이 필요하다.
     await expect(createComment('91', '  새 댓글  ')).resolves.toEqual({
+      author: {
+        avatarText: 'Yu',
+        id: '21',
+        name: 'Yura',
+        profileImageUrl: 'https://signed.example/yura.jpg',
+      },
       content: '새 댓글',
       createdAt: '2026-08-01T00:00:00Z',
       id: '12',
@@ -128,6 +140,48 @@ describe('commentApi', () => {
       content: '수정 댓글',
     });
     expect(deleteSpy).toHaveBeenCalledWith('/comments/12');
+  });
+
+  it('author를 내려주지 않는 서버 응답도 성공으로 파싱한다', async () => {
+    // 앱이 먼저 배포되어도 댓글 작성이 실패로 처리되지 않아야 한다.
+    jest.spyOn(apiClient, 'post').mockResolvedValueOnce(
+      success(
+        {
+          content: '새 댓글',
+          createdAt: '2026-08-01T00:00:00Z',
+          id: 12,
+          postId: 91,
+        },
+        201,
+      ),
+    );
+
+    await expect(createComment('91', '새 댓글')).resolves.toEqual({
+      author: undefined,
+      content: '새 댓글',
+      createdAt: '2026-08-01T00:00:00Z',
+      id: '12',
+      postId: '91',
+    });
+  });
+
+  it('author 형식이 깨진 응답은 거부한다', async () => {
+    jest.spyOn(apiClient, 'post').mockResolvedValueOnce(
+      success(
+        {
+          author: {displayName: 'Yura'},
+          content: '새 댓글',
+          createdAt: '2026-08-01T00:00:00Z',
+          id: 12,
+          postId: 91,
+        },
+        201,
+      ),
+    );
+
+    await expect(createComment('91', '새 댓글')).rejects.toMatchObject<
+      Partial<ApiError>
+    >({code: 'INVALID_API_RESPONSE'});
   });
 
   it('잘못된 입력과 불완전한 응답을 거부한다', async () => {

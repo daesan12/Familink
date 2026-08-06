@@ -5,6 +5,10 @@
 // 승격할 이유가 없고, 업로드 상태 머신을 FeedScreen 스코프에 유지할 수 있다.
 export type FeedStackParamList = {
   FeedHome: undefined;
-  PostDetail: { groupId: string; postId: string };
+  PostDetail: {
+    entrySource?: 'feed' | 'notification';
+    groupId: string;
+    postId: string;
+  };
   PostComposer: { mode: 'create' } | { mode: 'edit'; postId: string };
 };

@@ -1,5 +1,4 @@
-import {
-  useState} from 'react';
+import {useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -7,9 +6,9 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {AppText} from '../../../shared/components/AppText';
 import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {SubScreenHeader} from '../components/SubScreenHeader';
 import {getGroupManagementErrorMessage} from '../api/groupManagementApi';
@@ -28,7 +27,8 @@ interface LeaveGroupScreenProps {
   onGoToChangeManager: () => void;
 }
 
-// H-8 그룹 나가기. 그룹 요약과 관리자 위임 안내를 보여준 뒤 나가기를 확정한다.
+// H-8 그룹 나가기. 그룹 요약을 보여준 뒤 나가기를 확정한다.
+// 관리자에게는 위임 안내를 함께 보여주고 나가기를 막는다.
 export function LeaveGroupScreen({
   groupName,
   memberCount,
@@ -96,21 +96,25 @@ export function LeaveGroupScreen({
           <AppText style={styles.summaryLine}>그룹관리자 · {managerName}</AppText>
         </View>
 
-        <View style={styles.noticeCard}>
-          <AppText style={styles.noticeTitle}>그룹관리자는 바로 나갈 수 없어요</AppText>
-          <AppText style={styles.noticeBody}>
-            먼저 다른 구성원에게 그룹관리자 역할을 넘긴 뒤 그룹을 나가 주세요.
-          </AppText>
-          <Pressable
-            accessibilityLabel="그룹관리자 변경하기"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={onGoToChangeManager}
-            style={styles.noticeLink}
-          >
-            <AppText style={styles.noticeLinkText}>그룹관리자 변경하기 ›</AppText>
-          </Pressable>
-        </View>
+        {/* 위임 안내와 H-6 링크는 관리자에게만 해당한다(spec 규칙 10). 일반 구성원에게는
+            나가기를 막는 조건이 없으므로 위 안내 문구만 보여준다. */}
+        {isViewerManager ? (
+          <View style={styles.noticeCard}>
+            <AppText style={styles.noticeTitle}>그룹관리자는 바로 나갈 수 없어요</AppText>
+            <AppText style={styles.noticeBody}>
+              먼저 다른 구성원에게 그룹관리자 역할을 넘긴 뒤 그룹을 나가 주세요.
+            </AppText>
+            <Pressable
+              accessibilityLabel="그룹관리자 변경하기"
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={onGoToChangeManager}
+              style={styles.noticeLink}
+            >
+              <AppText style={styles.noticeLinkText}>그룹관리자 변경하기 ›</AppText>
+            </Pressable>
+          </View>
+        ) : null}
         {errorMessage ? <NoticeBanner message={errorMessage} /> : null}
       </ScrollView>
 

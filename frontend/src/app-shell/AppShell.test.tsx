@@ -13,6 +13,8 @@ import type {
   AppScreenProps,
   AppScreenRegistry,
   FamilyGroup,
+  MainTabRoute,
+  SharedSubRoute,
 } from './types';
 
 function MockCurrentGroupSwitcher({
@@ -219,7 +221,7 @@ function FullscreenScreen({onFullscreenChange}: AppScreenProps) {
 }
 
 function renderForBack(
-  initialRoute: AppRoute,
+  initialRoute: MainTabRoute,
   group: FamilyGroup,
   backTestScreens: AppScreenRegistry = createBackTestScreens(),
 ) {
@@ -253,31 +255,83 @@ function renderedRoute(
   return typeof label === 'string' ? label.slice('screen:'.length) : undefined;
 }
 
-test.each<AppRoute>([
-  'calendar',
-  'aiCall',
-  'groupInfo',
-  'profile',
-  'notifications',
-  'archive',
-])('%s 라우트에서 시스템 Back은 앱을 종료하지 않고 피드로 돌아간다', route => {
-  const back = mockHardwareBack();
+// 알림·보관함은 어느 탭도 소유하지 않는 공유 하위 화면이다. 콜드 스타트로는
+// 진입할 수 없으므로(initialRoute는 탭 라우트만 받는다) 프로덕션과 같은 경로로
+// 피드 헤더의 종·폴더 아이콘을 눌러 연다.
+const SUB_SCREEN_ROUTES: readonly SharedSubRoute[] = ['notifications', 'archive'];
 
-  try {
-    const renderer = renderForBack(route, CARE_RECEIVER_GROUP);
-    expect(renderedRoute(renderer)).toBe(route);
+const SUB_SCREEN_OPENER_LABEL: Record<SharedSubRoute, string> = {
+  archive: '게시글 보관함',
+  notifications: '알림',
+};
 
-    let handled = false;
-    TestRenderer.act(() => {
-      handled = back.press();
-    });
+function openSubScreen(
+  renderer: TestRenderer.ReactTestRenderer,
+  route: SharedSubRoute,
+) {
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: SUB_SCREEN_OPENER_LABEL[route]})
+      .props.onPress();
+  });
+}
 
-    expect(handled).toBe(true);
-    expect(renderedRoute(renderer)).toBe('feed');
-  } finally {
-    back.restore();
-  }
-});
+function selectTab(
+  renderer: TestRenderer.ReactTestRenderer,
+  route: MainTabRoute,
+) {
+  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
+    BottomTabBar: () => null;
+  };
+  TestRenderer.act(() => {
+    renderer.root.findByType(MockTabBar).props.onSelect(route);
+  });
+}
+
+test.each<MainTabRoute>(['calendar', 'aiCall', 'groupInfo', 'profile'])(
+  '%s 라우트에서 시스템 Back은 앱을 종료하지 않고 피드로 돌아간다',
+  route => {
+    const back = mockHardwareBack();
+
+    try {
+      const renderer = renderForBack(route, CARE_RECEIVER_GROUP);
+      expect(renderedRoute(renderer)).toBe(route);
+
+      let handled = false;
+      TestRenderer.act(() => {
+        handled = back.press();
+      });
+
+      expect(handled).toBe(true);
+      expect(renderedRoute(renderer)).toBe('feed');
+    } finally {
+      back.restore();
+    }
+  },
+);
+
+test.each(SUB_SCREEN_ROUTES)(
+  '%s 화면에서 시스템 Back은 앱을 종료하지 않고 피드로 돌아간다',
+  route => {
+    const back = mockHardwareBack();
+
+    try {
+      const renderer = renderForBack('feed', CARE_RECEIVER_GROUP);
+      openSubScreen(renderer, route);
+      expect(renderedRoute(renderer)).toBe(route);
+
+      let handled = false;
+      TestRenderer.act(() => {
+        handled = back.press();
+      });
+
+      expect(handled).toBe(true);
+      expect(renderedRoute(renderer)).toBe('feed');
+    } finally {
+      back.restore();
+    }
+  },
+);
 
 test('보호자 리포트 탭에서 시스템 Back은 앱을 종료하지 않고 피드로 돌아간다', () => {
   const back = mockHardwareBack();
@@ -321,6 +375,7 @@ test('피드 루트에서는 아무도 처리하지 않아 앱이 종료된다',
 // 목적지 화면 목은 전달받은 딥링크 prop을 텍스트로 렌더한다.
 const DEEP_LINK_GROUP_A: FamilyGroup = {
   id: 'group-a',
+  isManager: true,
   name: '가족A',
   role: 'guardian',
 };
@@ -335,13 +390,13 @@ function FeedParamsProbe(props: AppScreenProps) {
   const nested = route.params as
     | {
         initial?: boolean;
-        params?: {postId?: string};
+        params?: {entrySource?: string; postId?: string};
         screen?: string;
       }
     | undefined;
   return (
     <Text>
-      {`feed:${props.currentGroup.id}:${nested?.screen ?? 'none'}:${nested?.params?.postId ?? 'none'}:${String(nested?.initial ?? 'none')}`}
+      {`feed:${props.currentGroup.id}:${nested?.screen ?? 'none'}:${nested?.params?.postId ?? 'none'}:${nested?.params?.entrySource ?? 'none'}:${String(nested?.initial ?? 'none')}`}
     </Text>
   );
 }
@@ -458,6 +513,7 @@ function createDeepLinkScreens(): AppScreenRegistry {
   };
 }
 
+// 알림 화면은 피드에서 종 아이콘으로 진입한다(콜드 스타트 진입 경로가 없다).
 function renderForDeepLink() {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
@@ -466,13 +522,14 @@ function renderForDeepLink() {
         <AppShell
           groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
           initialGroupId={DEEP_LINK_GROUP_A.id}
-          initialRoute="notifications"
+          initialRoute="feed"
           screens={createDeepLinkScreens()}
         />,
       ),
     );
   });
   mountedRenderers.push(renderer!);
+  openSubScreen(renderer!, 'notifications');
   return renderer!;
 }
 
@@ -482,7 +539,9 @@ test('게시글 목적지는 그룹을 전환하고 피드 탭에 중첩 PostDet
   pressText(renderer, 'open-post');
 
   // initial:false가 함께 전달되어야 콜드 마운트에서 FeedHome이 스택 밑에 깔린다.
-  expect(hasText(renderer, 'feed:group-b:PostDetail:42:false')).toBe(true);
+  expect(hasText(renderer, 'feed:group-b:PostDetail:42:notification:false')).toBe(
+    true,
+  );
 });
 
 test('일정 목적지는 그룹을 전환하고 캘린더 탭에 중첩 CalendarHome params를 전달한다', () => {
@@ -811,4 +870,178 @@ test('알림 화면에서는 푸시 도착 구독을 해제해 배지를 조회�
   });
 
   expect(gateway.getUnreadCount).toHaveBeenCalledTimes(callsBefore);
+});
+
+// 알림·보관함 화면의 셸 계약 동결(S15P11B104-366). 아래 테스트는 현재 동작을
+// 그대로 못 박는다. 이 계약들은 지금 라우트 이름 분기(resolvedRoute ===
+// 'notifications' 등)에만 의존하고 있어, 두 화면이 탭 스택 안으로 들어가면
+// (S15P11B104-367) 에러 없이 조용히 깨진다.
+
+function renderFeedShell(registry: AppScreenRegistry) {
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      withNav(
+        <AppShell
+          groups={[GROUP_A]}
+          initialGroupId={GROUP_A.id}
+          initialRoute="feed"
+          screens={registry}
+        />,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+  return renderer!;
+}
+
+test.each(SUB_SCREEN_ROUTES)(
+  '%s 화면에서는 셸 헤더와 새 게시글 FAB를 렌더하지 않는다',
+  route => {
+    const renderer = renderFeedShell(screens);
+
+    expect(renderer.root.findAllByProps({testID: 'app-shell-header'}).length)
+      .toBeGreaterThan(0);
+
+    openSubScreen(renderer, route);
+
+    expect(
+      renderer.root.findAllByProps({testID: 'app-shell-header'}),
+    ).toHaveLength(0);
+    expect(
+      renderer.root.findAllByProps({accessibilityLabel: '새 게시글 작성'}),
+    ).toHaveLength(0);
+  },
+);
+
+// 스펙 D-3: 알림·보관함이 열려 있어도 하단 탭바는 계속 보인다.
+test.each(SUB_SCREEN_ROUTES)('%s 화면에서도 하단 탭바는 유지된다', route => {
+  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
+    BottomTabBar: () => null;
+  };
+  const renderer = renderFeedShell(screens);
+
+  openSubScreen(renderer, route);
+
+  expect(renderer.root.findAllByType(MockTabBar).length).toBeGreaterThan(0);
+});
+
+// 알림·보관함은 특정 탭에 속한 화면이 아니므로 어떤 탭도 "현재 위치"로 강조하지
+// 않는다. 보관함은 이전에 피드 탭을 강조했고 이 결정으로 알림과 일치시킨다.
+test.each(SUB_SCREEN_ROUTES)('%s 화면에서는 어떤 탭도 강조하지 않는다', route => {
+  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
+    BottomTabBar: () => null;
+  };
+  const renderer = renderFeedShell(screens);
+
+  expect(renderer.root.findByType(MockTabBar).props.activeRoute).toBe('feed');
+
+  openSubScreen(renderer, route);
+
+  expect(renderer.root.findByType(MockTabBar).props.activeRoute).toBeNull();
+});
+
+test('알림 화면에서 피드로 돌아오면 미읽음 배지를 다시 조회하지 않는다', async () => {
+  const gateway = createNotificationGateway();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      withNav(
+        <NotificationGatewayProvider gateway={gateway}>
+          <AppShell
+            groups={[GROUP_A]}
+            initialGroupId={GROUP_A.id}
+            initialRoute="feed"
+            screens={screens}
+          />
+        </NotificationGatewayProvider>,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(1);
+
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({accessibilityLabel: '알림'}).props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    selectTab(renderer!, 'feed');
+  });
+
+  // 읽음 API가 커밋되기 전 값으로 배지가 되돌아가는 경쟁을 막는 유일한 방어선이다.
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(1);
+});
+
+// 스킵은 알림 화면에만 적용된다. 보관함은 읽음 처리를 하지 않으므로 복귀 시
+// 최신 미읽음 수를 다시 조회해야 한다(스킵 조건을 하위 화면 전체로 넓히면 실패).
+test('보관함 화면에서 피드로 돌아오면 미읽음 배지를 다시 조회한다', async () => {
+  const gateway = createNotificationGateway();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      withNav(
+        <NotificationGatewayProvider gateway={gateway}>
+          <AppShell
+            groups={[GROUP_A]}
+            initialGroupId={GROUP_A.id}
+            initialRoute="feed"
+            screens={screens}
+          />
+        </NotificationGatewayProvider>,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(1);
+
+  await TestRenderer.act(async () => {
+    openSubScreen(renderer!, 'archive');
+  });
+  await TestRenderer.act(async () => {
+    selectTab(renderer!, 'feed');
+  });
+
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(2);
+});
+
+test('알림 화면이 보고한 미읽음 수를 피드로 돌아온 뒤에도 유지한다', async () => {
+  const gateway = createNotificationGateway();
+  function NotificationsScreen({onUnreadCountChange}: AppScreenProps) {
+    React.useEffect(() => {
+      onUnreadCountChange?.(5);
+    }, [onUnreadCountChange]);
+    return <Text>screen:notifications</Text>;
+  }
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      withNav(
+        <NotificationGatewayProvider gateway={gateway}>
+          <AppShell
+            groups={[GROUP_A]}
+            initialGroupId={GROUP_A.id}
+            initialRoute="feed"
+            screens={{...screens, notifications: NotificationsScreen}}
+          />
+        </NotificationGatewayProvider>,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({accessibilityLabel: '알림'}).props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    selectTab(renderer!, 'feed');
+  });
+
+  expect(
+    renderer!.root.findAllByProps({children: 5}).length,
+  ).toBeGreaterThan(0);
 });

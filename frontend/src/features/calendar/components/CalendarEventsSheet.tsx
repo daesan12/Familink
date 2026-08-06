@@ -1,23 +1,11 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
-import {AppText} from '../../../shared/components/AppText';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {Pressable, ScrollView, StyleSheet, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
-import {
-  formatEventTime,
-  formatSelectedDateLabel,
-} from '../calendarModel';
-import type {
-  CalendarEventSummary,
-  DateKey,
-} from '../types';
+import {AppText} from '../../../shared/components/AppText';
+import {DraggableBottomSheet} from '../../../shared/components/DraggableBottomSheet';
+import {formatEventTime, formatSelectedDateLabel} from '../calendarModel';
+import type {CalendarEventSummary, DateKey} from '../types';
 
 interface CalendarEventsSheetProps {
   dateKey: DateKey;
@@ -34,103 +22,86 @@ export function CalendarEventsSheet({
   onOpenEvent,
   visible,
 }: CalendarEventsSheetProps) {
-  const insets = useSafeAreaInsets();
-
   return (
-    <Modal
-      animationType="slide"
-      onRequestClose={onClose}
-      transparent
+    <DraggableBottomSheet
+      accessibilityLabel="선택한 날짜 일정"
+      backdropVisible={false}
+      collapsedHeight={260}
+      initialSnap="collapsed"
+      onClose={onClose}
+      sheetStyle={styles.sheet}
       visible={visible}
     >
-      <View style={styles.modalRoot}>
-        <Pressable
-          accessibilityLabel="선택 날짜 일정 닫기"
-          accessibilityRole="button"
-          onPress={onClose}
-          style={styles.dim}
-        />
-        <View style={[styles.sheet, {paddingBottom: insets.bottom}]}>
-          <View accessibilityElementsHidden style={styles.handle} />
-          <View style={styles.header}>
-            <View style={styles.headerText}>
-              <AppText style={styles.eyebrow}>선택한 날짜</AppText>
-              <AppText style={styles.title}>
-                {formatSelectedDateLabel(dateKey)}
-              </AppText>
-            </View>
-            <Pressable
-              accessibilityLabel="선택 날짜 일정 닫기"
-              accessibilityRole="button"
-              onPress={onClose}
-              style={styles.closeButton}
-            >
-              <MaterialDesignIcons
-                color={COLORS.textMuted}
-                name="close"
-                size={22}
-              />
-            </Pressable>
+      <View>
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <AppText style={styles.eyebrow}>선택한 날짜</AppText>
+            <AppText style={styles.title}>{formatSelectedDateLabel(dateKey)}</AppText>
           </View>
-
-          {events.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIcon}>
-                <MaterialDesignIcons
-                  color={COLORS.purpleDeep}
-                  name="calendar-blank-outline"
-                  size={28}
-                />
-              </View>
-              <AppText style={styles.emptyTitle}>등록된 일정이 없어요</AppText>
-              <AppText style={styles.emptyDescription}>
-                이 날짜에 새 일정을 추가할 수 있어요.
-              </AppText>
-            </View>
-          ) : (
-            <ScrollView
-              contentContainerStyle={styles.list}
-              showsVerticalScrollIndicator={false}
-            >
-              {events.map(event => (
-                <Pressable
-                  accessibilityHint="일정 상세를 엽니다"
-                  accessibilityLabel={`${event.title}, ${formatEventTime(
-                    event,
-                  )}`}
-                  accessibilityRole="button"
-                  key={event.id}
-                  onPress={() => onOpenEvent(event.id)}
-                  style={({pressed}) => [
-                    styles.eventRow,
-                    pressed && styles.pressedRow,
-                  ]}
-                >
-                  <View
-                    accessibilityElementsHidden
-                    style={styles.eventDot}
-                  />
-                  <View style={styles.eventContent}>
-                    <AppText numberOfLines={1} style={styles.eventTitle}>
-                      {event.title}
-                    </AppText>
-                    <AppText style={styles.eventTime}>
-                      {formatEventTime(event)}
-                    </AppText>
-                  </View>
-                  <MaterialDesignIcons
-                    accessibilityElementsHidden
-                    color={COLORS.textSubtle}
-                    name="chevron-right"
-                    size={22}
-                  />
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
+          <Pressable
+            accessibilityLabel="선택 날짜 일정 닫기"
+            accessibilityRole="button"
+            onPress={onClose}
+            style={styles.closeButton}
+          >
+            <MaterialDesignIcons
+              color={COLORS.textMuted}
+              name="close"
+              size={22}
+            />
+          </Pressable>
         </View>
+
+        {events.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <MaterialDesignIcons
+                color={COLORS.purpleDeep}
+                name="calendar-blank-outline"
+                size={28}
+              />
+            </View>
+            <AppText style={styles.emptyTitle}>등록된 일정이 없어요</AppText>
+            <AppText style={styles.emptyDescription}>
+              이 날짜에 새 일정을 추가할 수 있어요.
+            </AppText>
+          </View>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+          >
+            {events.map(event => (
+              <Pressable
+                accessibilityHint="일정 상세를 엽니다"
+                accessibilityLabel={`${event.title}, ${formatEventTime(event)}`}
+                accessibilityRole="button"
+                key={event.id}
+                onPress={() => onOpenEvent(event.id)}
+                style={({pressed}) => [
+                  styles.eventRow,
+                  pressed && styles.pressedRow,
+                ]}
+              >
+                <View accessibilityElementsHidden style={styles.eventDot} />
+                <View style={styles.eventContent}>
+                  <AppText numberOfLines={1} style={styles.eventTitle}>
+                    {event.title}
+                  </AppText>
+                  <AppText style={styles.eventTime}>{formatEventTime(event)}</AppText>
+                </View>
+                <MaterialDesignIcons
+                  accessibilityElementsHidden
+                  color={COLORS.textSubtle}
+                  name="chevron-right"
+                  size={22}
+                />
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
       </View>
-    </Modal>
+    </DraggableBottomSheet>
   );
 }
 
@@ -141,14 +112,6 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     width: 44,
-  },
-  dim: {
-    backgroundColor: COLORS.overlay,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
   },
   emptyDescription: {
     color: COLORS.textMuted,
@@ -209,14 +172,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 4,
   },
-  handle: {
-    alignSelf: 'center',
-    backgroundColor: '#C5C5C5',
-    borderRadius: RADII.pill,
-    height: 5,
-    marginTop: 10,
-    width: 46,
-  },
   header: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -230,10 +185,6 @@ const styles = StyleSheet.create({
   list: {
     paddingBottom: 24,
     paddingHorizontal: 20,
-  },
-  modalRoot: {
-    flex: 1,
-    justifyContent: 'flex-end',
   },
   pressedRow: {
     backgroundColor: COLORS.lavenderSurface,

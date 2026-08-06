@@ -42,6 +42,7 @@ import type {
   FamilyGroup,
   MainTabRoute,
   MainTabsParamList,
+  SharedSubRoute,
   ShellStackParamList,
 } from './types';
 
@@ -64,7 +65,7 @@ const STACK_ROOT_BY_TAB: Partial<Record<MainTabRoute, string>> = {
 
 type ShellNavigation = NativeStackNavigationProp<ShellStackParamList>;
 
-function isOverlayRoute(route: AppRoute): route is 'archive' | 'notifications' {
+function isSharedSubRoute(route: AppRoute): route is SharedSubRoute {
   return route === 'archive' || route === 'notifications';
 }
 
@@ -77,7 +78,9 @@ interface AppShellProps {
   groupStore?: CurrentGroupStore;
   groups: readonly FamilyGroup[];
   initialGroupId?: string | null;
-  initialRoute?: AppRoute;
+  // 콜드 스타트 진입 탭. 알림·보관함으로는 시작하지 않는다 — 프로덕션 진입점은
+  // 모두 탭 라우트이고, 앱 밖 푸시의 알림 폴백은 deepLinkTarget으로 전달된다.
+  initialRoute?: MainTabRoute;
   onCreateGroup?: () => void;
   onGroupChange?: (groupId: string) => void;
   onJoinGroup?: () => void;
@@ -118,11 +121,20 @@ export function AppShell({
   onDeepLinkConsumed,
   subscribePushReceived = subscribeNativePushReceived,
 }: AppShellProps) {
-  // 라우트의 진실 원천은 셸 내비게이터다. visibleRoute는 포커스된 화면이
-  // 보고하는 미러로, 헤더·FAB·배지·뒤로가기 활성 판단에 쓴다. 이동 함수가
+  // 라우트의 진실 원천은 셸 내비게이터다. 아래 두 미러는 포커스된 화면이
+  // 보고하는 값으로, 헤더·FAB·배지·뒤로가기 활성 판단에 쓴다. 이동 함수가
   // 낙관적으로 즉시 갱신하고, 내비게이터 자율 전이(역할 변경 폴백 등)는
   // 화면의 포커스 보고로 보정된다.
-  const [visibleRoute, setVisibleRoute] = useState<AppRoute>(initialRoute);
+  //
+  // 두 축을 분리하는 이유: "지금 공유 하위 화면(알림·보관함)이 열려 있는가"를
+  // 라우트 이름으로 재판정하면, 하위 화면이 탭 스택 안으로 들어갈 때
+  // (S15P11B104-367) resolvedRoute가 계속 탭 이름이 되어 헤더·FAB·배지·
+  // 뒤로가기 판단이 에러 없이 조용히 어긋난다. 셸이 신호를 직접 소유한다.
+  // visibleTabRoute는 하위 화면이 위에 열려 있어도 유지된다.
+  const [visibleTabRoute, setVisibleTabRoute] =
+    useState<MainTabRoute>(initialRoute);
+  const [focusedSubRoute, setFocusedSubRoute] =
+    useState<SharedSubRoute | null>(null);
   const shellNavRef = useRef<ShellNavigation | null>(null);
   const [currentGroupId, setCurrentGroupId] = useState(initialGroupId);
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
@@ -134,8 +146,9 @@ export function AppShell({
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   // 활성 탭을 다시 누르면 증가한다. 화면을 재마운트해 최신 데이터를 다시 조회하게 한다.
   const [screenRefreshNonce, setScreenRefreshNonce] = useState(0);
-  // 직전 라우트. 알림 화면 복귀 시 배지 재조회를 건너뛰는 판단에 쓴다.
-  const previousRouteRef = useRef<AppRoute | null>(null);
+  // 직전에 포커스됐던 공유 하위 화면. 알림 화면 복귀 시 배지 재조회를
+  // 건너뛰는 판단에 쓴다.
+  const previousSubRouteRef = useRef<SharedSubRoute | null>(null);
   // 푸시 딥링크 소비. 라우팅 함수가 렌더 본문(조기 반환 뒤)에서 정의되므로
   // ref로 최신 참조를 유지하고, 그룹 복원 중에는 소비하지 않고 다음 렌더에 재시도한다.
   const consumedDeepLinkRequestIdRef = useRef(0);
@@ -162,27 +175,39 @@ export function AppShell({
   const currentGroup = resolveCurrentGroup(groups, currentGroupId);
   const currentRole = currentGroup?.role;
   const notificationGateway = useNotificationGateway();
-  const resolvedRoute = currentRole
-    ? resolveAllowedRoute(currentRole, visibleRoute)
+  // 역할 변경으로 허용되지 않게 된 탭은 피드로 해석한다. 하위 화면은 역할과
+  // 무관하게 항상 허용되므로 신호를 그대로 얹는다.
+  const resolvedTabRoute = currentRole
+    ? resolveAllowedRoute(currentRole, visibleTabRoute)
     : 'feed';
+  const resolvedRoute: AppRoute = focusedSubRoute ?? resolvedTabRoute;
 
-  // 모든 탭 이동은 popTo 하나로 정규화한다. 오버레이(알림·보관함)가 열려
-  // 있으면 pop하고, 스택에 MainTabs가 없으면(오버레이 단독 시작) 교체하므로
-  // 어떤 상태에서도 스택 깊이 1이 보장된다. 이 불변식 덕에 피드에서
+  // 모든 탭 이동은 popTo 하나로 정규화한다. MainTabs는 항상 셸 스택의 루트고
+  // 그 위에 하위 화면(알림·보관함)만 쌓이므로, popTo가 열려 있던 하위 화면을
+  // pop해 어떤 상태에서도 스택 깊이 1이 보장된다. 이 불변식 덕에 피드에서
   // canGoBack()이 항상 false가 되어, 컨테이너의 useBackButton이 뒤로가기를
   // 가로채지 않는다(피드에서 앱 종료·풀스크린 중 미소비 계약의 전제).
   // v7의 navigate는 pop 없이 push하므로 탭 복귀에 쓰면 스택이 오염된다.
-  const goToTab = useCallback((route: MainTabRoute) => {
-    setVisibleRoute(route);
-    shellNavRef.current?.dispatch(
-      StackActions.popTo('MainTabs', { screen: route })
-    );
+  // 탭 미러를 낙관적으로 갱신한다. popTo가 열려 있던 하위 화면을 스택에서
+  // pop하므로 신호도 같은 커밋에 함께 내린다.
+  const mirrorTabRoute = useCallback((route: MainTabRoute) => {
+    setVisibleTabRoute(route);
+    setFocusedSubRoute(null);
   }, []);
-  const openOverlay = useCallback((route: 'archive' | 'notifications') => {
-    setVisibleRoute(route);
+  const goToTab = useCallback(
+    (route: MainTabRoute) => {
+      mirrorTabRoute(route);
+      shellNavRef.current?.dispatch(
+        StackActions.popTo('MainTabs', { screen: route })
+      );
+    },
+    [mirrorTabRoute]
+  );
+  const openSubScreen = useCallback((route: SharedSubRoute) => {
+    setFocusedSubRoute(route);
     shellNavRef.current?.navigate(route);
   }, []);
-  // 피드 탭 내부 FeedStack의 화면까지 한 번의 dispatch로 도달한다(오버레이
+  // 피드 탭 내부 FeedStack의 화면까지 한 번의 dispatch로 도달한다(하위 화면
   // pop + 탭 전환 + 중첩 화면 push). initial:false가 없으면 피드 탭 콜드
   // 마운트에서 [PostDetail] 단독 스택이 되어 뒤로가기가 앱 종료로 이어진다.
   const navigateInFeedTab = useCallback(
@@ -190,7 +215,7 @@ export function AppShell({
       screen: 'PostComposer' | 'PostDetail',
       params: FeedStackParamList['PostComposer'] | FeedStackParamList['PostDetail'],
     ) => {
-      setVisibleRoute('feed');
+      mirrorTabRoute('feed');
       shellNavRef.current?.dispatch(
         StackActions.popTo('MainTabs', {
           params: { initial: false, params, screen },
@@ -198,16 +223,18 @@ export function AppShell({
         })
       );
     },
-    []
+    [mirrorTabRoute]
   );
   // 그룹정보 탭 내부 GroupInfoStack의 화면까지 한 번의 dispatch로 도달한다
   // (navigateInFeedTab과 같은 관용구 — initial:false 필수, getId 금지).
   const navigateInGroupInfoTab = useCallback(
     (
-      screen: 'JoinApproval',
-      params: GroupInfoStackParamList['JoinApproval'],
+      screen: 'GroupInfoHome' | 'JoinApproval',
+      params:
+        | GroupInfoStackParamList['GroupInfoHome']
+        | GroupInfoStackParamList['JoinApproval'],
     ) => {
-      setVisibleRoute('groupInfo');
+      mirrorTabRoute('groupInfo');
       shellNavRef.current?.dispatch(
         StackActions.popTo('MainTabs', {
           params: { initial: false, params, screen },
@@ -215,7 +242,7 @@ export function AppShell({
         })
       );
     },
-    []
+    [mirrorTabRoute]
   );
   // 캘린더 탭 내부 CalendarStack의 화면까지 한 번의 dispatch로 도달한다
   // (navigateInFeedTab과 같은 관용구 — initial:false 필수, getId 금지).
@@ -226,7 +253,7 @@ export function AppShell({
         | CalendarStackParamList['CalendarEventForm']
         | CalendarStackParamList['CalendarHome'],
     ) => {
-      setVisibleRoute('calendar');
+      mirrorTabRoute('calendar');
       shellNavRef.current?.dispatch(
         StackActions.popTo('MainTabs', {
           params: { initial: false, params, screen },
@@ -234,21 +261,30 @@ export function AppShell({
         })
       );
     },
-    []
+    [mirrorTabRoute]
   );
   // 리포트 탭은 내부 스택이 없어 탭 route params(openReport)로 딥링크를 전달한다.
   const navigateToReportTab = useCallback(
     (params: MainTabsParamList['report']) => {
-      setVisibleRoute('report');
+      mirrorTabRoute('report');
       shellNavRef.current?.dispatch(
         StackActions.popTo('MainTabs', { params, screen: 'report' })
       );
     },
-    []
+    [mirrorTabRoute]
   );
-  const handleFocusedRouteChange = useCallback((route: AppRoute) => {
-    setVisibleRoute(route);
-  }, []);
+  // 포커스된 화면의 보고로 미러를 보정한다. 탭이 보고하면 그 위에 하위 화면이
+  // 없다는 뜻이므로(하위 화면이 포커스인 동안 탭은 보고하지 않는다) 신호를 내린다.
+  const handleFocusedRouteChange = useCallback(
+    (route: AppRoute) => {
+      if (isSharedSubRoute(route)) {
+        setFocusedSubRoute(route);
+        return;
+      }
+      mirrorTabRoute(route);
+    },
+    [mirrorTabRoute]
+  );
 
   // 피드는 홈이므로 뒤로가기를 처리하지 않는다(처리하는 리스너가 없으면 앱이 종료된다).
   // 나머지 라우트는 모두 피드로 복귀한다. 라우트를 열거하지 않아야 화면이 늘어도
@@ -256,6 +292,12 @@ export function AppShell({
   // 하드웨어 뒤로가기는 내비게이터(backBehavior)에 위임하지 않고 이 핸들러가
   // 유지한다. 위임하면 풀스크린(AI 통화) 중에도 컨테이너가 back을 소비해
   // 피드로 이동하고, 상태 리셋(아래 3종)을 실을 곳도 없다.
+  //
+  // 하위 화면이 열려 있어도(focusedSubRoute !== null) 지금은 이 핸들러가
+  // 뒤로가기를 소비해 피드로 보낸다. 하위 화면이 탭 스택 안으로 들어가면
+  // 스택 pop이 진입 지점으로 돌아가야 하므로 그때 focusedSubRoute === null
+  // 게이트를 추가한다(S15P11B104-367). 위상 변경 전에 미리 끄면 알림·보관함에서
+  // 뒤로가기를 처리하는 리스너가 사라져 앱이 종료된다.
   const canReturnToFeed = resolvedRoute !== 'feed';
 
   useHardwareBack(() => {
@@ -272,10 +314,10 @@ export function AppShell({
     // 역할 변경으로 현재 라우트가 허용되지 않으면 피드로 복귀한다. 역할 탭의
     // 조건부 Tab.Screen 제거 시 내비게이터도 자체적으로 첫 탭(feed)으로
     // 폴백하지만, 미러와 스택 상태를 함께 수렴시킨다.
-    if (resolveAllowedRoute(currentRole, visibleRoute) !== visibleRoute) {
+    if (resolveAllowedRoute(currentRole, visibleTabRoute) !== visibleTabRoute) {
       goToTab('feed');
     }
-  }, [currentRole, goToTab, visibleRoute]);
+  }, [currentRole, goToTab, visibleTabRoute]);
 
   useLayoutEffect(() => {
     if (!isRestoringGroup && currentGroup !== null) {
@@ -284,8 +326,8 @@ export function AppShell({
   }, [currentGroup, isRestoringGroup, onCurrentGroupChange]);
 
   useEffect(() => {
-    const previousRoute = previousRouteRef.current;
-    previousRouteRef.current = resolvedRoute;
+    const previousSubRoute = previousSubRouteRef.current;
+    previousSubRouteRef.current = focusedSubRoute;
     if (notificationGateway === null) {
       setUnreadNotificationCount(0);
       return;
@@ -294,7 +336,10 @@ export function AppShell({
     // 배지는 피드 헤더에서만 표시하므로 피드 진입·재탭 시에만 다시 조회한다.
     // 알림 화면에서 복귀할 때는 화면이 보고한 값을 유지한다(읽음 반영 전 값으로
     // 되돌아가는 경쟁 방지 — 읽음 API가 아직 커밋되기 전일 수 있다).
-    if (resolvedRoute !== 'feed' || previousRoute === 'notifications') {
+    if (focusedSubRoute !== null || resolvedTabRoute !== 'feed') {
+      return;
+    }
+    if (previousSubRoute === 'notifications') {
       return;
     }
 
@@ -311,7 +356,13 @@ export function AppShell({
     return () => {
       disposed = true;
     };
-  }, [currentUserId, notificationGateway, resolvedRoute, screenRefreshNonce]);
+  }, [
+    currentUserId,
+    focusedSubRoute,
+    notificationGateway,
+    resolvedTabRoute,
+    screenRefreshNonce,
+  ]);
 
   // 앱 실행 중 푸시가 도착하면 배지를 즉시 갱신한다. 알림 화면에서는 구독하지
   // 않고 화면이 보고한 값을 유지한다. 알림 화면에서 나온 직후 읽음 API 커밋 전에
@@ -319,7 +370,7 @@ export function AppShell({
   // 연속 푸시는 진행 중 조회 1건 + 후속 조회 1건으로 합쳐 마지막 푸시 이후
   // 값으로 확정한다(응답 역전으로 오래된 값이 남는 것 방지).
   useEffect(() => {
-    if (notificationGateway === null || resolvedRoute === 'notifications') {
+    if (notificationGateway === null || focusedSubRoute === 'notifications') {
       return;
     }
 
@@ -354,7 +405,7 @@ export function AppShell({
       disposed = true;
       unsubscribe();
     };
-  }, [notificationGateway, resolvedRoute, subscribePushReceived]);
+  }, [focusedSubRoute, notificationGateway, subscribePushReceived]);
 
   useEffect(() => {
     if (initialGroupId || !groupStore) {
@@ -476,7 +527,11 @@ export function AppShell({
     );
   };
 
-  const handleOpenPost = (postId: string, groupId?: string) => {
+  const handleOpenPost = (
+    postId: string,
+    groupId?: string,
+    entrySource: 'feed' | 'notification' = 'feed',
+  ) => {
     const targetGroupId =
       groupId && groups.some(group => group.id === groupId)
         ? groupId
@@ -486,27 +541,32 @@ export function AppShell({
     }
     setIsScreenHeaderVisible(true);
     navigateInFeedTab('PostDetail', {
+      entrySource,
       groupId: targetGroupId,
       postId,
     });
   };
 
-  const handleOpenNotificationTarget = (target: NotificationDeepLinkTarget) => {
-    if (target.kind === 'post') {
-      handleOpenPost(target.postId, target.groupId);
-      return;
-    }
+    const handleOpenNotificationTarget = (target: NotificationDeepLinkTarget) => {
+      if (target.kind === 'post') {
+        // 알림에서 진입했다는 출처를 유지해야 삭제된 게시글에 대한
+        // 전용 안내 팝업을 상세 로더가 표시할 수 있다.
+        handleOpenPost(target.postId, target.groupId, 'notification');
+        return;
+      }
     if (target.kind === 'notifications') {
       setIsScreenHeaderVisible(true);
-      openOverlay('notifications');
+      openSubScreen('notifications');
       return;
     }
-    if (
-      target.groupId &&
-      target.groupId !== currentGroup.id &&
-      groups.some(group => group.id === target.groupId)
-    ) {
-      handleGroupSelect(target.groupId);
+    const resolvedGroupId =
+      target.groupId && groups.some(group => group.id === target.groupId)
+        ? target.groupId
+        : currentGroup.id;
+    const targetGroup =
+      groups.find(group => group.id === resolvedGroupId) ?? currentGroup;
+    if (resolvedGroupId !== currentGroup.id) {
+      handleGroupSelect(resolvedGroupId);
     }
     setIsScreenHeaderVisible(true);
     if (target.kind === 'calendarEvent') {
@@ -525,28 +585,24 @@ export function AppShell({
       });
       return;
     }
+    if (target.kind === 'groupInfo') {
+      navigateInGroupInfoTab('GroupInfoHome', undefined);
+      return;
+    }
+    if (target.kind === 'joinApproval' && targetGroup.isManager !== true) {
+      navigateInGroupInfoTab('GroupInfoHome', undefined);
+      return;
+    }
     navigateInGroupInfoTab('JoinApproval', {
-      groupId:
-        target.groupId !== undefined &&
-        groups.some(group => group.id === target.groupId)
-          ? target.groupId
-          : currentGroup.id,
+      groupId: resolvedGroupId,
     });
   };
   openNotificationTargetRef.current = handleOpenNotificationTarget;
 
-  // 셸 내비게이터 초기 화면. 초기 라우트가 오버레이면 오버레이 단독으로
-  // 시작한다(MainTabs 미마운트 → 피드 effect 미실행, 현행 초기 진입과 동일).
-  const initialShellRouteName = isOverlayRoute(initialRoute)
-    ? initialRoute
-    : 'MainTabs';
-  const allowedInitialRoute = resolveAllowedRoute(
+  const initialTabRouteName: MainTabRoute = resolveAllowedRoute(
     currentGroup.role,
     initialRoute
   );
-  const initialTabRouteName: MainTabRoute = isOverlayRoute(allowedInitialRoute)
-    ? 'feed'
-    : allowedInitialRoute;
 
   const screenProps: AppScreenProps = {
     accessToken,
@@ -562,7 +618,7 @@ export function AppShell({
     onFullscreenChange: setIsScreenFullscreen,
     onHeaderVisibilityChange: setIsScreenHeaderVisible,
     onNotificationRead: handleNotificationRead,
-    onOpenNotifications: () => openOverlay('notifications'),
+    onOpenNotifications: () => openSubScreen('notifications'),
     onOpenNotificationTarget: handleOpenNotificationTarget,
     onOpenPost: handleOpenPost,
     onRequestLogout,
@@ -574,21 +630,22 @@ export function AppShell({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {!isScreenFullscreen &&
+      {/* 하위 화면 신호가 탭이 보고한 isScreenHeaderVisible보다 우선한다. 탭 화면이
+          마운트된 채 true를 다시 써도 하위 화면 위에 셸 헤더가 겹치지 않는다. */}
+      {focusedSubRoute === null &&
+      !isScreenFullscreen &&
       isScreenHeaderVisible &&
-      resolvedRoute !== 'notifications' &&
-      resolvedRoute !== 'archive' &&
-      resolvedRoute !== 'groupInfo' &&
-      resolvedRoute !== 'profile' ? (
+      resolvedTabRoute !== 'groupInfo' &&
+      resolvedTabRoute !== 'profile' ? (
         <View style={styles.header} testID="app-shell-header">
-          {resolvedRoute === 'calendar' ? (
+          {resolvedTabRoute === 'calendar' ? (
             <View style={styles.headerSide} />
-          ) : resolvedRoute === 'feed' ? (
+          ) : resolvedTabRoute === 'feed' ? (
             <View style={styles.headerActions}>
               <Pressable
                 accessibilityLabel="게시글 보관함"
                 accessibilityRole="button"
-                onPress={() => openOverlay('archive')}
+                onPress={() => openSubScreen('archive')}
                 style={styles.headerIconButton}
               >
                 <MaterialDesignIcons
@@ -601,7 +658,7 @@ export function AppShell({
           ) : (
             <View style={styles.headerSide} />
           )}
-          {resolvedRoute === 'calendar' ? (
+          {resolvedTabRoute === 'calendar' ? (
             <Pressable
               accessibilityLabel="일정 추가"
               accessibilityRole="button"
@@ -631,7 +688,7 @@ export function AppShell({
               onToggle={() => setIsGroupMenuOpen(isOpen => !isOpen)}
             />
           )}
-          {resolvedRoute === 'calendar' ? (
+          {resolvedTabRoute === 'calendar' ? (
             <View style={styles.headerCenterAbsolute}>
               <CurrentGroupSwitcher
                 currentGroup={currentGroup}
@@ -644,11 +701,11 @@ export function AppShell({
                 onToggle={() => setIsGroupMenuOpen(isOpen => !isOpen)}
               />
             </View>
-          ) : resolvedRoute === 'feed' ? (
+          ) : resolvedTabRoute === 'feed' ? (
             <Pressable
               accessibilityLabel="알림"
               accessibilityRole="button"
-              onPress={() => openOverlay('notifications')}
+              onPress={() => openSubScreen('notifications')}
               style={styles.headerSide}
             >
               <MaterialDesignIcons
@@ -674,14 +731,15 @@ export function AppShell({
 
       <View style={styles.content}>
         <ShellStack.Navigator
-          initialRouteName={initialShellRouteName}
+          initialRouteName="MainTabs"
           screenOptions={{ animation: 'none', headerShown: false }}
         >
           <ShellStack.Screen name="MainTabs">
             {({ navigation }) => {
               // 이동 함수가 렌더 본문 밖(effect·핸들러)에서도 셸 스택을
               // 조작할 수 있도록 렌더 중 ref로 캡처한다(openNotificationTargetRef와
-              // 같은 관용구). 오버레이 단독 시작도 있으므로 세 화면 모두 캡처한다.
+              // 같은 관용구). 하위 화면이 포커스인 동안에도 최신 navigation이
+              // 필요하므로 세 화면 모두 캡처한다.
               shellNavRef.current = navigation;
               return (
                 <Tab.Navigator
@@ -736,7 +794,8 @@ export function AppShell({
             }}
           </ShellStack.Screen>
         </ShellStack.Navigator>
-        {resolvedRoute === 'feed' &&
+        {focusedSubRoute === null &&
+        resolvedTabRoute === 'feed' &&
         !isScreenFullscreen &&
         isScreenHeaderVisible ? (
           <Pressable
@@ -759,13 +818,9 @@ export function AppShell({
 
       {!isScreenFullscreen ? (
         <BottomTabBar
-          activeRoute={resolvedRoute === 'archive' ? 'feed' : resolvedRoute}
+          // 알림·보관함은 어느 탭에도 속하지 않으므로 아무 탭도 강조하지 않는다.
+          activeRoute={focusedSubRoute === null ? resolvedTabRoute : null}
           onSelect={route => {
-            // 탭바에는 탭 라우트만 있으므로 오버레이 라우트는 도달하지 않지만,
-            // 타입 좁히기를 위해 방어한다.
-            if (isOverlayRoute(route)) {
-              return;
-            }
             if (route === resolvedRoute && route === 'aiCall') {
               return;
             }
@@ -805,11 +860,11 @@ interface ShellRouteScreenProps {
   screens: AppScreenRegistry;
 }
 
-// 탭·오버레이 화면 공용 본문. 포커스를 잃으면 즉시 null을 반환해
+// 탭·하위 화면 공용 본문. 포커스를 잃으면 즉시 null을 반환해
 // "탭 전환 = 언마운트" 의미론(상태 초기화·복귀 시 재조회)을 보존한다.
 // bottom-tabs v7은 한 번 방문한 탭을 마운트 유지하므로 이 게이트가 없으면
 // 비활성 화면이 트리에 남는다. useIsFocused는 컨텍스트 기반이라 부모
-// 스택의 오버레이 push까지 같은 커밋에 반영된다.
+// 스택의 하위 화면 push까지 같은 커밋에 반영된다.
 // 반드시 모듈 레벨로 유지한다 — 렌더 본문 안에서 정의하면 매 렌더마다
 // 컴포넌트 타입이 바뀌어 화면 전체가 리마운트된다.
 function ShellRouteScreen({
@@ -821,7 +876,7 @@ function ShellRouteScreen({
 }: ShellRouteScreenProps) {
   const isFocused = useIsFocused();
 
-  // 셸의 visibleRoute 미러 보정. 내비게이터가 자율적으로 전이한 경우
+  // 셸의 라우트 미러 보정. 내비게이터가 자율적으로 전이한 경우
   // (역할 변경 폴백 등)에도 포커스된 화면이 자기 라우트를 보고한다.
   useEffect(() => {
     if (isFocused) {

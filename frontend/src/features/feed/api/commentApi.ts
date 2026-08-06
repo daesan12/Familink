@@ -17,6 +17,9 @@ export type CommentPageLoader = (
 ) => Promise<CommentPage>;
 
 export interface CreatedComment {
+  // 프로필 이미지는 서버 서명 URL이라 클라이언트가 만들 수 없어 생성 응답에서 받는다.
+  // author를 내려주지 않는 이전 서버와도 동작해야 해서 선택 값이다.
+  author?: FeedMember;
   content: string;
   createdAt: string;
   id: string;
@@ -149,18 +152,23 @@ function parseCreatedComment(
   }
   const id = parsePositiveId(value.id);
   const postId = parsePositiveId(value.postId);
+  // author를 아직 내려주지 않는 서버와도 동작해야 하므로 누락은 허용한다.
+  // 다만 값이 있는데 형식이 깨졌다면 그대로 거부한다.
+  const author =
+    value.author === undefined ? undefined : parseAuthor(value.author);
   const content = parseNonEmptyString(value.content);
   const createdAt = parseInstant(value.createdAt);
   if (
     id === null ||
     postId === null ||
     postId !== expectedPostId ||
+    author === null ||
     content === null ||
     createdAt === null
   ) {
     return null;
   }
-  return {content, createdAt, id, postId};
+  return {author, content, createdAt, id, postId};
 }
 
 function parseUpdatedComment(value: unknown): UpdatedComment | null {

@@ -53,7 +53,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 요구사항 | REQ-022 게시글 미디어 구성 제한 | [피드](./domains/FEED_AND_MEDIA.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 |  |
 | 요구사항 | REQ-023 게시글 반응·댓글·게시 알림 | [피드](./domains/FEED_AND_MEDIA.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 새 게시글은 작성자를 제외한 그룹 활성 구성원, 댓글·반응은 본인 행동을 제외한 게시글 작성자에게 알림; 대댓글·댓글 반응 없음 |
 | 요구사항 | REQ-024 게시글 보관함 및 필터 | [피드](./domains/FEED_AND_MEDIA.md) | 반영·확정 | 서버의 활성 구성원 `memberId`·날짜·유형 AND 필터 |
-| 요구사항 | REQ-025 공유 일정 등록·조회·수정·삭제 | [일정](./domains/CALENDAR.md) | 반영·확정 | 그룹 이탈 멤버십의 참여자 연결 삭제·재가입 시 미복원 |
+| 요구사항 | REQ-025 공유 일정 등록·조회·수정·삭제 | [일정](./domains/CALENDAR.md) | 반영·확정 | 활성 그룹 구성원 전체 수정 가능, 삭제는 작성자·관리자만 가능; 그룹 이탈 멤버십의 참여자 연결 삭제·재가입 시 미복원 |
 | 요구사항 | REQ-026 공유 일정 알림 | [일정](./domains/CALENDAR.md), [알림](./domains/NOTIFICATIONS.md) | 반영·확정 | 지정 참여자가 모두 이탈해도 그룹 전체로 확대하지 않음; 일정 변경은 변경자를 제외한 기존·변경 후 참여자, 시작 알림은 1분 주기와 최근 1시간 복구 범위 적용 |
 | 요구사항 | REQ-027 공유 캘린더 범위 분리 | [일정](./domains/CALENDAR.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 기기 캘린더 연동 없음 |
 | 요구사항 | REQ-028 보호자 활동 잔디 및 연속 기록 | [카네이션·랭킹](./domains/CARNATIONS_AND_RANKING.md) | 반영·미결정 유지 | 과거 주 UI 등 미결정 |
@@ -184,7 +184,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-CALENDAR-001 그룹 일정 목록 조회 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
 | 활성 API | API-CALENDAR-002 일정 상세 조회 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
 | 활성 API | API-CALENDAR-003 일정 등록 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
-| 활성 API | API-CALENDAR-004 일정 수정 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
+| 활성 API | API-CALENDAR-004 일정 수정 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영·확정 | 해당 그룹 활성 구성원 |
 | 활성 API | API-CALENDAR-005 일정 삭제 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
 | 활성 API | API-CALLS-001 AI 통화 세션 생성 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 성공 문구·요청 검증·유효 lease 활성 통화·stale 복구·AI 연결 실패 매핑 |
 | 활성 API | API-CALLS-002 WebRTC 연결 결과 전달 | [API](./contracts/API.md), [AI 통화](./domains/AI_CALL.md) | 반영·확정 | 성공 문구·세션 존재·상태 오류 매핑 |

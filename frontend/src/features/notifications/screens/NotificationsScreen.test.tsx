@@ -13,6 +13,7 @@ import {NotificationsScreen} from './NotificationsScreen';
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
 jest.mock('lucide-react-native/icons/bell-off', () => 'BellOff');
 jest.mock('lucide-react-native/icons/check', () => 'Check');
+jest.mock('lucide-react-native/icons/trash-2', () => 'Trash2');
 jest.mock('lucide-react-native/icons/x', () => 'X');
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
@@ -59,6 +60,7 @@ test('알림을 읽음 처리하고 연결된 게시글을 연다', () => {
   expect(onOpenPost).toHaveBeenCalledWith(
     'post-love',
     'development-guardian-group',
+    'notification',
   );
   expect(
     renderer!.root
@@ -342,6 +344,8 @@ test('실제 gateway 경로에서 목록·미읽음 개수·읽음 API를 연결
       notifications: [DEVELOPMENT_NOTIFICATIONS[1]],
     }),
     loadSettings: jest.fn(),
+    deleteAllNotifications: jest.fn().mockResolvedValue(undefined),
+    deleteNotification: jest.fn().mockResolvedValue(undefined),
     markAllRead: jest.fn().mockResolvedValue({
       readAt: '2026-08-01T00:00:00Z',
       updatedCount: 1,
@@ -375,18 +379,29 @@ test('실제 gateway 경로에서 목록·미읽음 개수·읽음 API를 연결
   expect(gateway.markRead).toHaveBeenCalledWith('post-reaction-love');
 
   await TestRenderer.act(async () => {
-    const summaryButtons = renderer!.root.findAllByProps({
-      accessibilityRole: 'button',
+    const button = renderer!.root.findByProps({
+      accessibilityLabel: '알림 삭제',
     });
-    const button = summaryButtons.find(item => {
-      const child = item.props.children;
-      return child?.props?.children === '모두 읽음';
-    });
-    expect(button).toBeTruthy();
-    button!.props.onPress();
+    expect(button).toBeDefined();
+    button.props.onPress();
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+  });
+  expect(
+    renderer!.root
+      .findAllByType(Text)
+      .some(node => node.props.children === '전체 지우기'),
+  ).toBe(true);
+  await TestRenderer.act(async () => {
+    const armedButton = renderer!.root
+      .findAllByProps({accessibilityRole: 'button'})
+      .find(item => item.props.onPress?.name === 'handleDeleteAll');
+    if (armedButton === undefined) {
+      throw new Error('전체 삭제 버튼을 찾지 못했습니다.');
+    }
+    armedButton.props.onPress();
     await Promise.resolve();
   });
-  expect(gateway.markAllRead).toHaveBeenCalledTimes(1);
+  expect(gateway.deleteAllNotifications).toHaveBeenCalledTimes(1);
 });
 
 test('읽음 API 실패 시 상위 읽음 id를 저장하지 않고 화면 상태를 되돌린다', async () => {

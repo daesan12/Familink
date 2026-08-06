@@ -53,6 +53,22 @@ export function createNotificationGateway(
       : createApiClient(options.baseUrl, options.authSession));
 
   return {
+    async deleteNotification(notificationId) {
+      const response = await client.delete(
+        `/notifications/${encodeURIComponent(notificationId)}`,
+      );
+      if (response.status !== 204) {
+        throw invalidResponse(response.status);
+      }
+    },
+
+    async deleteAllNotifications() {
+      const response = await client.delete('/notifications');
+      if (response.status !== 204) {
+        throw invalidResponse(response.status);
+      }
+    },
+
     async loadPage(page, size = 20) {
       const response = await client.get<ApiSuccess<unknown>>(
         `/notifications?page=${encodeURIComponent(String(page))}&size=${encodeURIComponent(String(size))}`,

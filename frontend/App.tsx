@@ -18,13 +18,13 @@ import {
 
 import { AppShell, currentGroupStore } from "./src/app-shell";
 import type {
-  AppRoute,
   AiCallResultStatus,
   AppScreenProps,
   AppScreenRenderer,
   AppScreenRegistry,
   CurrentGroupStore,
   FamilyGroup,
+  MainTabRoute,
 } from "./src/app-shell";
 import { apiAuthGateway } from "./src/features/auth/api/authGateway";
 import { LoginBottomSheet } from "./src/features/auth/components/LoginBottomSheet";
@@ -156,7 +156,7 @@ interface AppProps {
   initialGroupId?: string | null;
   initialJoinRequests?: readonly PendingJoinRequest[];
   initialRootRoute?: RootRoute;
-  initialShellRoute?: AppRoute;
+  initialShellRoute?: MainTabRoute;
   onCreateGroup?: (
     input: CreateGroupInput,
     signal?: AbortSignal,
@@ -656,7 +656,9 @@ export default function App({
   const [groupOnboardingAction, setGroupOnboardingAction] = useState<
     "create" | "join" | null
   >(null);
-  const [appShellEntryRoute, setAppShellEntryRoute] = useState<AppRoute | undefined>(
+  const [appShellEntryRoute, setAppShellEntryRoute] = useState<
+    MainTabRoute | undefined
+  >(
     initialShellRoute,
   );
   // OS 알림 탭 딥링크 상태. 해석 흐름은 아래 notificationTapProvider effect 참고.

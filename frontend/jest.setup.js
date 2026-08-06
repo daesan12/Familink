@@ -7,6 +7,11 @@ jest.mock('react-native-config', () => ({
   },
 }));
 
+// lucide-react-native exposes ESM-only icon entry points. Jest's React Native
+// preset does not transform those files, so keep the icon as a lightweight
+// host component in tests.
+jest.mock('lucide-react-native/icons/trash-2', () => 'Trash2');
+
 jest.mock('@react-native-clipboard/clipboard', () => ({
   getString: jest.fn().mockResolvedValue(''),
   setString: jest.fn(),

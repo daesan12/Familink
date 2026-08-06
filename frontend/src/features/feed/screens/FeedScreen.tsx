@@ -22,6 +22,7 @@ import {AppText} from '../../../shared/components/AppText';
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS} from '../../../design/tokens';
+import {ApiError} from '../../../shared/api';
 import {RetryButton} from '../../../shared/components/RetryButton';
 import {
   MemberProfilePopup,
@@ -291,6 +292,7 @@ export function FeedScreen({
   const pendingReactionPostIds = useRef(new Set<string>());
   const nextLocalCommentId = useRef(1);
   const detailRequestId = useRef(0);
+  const detailEntrySourceRef = useRef<'feed' | 'notification'>('feed');
   const previousGroupId = useRef(currentGroup.id);
   const isDeleteConfirmationOpen = useRef(false);
   const isDeleteSubmitting = useRef(false);
@@ -450,11 +452,16 @@ export function FeedScreen({
           setDetailPost(post);
         }
       })
-      .catch(() => {
+      .catch(error => {
+        const isDeletedNotificationPost =
+          detailEntrySourceRef.current === 'notification' &&
+          error instanceof ApiError &&
+          (error.status === 403 || error.status === 404);
         if (
           isActive &&
           detailRequestId.current === requestId &&
-          fallbackPost === null
+          fallbackPost === null &&
+          !isDeletedNotificationPost
         ) {
           setDetailPost(null);
           // 실패한 상세 한 장만 걷어낸다. popTo('FeedHome')은 아래에 깔린
@@ -462,6 +469,22 @@ export function FeedScreen({
           feedNavRef.current?.goBack();
         }
         if (isActive && detailRequestId.current === requestId) {
+          if (isDeletedNotificationPost) {
+            Alert.alert(
+              '게시글을 볼 수 없어요',
+              '작성자가 게시글을 삭제했거나 더 이상 볼 수 없습니다.',
+              [
+                {
+                  onPress: () => {
+                    feedNavRef.current?.goBack();
+                    onOpenNotifications?.();
+                  },
+                  text: '확인',
+                },
+              ],
+            );
+            return;
+          }
           Alert.alert(
             '게시글 상세를 불러오지 못했어요',
             '잠시 후 다시 시도해 주세요.',
@@ -478,6 +501,7 @@ export function FeedScreen({
     currentMemberId,
     detailLoader,
     loadCommentsPage,
+    onOpenNotifications,
     selectedPostId,
   ]);
 
@@ -527,8 +551,28 @@ export function FeedScreen({
               selectedPostId === postId &&
               detailRequestId.current === nextDetailRequestId
             ) {
+              if (
+                detailEntrySourceRef.current === 'notification' &&
+                (error instanceof ApiError &&
+                  (error.status === 403 || error.status === 404))
+              ) {
+                Alert.alert(
+                  '게시글을 볼 수 없어요',
+                  '작성자가 게시글을 삭제했거나 더 이상 볼 수 없습니다.',
+                  [
+                    {
+                      onPress: () => {
+                        feedNavRef.current?.goBack();
+                        onOpenNotifications?.();
+                      },
+                      text: '확인',
+                    },
+                  ],
+                );
+                return;
+              }
               Alert.alert(
-                '寃뚯떆湲 ?곸꽭瑜?遺덈윭?ㅼ? 紐삵뻽?댁슂',
+                '게시글 상세를 불러오지 못했어요',
                 error instanceof Error
                   ? error.message
                   : '?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??',
@@ -596,6 +640,7 @@ export function FeedScreen({
     currentMemberId,
     detailLoader,
     isDetailRefreshing,
+    onOpenNotifications,
     selectedPostId,
   ]);
 
@@ -739,7 +784,10 @@ export function FeedScreen({
       interactionsRef.current.replaceComment(
         input.postId,
         {
-          author: resolvedCurrentUser,
+          // 서버가 준 작성자로 교체한다. 낙관적 항목의 resolvedCurrentUser에는
+          // 서버 서명 프로필 URL이 없어 기본 이미지로 보인다.
+          // author를 아직 내려주지 않는 서버에서는 기존처럼 화면 값을 유지한다.
+          author: result.author ?? resolvedCurrentUser,
           body: result.content,
           createdAt: result.createdAt,
           id: result.id,
@@ -1114,6 +1162,7 @@ export function FeedScreen({
           {({navigation, route}) => {
             feedNavRef.current = navigation;
             const {postId} = route.params;
+            detailEntrySourceRef.current = route.params.entrySource ?? 'feed';
             const detailSync = (
               <DetailRouteSync
                 onClosed={handleDetailRouteClosed}

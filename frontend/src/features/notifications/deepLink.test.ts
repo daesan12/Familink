@@ -82,9 +82,25 @@ test('일일 리포트 알림은 날짜·멤버 리포트 목적지로 해석한
 test('가입 요청 알림은 가입 승인 목적지로 해석한다', () => {
   expect(
     resolveNotificationTarget(
-      notification({groupId: '3', type: 'GROUP_JOIN_REQUEST'}),
+      notification({
+        groupId: '3',
+        relatedJoinRequestStatus: 'PENDING_ADMIN',
+        type: 'GROUP_JOIN_REQUEST',
+      }),
     ),
   ).toEqual({kind: 'joinApproval', groupId: '3'});
+});
+
+test('처리된 가입 요청 알림은 그룹 정보 목적지로 해석한다', () => {
+  expect(
+    resolveNotificationTarget(
+      notification({
+        groupId: '3',
+        relatedJoinRequestStatus: 'APPROVED',
+        type: 'GROUP_JOIN_REQUEST',
+      }),
+    ),
+  ).toEqual({kind: 'groupInfo', groupId: '3'});
 });
 
 test('이동에 필요한 참조가 결손이면 null을 반환한다', () => {

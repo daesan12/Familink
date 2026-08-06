@@ -8,12 +8,15 @@ import {Pressable, StyleSheet, View} from 'react-native';
 import {AppText} from '../shared/components/AppText';
 
 import {COLORS} from '../design/tokens';
-import type {AppRoute, GroupRole} from './types';
+import type {GroupRole, MainTabRoute} from './types';
 import {getTabsForRole, type TabIconName} from './navigation';
 
 interface BottomTabBarProps {
-  activeRoute: AppRoute;
-  onSelect: (route: AppRoute) => void;
+  // null이면 어떤 탭도 강조하지 않는다. 알림·보관함처럼 특정 탭에 속하지 않는
+  // 화면에서는 잘못된 탭을 "현재 위치"로 표시하지 않기 위해 null을 받는다
+  // (accessibilityState.selected로 스크린 리더에도 그대로 전달된다).
+  activeRoute: MainTabRoute | null;
+  onSelect: (route: MainTabRoute) => void;
   role: GroupRole;
 }
 

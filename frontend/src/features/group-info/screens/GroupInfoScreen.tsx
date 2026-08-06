@@ -763,8 +763,9 @@ export function GroupInfoScreen({
 
   // 관리자 전용 진입점은 한 곳에서 검사해 화면별 권한 문구와 분기가 어긋나지 않게
   // 한다. 게이트가 navigate 앞에서 실행되므로 실패 시 화면이 push되지 않고
-  // 풀스크린 신호도 발화하지 않는다. 하위 화면에서 재진입을 시도했다면
-  // (그룹 나가기 → 관리자 변경) 홈으로 걷어낸 뒤 안내한다 — 홈에서는 no-op.
+  // 풀스크린 신호도 발화하지 않는다. popToTop은 하위 화면에서 재진입을 시도한
+  // 경우에 대비한 이중 방어다. 비관리자에게는 그룹 나가기의 관리자 변경 링크를
+  // 렌더하지 않으므로 현재 그 경로는 없고, 홈에서 호출되면 no-op이다.
   const openManagerOnly = (open: () => void) => {
     if (!canManageRoles) {
       groupInfoNavRef.current?.dispatch(StackActions.popToTop());
