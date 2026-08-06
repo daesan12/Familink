@@ -902,14 +902,29 @@ test('그룹 나가기 화면의 관리자 변경 링크는 H-6으로 이동한�
   expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(true);
 });
 
-test('비관리자는 그룹 나가기 화면에서 관리자 변경 화면을 우회할 수 없다', () => {
+test('비관리자의 그룹 나가기 화면에는 관리자 전용 안내와 링크가 없다', () => {
   const renderer = renderScreen('m-dad');
 
   press(renderer, '그룹 나가기');
-  press(renderer, '그룹관리자 변경하기');
 
-  expect(hasText(renderer, '그룹관리자만 접근할 수 있습니다')).toBe(true);
-  expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(false);
+  // 관리자에게만 해당하는 위임 안내이므로 일반 구성원에게는 표시하지 않는다.
+  expect(hasText(renderer, '그룹관리자는 바로 나갈 수 없어요')).toBe(false);
+  // 링크 자체가 없어 H-6 우회 경로도 생기지 않는다.
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '그룹관리자 변경하기'}),
+  ).toHaveLength(0);
+});
+
+test('혼자인 관리자의 그룹 나가기는 H-8 대신 그룹 삭제 확인으로 연결한다', () => {
+  // spec 규칙 11: 위임할 상대가 없으므로 나가기 화면이 아니라 삭제 확인으로 보낸다.
+  const renderer = renderScreen('m-manager', {
+    initialMembers: [MEMBERS[0]],
+  });
+
+  press(renderer, '그룹 나가기');
+
+  expect(hasText(renderer, '정말 그룹을 삭제하시겠어요?')).toBe(true);
+  expect(hasText(renderer, '정말 그룹을 나가시겠어요?')).toBe(false);
 });
 
 test('그룹 삭제 메뉴는 확인 팝업을 띄우고 삭제 콜백을 부른다', () => {

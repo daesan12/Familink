@@ -58,21 +58,37 @@ function press(renderer: TestRenderer.ReactTestRenderer, label: string) {
   });
 }
 
-test('그룹 요약과 관리자 위임 안내를 보여준다', () => {
+test('그룹 요약과 나가기 안내를 보여준다', () => {
   const renderer = render({});
 
   expect(hasText(renderer, '정말 그룹을 나가시겠어요?')).toBe(true);
+  expect(hasText(renderer, '나가면 다시 초대받기 전까지 그룹을 볼 수 없어요.')).toBe(
+    true,
+  );
   expect(hasText(renderer, '우리 가족')).toBe(true);
   // 가족 기록 개수는 제공하는 API가 없어 표시하지 않는다(F-19).
   expect(hasText(renderer, '구성원 4명')).toBe(true);
   expect(hasText(renderer, '그룹관리자 · 이경호')).toBe(true);
-  expect(hasText(renderer, '그룹관리자는 바로 나갈 수 없어요')).toBe(true);
 });
 
-test('관리자 변경 링크는 H-6 이동 콜백을 부른다', () => {
-  const navigated: number[] = [];
-  const renderer = render({onGoToChangeManager: () => navigated.push(1)});
+test('비관리자에게는 관리자 전용 위임 안내를 보여주지 않는다', () => {
+  const renderer = render({isViewerManager: false});
 
+  expect(hasText(renderer, '그룹관리자는 바로 나갈 수 없어요')).toBe(false);
+  // 관리자만 쓸 수 있는 H-6 링크도 노출하지 않는다.
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '그룹관리자 변경하기'}),
+  ).toHaveLength(0);
+});
+
+test('관리자에게는 위임 안내와 H-6 이동 링크를 보여준다', () => {
+  const navigated: number[] = [];
+  const renderer = render({
+    isViewerManager: true,
+    onGoToChangeManager: () => navigated.push(1),
+  });
+
+  expect(hasText(renderer, '그룹관리자는 바로 나갈 수 없어요')).toBe(true);
   press(renderer, '그룹관리자 변경하기');
   expect(navigated).toEqual([1]);
 });
