@@ -1,11 +1,13 @@
 import React from 'react';
+import {NavigationContainer} from '@react-navigation/native';
 import {Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
+import {mockHardwareBack} from '../../../shared/testing/hardwareBack';
 import type {ProfileGateway} from '../api/profileApi';
 import {MyPageProfileCard} from '../components/MyPageProfileCard';
 import {CARE_RECEIVER_PROFILE} from '../fixtures/profileFixtures';
-import {CareReceiverMyPageScreen} from './CareReceiverMyPageScreen';
+import {CareReceiverMyPageScreen as CareReceiverMyPageScreenBase} from './CareReceiverMyPageScreen';
 import {ProfileEditScreen} from './ProfileEditScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
@@ -57,6 +59,33 @@ jest.mock('../../auth', () => {
       ),
   };
 });
+
+jest.mock('react-native-safe-area-context', () => {
+  const mockReact = jest.requireActual('react');
+  const {View} = jest.requireActual('react-native');
+  const insets = {bottom: 0, left: 0, right: 0, top: 0};
+
+  return {
+    // ProfileStack(native-stack)의 SafeAreaProviderCompat이 이 컨텍스트를 구독한다.
+    SafeAreaInsetsContext: mockReact.createContext(insets),
+    SafeAreaProvider: View,
+    SafeAreaView: View,
+    initialWindowMetrics: null,
+    useSafeAreaInsets: () => insets,
+  };
+});
+
+// 화면이 내부에 ProfileStack 내비게이터를 렌더하므로 컨테이너가 필요하다.
+// 모든 렌더 지점이 그대로 동작하도록 같은 이름의 래퍼로 감싼다.
+function CareReceiverMyPageScreen(
+  props: React.ComponentProps<typeof CareReceiverMyPageScreenBase>,
+) {
+  return (
+    <NavigationContainer>
+      <CareReceiverMyPageScreenBase {...props} />
+    </NavigationContainer>
+  );
+}
 
 const baseProps = {
   currentGroup: {
@@ -325,6 +354,48 @@ test('뒤로 간 뒤 도착한 조회 응답을 무시한다', async () => {
 
   expect(hasText(renderer, '손수호 님')).toBe(true);
   expect(hasText(renderer, '관심사:늦은 관심사')).toBe(false);
+});
+
+test('관심사 조회 중 시스템 Back으로 돌아가도 늦은 응답을 무시한다', async () => {
+  // 컨테이너 pop 경로에서도 라우트 unmount cleanup이 조회를 무효화한다.
+  const back = mockHardwareBack();
+  const pending = deferred<{
+    interests: readonly string[];
+    memberId: string;
+  }>();
+  const interestGateway = {
+    loadInterests: jest.fn(() => pending.promise),
+    replaceInterests: jest.fn(),
+  };
+
+  try {
+    const renderer = render({interestGateway});
+
+    let openPromise: Promise<void>;
+    await TestRenderer.act(() => {
+      openPromise = renderer.root
+        .findByProps({accessibilityLabel: '관심사 설정'})
+        .props.onPress();
+    });
+    expect(hasText(renderer, '관심사를 불러오는 중이에요.')).toBe(true);
+
+    let handled = false;
+    await TestRenderer.act(async () => {
+      handled = back.press();
+      await Promise.resolve();
+    });
+    expect(handled).toBe(true);
+
+    await TestRenderer.act(async () => {
+      pending.resolve({interests: ['늦은 관심사'], memberId: 'member-1'});
+      await openPromise!;
+    });
+
+    expect(hasText(renderer, '손수호 님')).toBe(true);
+    expect(hasText(renderer, '관심사:늦은 관심사')).toBe(false);
+  } finally {
+    back.restore();
+  }
 });
 
 test('그룹 변경 시 관심사 화면을 닫고 이전 응답을 무시한다', async () => {
