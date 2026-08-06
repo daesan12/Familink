@@ -244,6 +244,79 @@ describe('family feed API', () => {
     });
   });
 
+  it('탈퇴한 작성자의 이름이 비어 있어도 목록을 버리지 않는다', async () => {
+    jest.spyOn(apiClient, 'get').mockResolvedValueOnce(
+      success({
+        content: [
+          {
+            author: {
+              displayName: null,
+              memberId: 21,
+              profileImageUrl: null,
+              role: 'CARE_RECEIVER',
+              userId: 31,
+            },
+            commentCount: 0,
+            content: '탈퇴 전 게시글',
+            createdAt: '2026-07-31T01:02:03Z',
+            id: 11,
+            media: [],
+            myReaction: null,
+            reactionCounts: {},
+          },
+          {
+            author: {
+              displayName: '홍유라',
+              memberId: 22,
+              profileImageUrl: null,
+              role: 'GUARDIAN',
+              userId: 32,
+            },
+            commentCount: 0,
+            content: '남아 있는 게시글',
+            createdAt: '2026-07-31T01:02:04Z',
+            id: 12,
+            media: [],
+            myReaction: null,
+            reactionCounts: {},
+          },
+        ],
+        hasNext: false,
+      }),
+    );
+
+    const page = await loadFeedPage('11', 0, 20, '22');
+
+    expect(page.posts.map(post => post.author.name)).toEqual([
+      '탈퇴한 사용자',
+      '홍유라',
+    ]);
+  });
+
+  it('작성자 이름이 문자열이 아니면 탈퇴 처리로 넘기지 않고 거부한다', async () => {
+    jest.spyOn(apiClient, 'get').mockResolvedValueOnce(
+      success({
+        content: [
+          {
+            author: {displayName: 42, memberId: 21, profileImageUrl: null},
+            commentCount: 0,
+            content: '깨진 응답',
+            createdAt: '2026-07-31T01:02:03Z',
+            id: 11,
+            media: [],
+            myReaction: null,
+            reactionCounts: {},
+          },
+        ],
+        hasNext: false,
+      }),
+    );
+
+    await expect(loadFeedPage('11', 0, 20)).rejects.toMatchObject<
+      Partial<ApiError>
+    >({code: 'INVALID_API_RESPONSE'});
+  });
+
   it('목록 봉투가 깨지면 공통 invalid response 오류를 반환한다', async () => {
     jest.spyOn(apiClient, 'get').mockResolvedValueOnce(
       success({content: [{id: 1}], hasNext: false}),

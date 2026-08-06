@@ -9,7 +9,7 @@ import type {
   FeedPost,
   ReactionId,
 } from '../types';
-import {limitPostImages} from '../types';
+import {WITHDRAWN_MEMBER_NAME, limitPostImages} from '../types';
 
 const GYEONGJU_TEMPLE =
   require('../../../assets/images/feed-gyeongju-temple.png') as ImageSourcePropType;
@@ -362,11 +362,20 @@ function parseAuthor(value: unknown): ParsedAuthor | null {
     return null;
   }
   const memberId = parseId(value.memberId);
-  const displayName = parseNonEmptyString(value.displayName);
+  const displayName = parseAuthorDisplayName(value.displayName);
   const profileImageUrl = parseNullableUrl(value.profileImageUrl);
   return memberId !== null && displayName !== null && profileImageUrl !== undefined
     ? {displayName, memberId, profileImageUrl}
     : null;
+}
+
+// 탈퇴로 이름이 익명화된 작성자만 대체한다. 이름이 다른 타입으로 오는 계약 위반은 그대로
+// 거부해야 잘못된 응답이 전부 탈퇴 작성자로 조용히 렌더링되지 않는다.
+function parseAuthorDisplayName(value: unknown): string | null {
+  if (value === null || value === undefined) {
+    return WITHDRAWN_MEMBER_NAME;
+  }
+  return parseNonEmptyString(value);
 }
 
 function parseNullableUrl(value: unknown): string | null | undefined {
