@@ -91,6 +91,7 @@ export function ReportScreen({
   const { width } = useWindowDimensions();
   const navigation = useNavigation<ReportTabNavigation>();
   const route = useRoute<ReportTabRoute>();
+  const openCalendar = route.params?.openCalendar;
   const openReport = route.params?.openReport;
   const [selectedReportDate, setSelectedReportDate] = useState(reportDate);
   const shouldLoadTargets =
@@ -503,36 +504,39 @@ export function ReportScreen({
     setSelectedDetail(null);
   };
 
-  const handleOpenCalendar = (page: CareReceiverReportPage) => {
-    const displayedDate =
-      page.latestDailyReport?.reportDate ?? selectedReportDate;
-    if (page.reportCalendar) {
-      const reportCalendarMonth = parseReportYearMonth(
-        `${page.reportCalendar.yearMonth}-01`
-      );
-      const key = createCalendarMonthKey(
-        currentGroup.id,
-        page.memberId,
-        reportCalendarMonth.year,
-        reportCalendarMonth.month
-      );
-      setCalendarDatesByMonth((current) => ({
-        ...current,
-        [key]: page.reportCalendar?.reportDates ?? EMPTY_REPORT_DATES,
-      }));
-      setCalendarStatusByMonth((current) => ({
-        ...current,
-        [key]: "ready",
-      }));
-    }
-    setCalendarMonth(parseReportYearMonth(displayedDate));
-    setCalendarTarget({
-      localReportDates: page.latestDailyReport
-        ? [page.latestDailyReport.reportDate]
-        : [],
-      memberId: page.memberId,
-    });
-  };
+  const handleOpenCalendar = useCallback(
+    (page: CareReceiverReportPage) => {
+      const displayedDate =
+        page.latestDailyReport?.reportDate ?? selectedReportDate;
+      if (page.reportCalendar) {
+        const reportCalendarMonth = parseReportYearMonth(
+          `${page.reportCalendar.yearMonth}-01`
+        );
+        const key = createCalendarMonthKey(
+          currentGroup.id,
+          page.memberId,
+          reportCalendarMonth.year,
+          reportCalendarMonth.month
+        );
+        setCalendarDatesByMonth((current) => ({
+          ...current,
+          [key]: page.reportCalendar?.reportDates ?? EMPTY_REPORT_DATES,
+        }));
+        setCalendarStatusByMonth((current) => ({
+          ...current,
+          [key]: "ready",
+        }));
+      }
+      setCalendarMonth(parseReportYearMonth(displayedDate));
+      setCalendarTarget({
+        localReportDates: page.latestDailyReport
+          ? [page.latestDailyReport.reportDate]
+          : [],
+        memberId: page.memberId,
+      });
+    },
+    [currentGroup.id, selectedReportDate]
+  );
 
   const handleMoveCalendarMonth = (offset: number) => {
     setCalendarMonth((current) => moveReportYearMonth(current, offset));
@@ -583,6 +587,26 @@ export function ReportScreen({
     });
     handleSelectReportDate(openReport.reportDate);
   }, [handleSelectReportDate, navigation, openReport]);
+
+  useEffect(() => {
+    if (openCalendar !== true) {
+      return;
+    }
+
+    const currentItem = reportItems[currentIndex];
+    if (!currentItem || currentItem.status !== "ready") {
+      return;
+    }
+
+    navigation.setParams({openCalendar: undefined});
+    handleOpenCalendar(currentItem.page);
+  }, [
+    currentIndex,
+    handleOpenCalendar,
+    navigation,
+    openCalendar,
+    reportItems,
+  ]);
 
   // 페이지 로드가 끝나면 딥링크 대상 멤버로 페이저를 이동하고,
   // callSessionId가 지정된 경우 해당 통화 상세까지 연다.
@@ -708,9 +732,9 @@ export function ReportScreen({
               onGenerateDailyReport={
                 reportGateway ? dailyGeneration.request : undefined
               }
-              onOpenCalendar={handleOpenCalendar}
               onOpenCall={handleOpenCall}
               page={item.page}
+              reportDate={selectedReportDate}
               width={width}
             />
           ) : (
@@ -840,9 +864,9 @@ interface ReportPageProps {
   generationState?: DailyReportGenerationUiState;
   isToday: boolean;
   onGenerateDailyReport?: (memberId: string) => void;
-  onOpenCalendar: (page: CareReceiverReportPage) => void;
   onOpenCall: (call: CallReportView) => void;
   page: CareReceiverReportPage;
+  reportDate: string;
   width: number;
 }
 
@@ -850,9 +874,9 @@ function ReportPage({
   generationState,
   isToday,
   onGenerateDailyReport,
-  onOpenCalendar,
   onOpenCall,
   page,
+  reportDate,
   width,
 }: ReportPageProps) {
   const pageState = getReportPageState(page);
@@ -864,30 +888,17 @@ function ReportPage({
 
   return (
     <View style={[styles.page, { width }]}>
-      <View style={styles.header}>
-        {/* 캘린더 버튼과 같은 폭의 스페이서로 제목을 정확히 가운데에 둔다. */}
-        <View style={styles.headerSpacer} />
-        <AppText style={styles.title}>{page.displayName} 님의 통화 리포트</AppText>
-        <Pressable
-          accessibilityHint="생성된 일간 리포트 날짜를 월별로 확인합니다"
-          accessibilityLabel="리포트 캘린더"
-          accessibilityRole="button"
-          onPress={() => onOpenCalendar(page)}
-          style={styles.calendarButton}
-        >
-          <MaterialDesignIcons
-            color={COLORS.textStrong}
-            name="calendar-blank-outline"
-            size={26}
-          />
-        </Pressable>
-      </View>
-
       {shouldShowReportContent ? (
         <ScrollView
           contentContainerStyle={styles.pageContent}
           showsVerticalScrollIndicator={false}
         >
+          <AppText style={styles.reportHeading}>
+            {`${formatReportHeadingDate(
+              page.latestDailyReport?.reportDate ?? reportDate
+            )},\n${page.displayName}님과의 대화`}
+          </AppText>
+
           {page.latestDailyReport ? (
             <DailyReportCard report={page.latestDailyReport} />
           ) : (
@@ -907,7 +918,11 @@ function ReportPage({
               {isToday ? "오늘의 통화" : "선택한 날의 통화"}
             </AppText>
             {sortedTodayCalls.length > 0 ? (
-              <View style={styles.callList}>
+              <ScrollView
+                contentContainerStyle={styles.callList}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+              >
                 {sortedTodayCalls.map((call) => (
                   <CallReportRow
                     call={call}
@@ -915,7 +930,7 @@ function ReportPage({
                     onPress={onOpenCall}
                   />
                 ))}
-              </View>
+              </ScrollView>
             ) : (
               <View
                 accessibilityLabel="오늘 통화 리포트 없음"
@@ -935,6 +950,21 @@ function ReportPage({
       )}
     </View>
   );
+}
+
+function formatReportHeadingDate(reportDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(reportDate);
+  if (!match) {
+    return reportDate;
+  }
+
+  const [, year, month, day] = match;
+  const weekday = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    weekday: "long",
+  }).format(new Date(`${year}-${month}-${day}T12:00:00+09:00`));
+
+  return `${Number(month)}월 ${Number(day)}일 ${weekday}`;
 }
 
 function parseReportYearMonth(reportDate: string): ReportYearMonth {
@@ -1012,11 +1042,13 @@ function DailyReportGenerationControl({
 
   const isAvailable = status === "available";
   const isGenerating = status === "generating";
+  if (!isAvailable && !isGenerating) {
+    return null;
+  }
+
   const label = isAvailable
     ? "일간 리포트 생성"
-    : isGenerating
-    ? "일간 리포트 생성 중…"
-    : "건별 리포트 준비 중";
+    : "일간 리포트 생성 중…";
 
   return (
     <View style={styles.generationControl}>
@@ -1084,27 +1116,21 @@ function EmptyReportState({ displayName }: { displayName: string }) {
 }
 
 const styles = StyleSheet.create({
-  calendarButton: {
-    alignItems: "center",
-    height: 44,
-    justifyContent: "center",
-    width: 44,
-  },
-  headerSpacer: {
-    width: 44,
-  },
   callList: {
-    gap: 10,
+    gap: 14,
+    paddingBottom: 8,
+    paddingHorizontal: 4,
   },
   callSection: {
-    marginTop: 24,
+    marginTop: 42,
   },
   callSectionTitle: {
-    color: COLORS.textStrong,
-    fontSize: 17,
-    fontWeight: "800",
-    lineHeight: 23,
-    marginBottom: 12,
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: "700",
+    lineHeight: 25,
+    marginBottom: 16,
+    marginLeft: 8,
   },
   emptyCalls: {
     alignItems: "center",
@@ -1151,12 +1177,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 29,
     textAlign: "center",
-  },
-  header: {
-    alignItems: "center",
-    flexDirection: "row",
-    minHeight: 62,
-    paddingHorizontal: 20,
   },
   generationButton: {
     alignItems: "center",
@@ -1239,8 +1259,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pageContent: {
-    paddingBottom: 24,
-    paddingHorizontal: 20,
+    paddingBottom: 28,
+    paddingHorizontal: 24,
+    paddingTop: 30,
   },
   pendingCard: {
     alignItems: "center",
@@ -1283,12 +1304,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     flex: 1,
   },
-  title: {
-    color: COLORS.textStrong,
-    flex: 1,
-    fontSize: 20,
-    fontWeight: "800",
-    lineHeight: 28,
-    textAlign: "center",
+  reportHeading: {
+    color: COLORS.text,
+    fontSize: 28,
+    fontWeight: "700",
+    letterSpacing: -0.4,
+    lineHeight: 36,
+    marginBottom: 26,
+    marginLeft: 8,
   },
 });

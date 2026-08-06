@@ -1,8 +1,14 @@
 import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  useNavigation,
+  type NavigationProp,
+} from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import {Pressable} from "react-native";
 import TestRenderer from "react-test-renderer";
 
+import type {MainTabsParamList} from "../../../app-shell";
 import {
   DAILY_PENDING_REPORT_PAGE,
   EMPTY_REPORT_PAGE,
@@ -11,6 +17,7 @@ import type { CareReceiverReportPage } from "../types";
 import { ReportScreen } from "./ReportScreen";
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
+jest.mock("lucide-react-native", () => ({Phone: "PhoneIcon"}));
 jest.mock("react-native-safe-area-context", () => {
   const mockReact = jest.requireActual("react");
   const { View } = jest.requireActual("react-native");
@@ -34,13 +41,34 @@ const currentGroup = {
 
 // ReportScreen이 useRoute로 리포트 탭 route params를 읽으므로, 단독 렌더도
 // 셸과 같은 'report' route 이름의 화면으로 감싼다.
-const RouteStack = createNativeStackNavigator();
+type ReportTestParamList = Pick<MainTabsParamList, "report">;
+
+const RouteStack = createNativeStackNavigator<ReportTestParamList>();
+
+function ReportCalendarTrigger() {
+  const navigation =
+    useNavigation<NavigationProp<ReportTestParamList, "report">>();
+
+  return (
+    <Pressable
+      accessibilityLabel="리포트 캘린더"
+      onPress={() => navigation.setParams({openCalendar: true})}
+    />
+  );
+}
 
 function withReportRoute(element: React.ReactElement) {
   return (
     <NavigationContainer>
       <RouteStack.Navigator screenOptions={{ headerShown: false }}>
-        <RouteStack.Screen name="report">{() => element}</RouteStack.Screen>
+        <RouteStack.Screen name="report">
+          {() => (
+            <>
+              <ReportCalendarTrigger />
+              {element}
+            </>
+          )}
+        </RouteStack.Screen>
       </RouteStack.Navigator>
     </NavigationContainer>
   );
@@ -176,7 +204,7 @@ test("건별 리포트를 누르면 텍스트 상세를 열고 null 메시지 �
   });
 
   const tree = JSON.stringify(renderer.toJSON());
-  expect(tree).toContain("2026.07.18");
+  expect(tree).toContain("10시 32분 통화리포트");
   expect(tree).toContain("오늘 아침 식사와 날씨에 관해 이야기하셨어요.");
   expect(tree).not.toContain("전달하신 말씀");
 });

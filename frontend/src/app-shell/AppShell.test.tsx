@@ -1,5 +1,9 @@
 import React from 'react';
-import {NavigationContainer, useRoute} from '@react-navigation/native';
+import {
+  NavigationContainer,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import {Pressable, Text} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import TestRenderer from 'react-test-renderer';
@@ -13,6 +17,7 @@ import type {
   AppScreenProps,
   AppScreenRegistry,
   FamilyGroup,
+  MainTabsParamList,
   MainTabRoute,
   SharedSubRoute,
 } from './types';
@@ -71,10 +76,21 @@ function CalendarScreen({currentGroup}: AppScreenProps) {
   return <Text>{`캘린더:${currentGroup.name}`}</Text>;
 }
 
+function ReportScreen() {
+  const route = useRoute<RouteProp<MainTabsParamList, 'report'>>();
+
+  return (
+    <Text>
+      {route.params?.openCalendar ? '리포트 캘린더 요청됨' : '리포트 화면'}
+    </Text>
+  );
+}
+
 const screens = {
   calendar: CalendarScreen,
   feed: FeedScreen,
   groupInfo: GroupInfoScreen,
+  report: ReportScreen,
 };
 
 function hasText(renderer: TestRenderer.ReactTestRenderer, value: string) {
@@ -105,6 +121,31 @@ function pressText(renderer: TestRenderer.ReactTestRenderer, value: string) {
     target.props.onPress();
   });
 }
+
+test('리포트 헤더의 캘린더 버튼이 리포트 화면에 열기 요청을 전달한다', () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      withNav(
+        <AppShell
+          groups={[GROUP_A]}
+          initialGroupId={GROUP_A.id}
+          initialRoute="report"
+          screens={screens}
+        />,
+      ),
+    );
+  });
+
+  TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '리포트 캘린더'})
+      .props.onPress();
+  });
+
+  expect(hasText(renderer!, '리포트 캘린더 요청됨')).toBe(true);
+  TestRenderer.act(() => renderer!.unmount());
+});
 
 test('현재 그룹이 삭제되고 대체 그룹이 지정되면 대체 그룹의 피드로 이동한다', async () => {
   let renderer: TestRenderer.ReactTestRenderer;
