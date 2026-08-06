@@ -117,8 +117,30 @@ function ExpiredEditGuard({ navigation }: { navigation: CalendarNavigation }) {
   return null;
 }
 
+// CalendarHome 딥링크 params 소비자. 루트 화면 params는 재탭 key 리마운트가
+// 구 스택 상태를 재수화할 때 그대로 남으므로 소비 직후 setParams로 비운다.
+// 비우면 undefined→값 전이가 되어 같은 알림을 두 번 탭해도 다시 발화한다
+// (push 화면이던 피드·가입승인 딥링크 선례에는 없던 요구).
+function HomeDeepLinkSync({
+  navigation,
+  onOpenEvent,
+  openEventId,
+}: {
+  navigation: CalendarNavigation;
+  onOpenEvent: (eventId: string) => void;
+  openEventId: string | undefined;
+}) {
+  useEffect(() => {
+    if (openEventId !== undefined) {
+      navigation.setParams({ openEventId: undefined });
+      onOpenEvent(openEventId);
+    }
+  }, [navigation, onOpenEvent, openEventId]);
+
+  return null;
+}
+
 export function CalendarScreen({
-  createCalendarEventRequestId,
   currentGroup,
   currentUserId,
   currentUserName = "사용자",
@@ -127,8 +149,6 @@ export function CalendarScreen({
   now,
   onFullscreenChange,
   onHeaderVisibilityChange,
-  openCalendarEventId,
-  openCalendarEventRequestId,
 }: CalendarScreenProps) {
   const contextGateway = useCalendarGateway();
   const resolvedGateway = gateway ?? contextGateway;
@@ -157,8 +177,6 @@ export function CalendarScreen({
   const editorDetailRef = useRef<CalendarEventDetail | null>(null);
   // 저장 진행 미러. SavingBackGuard가 beforeRemove에서 읽는다.
   const savingRef = useRef(false);
-  const lastCreateRequestId = useRef(createCalendarEventRequestId ?? 0);
-  const lastOpenEventRequestId = useRef(0);
   // 알림 딥링크로 연 상세는 로드 성공 시 선택 날짜를 이벤트 날짜로 맞춰,
   // 모달을 닫았을 때 해당 날짜의 시트가 열리게 한다.
   const syncDateOnDetailLoadRef = useRef(false);
@@ -212,17 +230,6 @@ export function CalendarScreen({
       calNavRef.current?.dispatch(StackActions.popToTop());
     }
   }, [currentGroup.id]);
-
-  useEffect(() => {
-    const requestId = createCalendarEventRequestId ?? 0;
-    if (requestId > 0 && requestId !== lastCreateRequestId.current) {
-      lastCreateRequestId.current = requestId;
-      setDetailState(CLOSED_DETAIL);
-      setIsSheetVisible(false);
-      editorDetailRef.current = null;
-      calNavRef.current?.navigate("CalendarEventForm", { mode: "create" });
-    }
-  }, [createCalendarEventRequestId]);
 
   useEffect(() => {
     if (!isFormFocused) {
@@ -413,18 +420,14 @@ export function CalendarScreen({
     [resolvedGateway]
   );
 
-  useEffect(() => {
-    const requestId = openCalendarEventRequestId ?? 0;
-    if (
-      openCalendarEventId &&
-      requestId > 0 &&
-      requestId !== lastOpenEventRequestId.current
-    ) {
-      lastOpenEventRequestId.current = requestId;
+  // 알림 딥링크(CalendarHome params)로 일정 상세를 연다.
+  const handleOpenEventDeepLink = useCallback(
+    (eventId: string) => {
       syncDateOnDetailLoadRef.current = true;
-      loadEventDetail(openCalendarEventId);
-    }
-  }, [openCalendarEventId, openCalendarEventRequestId, loadEventDetail]);
+      loadEventDetail(eventId);
+    },
+    [loadEventDetail]
+  );
 
   const handleCloseDetail = () => {
     if (detailState.deleting) {
@@ -511,10 +514,15 @@ export function CalendarScreen({
         screenOptions={{ animation: "none", headerShown: false }}
       >
         <CalendarStack.Screen name="CalendarHome">
-          {({ navigation }) => {
+          {({ navigation, route }) => {
             calNavRef.current = navigation;
             return (
               <View style={styles.screen}>
+                <HomeDeepLinkSync
+                  navigation={navigation}
+                  onOpenEvent={handleOpenEventDeepLink}
+                  openEventId={route.params?.openEventId}
+                />
                 <View style={styles.monthToolbar}>
                   <Text accessibilityRole="header" style={styles.monthTitle}>
                     {formatMonthLabel(visibleMonth)}

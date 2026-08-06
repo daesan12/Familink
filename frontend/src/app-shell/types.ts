@@ -49,7 +49,6 @@ export interface AppScreenProps {
   authSession?: AppAuthSession;
   accessToken?: string | null;
   onCallResult?: (status: AiCallResultStatus) => void;
-  createCalendarEventRequestId?: number;
   createPostRequestId?: number;
   currentGroup: FamilyGroup;
   currentUserId?: number;
@@ -66,8 +65,6 @@ export interface AppScreenProps {
   onOpenPost?: (postId: string, groupId?: string) => void;
   onRequestLogout?: () => void;
   onRequestWithdrawal?: () => Promise<void>;
-  openCalendarEventId?: string | null;
-  openCalendarEventRequestId?: number;
   openJoinApprovalRequestId?: number;
   openPostId?: string | null;
   openPostRequestId?: number;

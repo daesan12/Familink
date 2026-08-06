@@ -1,19 +1,23 @@
 import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+} from "@react-navigation/native";
 import { Alert, Modal, Text } from "react-native";
 import TestRenderer from "react-test-renderer";
 
 import { mockHardwareBack } from "../../../shared/testing/hardwareBack";
 import { CalendarEventDetailModal } from "../components/CalendarEventDetailModal";
 import { CalendarEventsSheet } from "../components/CalendarEventsSheet";
+import type { CalendarStackParamList } from "../navigationTypes";
 import type { CalendarGateway } from "../types";
 import { CalendarScreen } from "./CalendarScreen";
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
 jest.mock("react-native-safe-area-context", () => {
   const mockReact = jest.requireActual("react");
-  const {View} = jest.requireActual("react-native");
-  const insets = {bottom: 0, left: 0, right: 0, top: 0};
+  const { View } = jest.requireActual("react-native");
+  const insets = { bottom: 0, left: 0, right: 0, top: 0 };
 
   return {
     // CalendarStack(native-stack)의 SafeAreaProviderCompat이 이 컨텍스트를 구독한다.
@@ -190,13 +194,27 @@ test("실제 조회 구간으로 일정을 불러와 7개 요일과 기간 막�
 });
 
 test("알림 딥링크로 이벤트 상세를 열고 닫으면 이벤트 날짜 시트를 표시한다", async () => {
-  const { gateway, renderer } = await renderCalendar(createGateway(), {
-    openCalendarEventId: "12",
-    openCalendarEventRequestId: 1,
+  const navRef = createNavigationContainerRef<CalendarStackParamList>();
+  const gateway = createGateway();
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NavigationContainer ref={navRef}>
+        <CalendarScreen {...baseProps} gateway={gateway} />
+      </NavigationContainer>
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  // 셸의 중첩 navigate가 도달하는 것과 같은 경로로 CalendarHome params를 전달한다.
+  await TestRenderer.act(async () => {
+    navRef.navigate("CalendarHome", { openEventId: "12" });
+    await Promise.resolve();
   });
 
   expect(gateway.getEvent).toHaveBeenCalledWith("12", expect.anything());
-  const detailModal = renderer.root.findByType(CalendarEventDetailModal);
+  const detailModal = renderer!.root.findByType(CalendarEventDetailModal);
   expect(detailModal.props.visible).toBe(true);
   expect(detailModal.props.detail).toMatchObject({ id: "12" });
 
@@ -204,9 +222,16 @@ test("알림 딥링크로 이벤트 상세를 열고 닫으면 이벤트 날짜 
   await TestRenderer.act(async () => {
     detailModal.props.onClose();
   });
-  const sheet = renderer.root.findByType(CalendarEventsSheet);
+  const sheet = renderer!.root.findByType(CalendarEventsSheet);
   expect(sheet.props.visible).toBe(true);
   expect(sheet.props.dateKey).toBe("2026-07-17");
+
+  // 소비 직후 params를 비워 두므로 같은 알림을 다시 탭해도 재발화한다.
+  await TestRenderer.act(async () => {
+    navRef.navigate("CalendarHome", { openEventId: "12" });
+    await Promise.resolve();
+  });
+  expect(gateway.getEvent).toHaveBeenCalledTimes(2);
 });
 
 test("날짜 바텀시트에서 일정을 열고 작성자·참여자 상세를 표시한다", async () => {
@@ -261,30 +286,30 @@ test("활성 구성원에서 사라진 참여자 태그와 편집 선택값을 �
     startAt: "2026-07-17T06:00:00Z",
     title: "홍박사 정형외과",
   });
-  const {renderer} = await renderCalendar(gateway);
+  const { renderer } = await renderCalendar(gateway);
 
   await openEventDetail(renderer);
 
-  expect(renderer.root.findByProps({children: "홍유라"})).toBeTruthy();
-  expect(
-    renderer.root.findAllByProps({children: "구성원 36"}),
-  ).toHaveLength(0);
+  expect(renderer.root.findByProps({ children: "홍유라" })).toBeTruthy();
+  expect(renderer.root.findAllByProps({ children: "구성원 36" })).toHaveLength(
+    0
+  );
 
   await TestRenderer.act(async () => {
     renderer.root
-      .findByProps({accessibilityLabel: "일정 수정"})
+      .findByProps({ accessibilityLabel: "일정 수정" })
       .props.onPress();
   });
   await TestRenderer.act(async () => {
     renderer.root
-      .findByProps({accessibilityLabel: "일정 저장"})
+      .findByProps({ accessibilityLabel: "일정 저장" })
       .props.onPress();
     await Promise.resolve();
   });
 
   expect(gateway.updateEvent).toHaveBeenCalledWith(
     "12",
-    expect.objectContaining({participantMemberIds: ["8"]}),
+    expect.objectContaining({ participantMemberIds: ["8"] })
   );
 });
 
@@ -366,9 +391,7 @@ test("상세를 여닫는 동안 팝업은 한 번에 하나만 표시된다", a
   expect(sheetVisible(renderer)).toBe(false);
 
   await TestRenderer.act(async () => {
-    renderer.root
-      .findByType(CalendarEventDetailModal)
-      .props.onClose();
+    renderer.root.findByType(CalendarEventDetailModal).props.onClose();
   });
 
   // 상세를 닫으면 선택 날짜 목록으로 복귀한다.
@@ -489,29 +512,31 @@ test("저장 중 하드웨어 뒤로가기는 편집 화면을 유지한다", as
 });
 
 test("상단 추가 요청은 선택 날짜의 시간 설정이 꺼진 새 폼을 연다", async () => {
+  const navRef = createNavigationContainerRef<CalendarStackParamList>();
   const gateway = createGateway();
-  const { renderer } = await renderCalendar(gateway, {
-    createCalendarEventRequestId: 0,
-  });
-
+  let renderer: TestRenderer.ReactTestRenderer;
   await TestRenderer.act(async () => {
-    renderer.update(
-      withNav(
-        <CalendarScreen
-          {...baseProps}
-          createCalendarEventRequestId={1}
-          gateway={gateway}
-        />
-      )
+    renderer = TestRenderer.create(
+      <NavigationContainer ref={navRef}>
+        <CalendarScreen {...baseProps} gateway={gateway} />
+      </NavigationContainer>
     );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  // 셸 헤더 FAB의 중첩 navigate가 도달하는 것과 같은 경로로 폼을 연다.
+  await TestRenderer.act(async () => {
+    navRef.navigate("CalendarEventForm", { mode: "create" });
+    await Promise.resolve();
   });
 
-  expect(renderer.root.findByProps({ children: "새 일정" })).toBeTruthy();
+  expect(renderer!.root.findByProps({ children: "새 일정" })).toBeTruthy();
   expect(
-    renderer.root.findByProps({ accessibilityLabel: "시간 설정" }).props.value
+    renderer!.root.findByProps({ accessibilityLabel: "시간 설정" }).props.value
   ).toBe(false);
   expect(
-    renderer.root.findByProps({
+    renderer!.root.findByProps({
       accessibilityLabel: "시작 날짜 2026년 7월 31일",
     })
   ).toBeTruthy();
