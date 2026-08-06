@@ -395,6 +395,21 @@ class GroupMemberApiTest extends IntegrationTest {
 	}
 
 	@Test
+	void managerTransferToCareReceiverSucceeds() throws Exception {
+		mockMvc.perform(changeManager(careReceiverMember.getId(), managerUser.getId()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.managerMemberId").value(careReceiverMember.getId()));
+
+		entityManager.flush();
+		entityManager.clear();
+		GroupMember newManager = groupMemberRepository.findById(careReceiverMember.getId()).orElseThrow();
+		assertThat(newManager.isManager()).isTrue();
+		// 관리자 여부와 역할은 독립된 축이므로 위임이 역할을 승격시키지 않는다.
+		assertThat(newManager.getRole()).isEqualTo(GroupRole.CARE_RECEIVER);
+		assertThat(groupMemberRepository.findById(managerMember.getId()).orElseThrow().isManager()).isFalse();
+	}
+
+	@Test
 	void managerTransferToSelfKeepsCurrentManager() throws Exception {
 		mockMvc.perform(changeManager(managerMember.getId(), managerUser.getId()))
 			.andExpect(status().isOk())
