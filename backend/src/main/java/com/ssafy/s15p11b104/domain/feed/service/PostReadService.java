@@ -177,7 +177,7 @@ public class PostReadService {
 			.findByGroupIdAndOwnerMemberIdAndTargetMemberId(
 				post.getGroup().getId(), viewer.getId(), author.getId())
 			.map(alias -> alias.getAlias())
-			.orElse(author.getUser().getName());
+			.orElseGet(author.getUser()::resolveDisplayName);
 		return PostAuthorResponse.from(
 			author,
 			displayName,
@@ -186,7 +186,8 @@ public class PostReadService {
 
 	private PostAuthorResponse authorOf(Post post, GroupMember viewer, Map<Long, String> aliasesByTarget) {
 		GroupMember author = post.getAuthorMember();
-		String displayName = aliasesByTarget.getOrDefault(author.getId(), author.getUser().getName());
+		String displayName = aliasesByTarget.getOrDefault(
+			author.getId(), author.getUser().resolveDisplayName());
 		return PostAuthorResponse.from(
 			author,
 			displayName,

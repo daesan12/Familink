@@ -189,6 +189,20 @@ class CommentApiTest extends IntegrationTest {
 	}
 
 	@Test
+	void withdrawnCommentAuthorIsDisplayedWithFallbackName() throws Exception {
+		commentRepository.save(new Comment(post, author, "탈퇴 전 댓글"));
+		author.leave(Instant.now());
+		author.getUser().withdraw(Instant.now());
+		entityManager.flush();
+
+		mockMvc.perform(get("/posts/{postId}/comments", post.getId())
+				.with(authenticatedAs(viewer.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.content.length()").value(1))
+			.andExpect(jsonPath("$.data.content[0].author.displayName").value("탈퇴한 사용자"));
+	}
+
+	@Test
 	void invalidContentIsRejected() throws Exception {
 		mockMvc.perform(post("/posts/{postId}/comments", post.getId())
 				.with(authenticatedAs(author.getUser().getId()))
