@@ -1,4 +1,5 @@
 import React from 'react';
+import {NavigationContainer} from '@react-navigation/native';
 import {Pressable, Text} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import TestRenderer from 'react-test-renderer';
@@ -37,6 +38,13 @@ jest.mock('./BottomTabBar', () => ({BottomTabBar: () => null}));
 jest.mock('./CurrentGroupSwitcher', () => ({
   CurrentGroupSwitcher: MockCurrentGroupSwitcher,
 }));
+
+// AppShell이 내부에 셸 스택·탭 내비게이터를 렌더하므로(S15P11B104-320)
+// 컨테이너 없이는 마운트가 실패한다. 프로덕션에서는 App 루트의
+// NavigationContainer를 재사용하므로 테스트도 같은 위상을 재현한다.
+function withNav(element: React.ReactElement) {
+  return <NavigationContainer>{element}</NavigationContainer>;
+}
 
 const GROUP_A: FamilyGroup = {
   id: 'group-a',
@@ -100,12 +108,14 @@ test('현재 그룹이 삭제되고 대체 그룹이 지정되면 대체 그룹�
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <AppShell
-        groups={[GROUP_A, GROUP_B]}
-        initialGroupId={GROUP_A.id}
-        initialRoute="groupInfo"
-        screens={screens}
-      />,
+      withNav(
+        <AppShell
+          groups={[GROUP_A, GROUP_B]}
+          initialGroupId={GROUP_A.id}
+          initialRoute="groupInfo"
+          screens={screens}
+        />,
+      ),
     );
   });
 
@@ -113,12 +123,14 @@ test('현재 그룹이 삭제되고 대체 그룹이 지정되면 대체 그룹�
 
   await TestRenderer.act(async () => {
     renderer!.update(
-      <AppShell
-        groups={[GROUP_B]}
-        initialGroupId={GROUP_B.id}
-        initialRoute="groupInfo"
-        screens={screens}
-      />,
+      withNav(
+        <AppShell
+          groups={[GROUP_B]}
+          initialGroupId={GROUP_B.id}
+          initialRoute="groupInfo"
+          screens={screens}
+        />,
+      ),
     );
   });
 
@@ -131,12 +143,14 @@ test('삭제가 아닌 일반 그룹 전환은 현재 화면을 유지한다', a
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <AppShell
-        groups={[GROUP_A, GROUP_B]}
-        initialGroupId={GROUP_A.id}
-        initialRoute="calendar"
-        screens={screens}
-      />,
+      withNav(
+        <AppShell
+          groups={[GROUP_A, GROUP_B]}
+          initialGroupId={GROUP_A.id}
+          initialRoute="calendar"
+          screens={screens}
+        />,
+      ),
     );
   });
 
@@ -212,14 +226,16 @@ function renderForBack(
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
-        <AppShell
-          groups={[group]}
-          initialGroupId={group.id}
-          initialRoute={initialRoute}
-          screens={backTestScreens}
-        />
-      </SafeAreaProvider>,
+      withNav(
+        <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
+          <AppShell
+            groups={[group]}
+            initialGroupId={group.id}
+            initialRoute={initialRoute}
+            screens={backTestScreens}
+          />
+        </SafeAreaProvider>,
+      ),
     );
   });
   mountedRenderers.push(renderer!);
@@ -372,12 +388,14 @@ function renderForDeepLink() {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <AppShell
-        groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
-        initialGroupId={DEEP_LINK_GROUP_A.id}
-        initialRoute="notifications"
-        screens={createDeepLinkScreens()}
-      />,
+      withNav(
+        <AppShell
+          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+          initialGroupId={DEEP_LINK_GROUP_A.id}
+          initialRoute="notifications"
+          screens={createDeepLinkScreens()}
+        />,
+      ),
     );
   });
   mountedRenderers.push(renderer!);
@@ -412,14 +430,16 @@ test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다',
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <AppShell
-        deepLinkRequestId={1}
-        deepLinkTarget={{eventId: '9', kind: 'calendarEvent'}}
-        groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
-        initialGroupId={DEEP_LINK_GROUP_A.id}
-        initialRoute="feed"
-        screens={createDeepLinkScreens()}
-      />,
+      withNav(
+        <AppShell
+          deepLinkRequestId={1}
+          deepLinkTarget={{eventId: '9', kind: 'calendarEvent'}}
+          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+          initialGroupId={DEEP_LINK_GROUP_A.id}
+          initialRoute="feed"
+          screens={createDeepLinkScreens()}
+        />,
+      ),
     );
   });
   mountedRenderers.push(renderer!);
@@ -429,14 +449,16 @@ test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다',
   // 같은 requestId로는 재소비하지 않고, 증가하면 새 목적지로 이동한다.
   TestRenderer.act(() => {
     renderer!.update(
-      <AppShell
-        deepLinkRequestId={2}
-        deepLinkTarget={{kind: 'notifications'}}
-        groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
-        initialGroupId={DEEP_LINK_GROUP_A.id}
-        initialRoute="feed"
-        screens={createDeepLinkScreens()}
-      />,
+      withNav(
+        <AppShell
+          deepLinkRequestId={2}
+          deepLinkTarget={{kind: 'notifications'}}
+          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+          initialGroupId={DEEP_LINK_GROUP_A.id}
+          initialRoute="feed"
+          screens={createDeepLinkScreens()}
+        />,
+      ),
     );
   });
 
@@ -506,14 +528,16 @@ test('앱 실행 중 푸시가 도착하면 미읽음 배지를 다시 조회해
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <NotificationGatewayProvider gateway={gateway}>
-        <AppShell
-          groups={[GROUP_A]}
-          initialGroupId={GROUP_A.id}
-          screens={screens}
-          subscribePushReceived={subscriber.subscribe}
-        />
-      </NotificationGatewayProvider>,
+      withNav(
+        <NotificationGatewayProvider gateway={gateway}>
+          <AppShell
+            groups={[GROUP_A]}
+            initialGroupId={GROUP_A.id}
+            screens={screens}
+            subscribePushReceived={subscriber.subscribe}
+          />
+        </NotificationGatewayProvider>,
+      ),
     );
   });
   mountedRenderers.push(renderer!);
@@ -542,14 +566,16 @@ test('연속 푸시는 진행 중 조회와 합쳐 마지막 값으로 배지를
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <NotificationGatewayProvider gateway={gateway}>
-        <AppShell
-          groups={[GROUP_A]}
-          initialGroupId={GROUP_A.id}
-          screens={screens}
-          subscribePushReceived={subscriber.subscribe}
-        />
-      </NotificationGatewayProvider>,
+      withNav(
+        <NotificationGatewayProvider gateway={gateway}>
+          <AppShell
+            groups={[GROUP_A]}
+            initialGroupId={GROUP_A.id}
+            screens={screens}
+            subscribePushReceived={subscriber.subscribe}
+          />
+        </NotificationGatewayProvider>,
+      ),
     );
   });
   mountedRenderers.push(renderer!);
@@ -576,14 +602,16 @@ test('알림 화면에서는 푸시 도착 구독을 해제해 배지를 조회�
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <NotificationGatewayProvider gateway={gateway}>
-        <AppShell
-          groups={[GROUP_A]}
-          initialGroupId={GROUP_A.id}
-          screens={screens}
-          subscribePushReceived={subscriber.subscribe}
-        />
-      </NotificationGatewayProvider>,
+      withNav(
+        <NotificationGatewayProvider gateway={gateway}>
+          <AppShell
+            groups={[GROUP_A]}
+            initialGroupId={GROUP_A.id}
+            screens={screens}
+            subscribePushReceived={subscriber.subscribe}
+          />
+        </NotificationGatewayProvider>,
+      ),
     );
   });
   mountedRenderers.push(renderer!);
