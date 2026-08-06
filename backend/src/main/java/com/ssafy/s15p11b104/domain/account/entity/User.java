@@ -108,16 +108,20 @@ public class User extends BaseEntity {
 	}
 
 	/**
-	 * 호칭이 없을 때 사용할 표시 이름을 반환한다.
+	 * 조회자의 호칭을 반영한 표시 이름을 반환한다.
 	 *
-	 * <p>탈퇴하면 이름은 익명화되지만 게시글·댓글은 보존되므로, 남은 기록의 작성자를 표시할 이름이
-	 * 사라진다. 이때 {@code null} 대신 고정 문구를 사용해 작성자 이름이 있는 응답 계약을 채운다.
-	 * 그룹만 나간 구성원은 이름이 그대로 남아 있어 실명으로 표시된다.
+	 * <p>탈퇴하면 이름은 익명화되지만 게시글·댓글은 보존되므로 표시할 이름이 사라진다. 이때는 조회자가
+	 * 탈퇴 전에 등록해 둔 호칭도 사용하지 않고 고정 문구로 통일해, 남은 기록에서 개인을 다시 식별할 수
+	 * 없게 한다. 그룹만 나간 구성원은 이름과 호칭을 그대로 유지한다.
 	 *
-	 * @return 탈퇴하지 않았으면 사용자 이름, 탈퇴했으면 탈퇴 사용자 표시 문구
+	 * @param alias 조회자가 이 사용자에게 등록한 호칭, 없으면 {@code null}
+	 * @return 탈퇴했으면 탈퇴 사용자 표시 문구, 아니면 호칭 또는 사용자 이름
 	 */
-	public String resolveDisplayName() {
-		return withdrawnAt == null ? name : WITHDRAWN_DISPLAY_NAME;
+	public String resolveDisplayName(String alias) {
+		if (withdrawnAt != null) {
+			return WITHDRAWN_DISPLAY_NAME;
+		}
+		return alias == null ? name : alias;
 	}
 
 	public String getLoginId() {

@@ -190,6 +190,7 @@ class CommentApiTest extends IntegrationTest {
 
 	@Test
 	void withdrawnCommentAuthorIsDisplayedWithFallbackName() throws Exception {
+		memberAliasRepository.save(new MemberAlias(group, viewer, author, "우리엄마"));
 		commentRepository.save(new Comment(post, author, "탈퇴 전 댓글"));
 		author.leave(Instant.now());
 		author.getUser().withdraw(Instant.now());
