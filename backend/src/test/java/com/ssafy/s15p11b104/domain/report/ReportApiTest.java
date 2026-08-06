@@ -1,8 +1,10 @@
 package com.ssafy.s15p11b104.domain.report;
 
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -20,6 +22,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.s15p11b104.domain.account.entity.User;
@@ -40,9 +43,14 @@ import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 import com.ssafy.s15p11b104.domain.group.repository.FamilyGroupRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.report.dto.DailyReportGenerationResponse;
+import com.ssafy.s15p11b104.domain.report.dto.DailyReportGenerationStatus;
 import com.ssafy.s15p11b104.domain.report.entity.DailyReport;
+import com.ssafy.s15p11b104.domain.report.entity.DailyReportGenerationClaim;
 import com.ssafy.s15p11b104.domain.report.entity.EmotionCategory;
+import com.ssafy.s15p11b104.domain.report.repository.DailyReportGenerationClaimRepository;
 import com.ssafy.s15p11b104.domain.report.repository.DailyReportRepository;
+import com.ssafy.s15p11b104.domain.report.service.DailyReportManualGenerationService;
 import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
@@ -82,6 +90,9 @@ class ReportApiTest extends IntegrationTest {
 	private DailyReportRepository dailyReportRepository;
 
 	@Autowired
+	private DailyReportGenerationClaimRepository dailyReportGenerationClaimRepository;
+
+	@Autowired
 	private CallSessionRepository callSessionRepository;
 
 	@Autowired
@@ -89,6 +100,9 @@ class ReportApiTest extends IntegrationTest {
 
 	@Autowired
 	private CallReportGenerationRequestRepository callReportRequestRepository;
+
+	@MockitoBean
+	private DailyReportManualGenerationService manualGenerationService;
 
 	private User guardianUser;
 	private User careReceiverUser;
@@ -112,6 +126,7 @@ class ReportApiTest extends IntegrationTest {
 		entityManager.createNativeQuery("DELETE FROM call_transcript_events").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM call_transcripts").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM call_sessions").executeUpdate();
+		entityManager.createNativeQuery("DELETE FROM daily_report_generation_claims").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM daily_reports").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM member_interests").executeUpdate();
 		entityManager.createNativeQuery("DELETE FROM member_aliases").executeUpdate();
@@ -219,6 +234,7 @@ class ReportApiTest extends IntegrationTest {
 				.with(authenticatedAs(guardianUser.getId())))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.date").value("2026-07-15"))
+			.andExpect(jsonPath("$.data.generationStatus").value("READY"))
 			.andExpect(jsonPath("$.data.dailyReport.id").isNumber())
 			.andExpect(jsonPath("$.data.dailyReport.summary").value("하루 요약"))
 			.andExpect(jsonPath("$.data.dailyReport.emotionCategory").value("JOY"))
@@ -261,6 +277,7 @@ class ReportApiTest extends IntegrationTest {
 				.with(authenticatedAs(guardianUser.getId())))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.success").value(true))
+			.andExpect(jsonPath("$.data.generationStatus").value("NOT_READY"))
 			.andExpect(jsonPath("$.data.dailyReport").value(nullValue()))
 			.andExpect(jsonPath("$.data.calls.length()").value(0));
 	}
@@ -304,6 +321,66 @@ class ReportApiTest extends IntegrationTest {
 				.with(authenticatedAs(guardianUser.getId())))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
+	void dailyReportReturnsAvailableWhenAtLeastOneCallReportExists() throws Exception {
+		Long callSessionId = persistCompletedCall(businessTime(REPORT_DATE, 10, 0));
+		persistCallReport(callSessionId);
+
+		mockMvc.perform(get("/groups/{groupId}/members/{memberId}/reports/daily/{reportDate}",
+				group.getId(), careReceiverMember.getId(), REPORT_DATE)
+				.with(authenticatedAs(guardianUser.getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.generationStatus").value("AVAILABLE"));
+	}
+
+	@Test
+	void dailyReportReturnsGeneratingWhileActiveClaimExists() throws Exception {
+		Long callSessionId = persistCompletedCall(businessTime(REPORT_DATE, 10, 0));
+		persistCallReport(callSessionId);
+		dailyReportGenerationClaimRepository.save(new DailyReportGenerationClaim(
+			careReceiverMember.getId(),
+			REPORT_DATE,
+			UUID.randomUUID(),
+			Instant.now().plusSeconds(60),
+			1,
+			callSessionId));
+		entityManager.flush();
+		entityManager.clear();
+
+		mockMvc.perform(get("/groups/{groupId}/members/{memberId}/reports/daily/{reportDate}",
+				group.getId(), careReceiverMember.getId(), REPORT_DATE)
+				.with(authenticatedAs(guardianUser.getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.generationStatus").value("GENERATING"));
+	}
+
+	@Test
+	void manualGenerationRequestReturnsAcceptedWhileGenerating() throws Exception {
+		when(manualGenerationService.request(
+			group.getId(), careReceiverMember.getId(), guardianUser.getId()))
+			.thenReturn(new DailyReportGenerationResponse(REPORT_DATE, DailyReportGenerationStatus.GENERATING));
+
+		mockMvc.perform(post("/groups/{groupId}/members/{memberId}/reports/daily/generation-requests",
+				group.getId(), careReceiverMember.getId())
+				.with(authenticatedAs(guardianUser.getId())))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.data.reportDate").value(REPORT_DATE.toString()))
+			.andExpect(jsonPath("$.data.generationStatus").value("GENERATING"));
+	}
+
+	@Test
+	void manualGenerationRequestReturnsOkWhenAlreadyReady() throws Exception {
+		when(manualGenerationService.request(
+			group.getId(), careReceiverMember.getId(), guardianUser.getId()))
+			.thenReturn(new DailyReportGenerationResponse(REPORT_DATE, DailyReportGenerationStatus.READY));
+
+		mockMvc.perform(post("/groups/{groupId}/members/{memberId}/reports/daily/generation-requests",
+				group.getId(), careReceiverMember.getId())
+				.with(authenticatedAs(guardianUser.getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.generationStatus").value("READY"));
 	}
 
 	// --- 피보호자 스코프 ---

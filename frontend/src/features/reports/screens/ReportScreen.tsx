@@ -8,6 +8,7 @@ import {
 import type { ComponentProps } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
@@ -32,6 +33,10 @@ import { ReportPageIndicator } from "../components/ReportPageIndicator";
 import { DEVELOPMENT_REPORT_PAGES } from "../fixtures/reportFixtures";
 import { useCareReceiverReportTargets } from "../hooks/useCareReceiverReportTargets";
 import {
+  type DailyReportGenerationUiState,
+  useDailyReportGeneration,
+} from "../hooks/useDailyReportGeneration";
+import {
   type ReportPageLoadItem,
   useReportPages,
 } from "../hooks/useReportPages";
@@ -45,6 +50,7 @@ import type {
   CareReceiverReportPage,
   CareReceiverReportTarget,
   CareReceiverReportTargetLoader,
+  DailyReportGenerationStatus,
   ReportGateway,
 } from "../types";
 
@@ -109,6 +115,13 @@ export function ReportScreen({
     reportDate: selectedReportDate,
     reportGateway,
     targets: resolvedTargets,
+  });
+  const dailyGeneration = useDailyReportGeneration({
+    enabled: hasRemoteSource && selectedReportDate === reportDate,
+    groupId: currentGroup.id,
+    onReady: remotePages.retry,
+    reportDate: selectedReportDate,
+    reportGateway,
   });
   const localPages =
     careReceivers ??
@@ -686,8 +699,12 @@ export function ReportScreen({
         {reportItems.map((item) =>
           item.status === "ready" ? (
             <ReportPage
+              generationState={dailyGeneration.states[item.target.memberId]}
               isToday={selectedReportDate === reportDate}
               key={item.target.memberId}
+              onGenerateDailyReport={
+                reportGateway ? dailyGeneration.request : undefined
+              }
               onOpenCalendar={handleOpenCalendar}
               onOpenCall={handleOpenCall}
               page={item.page}
@@ -817,7 +834,9 @@ function getKoreaReportDate(now = new Date()): string {
 }
 
 interface ReportPageProps {
+  generationState?: DailyReportGenerationUiState;
   isToday: boolean;
+  onGenerateDailyReport?: (memberId: string) => void;
   onOpenCalendar: (page: CareReceiverReportPage) => void;
   onOpenCall: (call: CallReportView) => void;
   page: CareReceiverReportPage;
@@ -825,7 +844,9 @@ interface ReportPageProps {
 }
 
 function ReportPage({
+  generationState,
   isToday,
+  onGenerateDailyReport,
   onOpenCalendar,
   onOpenCall,
   page,
@@ -833,6 +854,10 @@ function ReportPage({
 }: ReportPageProps) {
   const pageState = getReportPageState(page);
   const sortedTodayCalls = sortCallsByStartedAt(page.todayCalls);
+  const generationStatus =
+    generationState?.generationStatus ?? page.selectedDateGenerationStatus;
+  const shouldShowReportContent =
+    pageState !== "empty" || (isToday && onGenerateDailyReport !== undefined);
 
   return (
     <View style={[styles.page, { width }]}>
@@ -855,9 +880,7 @@ function ReportPage({
         </Pressable>
       </View>
 
-      {pageState === "empty" ? (
-        <EmptyReportState displayName={page.displayName} />
-      ) : (
+      {shouldShowReportContent ? (
         <ScrollView
           contentContainerStyle={styles.pageContent}
           showsVerticalScrollIndicator={false}
@@ -867,6 +890,14 @@ function ReportPage({
           ) : (
             <DailyReportPendingCard />
           )}
+
+          {isToday && onGenerateDailyReport ? (
+            <DailyReportGenerationControl
+              message={generationState?.message ?? null}
+              onPress={() => onGenerateDailyReport(page.memberId)}
+              status={generationStatus}
+            />
+          ) : null}
 
           <View style={styles.callSection}>
             <Text style={styles.callSectionTitle}>
@@ -896,6 +927,8 @@ function ReportPage({
             )}
           </View>
         </ScrollView>
+      ) : (
+        <EmptyReportState displayName={page.displayName} />
       )}
     </View>
   );
@@ -957,6 +990,72 @@ function DailyReportPendingCard() {
           오늘의 통화가 모이면 일간 리포트로 정리해드려요.
         </Text>
       </View>
+    </View>
+  );
+}
+
+function DailyReportGenerationControl({
+  message,
+  onPress,
+  status,
+}: {
+  message: string | null;
+  onPress: () => void;
+  status: DailyReportGenerationStatus;
+}) {
+  if (status === "ready") {
+    return null;
+  }
+
+  const isAvailable = status === "available";
+  const isGenerating = status === "generating";
+  const label = isAvailable
+    ? "일간 리포트 생성"
+    : isGenerating
+    ? "일간 리포트 생성 중…"
+    : "건별 리포트 준비 중";
+
+  return (
+    <View style={styles.generationControl}>
+      <Pressable
+        accessibilityHint={
+          isAvailable
+            ? "준비된 오늘의 건별 리포트로 일간 리포트를 생성합니다"
+            : undefined
+        }
+        accessibilityLabel={label}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: !isAvailable }}
+        disabled={!isAvailable}
+        onPress={onPress}
+        style={[
+          styles.generationButton,
+          !isAvailable ? styles.generationButtonDisabled : null,
+        ]}
+      >
+        {isGenerating ? (
+          <ActivityIndicator color={COLORS.textMuted} size="small" />
+        ) : (
+          <MaterialDesignIcons
+            color={isAvailable ? COLORS.background : COLORS.textMuted}
+            name={isAvailable ? "file-document-plus-outline" : "clock-outline"}
+            size={20}
+          />
+        )}
+        <Text
+          style={[
+            styles.generationButtonText,
+            !isAvailable ? styles.generationButtonTextDisabled : null,
+          ]}
+        >
+          {label}
+        </Text>
+      </Pressable>
+      {message ? (
+        <Text accessibilityLiveRegion="polite" style={styles.generationMessage}>
+          {message}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -1055,6 +1154,39 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     minHeight: 62,
     paddingHorizontal: 20,
+  },
+  generationButton: {
+    alignItems: "center",
+    backgroundColor: COLORS.purpleDeep,
+    borderCurve: "continuous",
+    borderRadius: RADII.medium,
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+    minHeight: 50,
+    paddingHorizontal: 18,
+  },
+  generationButtonDisabled: {
+    backgroundColor: COLORS.surface,
+  },
+  generationButtonText: {
+    color: COLORS.background,
+    fontSize: 15,
+    fontWeight: "800",
+    lineHeight: 21,
+  },
+  generationButtonTextDisabled: {
+    color: COLORS.textMuted,
+  },
+  generationControl: {
+    gap: 8,
+    marginTop: 12,
+  },
+  generationMessage: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
   },
   noCareReceiver: {
     alignItems: "center",

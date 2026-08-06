@@ -1,6 +1,7 @@
 package com.ssafy.s15p11b104.domain.report.service;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +32,10 @@ public class DailyReportGenerationDispatcher {
 		}
 	}
 
+	public boolean dispatchManual(LocalDate reportDate, Long careReceiverMemberId, UUID token) {
+		return aiTaskExecutor.submit(() -> generateManualSafely(reportDate, careReceiverMemberId, token));
+	}
+
 	private void generateSafely(LocalDate reportDate) {
 		try {
 			generationService.generate(reportDate);
@@ -38,6 +43,24 @@ public class DailyReportGenerationDispatcher {
 			LOGGER.error(
 				"일일 리포트 생성 작업에 실패했습니다. reportDate={}, errorType={}",
 				reportDate,
+				exception.getClass().getSimpleName()
+			);
+		}
+	}
+
+	private void generateManualSafely(
+		LocalDate reportDate,
+		Long careReceiverMemberId,
+		UUID token
+	) {
+		try {
+			generationService.generateManual(reportDate, careReceiverMemberId, token);
+		} catch (RuntimeException exception) {
+			generationService.releaseManualClaim(reportDate, careReceiverMemberId, token);
+			LOGGER.error(
+				"수동 일일 리포트 생성 작업에 실패했습니다. reportDate={}, careReceiverMemberId={}, errorType={}",
+				reportDate,
+				careReceiverMemberId,
 				exception.getClass().getSimpleName()
 			);
 		}

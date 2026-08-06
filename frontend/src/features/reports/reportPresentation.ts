@@ -62,6 +62,7 @@ export function toCareReceiverReportPage(
       : null,
     memberId: target.memberId,
     reportCalendar,
+    selectedDateGenerationStatus: callsResult.generationStatus,
     todayCalls: callsResult.calls.map((call) => ({
       callSessionId: call.callSessionId,
       guardianMessage: null,

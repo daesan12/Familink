@@ -91,6 +91,17 @@
     선별 복구하지 않는다. 과거 `INCOMPLETE`를 `COMPLETED`로 바꾸거나 조건 없이
     일괄 backfill하지 않으며 자동 복구 스케줄은 계속 `PENDING`과 만료
     `CLAIMED`만 접수한다.
+29. 스토어 배포 전 시연 기간에는 보호자가 현재 보고 있는 피보호자 한 명의
+    `Asia/Seoul` 기준 오늘 일일 리포트를 수동으로 생성할 수 있다. 오늘이 아닌
+    날짜에는 생성 요청을 제공하지 않는다.
+30. 시연용 수동 생성 상태는 `NOT_READY`, `AVAILABLE`, `GENERATING`, `READY`다.
+    저장된 건별 리포트가 없으면 `NOT_READY`, 오늘 일일 리포트와 활성 claim이
+    없고 저장된 건별 리포트가 하나 이상이면 `AVAILABLE`, 유효한 claim을
+    보유하면 `GENERATING`, 오늘 일일 리포트가 존재하면 `READY`다.
+31. 수동 생성은 오늘 구간에 이미 저장된 건별 리포트만 입력으로 사용한다.
+    같은 구간의 다른 통화에서 건별 리포트가 아직 준비되지 않았더라도 생성할
+    수 있다. 22시 정기 생성의 전체 준비 조건과 집계 구간은 변경하지 않으며,
+    수동 결과가 이미 있으면 기존 멱등 처리로 정기 생성을 건너뛴다.
 
 건별 감정 대분류 enum은 `ANGER`, `SADNESS`, `ANXIETY`, `HURT`, `EMBARRASSMENT`, `JOY`, `NEUTRAL`이다. 한국어 표시명과 이미지 매핑은 미결정이다.
 
@@ -115,6 +126,7 @@
   - `API-REPORTS-002` `GET /groups/{groupId}/members/{memberId}/reports/daily/{reportDate}`
   - `API-REPORTS-003` `GET /call-sessions/{callSessionId}/report`
   - `API-REPORTS-004` `GET /call-sessions/{callSessionId}/report/status`
+  - `API-REPORTS-005` `POST /groups/{groupId}/members/{memberId}/reports/daily/generation-requests`
   - 요청·응답·명시 오류의 상세는 [API 계약](../contracts/API.md)을 따른다.
 - 데이터:
   - 관련 엔티티는 `call_reports`, `daily_reports`,
@@ -135,8 +147,9 @@
 - AI 실행:
   - 대상·claim·입력 조회와 결과 저장은 짧은 DB 트랜잭션으로 나누고 Gemini
     호출 중에는 DB 트랜잭션을 유지하지 않는다.
-  - 공용 AI executor의 대기열이 가득 차면 무기한 기다리지 않는다. 건별·일일
-    리포트에는 사용자용 재시도 API나 관리 화면을 추가하지 않는다.
+  - 공용 AI executor의 대기열이 가득 차면 무기한 기다리지 않는다. 스토어 배포
+    전 시연용 `API-REPORTS-005`를 제외하고 건별·일일 리포트에는 사용자용
+    재시도 API나 관리 화면을 추가하지 않는다.
 
 ## 인수 조건
 
@@ -244,6 +257,29 @@
 - Then: 누락 request는 현재 revision의 `PENDING`으로 만들고 `GEMINI_FAILED`는
   해당 request만 `PENDING`으로 되돌린다. 다른 통화 상태와 불완전 전사는
   변경하지 않고 자동·일괄 재시도도 시작하지 않는다.
+
+### AC-016
+
+- Given: 보호자가 오늘 리포트 화면에서 저장된 건별 리포트가 하나 이상이고,
+  오늘 일일 리포트와 활성 생성 claim이 없는 피보호자를 보고 있다.
+- When: 시연용 일일 리포트 생성을 요청한다.
+- Then: 서버는 오늘 날짜와 해당 피보호자만 대상으로 claim을 획득하고
+  `GENERATING`을 반환하며, 준비된 건별 리포트만으로 한 번 생성한다.
+
+### AC-017
+
+- Given: 오늘 일일 리포트가 없고 일부 통화의 건별 리포트만 준비됐다.
+- When: 시연용 수동 생성을 실행한다.
+- Then: 준비된 건별 리포트가 하나 이상이면 그 입력만 사용하며, 준비되지 않은
+  통화 때문에 수동 생성을 막지 않는다. 기존 22시 정기 생성 조건은 유지한다.
+
+### AC-018
+
+- Given: 보호자가 오늘 일일 리포트 화면을 보고 있다.
+- When: 생성 상태가 `NOT_READY`, `AVAILABLE`, `GENERATING`, `READY` 중 하나다.
+- Then: `AVAILABLE`에서만 버튼을 활성화하고 `NOT_READY`·`GENERATING`에서는
+  비활성화하며 `READY`에서는 버튼을 표시하지 않는다. 이전 최신 일일 리포트가
+  표시 중이면 생성 버튼을 그 카드 아래에 표시한다.
 
 ## 미결정 사항
 

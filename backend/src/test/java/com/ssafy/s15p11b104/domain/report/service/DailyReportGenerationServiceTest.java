@@ -37,6 +37,7 @@ import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
 import com.ssafy.s15p11b104.domain.report.entity.DailyReport;
 import com.ssafy.s15p11b104.domain.report.entity.DailyReportGenerationClaim;
 import com.ssafy.s15p11b104.domain.report.entity.EmotionCategory;
+import com.ssafy.s15p11b104.domain.report.dto.DailyReportGenerationStatus;
 import com.ssafy.s15p11b104.domain.report.repository.DailyReportGenerationClaimRepository;
 import com.ssafy.s15p11b104.domain.report.repository.DailyReportRepository;
 
@@ -101,6 +102,7 @@ class DailyReportGenerationServiceTest {
 			}
 		});
 		lenient().when(groupMemberRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(member));
+		lenient().when(member.isActive()).thenReturn(true);
 		lenient().when(member.getGroup()).thenReturn(group);
 		lenient().when(claimRepository.findForUpdate(11L, REPORT_DATE))
 			.thenAnswer(invocation -> Optional.ofNullable(storedClaim.get()));
@@ -183,6 +185,39 @@ class DailyReportGenerationServiceTest {
 
 		verify(analyzer, org.mockito.Mockito.times(2)).analyze(any());
 		verify(dailyReportRepository).save(any(DailyReport.class));
+	}
+
+	@Test
+	void manualGenerationUsesReadyReportsEvenWhenAnotherReportIsMissing() {
+		CallReport readyReport = report(101L, "준비된 통화", null);
+		when(callReportRepository.findCompletedForMemberInEndedAtRange(anyLong(), any(), any(), any()))
+			.thenReturn(List.of(readyReport));
+		when(analyzer.analyze(any())).thenReturn(analysis("준비된 입력 요약"));
+
+		DailyReportGenerationService.ManualClaim claim = generationService.claimManual(REPORT_DATE, 11L);
+		generationService.generateManual(REPORT_DATE, 11L, claim.token());
+
+		assertThat(claim.status()).isEqualTo(DailyReportGenerationStatus.GENERATING);
+		assertThat(claim.needsDispatch()).isTrue();
+		verify(analyzer).analyze(any());
+		verify(dailyReportRepository).save(any(DailyReport.class));
+		verify(callSessionRepository, never())
+			.findCareReceiverMemberIdsWithCompletedWithoutReportInEndedAtRange(any(), any(), any());
+	}
+
+	@Test
+	void manualAnalyzerFailureReleasesOwnedClaimForRetry() {
+		CallReport report = report(101L, "실패 대상", null);
+		when(callReportRepository.findCompletedForMemberInEndedAtRange(anyLong(), any(), any(), any()))
+			.thenReturn(List.of(report));
+		when(analyzer.analyze(any())).thenThrow(new DailyReportAnalysisException("upstream"));
+
+		DailyReportGenerationService.ManualClaim claim = generationService.claimManual(REPORT_DATE, 11L);
+		generationService.generateManual(REPORT_DATE, 11L, claim.token());
+
+		verify(dailyReportRepository, never()).save(any());
+		verify(claimRepository).delete(any(DailyReportGenerationClaim.class));
+		assertThat(storedClaim).hasValue(null);
 	}
 
 	private void stubInitialAndMemberReports(List<CallReport> initial, List<CallReport> current) {

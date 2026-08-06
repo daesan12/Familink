@@ -3759,13 +3759,14 @@ test("앱에 주입한 리포트 Gateway와 현재 그룹 피보호자를 조회
         summary: "가족 이야기를 나누며 즐거워하셨어요.",
       },
       date: "2026-07-31",
-      status: "ready",
+      generationStatus: "ready",
     }),
     getReportDates: jest.fn().mockResolvedValue({
       latestReportDate: "2026-07-31",
       reportDates: ["2026-07-31"],
       yearMonth: "2026-07",
     }),
+    requestDailyReportGeneration: jest.fn(),
   };
   let renderer: TestRenderer.ReactTestRenderer;
 
@@ -3839,13 +3840,14 @@ test("현재 그룹 구성원 API에서 피보호자만 리포트 조회 대상�
       calls: [],
       dailyReport: null,
       date: "2026-08-01",
-      status: "noCalls",
+      generationStatus: "notReady",
     }),
     getReportDates: jest.fn().mockResolvedValue({
       latestReportDate: null,
       reportDates: [],
       yearMonth: "2026-08",
     }),
+    requestDailyReportGeneration: jest.fn(),
   };
   let renderer: TestRenderer.ReactTestRenderer;
 

@@ -30,10 +30,12 @@ public enum ErrorCode {
 	CANNOT_REMOVE_SELF(HttpStatus.CONFLICT, "본인을 내보낼 수 없음"),
 	GROUP_HAS_ACTIVE_MEMBERS(HttpStatus.CONFLICT, "다른 활성 구성원이 있는 그룹은 삭제할 수 없음"),
 	GROUP_NAME_MISMATCH(HttpStatus.CONFLICT, "확인용 그룹 이름이 그룹 이름과 일치하지 않음"),
+	DAILY_REPORT_INPUT_NOT_READY(HttpStatus.CONFLICT, "일별 리포트 생성에 사용할 건별 리포트가 없음"),
 	ALREADY_GROUP_MEMBER(HttpStatus.CONFLICT, "이미 해당 그룹의 활성 구성원"),
 	JOIN_REQUEST_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 대기 중인 가입 요청이 있음"),
 	JOIN_REQUEST_ALREADY_PROCESSED(HttpStatus.CONFLICT, "이미 처리된 가입 요청"),
-	CARE_RECEIVER_ALREADY_ACTIVE_IN_OTHER_GROUP(HttpStatus.CONFLICT, "이미 다른 그룹의 활성 피보호자");
+	CARE_RECEIVER_ALREADY_ACTIVE_IN_OTHER_GROUP(HttpStatus.CONFLICT, "이미 다른 그룹의 활성 피보호자"),
+	DAILY_REPORT_GENERATION_BUSY(HttpStatus.SERVICE_UNAVAILABLE, "일별 리포트 생성 작업을 접수할 수 없음");
 
 	private final HttpStatus status;
 	private final String message;
