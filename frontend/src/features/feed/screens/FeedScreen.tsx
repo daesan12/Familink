@@ -779,7 +779,10 @@ export function FeedScreen({
       interactionsRef.current.replaceComment(
         input.postId,
         {
-          author: resolvedCurrentUser,
+          // 서버가 준 작성자로 교체한다. 낙관적 항목의 resolvedCurrentUser에는
+          // 서버 서명 프로필 URL이 없어 기본 이미지로 보인다.
+          // author를 아직 내려주지 않는 서버에서는 기존처럼 화면 값을 유지한다.
+          author: result.author ?? resolvedCurrentUser,
           body: result.content,
           createdAt: result.createdAt,
           id: result.id,
