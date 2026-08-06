@@ -61,7 +61,11 @@ export interface AppScreenProps {
   onUnreadCountChange?: (count: number) => void;
   onOpenNotifications?: () => void;
   onOpenNotificationTarget?: (target: NotificationDeepLinkTarget) => void;
-  onOpenPost?: (postId: string, groupId?: string) => void;
+  onOpenPost?: (
+    postId: string,
+    groupId?: string,
+    entrySource?: 'feed' | 'notification',
+  ) => void;
   onRequestLogout?: () => void;
   onRequestWithdrawal?: () => Promise<void>;
   readNotificationIds?: readonly string[];

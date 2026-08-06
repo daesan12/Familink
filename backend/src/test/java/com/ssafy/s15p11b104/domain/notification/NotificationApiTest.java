@@ -399,6 +399,48 @@ class NotificationApiTest extends NotificationApiIntegrationTestSupport {
 	}
 
 	@Test
+	void deletingOneNotificationOnlyAllowsItsReceiver() throws Exception {
+		TestUser owner = createUser("deleteowner", "알림 삭제자");
+		TestUser other = createUser("deleteother", "다른 사용자");
+		Notification owned = notificationRepository.saveAndFlush(new Notification(
+			owner.entity(),
+			NotificationType.NEW_POST,
+			"삭제 대상",
+			"내 알림"));
+		Notification foreign = notificationRepository.saveAndFlush(new Notification(
+			other.entity(),
+			NotificationType.NEW_POST,
+			"다른 알림",
+			"다른 사용자의 알림"));
+
+		mockMvc.perform(authorized(deleteRequest("/notifications/" + owned.getId()), owner))
+			.andExpect(status().isNoContent());
+		assertThat(notificationRepository.findById(owned.getId())).isEmpty();
+
+		mockMvc.perform(authorized(deleteRequest("/notifications/" + foreign.getId()), owner))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("FORBIDDEN"));
+		assertThat(notificationRepository.findById(foreign.getId())).isPresent();
+	}
+
+	@Test
+	void deletingAllNotificationsOnlyDeletesTheAuthenticatedUsersRows() throws Exception {
+		TestUser owner = createUser("deleteall1", "전체 삭제자");
+		TestUser other = createUser("deleteall2", "다른 사용자");
+		notificationRepository.saveAndFlush(new Notification(
+			owner.entity(), NotificationType.CALL_REPORT, "첫 알림", "내용"));
+		notificationRepository.saveAndFlush(new Notification(
+			owner.entity(), NotificationType.DAILY_REPORT, "둘째 알림", "내용"));
+		Notification foreign = notificationRepository.saveAndFlush(new Notification(
+			other.entity(), NotificationType.NEW_POST, "보존 알림", "내용"));
+
+		mockMvc.perform(authorized(deleteRequest("/notifications"), owner))
+			.andExpect(status().isNoContent());
+		assertThat(notificationRepository.countByReceiver_Id(owner.entity().getId())).isZero();
+		assertThat(notificationRepository.findById(foreign.getId())).isPresent();
+	}
+
+	@Test
 	void listRejectsInvalidPaginationAndSortAndRequiresAuthentication() throws Exception {
 		TestUser user = createUser("pageuser1", "사용자");
 

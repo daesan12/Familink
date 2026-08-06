@@ -91,6 +91,8 @@ export interface DeviceTokenProvider {
 }
 
 export interface NotificationGateway {
+  deleteAllNotifications(): Promise<void>;
+  deleteNotification(notificationId: string): Promise<void>;
   deactivateDeviceToken(token: string): Promise<void>;
   getUnreadCount(): Promise<number>;
   loadPage(page: number, size?: number): Promise<NotificationPage>;

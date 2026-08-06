@@ -194,8 +194,10 @@ export function AppShell({
   // (navigateInFeedTab과 같은 관용구 — initial:false 필수, getId 금지).
   const navigateInGroupInfoTab = useCallback(
     (
-      screen: 'JoinApproval',
-      params: GroupInfoStackParamList['JoinApproval'],
+      screen: 'GroupInfoHome' | 'JoinApproval',
+      params:
+        | GroupInfoStackParamList['GroupInfoHome']
+        | GroupInfoStackParamList['JoinApproval'],
     ) => {
       setVisibleRoute('groupInfo');
       shellNavRef.current?.dispatch(
@@ -466,7 +468,11 @@ export function AppShell({
     );
   };
 
-  const handleOpenPost = (postId: string, groupId?: string) => {
+  const handleOpenPost = (
+    postId: string,
+    groupId?: string,
+    entrySource: 'feed' | 'notification' = 'feed',
+  ) => {
     const targetGroupId =
       groupId && groups.some(group => group.id === groupId)
         ? groupId
@@ -476,27 +482,32 @@ export function AppShell({
     }
     setIsScreenHeaderVisible(true);
     navigateInFeedTab('PostDetail', {
+      entrySource,
       groupId: targetGroupId,
       postId,
     });
   };
 
-  const handleOpenNotificationTarget = (target: NotificationDeepLinkTarget) => {
-    if (target.kind === 'post') {
-      handleOpenPost(target.postId, target.groupId);
-      return;
-    }
+    const handleOpenNotificationTarget = (target: NotificationDeepLinkTarget) => {
+      if (target.kind === 'post') {
+        // 알림에서 진입했다는 출처를 유지해야 삭제된 게시글에 대한
+        // 전용 안내 팝업을 상세 로더가 표시할 수 있다.
+        handleOpenPost(target.postId, target.groupId, 'notification');
+        return;
+      }
     if (target.kind === 'notifications') {
       setIsScreenHeaderVisible(true);
       openOverlay('notifications');
       return;
     }
-    if (
-      target.groupId &&
-      target.groupId !== currentGroup.id &&
-      groups.some(group => group.id === target.groupId)
-    ) {
-      handleGroupSelect(target.groupId);
+    const resolvedGroupId =
+      target.groupId && groups.some(group => group.id === target.groupId)
+        ? target.groupId
+        : currentGroup.id;
+    const targetGroup =
+      groups.find(group => group.id === resolvedGroupId) ?? currentGroup;
+    if (resolvedGroupId !== currentGroup.id) {
+      handleGroupSelect(resolvedGroupId);
     }
     setIsScreenHeaderVisible(true);
     if (target.kind === 'calendarEvent') {
@@ -515,12 +526,16 @@ export function AppShell({
       });
       return;
     }
+    if (target.kind === 'groupInfo') {
+      navigateInGroupInfoTab('GroupInfoHome', undefined);
+      return;
+    }
+    if (target.kind === 'joinApproval' && targetGroup.isManager !== true) {
+      navigateInGroupInfoTab('GroupInfoHome', undefined);
+      return;
+    }
     navigateInGroupInfoTab('JoinApproval', {
-      groupId:
-        target.groupId !== undefined &&
-        groups.some(group => group.id === target.groupId)
-          ? target.groupId
-          : currentGroup.id,
+      groupId: resolvedGroupId,
     });
   };
   openNotificationTargetRef.current = handleOpenNotificationTarget;

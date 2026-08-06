@@ -89,6 +89,21 @@ public class NotificationService {
 		return new NotificationReadAllResponse(updatedCount, readAt);
 	}
 
+	@Transactional
+	public void deleteNotification(Long userId, Long notificationId) {
+		requireActiveUser(userId);
+		Notification notification = notificationRepository
+			.findByIdAndReceiver_Id(notificationId, userId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+		notificationRepository.delete(notification);
+	}
+
+	@Transactional
+	public void deleteAllNotifications(Long userId) {
+		requireActiveUser(userId);
+		notificationRepository.deleteAllByReceiverId(userId);
+	}
+
 	private NotificationListResponse.Item toItem(Notification notification) {
 		User actor = notification.getActor();
 		NotificationListResponse.Actor actorResponse = actor == null
