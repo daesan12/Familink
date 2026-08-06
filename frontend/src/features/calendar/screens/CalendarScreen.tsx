@@ -165,6 +165,11 @@ export function CalendarScreen({
   const [detailState, setDetailState] = useState<DetailState>(CLOSED_DETAIL);
   // 편집 화면(스택)의 포커스 미러. 셸 풀스크린 신호와 모달 게이트의 기준이다.
   const [isFormFocused, setIsFormFocused] = useState(false);
+  // HomeDeepLinkSync가 소비한 딥링크 이벤트 id. 아래 소비 effect가 다음
+  // 커밋에서 상세를 연다.
+  const [pendingOpenEventId, setPendingOpenEventId] = useState<string | null>(
+    null
+  );
   const [isAnimatingMonth, setIsAnimatingMonth] = useState(false);
   const translateY = useRef(new Animated.Value(0)).current;
   const calendarViewportHeightRef = useRef(CALENDAR_MONTH_HEIGHT);
@@ -420,14 +425,17 @@ export function CalendarScreen({
     [resolvedGateway]
   );
 
-  // 알림 딥링크(CalendarHome params)로 일정 상세를 연다.
-  const handleOpenEventDeepLink = useCallback(
-    (eventId: string) => {
+  // 알림 딥링크(CalendarHome params) 소비는 한 커밋 늦춘다. HomeDeepLinkSync는
+  // 자식이라 effect가 이 컴포넌트의 그룹 리셋 effect보다 먼저 실행되는데,
+  // 콜드 마운트·그룹 전환 커밋에서 바로 상세를 로드하면 그 리셋이 요청을
+  // abort해 상세가 열리지 않는다.
+  useEffect(() => {
+    if (pendingOpenEventId !== null) {
+      setPendingOpenEventId(null);
       syncDateOnDetailLoadRef.current = true;
-      loadEventDetail(eventId);
-    },
-    [loadEventDetail]
-  );
+      loadEventDetail(pendingOpenEventId);
+    }
+  }, [pendingOpenEventId, loadEventDetail]);
 
   const handleCloseDetail = () => {
     if (detailState.deleting) {
@@ -520,7 +528,7 @@ export function CalendarScreen({
               <View style={styles.screen}>
                 <HomeDeepLinkSync
                   navigation={navigation}
-                  onOpenEvent={handleOpenEventDeepLink}
+                  onOpenEvent={setPendingOpenEventId}
                   openEventId={route.params?.openEventId}
                 />
                 <View style={styles.monthToolbar}>
@@ -604,9 +612,12 @@ export function CalendarScreen({
         <CalendarStack.Screen name="CalendarEventForm">
           {({ navigation, route }) => {
             calNavRef.current = navigation;
+            // 셸 헬퍼의 느슨한 union 시그니처가 mode 없는 params를 보낼 수
+            // 있어 create로 폴백한다(런타임 params는 타입 보장이 없다).
+            const mode = route.params?.mode ?? "create";
             const initialDetail =
-              route.params.mode === "edit" ? editorDetailRef.current : null;
-            if (route.params.mode === "edit" && initialDetail === null) {
+              mode === "edit" ? editorDetailRef.current : null;
+            if (mode === "edit" && initialDetail === null) {
               return <ExpiredEditGuard navigation={navigation} />;
             }
             return (

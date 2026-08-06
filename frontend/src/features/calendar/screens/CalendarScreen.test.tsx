@@ -3,6 +3,7 @@ import {
   NavigationContainer,
   createNavigationContainerRef,
 } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Alert, Modal, Text } from "react-native";
 import TestRenderer from "react-test-renderer";
 
@@ -32,6 +33,29 @@ jest.mock("react-native-safe-area-context", () => {
 // CalendarScreen이 내부에 CalendarStack 내비게이터를 렌더하므로 컨테이너가 필요하다.
 function withNav(element: React.ReactElement) {
   return <NavigationContainer>{element}</NavigationContainer>;
+}
+
+// 셸의 캘린더 탭처럼 부모 route params(initial·params·screen)로 내부 스택을
+// 콜드 마운트하는 하네스. 마운트 첫 커밋부터 params가 존재하는 경로를 재현한다.
+const TabHarnessStack = createNativeStackNavigator();
+
+function withCalendarTabRoute(
+  element: React.ReactElement,
+  initialParams: {
+    initial: boolean;
+    params: Record<string, unknown>;
+    screen: string;
+  }
+) {
+  return (
+    <NavigationContainer>
+      <TabHarnessStack.Navigator screenOptions={{ headerShown: false }}>
+        <TabHarnessStack.Screen initialParams={initialParams} name="calendar">
+          {() => element}
+        </TabHarnessStack.Screen>
+      </TabHarnessStack.Navigator>
+    </NavigationContainer>
+  );
 }
 
 jest.mock("@react-native-community/datetimepicker", () => ({
@@ -232,6 +256,95 @@ test("알림 딥링크로 이벤트 상세를 열고 닫으면 이벤트 날짜 
     await Promise.resolve();
   });
   expect(gateway.getEvent).toHaveBeenCalledTimes(2);
+});
+
+test("캘린더가 마운트되지 않았던 딥링크도 콜드 마운트 직후 상세를 연다", async () => {
+  const gateway = createGateway();
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      withCalendarTabRoute(
+        <CalendarScreen {...baseProps} gateway={gateway} />,
+        {
+          initial: false,
+          params: { openEventId: "12" },
+          screen: "CalendarHome",
+        }
+      )
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+  await TestRenderer.act(async () => {});
+
+  // 마운트 커밋의 그룹 리셋 effect가 딥링크 상세 로드를 abort하면 안 된다.
+  expect(gateway.getEvent).toHaveBeenCalledWith("12", expect.anything());
+  const detailModal = renderer!.root.findByType(CalendarEventDetailModal);
+  expect(detailModal.props.visible).toBe(true);
+  expect(detailModal.props.detail).toMatchObject({ id: "12" });
+});
+
+test("재수화로 초기값 스태시가 사라진 수정 폼은 홈으로 되돌린다", async () => {
+  const gateway = createGateway();
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      withCalendarTabRoute(
+        <CalendarScreen {...baseProps} gateway={gateway} />,
+        {
+          initial: false,
+          params: { eventId: "12", mode: "edit" },
+          screen: "CalendarEventForm",
+        }
+      )
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+  await TestRenderer.act(async () => {});
+
+  // 수정 폼이 신규 작성으로 둔갑해 저장되지 않도록 폼 대신 홈을 보여준다.
+  expect(
+    renderer!.root.findAllByProps({ accessibilityLabel: "일정 제목" })
+  ).toHaveLength(0);
+  expect(renderer!.root.findByProps({ children: "2026년 7월" })).toBeTruthy();
+});
+
+test("그룹이 바뀌면 열려 있던 편집 화면을 홈으로 되돌린다", async () => {
+  const gateway = createGateway();
+  const { renderer } = await renderCalendar(gateway);
+
+  await openEventDetail(renderer);
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "일정 수정" })
+      .props.onPress();
+  });
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "일정 제목" })
+  ).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    renderer.update(
+      withNav(
+        <CalendarScreen
+          {...baseProps}
+          currentGroup={{
+            id: "4",
+            name: "외갓집 식구들",
+            role: "guardian",
+          }}
+          gateway={gateway}
+        />
+      )
+    );
+    await Promise.resolve();
+  });
+
+  expect(
+    renderer.root.findAllByProps({ accessibilityLabel: "일정 제목" })
+  ).toHaveLength(0);
+  expect(renderer.root.findByProps({ children: "2026년 7월" })).toBeTruthy();
 });
 
 test("날짜 바텀시트에서 일정을 열고 작성자·참여자 상세를 표시한다", async () => {
