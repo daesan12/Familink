@@ -18,6 +18,8 @@ import jakarta.persistence.Table;
 @Table(name = "users")
 public class User extends BaseEntity {
 
+	public static final String WITHDRAWN_DISPLAY_NAME = "탈퇴한 사용자";
+
 	@Column(name = "login_id", length = 15, unique = true)
 	private String loginId;
 
@@ -103,6 +105,19 @@ public class User extends BaseEntity {
 		this.gender = null;
 		this.profileImageUrl = null;
 		this.withdrawnAt = withdrawnAt;
+	}
+
+	/**
+	 * 호칭이 없을 때 사용할 표시 이름을 반환한다.
+	 *
+	 * <p>탈퇴하면 이름은 익명화되지만 게시글·댓글은 보존되므로, 남은 기록의 작성자를 표시할 이름이
+	 * 사라진다. 이때 {@code null} 대신 고정 문구를 사용해 작성자 이름이 있는 응답 계약을 채운다.
+	 * 그룹만 나간 구성원은 이름이 그대로 남아 있어 실명으로 표시된다.
+	 *
+	 * @return 탈퇴하지 않았으면 사용자 이름, 탈퇴했으면 탈퇴 사용자 표시 문구
+	 */
+	public String resolveDisplayName() {
+		return withdrawnAt == null ? name : WITHDRAWN_DISPLAY_NAME;
 	}
 
 	public String getLoginId() {

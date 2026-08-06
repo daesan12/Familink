@@ -138,7 +138,8 @@ public class AiCallPromptContextProvider {
 		return analyses.stream()
 			.map(analysis -> {
 				GroupMember author = analysis.getPost().getAuthorMember();
-				String displayName = aliases.getOrDefault(author.getId(), author.getUser().getName());
+				String displayName = aliases.getOrDefault(
+					author.getId(), author.getUser().resolveDisplayName());
 				return new AiCallPromptContext.TodayPostContext(
 					displayName,
 					analysis.getSummary(),
