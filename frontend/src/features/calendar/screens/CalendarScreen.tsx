@@ -214,7 +214,8 @@ export function CalendarScreen({
         : null,
     [detailState.detail, members]
   );
-  const canManageSelectedEvent = Boolean(
+  const canEditSelectedEvent = Boolean(visibleDetail && currentMember);
+  const canDeleteSelectedEvent = Boolean(
     visibleDetail &&
       currentMember &&
       (currentMember.isManager ||
@@ -454,7 +455,7 @@ export function CalendarScreen({
   };
 
   const handleEditDetail = () => {
-    if (visibleDetail && canManageSelectedEvent) {
+    if (visibleDetail && canEditSelectedEvent) {
       editorDetailRef.current = visibleDetail;
       setDetailState(CLOSED_DETAIL);
       setIsSheetVisible(false);
@@ -502,7 +503,7 @@ export function CalendarScreen({
   }, [detailState.deleting, detailState.detail, removeEvent, resolvedGateway]);
 
   const handleRequestDelete = () => {
-    if (!canManageSelectedEvent) {
+    if (!canDeleteSelectedEvent) {
       return;
     }
     Alert.alert("일정을 삭제할까요?", "삭제한 일정은 다시 복구할 수 없어요.", [
@@ -664,7 +665,8 @@ export function CalendarScreen({
         visible={isSheetVisible && !detailState.visible && !isFormFocused}
       />
       <CalendarEventDetailModal
-        canManage={canManageSelectedEvent}
+        canDelete={canDeleteSelectedEvent}
+        canEdit={canEditSelectedEvent}
         deleteErrorMessage={detailState.deleteErrorMessage}
         deleting={detailState.deleting}
         detail={visibleDetail}
