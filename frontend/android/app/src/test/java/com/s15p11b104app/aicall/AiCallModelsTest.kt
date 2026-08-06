@@ -102,4 +102,32 @@ class AiCallModelsTest {
     assertEquals(false, isFailedCallSelectionAllowed(endRetryRequired = true))
     assertEquals(true, isFailedCallSelectionAllowed(endRetryRequired = false))
   }
+
+  @Test
+  fun `통화 화면에서는 시스템 뒤로 가기를 무시한다`() {
+    val callPhases = listOf(AiCallPhase.Connecting, AiCallPhase.InProgress, AiCallPhase.Ending)
+
+    assertEquals(
+        callPhases.map { AiCallBackAction.Ignore },
+        callPhases.map { aiCallBackAction(it, endRetryRequired = false) },
+    )
+  }
+
+  @Test
+  fun `종료 결과 화면에서는 시스템 뒤로 가기로 선택 화면에 돌아간다`() {
+    val resultPhases = listOf(AiCallPhase.Completed, AiCallPhase.Cancelled, AiCallPhase.Failed)
+
+    assertEquals(
+        resultPhases.map { AiCallBackAction.ReturnToSelection },
+        resultPhases.map { aiCallBackAction(it, endRetryRequired = false) },
+    )
+  }
+
+  @Test
+  fun `종료 재시도가 필요한 실패 화면은 시스템 뒤로 가기를 무시한다`() {
+    assertEquals(
+        AiCallBackAction.Ignore,
+        aiCallBackAction(AiCallPhase.Failed, endRetryRequired = true),
+    )
+  }
 }

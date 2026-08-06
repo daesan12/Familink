@@ -47,6 +47,39 @@ internal suspend fun awaitAiCallEndConfirmation(
 
 internal fun isFailedCallSelectionAllowed(endRetryRequired: Boolean): Boolean = !endRetryRequired
 
+/** 시스템 뒤로 가기를 눌렀을 때 AI 전화 화면이 할 일. */
+internal enum class AiCallBackAction {
+  /** 뒤로 가기를 소비만 하고 현재 화면을 유지한다. */
+  Ignore,
+  /** 페르소나 선택 화면으로 돌아간다. */
+  ReturnToSelection,
+}
+
+/**
+ * 연결 중·통화 중·종료 중에는 뒤로 가기를 소비만 한다. 실수로 한 번 누른 것으로 통화가 끊기지 않도록
+ * 통화 종료는 화면의 통화 종료 버튼으로만 실행한다. [AiCallPhase.Selecting]은 뒤로 가기를 앱 셸에
+ * 넘기므로 여기까지 오지 않지만, 단계가 늘어날 때 누락을 컴파일러가 잡도록 분기를 모두 적는다.
+ */
+internal fun aiCallBackAction(
+    phase: AiCallPhase,
+    endRetryRequired: Boolean,
+): AiCallBackAction =
+    when (phase) {
+      AiCallPhase.Connecting,
+      AiCallPhase.InProgress,
+      AiCallPhase.Ending,
+      -> AiCallBackAction.Ignore
+
+      AiCallPhase.Failed ->
+          if (isFailedCallSelectionAllowed(endRetryRequired)) AiCallBackAction.ReturnToSelection
+          else AiCallBackAction.Ignore
+
+      AiCallPhase.Selecting,
+      AiCallPhase.Completed,
+      AiCallPhase.Cancelled,
+      -> AiCallBackAction.ReturnToSelection
+    }
+
 internal data class AiPersona(
     val id: Long,
     val displayName: String,
