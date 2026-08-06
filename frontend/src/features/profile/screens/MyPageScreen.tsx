@@ -425,6 +425,14 @@ export function MyPageScreen({
     Alert.alert('로그아웃', '후속 작업에서 연결될 기능입니다.');
   };
 
+  const handleMonthlyOpen = () => {
+    setSelectedMonth({
+      month: currentMonth.month,
+      year: currentMonth.year,
+    });
+    setIsMonthlyOpen(true);
+  };
+
   const menuItems: readonly MyPageMenuItem[] = [
     {
       key: 'notification-settings',
@@ -486,7 +494,7 @@ export function MyPageScreen({
               accessibilityLabel="월간 효자 도장 보기"
               accessibilityRole="button"
               hitSlop={8}
-              onPress={() => setIsMonthlyOpen(true)}
+              onPress={handleMonthlyOpen}
               style={styles.calendarButton}
             >
               <MaterialDesignIcons
