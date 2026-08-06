@@ -1,10 +1,13 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {StackActions, useIsFocused} from '@react-navigation/native';
+import {
+  createNativeStackNavigator,
+  type NativeStackNavigationProp,
+} from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   StyleSheet,
   Text,
   Vibration,
@@ -15,7 +18,6 @@ import {
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS} from '../../../design/tokens';
 import {RetryButton} from '../../../shared/components/RetryButton';
-import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {
   MemberProfilePopup,
   type GroupMembersLoader,
@@ -53,6 +55,7 @@ import {
 } from '../fixtures/commentFixtures';
 import {useFeed} from '../hooks/useFeed';
 import {usePostInteractions} from '../hooks/usePostInteractions';
+import type {FeedStackParamList} from '../navigationTypes';
 import type {
   ChangeReactionInput,
   CreateCommentInput,
@@ -69,6 +72,59 @@ const EMPTY_COMMENTS_BY_POST_ID: Readonly<
   Record<string, readonly PostComment[]>
 > = {};
 const EMPTY_POSTS: readonly FeedPost[] = [];
+
+// 피드 탭 내부 스택. 상세·작성이 조건부 렌더링 대신 스택 화면으로 열린다.
+// 작성 화면도 셸 스택이 아니라 여기에 둔다 — 탭바 숨김은 풀스크린 신호가
+// 담당하므로(셸 레벨 탭바) 승격 이점이 없고, 업로드 상태 머신을 FeedScreen
+// 스코프에 유지할 수 있다.
+const FeedStack = createNativeStackNavigator<FeedStackParamList>();
+
+type FeedNavigation = NativeStackNavigationProp<FeedStackParamList>;
+
+// 라우트 포커스를 셸 신호·목록 게이트용 미러로 보고한다. 반드시 모듈 레벨
+// 유지 — 렌더 본문 안에서 정의하면 매 렌더 타입이 바뀌어 리마운트된다.
+function RouteFocusReporter({
+  onFocusChange,
+}: {
+  onFocusChange: (isFocused: boolean) => void;
+}) {
+  const isFocused = useIsFocused();
+
+  useEffect(() => {
+    onFocusChange(isFocused);
+    return () => onFocusChange(false);
+  }, [isFocused, onFocusChange]);
+
+  return null;
+}
+
+// 상세 라우트의 마운트와 postId를 selectedPostId 미러로 동기화한다.
+// unmount cleanup이 기존 하드웨어 백 핸들러의 정리(피커·메뉴·상세 상태 닫기)를
+// 대체한다 — 스택 pop 한 번으로 오늘과 같은 동시 정리가 일어난다.
+// 포커스 기준으로 재보고해야 한다: 이 상세 위에 다른 화면(작성 중 딥링크로
+// 쌓인 두 번째 상세 등)이 pop되어 돌아왔을 때, 그 화면의 cleanup이 비운
+// 미러를 복구하는 경로가 포커스 재보고뿐이다.
+function DetailRouteSync({
+  onClosed,
+  onOpened,
+  postId,
+}: {
+  onClosed: () => void;
+  onOpened: (postId: string) => void;
+  postId: string;
+}) {
+  const isFocused = useIsFocused();
+
+  useEffect(() => {
+    if (isFocused) {
+      onOpened(postId);
+    }
+  }, [isFocused, onOpened, postId]);
+
+  useEffect(() => () => onClosed(), [onClosed]);
+
+  return null;
+}
 
 export interface FeedScreenProps extends AppScreenProps {
   currentUser?: FeedMember | null;
@@ -106,11 +162,6 @@ export interface FeedScreenProps extends AppScreenProps {
   rankingLoader?: WeeklyRankingLoader;
 }
 
-interface ComposerState {
-  initialValue?: PostComposerInitialValue;
-  mode: 'create' | 'edit';
-}
-
 interface OpenReactionPicker {
   anchor: ReactionAnchor;
   postId: string;
@@ -125,7 +176,6 @@ interface CommentsState {
 }
 
 export function FeedScreen({
-  createPostRequestId = 0,
   currentGroup,
   currentMemberId,
   commentsLoader,
@@ -142,8 +192,6 @@ export function FeedScreen({
   onOpenNotifications,
   onSubmitPost,
   onUpdateComment,
-  openPostId,
-  openPostRequestId = 0,
   pageLoader,
   membersLoader,
   memberProfileLoader,
@@ -201,11 +249,17 @@ export function FeedScreen({
     ) : null;
   const interactionsRef = useRef(interactions);
   interactionsRef.current = interactions;
+  // 상세 라우트의 미러. 진실 원천은 FeedStack이며 DetailRouteSync가 동기화한다.
+  // 상세 데이터 로딩 effect·새로고침이 기존 그대로 이 값을 구독한다.
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [detailPost, setDetailPost] = useState<FeedPost | null>(null);
   const [isDetailRefreshing, setIsDetailRefreshing] = useState(false);
   const [menuPostId, setMenuPostId] = useState<string | null>(null);
-  const [composer, setComposer] = useState<ComposerState | null>(null);
+  // 작성 라우트의 포커스 미러. 셸 풀스크린 신호(탭바·헤더 숨김)를 구동한다.
+  // 마운트가 아니라 포커스 기준 — 작성 중 딥링크로 상세가 위에 쌓이는 엣지에서
+  // 상세 화면인데 탭바가 숨는 비정합을 막는다.
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
+  const [isHomeFocused, setIsHomeFocused] = useState(false);
   const [openReactionPicker, setOpenReactionPicker] =
     useState<OpenReactionPicker | null>(null);
   const [uploadState, setUploadState] = useState<UploadState>({status: 'idle'});
@@ -219,19 +273,22 @@ export function FeedScreen({
     page: 0,
     postId: null,
   });
+  const feedNavRef = useRef<FeedNavigation | null>(null);
+  // 수정 모드 작성 화면의 초깃값. 라우트 params에는 postId만 실리므로,
+  // 수정 진입 시점의 스냅샷을 ref로 전달한다.
+  const composerEditInitialValueRef = useRef<PostComposerInitialValue | null>(
+    null,
+  );
   const pendingUploadPayload = useRef<PostSubmitPayload | null>(null);
   const uploadAbortController = useRef<AbortController | null>(null);
   const commentsRequestId = useRef(0);
   const commentsLoading = useRef(false);
   const pendingReactionPostIds = useRef(new Set<string>());
   const nextLocalCommentId = useRef(1);
-  const lastCreateRequestId = useRef(createPostRequestId);
-  const lastOpenPostRequestId = useRef(0);
   const detailRequestId = useRef(0);
   const previousGroupId = useRef(currentGroup.id);
   const isDeleteConfirmationOpen = useRef(false);
   const isDeleteSubmitting = useRef(false);
-  const feedScrollOffset = useRef(0);
   const handleViewablePostsChanged = useRef(
     ({viewableItems}: {viewableItems: readonly ViewToken<FeedPost>[]}) => {
       setVisiblePostIds(
@@ -249,50 +306,25 @@ export function FeedScreen({
       return;
     }
     previousGroupId.current = currentGroup.id;
-    detailRequestId.current += 1;
-    setSelectedPostId(null);
-    setDetailPost(null);
-    setIsDetailRefreshing(false);
     setMenuPostId(null);
     setOpenReactionPicker(null);
     uploadAbortController.current?.abort();
     pendingUploadPayload.current = null;
     setUploadState({status: 'idle'});
-    commentsRequestId.current += 1;
-    commentsLoading.current = false;
-    setCommentsState({
-      error: null,
-      hasNext: false,
-      isLoading: false,
-      page: 0,
-      postId: null,
-    });
+    // 이전 그룹의 상세가 열려 있으면 홈으로 되돌린다(상세 상태 정리는
+    // DetailRouteSync cleanup → selectedPostId null 분기가 이어받는다).
+    // 그룹 전환이 동반된 딥링크 상세는 params.groupId가 새 그룹과 일치하므로
+    // 지우지 않는다 — 같은 커밋에 push된 목적지를 죽이지 않기 위한 판별자다.
+    const stackState = feedNavRef.current?.getState();
+    const topRoute = stackState?.routes[stackState.index];
+    if (
+      topRoute?.name === 'PostDetail' &&
+      (topRoute.params as {groupId?: string} | undefined)?.groupId !==
+        currentGroup.id
+    ) {
+      feedNavRef.current?.dispatch(StackActions.popTo('FeedHome'));
+    }
   }, [currentGroup.id]);
-
-  useEffect(() => {
-    if (
-      createPostRequestId > 0 &&
-      createPostRequestId !== lastCreateRequestId.current
-    ) {
-      lastCreateRequestId.current = createPostRequestId;
-      pendingUploadPayload.current = null;
-      setUploadState({status: 'idle'});
-      setComposer({mode: 'create'});
-      setOpenReactionPicker(null);
-    }
-  }, [createPostRequestId]);
-
-  useEffect(() => {
-    if (
-      openPostId &&
-      openPostRequestId > 0 &&
-      openPostRequestId !== lastOpenPostRequestId.current
-    ) {
-      lastOpenPostRequestId.current = openPostRequestId;
-      setSelectedPostId(openPostId);
-      setOpenReactionPicker(null);
-    }
-  }, [openPostId, openPostRequestId]);
 
   const loadCommentsPage = useCallback(
     (postId: string, page: number, replace: boolean) => {
@@ -420,7 +452,9 @@ export function FeedScreen({
           fallbackPost === null
         ) {
           setDetailPost(null);
-          setSelectedPostId(null);
+          // 실패한 상세 한 장만 걷어낸다. popTo('FeedHome')은 아래에 깔린
+          // dirty 작성 화면까지 경고 없이 파괴한다.
+          feedNavRef.current?.goBack();
         }
         if (isActive && detailRequestId.current === requestId) {
           Alert.alert(
@@ -561,10 +595,10 @@ export function FeedScreen({
   ]);
 
   useEffect(() => {
-    onFullscreenChange?.(Boolean(composer));
+    onFullscreenChange?.(isComposerFocused);
 
     return () => onFullscreenChange?.(false);
-  }, [composer, onFullscreenChange]);
+  }, [isComposerFocused, onFullscreenChange]);
 
   useEffect(() => {
     onHeaderVisibilityChange?.(!selectedPostId);
@@ -577,12 +611,20 @@ export function FeedScreen({
 
   const closeReactionPicker = () => setOpenReactionPicker(null);
 
-  useHardwareBack(() => {
-    closeReactionPicker();
-    setMenuPostId(null);
+  // 상세 라우트 마운트 동기화 콜백. cleanup(onClosed)이 기존 하드웨어 백
+  // 핸들러의 정리를 대체한다 — 상세의 뒤로가기는 이제 스택 pop이 담당한다
+  // (컨테이너 useBackButton이 최심 포커스 스택을 pop).
+  const handleDetailRouteOpened = useCallback((postId: string) => {
+    setSelectedPostId(postId);
+    // 열려 있던 상세의 postId가 딥링크로 교체되는 경우(기존 신호 소비와 동일
+    // 시점) 반응 피커가 이전 게시글 것을 가리키지 않게 닫는다.
+    setOpenReactionPicker(null);
+  }, []);
+  const handleDetailRouteClosed = useCallback(() => {
     setSelectedPostId(null);
-    return true;
-  }, selectedPostId !== null && composer === null);
+    setMenuPostId(null);
+    setOpenReactionPicker(null);
+  }, []);
 
   const handleToggleReactionPicker = (
     postId: string,
@@ -658,13 +700,10 @@ export function FeedScreen({
 
   const handleOpenPost = (postId: string) => {
     closeReactionPicker();
-    setSelectedPostId(postId);
-  };
-
-  const handleFeedScroll = (
-    event: NativeSyntheticEvent<NativeScrollEvent>,
-  ) => {
-    feedScrollOffset.current = event.nativeEvent.contentOffset.y;
+    feedNavRef.current?.navigate('PostDetail', {
+      groupId: currentGroup.id,
+      postId,
+    });
   };
 
   const handleCreateComment = async (
@@ -824,11 +863,14 @@ export function FeedScreen({
       if (controller.signal.aborted) {
         return;
       }
-      setUploadState({status: 'success'});
+      // 같은 커밋에 popToTop으로 작성 화면이 언마운트되므로 success 카드는
+      // 보이지 않는다(기존 동작 동일). idle로 되돌려야 다음 작성 진입에서
+      // 이전 업로드의 완료 카드가 잔존하지 않는다.
+      setUploadState({status: 'idle'});
       pendingUploadPayload.current = null;
-      setComposer(null);
-      setSelectedPostId(null);
-      setDetailPost(null);
+      // 작성·수정 완료 시 상세까지 닫고 목록으로 돌아간다(기존 동작).
+      // 미러 정리는 라우트 unmount cleanup이 이어받는다.
+      feedNavRef.current?.dispatch(StackActions.popToTop());
       feed.retry();
     } catch (error) {
       if (
@@ -861,48 +903,9 @@ export function FeedScreen({
     uploadAbortController.current = null;
     pendingUploadPayload.current = null;
     setUploadState({status: 'idle'});
-    setComposer(null);
   };
 
-  if (composer) {
-    return (
-      <PostComposerScreen
-        initialValue={composer.initialValue}
-        mode={composer.mode}
-        onCancel={cancelComposer}
-        onRetryUpload={() => {
-          if (pendingUploadPayload.current !== null) {
-            void submitComposerPayload(pendingUploadPayload.current);
-          }
-        }}
-        onSubmit={payload => void submitComposerPayload(payload)}
-        uploadState={uploadState}
-      />
-    );
-  }
-
-  if (feed.status === 'loading') {
-    return (
-      <View accessibilityLabel="피드 불러오는 중" style={styles.centered}>
-        <ActivityIndicator color={COLORS.purple} size="large" />
-      </View>
-    );
-  }
-
-  if (feed.status === 'error') {
-    return (
-      <View accessibilityLiveRegion="polite" style={styles.centered}>
-        <Text style={styles.errorText}>{feed.message}</Text>
-        <RetryButton onPress={feed.retry} />
-      </View>
-    );
-  }
-
-  const selectedPost =
-    detailPost?.id === selectedPostId
-      ? detailPost
-      : feed.posts.find(post => post.id === selectedPostId) ?? null;
-  const menuPost = feed.posts.find(post => post.id === menuPostId) ?? null;
+  const menuPost = posts.find(post => post.id === menuPostId) ?? null;
 
   const handleEdit = () => {
     if (!menuPost || !menuPost.isOwnedByCurrentUser) {
@@ -911,9 +914,10 @@ export function FeedScreen({
     setMenuPostId(null);
     pendingUploadPayload.current = null;
     setUploadState({status: 'idle'});
-    setComposer({
-      initialValue: createEditInitialValue(menuPost),
+    composerEditInitialValueRef.current = createEditInitialValue(menuPost);
+    feedNavRef.current?.navigate('PostComposer', {
       mode: 'edit',
+      postId: menuPost.id,
     });
   };
 
@@ -956,8 +960,7 @@ export function FeedScreen({
               .then(() => onConfirmDelete(postId))
               .then(() => {
                 feed.retry();
-                setSelectedPostId(null);
-                setDetailPost(null);
+                feedNavRef.current?.dispatch(StackActions.popToTop());
               })
               .catch(() => {
                 Alert.alert(
@@ -982,172 +985,273 @@ export function FeedScreen({
     );
   };
 
-  if (selectedPost) {
-    const comments =
-      interactions.commentsByPostId[selectedPost.id] ?? [];
-    const reactions =
-      interactions.reactionsByPostId[selectedPost.id] ??
-      selectedPost.reactions;
-    const selectedReactionId =
-      interactions.selectedReactionByPostId[selectedPost.id] ?? null;
-
-    return (
-      <View style={styles.feedRoot}>
-        <PostDetailScreen
-          canInteract={canInteract}
-          commentCount={
-            interactions.commentCountByPostId[selectedPost.id] ??
-            selectedPost.commentCount
-          }
-          comments={comments}
-          commentsError={commentsState.error}
-          commentsHasNext={commentsState.hasNext}
-          currentGroupName={currentGroup.name}
-          currentUser={resolvedCurrentUser}
-          isCommentsLoading={commentsState.isLoading}
-          isRefreshing={isDetailRefreshing}
-          isReactionPickerOpen={
-            openReactionPicker?.postId === selectedPost.id
-          }
-          onBack={() => {
-            closeReactionPicker();
-            setMenuPostId(null);
-            setSelectedPostId(null);
-          }}
-          onCreateComment={handleCreateComment}
-          onDeleteComment={handleDeleteComment}
-          onLoadMoreComments={() => {
-            if (
-              selectedPostId !== null &&
-              commentsState.hasNext &&
-              !commentsState.isLoading
-            ) {
-              loadCommentsPage(selectedPostId, commentsState.page + 1, false);
-            }
-          }}
-          onMenuPress={() => setMenuPostId(selectedPost.id)}
-          onOpenNotifications={onOpenNotifications}
-          onPressAuthor={handlePressAuthor}
-          onScrollBeginDrag={closeReactionPicker}
-          onRetryComments={() => {
-            if (selectedPostId !== null) {
-              loadCommentsPage(selectedPostId, 0, true);
-            }
-          }}
-          onRefresh={() => {
-            void refreshSelectedPost();
-          }}
-          onSelectReaction={handleSelectReaction}
-          onToggleReactionPicker={handleToggleReactionPicker}
-          onUpdateComment={handleUpdateComment}
-          post={selectedPost}
-          reactions={reactions}
-          selectedReactionId={selectedReactionId}
-        />
-        <PostActionsSheet
-          isOpen={menuPost?.id === selectedPost.id}
-          onClose={() => setMenuPostId(null)}
-          onDelete={handleDelete}
-          onEdit={handleEdit}
-        />
-        <ReactionPopover
-          anchor={
-            openReactionPicker?.anchor ?? {
-              height: 0,
-              width: 0,
-              x: 0,
-              y: 0,
-            }
-          }
-          onClose={closeReactionPicker}
-          onSelect={reactionId =>
-            handleSelectReaction(selectedPost.id, reactionId)
-          }
-          selectedReactionId={selectedReactionId}
-          visible={openReactionPicker?.postId === selectedPost.id}
-        />
-        {authorProfilePopup}
-      </View>
-    );
-  }
-
   return (
     <View style={styles.feedRoot}>
-      <FlatList
-        contentContainerStyle={[
-          styles.listContent,
-          feed.posts.length === 0 && styles.emptyListContent,
-        ]}
-        contentInsetAdjustmentBehavior="automatic"
-        contentOffset={{x: 0, y: feedScrollOffset.current}}
-        data={feed.posts}
-        keyExtractor={post => post.id}
-        ListEmptyComponent={<EmptyFeedState />}
-        ListFooterComponent={
-          feed.isLoadingMore ? (
-            <ActivityIndicator color={COLORS.purple} style={styles.listFooter} />
-          ) : null
-        }
-        onEndReached={feed.loadMore}
-        onEndReachedThreshold={0.5}
-        onScroll={handleFeedScroll}
-        onScrollBeginDrag={closeReactionPicker}
-        onRefresh={feed.refresh}
-        refreshing={feed.isRefreshing}
-        onViewableItemsChanged={handleViewablePostsChanged}
-        renderItem={({item}) => {
-          const reactions =
-            interactions.reactionsByPostId[item.id] ?? item.reactions;
+      <FeedStack.Navigator
+        screenOptions={{animation: 'none', headerShown: false}}
+      >
+        <FeedStack.Screen name="FeedHome">
+          {({navigation}) => {
+            // 이동 함수가 effect·핸들러에서도 스택을 조작할 수 있게 렌더 중
+            // ref로 캡처한다(AppShell shellNavRef 관용구). 세 화면 모두 캡처 —
+            // 중첩 params로 상세·작성이 초기 화면이 될 수 있다.
+            feedNavRef.current = navigation;
+            return (
+              <View style={styles.feedRoot}>
+                <RouteFocusReporter onFocusChange={setIsHomeFocused} />
+                {feed.status === 'loading' ? (
+                  <View
+                    accessibilityLabel="피드 불러오는 중"
+                    style={styles.centered}
+                  >
+                    <ActivityIndicator color={COLORS.purple} size="large" />
+                  </View>
+                ) : feed.status === 'error' ? (
+                  <View accessibilityLiveRegion="polite" style={styles.centered}>
+                    <Text style={styles.errorText}>{feed.message}</Text>
+                    <RetryButton onPress={feed.retry} />
+                  </View>
+                ) : (
+                  <>
+                    <FlatList
+                      contentContainerStyle={[
+                        styles.listContent,
+                        feed.posts.length === 0 && styles.emptyListContent,
+                      ]}
+                      contentInsetAdjustmentBehavior="automatic"
+                      data={feed.posts}
+                      keyExtractor={post => post.id}
+                      ListEmptyComponent={<EmptyFeedState />}
+                      ListFooterComponent={
+                        feed.isLoadingMore ? (
+                          <ActivityIndicator
+                            color={COLORS.purple}
+                            style={styles.listFooter}
+                          />
+                        ) : null
+                      }
+                      onEndReached={feed.loadMore}
+                      onEndReachedThreshold={0.5}
+                      onScrollBeginDrag={closeReactionPicker}
+                      onRefresh={feed.refresh}
+                      refreshing={feed.isRefreshing}
+                      onViewableItemsChanged={handleViewablePostsChanged}
+                      renderItem={({item}) => {
+                        const reactions =
+                          interactions.reactionsByPostId[item.id] ??
+                          item.reactions;
 
-          return (
-            <FeedItem
-              canInteract={canInteract}
-              commentCount={
-                interactions.commentCountByPostId[item.id] ??
-                item.commentCount
-              }
-              isVisible={visiblePostIds.has(item.id)}
-              isReactionPickerOpen={
-                openReactionPicker?.postId === item.id
-              }
-              onPress={handleOpenPost}
-              onPressAuthor={handlePressAuthor}
-              onSelectReaction={handleSelectReaction}
-              onToggleReactionPicker={handleToggleReactionPicker}
-              post={{...item, reactions}}
-              selectedReactionId={
-                interactions.selectedReactionByPostId[item.id] ?? null
-              }
-            />
-          );
-        }}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-      />
-      <ReactionPopover
-        anchor={
-          openReactionPicker?.anchor ?? {
-            height: 0,
-            width: 0,
-            x: 0,
-            y: 0,
-          }
-        }
-        onClose={closeReactionPicker}
-        onSelect={reactionId => {
-          if (openReactionPicker) {
-            handleSelectReaction(openReactionPicker.postId, reactionId);
-          }
-        }}
-        selectedReactionId={
-          openReactionPicker
-            ? interactions.selectedReactionByPostId[
-                openReactionPicker.postId
-              ] ?? null
-            : null
-        }
-        visible={openReactionPicker !== null}
-      />
+                        return (
+                          <FeedItem
+                            canInteract={canInteract}
+                            commentCount={
+                              interactions.commentCountByPostId[item.id] ??
+                              item.commentCount
+                            }
+                            // 홈이 상세·작성 아래에서 마운트 유지되므로 포커스로
+                            // 게이트해 백그라운드 영상 재생을 막는다(기존 언마운트 등가).
+                            isVisible={
+                              isHomeFocused && visiblePostIds.has(item.id)
+                            }
+                            isReactionPickerOpen={
+                              openReactionPicker?.postId === item.id
+                            }
+                            onPress={handleOpenPost}
+                            onPressAuthor={handlePressAuthor}
+                            onSelectReaction={handleSelectReaction}
+                            onToggleReactionPicker={handleToggleReactionPicker}
+                            post={{...item, reactions}}
+                            selectedReactionId={
+                              interactions.selectedReactionByPostId[item.id] ??
+                              null
+                            }
+                          />
+                        );
+                      }}
+                      showsVerticalScrollIndicator={false}
+                    />
+                    {isHomeFocused ? (
+                      <ReactionPopover
+                        anchor={
+                          openReactionPicker?.anchor ?? {
+                            height: 0,
+                            width: 0,
+                            x: 0,
+                            y: 0,
+                          }
+                        }
+                        onClose={closeReactionPicker}
+                        onSelect={reactionId => {
+                          if (openReactionPicker) {
+                            handleSelectReaction(
+                              openReactionPicker.postId,
+                              reactionId,
+                            );
+                          }
+                        }}
+                        selectedReactionId={
+                          openReactionPicker
+                            ? interactions.selectedReactionByPostId[
+                                openReactionPicker.postId
+                              ] ?? null
+                            : null
+                        }
+                        visible={openReactionPicker !== null}
+                      />
+                    ) : null}
+                  </>
+                )}
+              </View>
+            );
+          }}
+        </FeedStack.Screen>
+        <FeedStack.Screen name="PostDetail">
+          {({navigation, route}) => {
+            feedNavRef.current = navigation;
+            const {postId} = route.params;
+            const detailSync = (
+              <DetailRouteSync
+                onClosed={handleDetailRouteClosed}
+                onOpened={handleDetailRouteOpened}
+                postId={postId}
+              />
+            );
+            const selectedPost =
+              detailPost?.id === postId
+                ? detailPost
+                : posts.find(post => post.id === postId) ?? null;
+
+            if (selectedPost === null) {
+              // 목록에 없는 게시글 딥링크: detailLoader 응답까지 로딩을 보여준다.
+              return (
+                <View
+                  accessibilityLabel="게시글 상세 불러오는 중"
+                  style={styles.centered}
+                >
+                  {detailSync}
+                  <ActivityIndicator color={COLORS.purple} size="large" />
+                </View>
+              );
+            }
+
+            const comments =
+              interactions.commentsByPostId[selectedPost.id] ?? [];
+            const reactions =
+              interactions.reactionsByPostId[selectedPost.id] ??
+              selectedPost.reactions;
+            const selectedReactionId =
+              interactions.selectedReactionByPostId[selectedPost.id] ?? null;
+
+            return (
+              <View style={styles.feedRoot}>
+                {detailSync}
+                <PostDetailScreen
+                  canInteract={canInteract}
+                  commentCount={
+                    interactions.commentCountByPostId[selectedPost.id] ??
+                    selectedPost.commentCount
+                  }
+                  comments={comments}
+                  commentsError={commentsState.error}
+                  commentsHasNext={commentsState.hasNext}
+                  currentGroupName={currentGroup.name}
+                  currentUser={resolvedCurrentUser}
+                  isCommentsLoading={commentsState.isLoading}
+                  isRefreshing={isDetailRefreshing}
+                  isReactionPickerOpen={
+                    openReactionPicker?.postId === selectedPost.id
+                  }
+                  onBack={() => navigation.goBack()}
+                  onCreateComment={handleCreateComment}
+                  onDeleteComment={handleDeleteComment}
+                  onLoadMoreComments={() => {
+                    if (
+                      selectedPostId !== null &&
+                      commentsState.hasNext &&
+                      !commentsState.isLoading
+                    ) {
+                      loadCommentsPage(
+                        selectedPostId,
+                        commentsState.page + 1,
+                        false,
+                      );
+                    }
+                  }}
+                  onMenuPress={() => setMenuPostId(selectedPost.id)}
+                  onOpenNotifications={onOpenNotifications}
+                  onPressAuthor={handlePressAuthor}
+                  onScrollBeginDrag={closeReactionPicker}
+                  onRetryComments={() => {
+                    if (selectedPostId !== null) {
+                      loadCommentsPage(selectedPostId, 0, true);
+                    }
+                  }}
+                  onRefresh={() => {
+                    void refreshSelectedPost();
+                  }}
+                  onSelectReaction={handleSelectReaction}
+                  onToggleReactionPicker={handleToggleReactionPicker}
+                  onUpdateComment={handleUpdateComment}
+                  post={selectedPost}
+                  reactions={reactions}
+                  selectedReactionId={selectedReactionId}
+                />
+                <PostActionsSheet
+                  isOpen={menuPost?.id === selectedPost.id}
+                  onClose={() => setMenuPostId(null)}
+                  onDelete={handleDelete}
+                  onEdit={handleEdit}
+                />
+                <ReactionPopover
+                  anchor={
+                    openReactionPicker?.anchor ?? {
+                      height: 0,
+                      width: 0,
+                      x: 0,
+                      y: 0,
+                    }
+                  }
+                  onClose={closeReactionPicker}
+                  onSelect={reactionId =>
+                    handleSelectReaction(selectedPost.id, reactionId)
+                  }
+                  selectedReactionId={selectedReactionId}
+                  visible={openReactionPicker?.postId === selectedPost.id}
+                />
+              </View>
+            );
+          }}
+        </FeedStack.Screen>
+        <FeedStack.Screen name="PostComposer">
+          {({navigation, route}) => {
+            feedNavRef.current = navigation;
+            return (
+              <>
+                <RouteFocusReporter onFocusChange={setIsComposerFocused} />
+                <PostComposerScreen
+                  initialValue={
+                    route.params.mode === 'edit'
+                      ? composerEditInitialValueRef.current ?? undefined
+                      : undefined
+                  }
+                  mode={route.params.mode}
+                  onCancel={() => {
+                    cancelComposer();
+                    navigation.goBack();
+                  }}
+                  onRetryUpload={() => {
+                    if (pendingUploadPayload.current !== null) {
+                      void submitComposerPayload(pendingUploadPayload.current);
+                    }
+                  }}
+                  onSubmit={payload => void submitComposerPayload(payload)}
+                  uploadState={uploadState}
+                />
+              </>
+            );
+          }}
+        </FeedStack.Screen>
+      </FeedStack.Navigator>
       {authorProfilePopup}
     </View>
   );

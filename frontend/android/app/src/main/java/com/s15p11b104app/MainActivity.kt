@@ -10,6 +10,7 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnable
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 import com.s15p11b104app.notifications.NotificationPresenter
 import com.s15p11b104app.notifications.NotificationTapStore
+import com.swmansion.rnscreens.fragment.restoration.RNScreensFragmentFactory
 
 class MainActivity : ReactActivity() {
 
@@ -27,6 +28,9 @@ class MainActivity : ReactActivity() {
       DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    // react-native-screens 권장 설정. Activity 재생성 시 screens Fragment가 기본
+    // FragmentFactory로 복원되며 크래시하는 문제를 막는다.
+    supportFragmentManager.fragmentFactory = RNScreensFragmentFactory()
     super.onCreate(savedInstanceState)
     // 시스템이 보관한 launch intent에는 removeExtra가 적용되지 않아, 프로세스 종료 후
     // 최근 앱 재실행이 같은 extras를 다시 전달한다. 히스토리 재실행은 새 탭이 아니므로

@@ -1,5 +1,10 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {StackActions} from '@react-navigation/native';
+import {
+  createNativeStackNavigator,
+  type NativeStackNavigationProp,
+} from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +18,7 @@ import {
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
-import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
+import {RouteFocusReporter} from '../../../shared/navigation/RouteFocusReporter';
 import {
   getInterestErrorMessage,
   InterestSelectionScreen,
@@ -29,6 +34,7 @@ import {
 } from '../components/MyPageSettingsSection';
 import {CARE_RECEIVER_PROFILE} from '../fixtures/profileFixtures';
 import {mergeUserProfile, toChangedApiProfileUpdate} from '../profileModel';
+import type {ProfileStackParamList} from '../navigationTypes';
 import type {CareReceiverProfile, ProfileImageChange} from '../types';
 import {ProfileEditScreen} from './ProfileEditScreen';
 import {ProfileGuideScreen} from './ProfileGuideScreen';
@@ -41,8 +47,19 @@ export interface CareReceiverMyPageScreenProps extends AppScreenProps {
   profileGateway?: ProfileGateway;
 }
 
-// 하위 전체화면. 진입 시 하단 탭을 숨긴다.
-type SubScreen = 'edit' | 'interest' | 'guide' | 'notificationSettings' | null;
+// 프로필 탭 내부 스택. 하위 전체화면 4종이 얼리 리턴 대신 스택 화면으로
+// 열린다. 보호자 화면과 param list를 공유하고 InterestSettings를 추가 등록한다.
+const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
+
+type ProfileNavigation = NativeStackNavigationProp<ProfileStackParamList>;
+
+// InterestSettings 라우트가 pop되는 모든 경로(자체 뒤로 버튼, 하드웨어 백의
+// 컨테이너 pop, 그룹 전환·프로필 실패 popTo)에서 진행 중 조회를 무효화한다.
+// 모듈 레벨 필수 — 렌더 본문 안에서 정의하면 매 렌더 리마운트된다.
+function RouteUnmountCleanup({onUnmount}: {onUnmount: () => void}) {
+  useEffect(() => () => onUnmount(), [onUnmount]);
+  return null;
+}
 
 type ProfileLoadState =
   | {status: 'loading'}
@@ -90,7 +107,12 @@ export function CareReceiverMyPageScreen({
         : {status: 'loading'},
     );
   const [profileRetryCount, setProfileRetryCount] = useState(0);
-  const [subScreen, setSubScreen] = useState<SubScreen>(null);
+  // 홈 포커스의 부정이 곧 풀스크린이다(하위 화면 전부 풀스크린).
+  // 초기값 true — false로 시작하면 첫 커밋에서 탭바가 잠깐 숨는다.
+  const [isHomeFocused, setIsHomeFocused] = useState(true);
+  // 이동 함수가 effect·핸들러에서도 스택을 조작할 수 있게 렌더 중 ref로
+  // 캡처한다(FeedScreen feedNavRef 관용구).
+  const profileNavRef = useRef<ProfileNavigation | null>(null);
 
   const [interestLoadState, setInterestLoadState] =
     useState<InterestLoadState>(IDLE_INTEREST_LOAD_STATE);
@@ -99,22 +121,13 @@ export function CareReceiverMyPageScreen({
   const currentInterestScopeRef = useRef(interestScopeKey);
   const previousInterestScopeRef = useRef(interestScopeKey);
   currentInterestScopeRef.current = interestScopeKey;
-  const interestScreenHandlesBack =
-    subScreen === 'interest' &&
-    interestLoadState.status === 'ready' &&
-    interestLoadState.scopeKey === interestScopeKey;
-
-  useHardwareBack(() => {
-    setSubScreen(null);
-    return true;
-  }, subScreen !== null && subScreen !== 'edit' && !interestScreenHandlesBack);
 
   // 하위 전체화면에 들어가면 하단 탭을 숨긴다(보호자 마이페이지와 같은 방식).
   useEffect(() => {
-    onFullscreenChange?.(subScreen !== null);
+    onFullscreenChange?.(!isHomeFocused);
 
     return () => onFullscreenChange?.(false);
-  }, [subScreen, onFullscreenChange]);
+  }, [isHomeFocused, onFullscreenChange]);
 
   useEffect(() => {
     if (previousInterestScopeRef.current === interestScopeKey) {
@@ -124,7 +137,12 @@ export function CareReceiverMyPageScreen({
     previousInterestScopeRef.current = interestScopeKey;
     interestRequestGenerationRef.current += 1;
     setInterestLoadState(IDLE_INTEREST_LOAD_STATE);
-    setSubScreen(current => (current === 'interest' ? null : current));
+    // 그룹 전환은 관심사 화면만 닫는다(편집·가이드는 유지 — 기존 동작 보존).
+    const stackState = profileNavRef.current?.getState();
+    const topRoute = stackState?.routes[stackState.index];
+    if (topRoute?.name === 'InterestSettings') {
+      profileNavRef.current?.dispatch(StackActions.popTo('ProfileHome'));
+    }
   }, [interestScopeKey]);
 
   useEffect(
@@ -156,7 +174,9 @@ export function CareReceiverMyPageScreen({
       })
       .catch(() => {
         if (!disposed) {
-          setSubScreen(null);
+          // 하위 화면이 열린 채 실패하면(재시도 실패 등) 홈으로 걷어내
+          // 오류 화면이 가려지지 않게 한다(기존 setSubScreen(null) 등가).
+          profileNavRef.current?.dispatch(StackActions.popTo('ProfileHome'));
           setProfileLoadState({
             message: PROFILE_LOAD_ERROR_MESSAGE,
             status: 'error',
@@ -214,17 +234,19 @@ export function CareReceiverMyPageScreen({
     Alert.alert('로그아웃', '후속 작업에서 연결될 기능입니다.');
   };
 
-  const closeInterestSettings = () => {
+  // 기존 closeInterestSettings의 무효화 부분. 라우트 unmount cleanup으로
+  // 옮겨져 어떤 경로로 닫혀도(뒤로 버튼·하드웨어 백·그룹 전환) 진행 중
+  // 조회 무효화가 항상 따라온다. 화면 닫기 자체는 스택 pop이 담당한다.
+  const handleInterestRouteClosed = useCallback(() => {
     interestRequestGenerationRef.current += 1;
     setInterestLoadState(IDLE_INTEREST_LOAD_STATE);
-    setSubScreen(null);
-  };
+  }, []);
 
   const loadInterestSettings = async () => {
     const requestGeneration = ++interestRequestGenerationRef.current;
     const scopeKey = interestScopeKey;
     const memberId = currentGroup.myMemberId;
-    setSubScreen('interest');
+    profileNavRef.current?.navigate('InterestSettings');
 
     if (interestGateway === undefined) {
       setInterestLoadState({
@@ -311,81 +333,6 @@ export function CareReceiverMyPageScreen({
     });
   };
 
-  if (profileLoadState.status === 'loading') {
-    return <ProfileLoadStateScreen onBack={onCloseProfile} />;
-  }
-
-  if (profileLoadState.status === 'error') {
-    return (
-      <ProfileLoadStateScreen
-        errorMessage={profileLoadState.message}
-        onBack={onCloseProfile}
-        onRetry={() => setProfileRetryCount(count => count + 1)}
-      />
-    );
-  }
-
-  if (subScreen === 'edit') {
-    return (
-      <ProfileEditScreen
-        onBack={() => setSubScreen(null)}
-        onSave={handleProfileSave}
-        onWithdraw={onRequestWithdrawal}
-        profile={profile}
-      />
-    );
-  }
-
-  if (subScreen === 'interest') {
-    if (
-      interestLoadState.status === 'idle' ||
-      interestLoadState.scopeKey !== interestScopeKey ||
-      interestLoadState.status === 'loading'
-    ) {
-      return <InterestRequestStateScreen onBack={closeInterestSettings} />;
-    }
-
-    if (interestLoadState.status === 'error') {
-      return (
-        <InterestRequestStateScreen
-          errorMessage={interestLoadState.message}
-          onBack={closeInterestSettings}
-          onRetry={loadInterestSettings}
-        />
-      );
-    }
-
-    // J-3·J-3p·J-4 관심사 선택 화면을 재사용한다. 저장 완료 시 J-4p 문구를 띄우고 J-1로 돌아간다.
-    return (
-      <InterestSelectionScreen
-        embedded
-        getSaveErrorMessage={error =>
-          getInterestErrorMessage(
-            error,
-            '관심사를 저장하지 못했어요. 다시 시도해 주세요.',
-          )
-        }
-        initialInterests={interestLoadState.interests}
-        onBack={closeInterestSettings}
-        onComplete={closeInterestSettings}
-        onSave={saveInterestSettings}
-        savedContent={{
-          buttonLabel: '확인',
-          message: `${profile.name}님의 관심사가\n수정되었습니다.`,
-          title: '관심사 수정 완료',
-        }}
-      />
-    );
-  }
-
-  if (subScreen === 'guide') {
-    return <ProfileGuideScreen onBack={() => setSubScreen(null)} />;
-  }
-
-  if (subScreen === 'notificationSettings') {
-    return <NotificationSettingsScreen onBack={() => setSubScreen(null)} />;
-  }
-
   const menuItems: readonly MyPageMenuItem[] = [
     {
       key: 'interest-settings',
@@ -395,12 +342,28 @@ export function CareReceiverMyPageScreen({
     {
       key: 'notification-settings',
       label: '알림 설정',
-      onPress: () => setSubScreen('notificationSettings'),
+      onPress: () => profileNavRef.current?.navigate('NotificationSettings'),
     },
-    {key: 'guide', label: '이용가이드', onPress: () => setSubScreen('guide')},
+    {
+      key: 'guide',
+      label: '이용가이드',
+      onPress: () => profileNavRef.current?.navigate('ProfileGuide'),
+    },
   ];
 
-  return (
+  // 홈 본문. 조회 상태 분기를 스택 밖에 두면 loading↔ready 전이마다
+  // 내비게이터가 언마운트되므로 홈 라우트 안으로 내린다(보호자와 동일).
+  // 로딩·오류 중에는 편집 진입 UI 자체가 렌더되지 않는다.
+  const homeScreenContent =
+    profileLoadState.status === 'loading' ? (
+      <ProfileLoadStateScreen onBack={onCloseProfile} />
+    ) : profileLoadState.status === 'error' ? (
+      <ProfileLoadStateScreen
+        errorMessage={profileLoadState.message}
+        onBack={onCloseProfile}
+        onRetry={() => setProfileRetryCount(count => count + 1)}
+      />
+    ) : (
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>마이페이지</Text>
@@ -415,7 +378,7 @@ export function CareReceiverMyPageScreen({
           gender={profile.gender}
           name={profile.name}
           profileImageUrl={profile.profileImageUrl}
-          onEdit={() => setSubScreen('edit')}
+          onEdit={() => profileNavRef.current?.navigate('ProfileEdit')}
         />
 
         <MyPageSettingsSection items={menuItems} />
@@ -423,6 +386,94 @@ export function CareReceiverMyPageScreen({
         <MyPageFooter onLogout={handleLogout} />
       </ScrollView>
     </View>
+    );
+
+  return (
+    <ProfileStack.Navigator
+      screenOptions={{animation: 'none', headerShown: false}}>
+      <ProfileStack.Screen name="ProfileHome">
+        {({navigation}) => {
+          profileNavRef.current = navigation;
+          return (
+            <>
+              <RouteFocusReporter onFocusChange={setIsHomeFocused} />
+              {homeScreenContent}
+            </>
+          );
+        }}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen name="ProfileEdit">
+        {({navigation}) => {
+          profileNavRef.current = navigation;
+          return (
+            <ProfileEditScreen
+              onBack={() => navigation.goBack()}
+              onSave={handleProfileSave}
+              onWithdraw={onRequestWithdrawal}
+              profile={profile}
+            />
+          );
+        }}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen name="InterestSettings">
+        {({navigation}) => {
+          profileNavRef.current = navigation;
+          return (
+            <>
+              <RouteUnmountCleanup onUnmount={handleInterestRouteClosed} />
+              {interestLoadState.status === 'idle' ||
+              interestLoadState.scopeKey !== interestScopeKey ||
+              interestLoadState.status === 'loading' ? (
+                <InterestRequestStateScreen
+                  onBack={() => navigation.goBack()}
+                />
+              ) : interestLoadState.status === 'error' ? (
+                <InterestRequestStateScreen
+                  errorMessage={interestLoadState.message}
+                  onBack={() => navigation.goBack()}
+                  onRetry={loadInterestSettings}
+                />
+              ) : (
+                // J-3·J-3p·J-4 관심사 선택 화면을 재사용한다. 저장 완료 시
+                // J-4p 문구를 띄우고 J-1로 돌아간다.
+                <InterestSelectionScreen
+                  embedded
+                  getSaveErrorMessage={error =>
+                    getInterestErrorMessage(
+                      error,
+                      '관심사를 저장하지 못했어요. 다시 시도해 주세요.',
+                    )
+                  }
+                  initialInterests={interestLoadState.interests}
+                  onBack={() => navigation.goBack()}
+                  onComplete={() => navigation.goBack()}
+                  onSave={saveInterestSettings}
+                  savedContent={{
+                    buttonLabel: '확인',
+                    message: `${profile.name}님의 관심사가\n수정되었습니다.`,
+                    title: '관심사 수정 완료',
+                  }}
+                />
+              )}
+            </>
+          );
+        }}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen name="ProfileGuide">
+        {({navigation}) => {
+          profileNavRef.current = navigation;
+          return <ProfileGuideScreen onBack={() => navigation.goBack()} />;
+        }}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen name="NotificationSettings">
+        {({navigation}) => {
+          profileNavRef.current = navigation;
+          return (
+            <NotificationSettingsScreen onBack={() => navigation.goBack()} />
+          );
+        }}
+      </ProfileStack.Screen>
+    </ProfileStack.Navigator>
   );
 }
 

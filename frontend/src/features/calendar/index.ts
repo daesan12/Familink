@@ -6,6 +6,7 @@ export {
   CalendarApiError,
   createCalendarHttpGateway,
 } from './api/calendarApi';
+export type {CalendarStackParamList} from './navigationTypes';
 export {CalendarScreen} from './screens/CalendarScreen';
 export type {
   CalendarEventDetail,

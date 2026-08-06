@@ -1,4 +1,8 @@
 import React from 'react';
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
 import TestRenderer from 'react-test-renderer';
 
 import type {
@@ -6,6 +10,7 @@ import type {
   PostSubmitPayload,
   UploadState,
 } from '../composer/postComposerModel';
+import type {FeedStackParamList} from '../navigationTypes';
 import {FeedScreen} from './FeedScreen';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
@@ -68,33 +73,26 @@ const submitPayload: PostSubmitPayload = {
 test('게시글 저장 성공 후 작성 화면을 닫고 피드를 다시 조회한다', async () => {
   const loader = jest.fn().mockResolvedValue([post]);
   const onSubmitPost = jest.fn().mockResolvedValue(undefined);
+  const navRef = createNavigationContainerRef<FeedStackParamList>();
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <FeedScreen
-        createPostRequestId={0}
-        currentGroup={{id: '11', name: '우리 가족', role: 'guardian'}}
-        loader={loader}
-        onSubmitPost={onSubmitPost}
-        role="guardian"
-      />,
+      <NavigationContainer ref={navRef}>
+        <FeedScreen
+          currentGroup={{id: '11', name: '우리 가족', role: 'guardian'}}
+          loader={loader}
+          onSubmitPost={onSubmitPost}
+          role="guardian"
+        />
+      </NavigationContainer>,
     );
     await Promise.resolve();
     await Promise.resolve();
   });
 
   await TestRenderer.act(async () => {
-    renderer!.update(
-      <FeedScreen
-        createPostRequestId={1}
-        currentGroup={{id: '11', name: '우리 가족', role: 'guardian'}}
-        loader={loader}
-        onSubmitPost={onSubmitPost}
-        role="guardian"
-      />,
-    );
-    await Promise.resolve();
+    navRef.navigate('PostComposer', {mode: 'create'});
     await Promise.resolve();
   });
 

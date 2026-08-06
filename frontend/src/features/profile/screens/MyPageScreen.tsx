@@ -1,5 +1,10 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {useEffect, useMemo, useRef, useState} from 'react';
+import {StackActions} from '@react-navigation/native';
+import {
+  createNativeStackNavigator,
+  type NativeStackNavigationProp,
+} from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +18,7 @@ import {
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
 import {RetryButton} from '../../../shared/components/RetryButton';
-import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
+import {RouteFocusReporter} from '../../../shared/navigation/RouteFocusReporter';
 import {
   formatWeekRange,
   getCurrentMonthRange,
@@ -40,6 +45,7 @@ import {
   toChangedApiProfileUpdate,
 } from '../profileModel';
 import type {ProfileGateway} from '../api/profileApi';
+import type {ProfileStackParamList} from '../navigationTypes';
 import type {GuardianProfile, ProfileImageChange} from '../types';
 import {ProfileEditScreen} from './ProfileEditScreen';
 import {ProfileGuideScreen} from './ProfileGuideScreen';
@@ -52,7 +58,11 @@ export interface MyPageScreenProps extends AppScreenProps {
   profileGateway?: ProfileGateway;
 }
 
-type SubScreen = 'edit' | 'guide' | 'notificationSettings' | null;
+// 프로필 탭 내부 스택. 서브 화면 3종이 얼리 리턴 대신 스택 화면으로 열린다.
+// 피보호자 화면과 param list를 공유하되 InterestSettings는 등록하지 않는다.
+const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
+
+type ProfileNavigation = NativeStackNavigationProp<ProfileStackParamList>;
 
 type ProfileLoadState =
   | {status: 'loading'}
@@ -120,13 +130,13 @@ export function MyPageScreen({
         : {status: 'loading'},
     );
   const [profileRetryCount, setProfileRetryCount] = useState(0);
-  const [subScreen, setSubScreen] = useState<SubScreen>(null);
+  // 홈 포커스의 부정이 곧 풀스크린이다(서브 화면 3종 전부 풀스크린).
+  // 초기값 true — false로 시작하면 첫 커밋에서 탭바가 잠깐 숨는다.
+  const [isHomeFocused, setIsHomeFocused] = useState(true);
   const [isMonthlyOpen, setIsMonthlyOpen] = useState(false);
-
-  useHardwareBack(() => {
-    setSubScreen(null);
-    return true;
-  }, subScreen !== null && subScreen !== 'edit');
+  // 이동 함수가 effect·핸들러에서도 스택을 조작할 수 있게 렌더 중 ref로
+  // 캡처한다(FeedScreen feedNavRef 관용구).
+  const profileNavRef = useRef<ProfileNavigation | null>(null);
   const [weeklyRetryCount, setWeeklyRetryCount] = useState(0);
   const [monthlyRetryCount, setMonthlyRetryCount] = useState(0);
   const [weeklyState, setWeeklyState] = useState<WeeklyStampLoadState>({
@@ -147,10 +157,10 @@ export function MyPageScreen({
   const monthlyRequestGenerationRef = useRef(0);
 
   useEffect(() => {
-    onFullscreenChange?.(subScreen !== null);
+    onFullscreenChange?.(!isHomeFocused);
 
     return () => onFullscreenChange?.(false);
-  }, [onFullscreenChange, subScreen]);
+  }, [isHomeFocused, onFullscreenChange]);
 
   useEffect(() => {
     const intervalId = setInterval(() => setNow(new Date()), 60_000);
@@ -179,7 +189,9 @@ export function MyPageScreen({
       })
       .catch(() => {
         if (!disposed) {
-          setSubScreen(null);
+          // 서브 화면이 열린 채 실패하면(재시도 실패 등) 홈으로 걷어내
+          // 오류 화면이 가려지지 않게 한다(기존 setSubScreen(null) 등가).
+          profileNavRef.current?.dispatch(StackActions.popTo('ProfileHome'));
           setProfileLoadState({
             message: PROFILE_LOAD_ERROR_MESSAGE,
             status: 'error',
@@ -409,49 +421,32 @@ export function MyPageScreen({
     Alert.alert('로그아웃', '후속 작업에서 연결될 기능입니다.');
   };
 
-  if (profileLoadState.status === 'loading') {
-    return <ProfileLoadStateScreen onBack={onCloseProfile} />;
-  }
+  const menuItems: readonly MyPageMenuItem[] = [
+    {
+      key: 'notification-settings',
+      label: '알림 설정',
+      onPress: () => profileNavRef.current?.navigate('NotificationSettings'),
+    },
+    {
+      key: 'guide',
+      label: '이용가이드',
+      onPress: () => profileNavRef.current?.navigate('ProfileGuide'),
+    },
+  ];
 
-  if (profileLoadState.status === 'error') {
-    return (
+  // 홈 본문. 조회 상태 분기를 스택 밖에 두면 loading↔ready 전이마다
+  // 내비게이터가 언마운트되므로 홈 라우트 안으로 내린다(FeedScreen 선례).
+  // 로딩·오류 중에는 편집 진입 UI 자체가 렌더되지 않는다.
+  const homeScreenContent =
+    profileLoadState.status === 'loading' ? (
+      <ProfileLoadStateScreen onBack={onCloseProfile} />
+    ) : profileLoadState.status === 'error' ? (
       <ProfileLoadStateScreen
         errorMessage={profileLoadState.message}
         onBack={onCloseProfile}
         onRetry={() => setProfileRetryCount(count => count + 1)}
       />
-    );
-  }
-
-  if (subScreen === 'edit') {
-    return (
-      <ProfileEditScreen
-        onBack={() => setSubScreen(null)}
-        onSave={handleProfileSave}
-        onWithdraw={onRequestWithdrawal}
-        profile={profile}
-      />
-    );
-  }
-
-  if (subScreen === 'guide') {
-    return <ProfileGuideScreen onBack={() => setSubScreen(null)} />;
-  }
-
-  if (subScreen === 'notificationSettings') {
-    return <NotificationSettingsScreen onBack={() => setSubScreen(null)} />;
-  }
-
-  const menuItems: readonly MyPageMenuItem[] = [
-    {
-      key: 'notification-settings',
-      label: '알림 설정',
-      onPress: () => setSubScreen('notificationSettings'),
-    },
-    {key: 'guide', label: '이용가이드', onPress: () => setSubScreen('guide')},
-  ];
-
-  return (
+    ) : (
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>마이페이지</Text>
@@ -469,7 +464,7 @@ export function MyPageScreen({
           }
           name={profile.name}
           profileImageUrl={profile.profileImageUrl}
-          onEdit={() => setSubScreen('edit')}
+          onEdit={() => profileNavRef.current?.navigate('ProfileEdit')}
           rank={
             weeklyState.status === 'success' ? weeklyState.rank : undefined
           }
@@ -520,6 +515,50 @@ export function MyPageScreen({
         year={selectedMonth.year}
       />
     </View>
+    );
+
+  return (
+    <ProfileStack.Navigator
+      screenOptions={{animation: 'none', headerShown: false}}>
+      <ProfileStack.Screen name="ProfileHome">
+        {({navigation}) => {
+          profileNavRef.current = navigation;
+          return (
+            <>
+              <RouteFocusReporter onFocusChange={setIsHomeFocused} />
+              {homeScreenContent}
+            </>
+          );
+        }}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen name="ProfileEdit">
+        {({navigation}) => {
+          profileNavRef.current = navigation;
+          return (
+            <ProfileEditScreen
+              onBack={() => navigation.goBack()}
+              onSave={handleProfileSave}
+              onWithdraw={onRequestWithdrawal}
+              profile={profile}
+            />
+          );
+        }}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen name="ProfileGuide">
+        {({navigation}) => {
+          profileNavRef.current = navigation;
+          return <ProfileGuideScreen onBack={() => navigation.goBack()} />;
+        }}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen name="NotificationSettings">
+        {({navigation}) => {
+          profileNavRef.current = navigation;
+          return (
+            <NotificationSettingsScreen onBack={() => navigation.goBack()} />
+          );
+        }}
+      </ProfileStack.Screen>
+    </ProfileStack.Navigator>
   );
 }
 

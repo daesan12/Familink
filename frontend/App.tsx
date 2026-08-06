@@ -9,6 +9,8 @@ import {
   useState,
 } from "react";
 import { Alert, AppState, StatusBar } from "react-native";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import {
   SafeAreaProvider,
   initialWindowMetrics,
@@ -127,14 +129,7 @@ import {
   subscribeGroupAccessDenied,
 } from "./src/shared/api";
 import { imageDiskCache } from "./src/shared/media/imageDiskCache";
-
-type RootRoute =
-  | "welcome"
-  | "signup"
-  | "signedInWelcome"
-  | "groupOnboarding"
-  | "interestSetup"
-  | "appShell";
+import type { RootRoute, RootStackParamList } from "./src/navigation/types";
 
 type FamilyGroupWithMemberId = FamilyGroup & {
   myMemberId?: string;
@@ -556,6 +551,11 @@ const DEFAULT_SCREENS: AppScreenRegistry = {
 };
 
 const DEFAULT_API_BASE_URL = API_BASE_URL;
+
+// 루트 스택. route useState가 단일 소스이며, 매 시점 route에 해당하는 Screen
+// 하나만 조건부 등록한다. 등록 Screen이 1개뿐이라 내비게이터의 초기 화면
+// fallback이 곧 현재 route가 되어 navigate 호출 없이 전환이 일어난다.
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 function createProfileScreenRenderer(
   profileGateway: ProfileGateway,
@@ -2123,97 +2123,135 @@ export default function App({
           <CalendarGatewayProvider gateway={resolvedCalendarGateway}>
             {/* edge-to-edge에서는 상태바 배경색 지정이 무시되므로 barStyle만 사용한다. */}
             <StatusBar barStyle="dark-content" />
-            {route === "welcome" && (
-              <>
-                <WelcomeScreen
-                  onStartLogin={() => setLoginVisible(true)}
-                  onStartSignup={() => setRoute("signup")}
-                />
-                <LoginBottomSheet
-                  initialLoginId={signupLoginId}
-                  onDismiss={handleLoginDismiss}
-                  onLogin={handleLogin}
-                  visible={loginVisible}
-                />
-              </>
-            )}
-            {route === "signup" && (
-              <SignupFlowScreen
-                onCancel={() => {
-                  setPendingSignupProfileImage(null);
-                  setRoute("welcome");
-                }}
-                onComplete={(loginId, profileImageAsset) => {
-                  // 방금 만든 계정을 다시 입력하지 않도록 아이디를 채운 로그인 시트를 바로 연다.
-                  setSignupLoginId(loginId);
-                  setPendingSignupProfileImage(
-                    profileImageAsset
-                      ? {asset: profileImageAsset, loginId}
-                      : null,
-                  );
-                  setRoute("welcome");
-                  setLoginVisible(true);
-                }}
-              />
-            )}
-            {route === "appShell" && (
-              <AppShell
-                key={appShellRecoveryVersion}
-                apiBaseUrl={apiBaseUrl}
-                authSession={authSession}
-                accessToken={authSession.getAccessToken()}
-                currentUserId={user?.id}
-                currentUserName={user?.name}
-                deepLinkRequestId={appShellDeepLink?.requestId ?? 0}
-                deepLinkTarget={appShellDeepLink?.target ?? null}
-                onDeepLinkConsumed={() => setAppShellDeepLink(null)}
-                groupStore={groupStore}
-                groups={resolvedGroups}
-                initialGroupId={activeGroupId}
-                initialRoute={appShellEntryRoute}
-                onCreateGroup={() => openGroupOnboarding("appShell", "create")}
-                onCurrentGroupChange={handleCurrentGroupChange}
-                onGroupChange={onGroupChange}
-                onJoinGroup={() => openGroupOnboarding("appShell", "join")}
-                onCallResult={onCallResult}
-                onRequestLogout={handleLogout}
-                onRequestWithdrawal={handleWithdrawal}
-                screens={resolvedScreens}
-              />
-            )}
-            {route === "signedInWelcome" && user !== null && (
-              <SignedInWelcomeScreen
-                onLogout={handleLogout}
-                onRequestWithdrawal={handleSignedInWelcomeWithdrawal}
-                onStartGroupOnboarding={() =>
-                  openGroupOnboarding("signedInWelcome")
-                }
-                userName={user.name}
-              />
-            )}
-            {route === "groupOnboarding" && (
-              <GroupOnboardingScreen
-                hasJoinedGroups={availableGroups.length > 0}
-                initialAction={groupOnboardingAction}
-                onBack={() => {
-                  setGroupOnboardingAction(null);
-                  setRoute(groupOnboardingReturnRoute);
-                }}
-                onCreateGroup={handleCreateGroup}
-                onJoinByCode={handleJoinGroup}
-                onOpenApprovedGroup={handleOpenApprovedGroup}
-                pendingRequests={joinRequests}
-              />
-            )}
-            {route === "interestSetup" && interestGroup !== null && (
-              <InterestSelectionScreen
-                initialInterests={interestInitialValues}
-                onBack={handleFinishInterestSetup}
-                onComplete={handleFinishInterestSetup}
-                onSave={handleSaveInterests}
-                onSkip={handleFinishInterestSetup}
-              />
-            )}
+            <NavigationContainer>
+              {/* 기존 조건부 렌더링과 등가 유지를 위해 전환 애니메이션은 사용하지 않는다. */}
+              <RootStack.Navigator
+                screenOptions={{ animation: "none", headerShown: false }}
+              >
+                {route === "welcome" && (
+                  <RootStack.Screen name="welcome">
+                    {() => (
+                      <>
+                        <WelcomeScreen
+                          onStartLogin={() => setLoginVisible(true)}
+                          onStartSignup={() => setRoute("signup")}
+                        />
+                        <LoginBottomSheet
+                          initialLoginId={signupLoginId}
+                          onDismiss={handleLoginDismiss}
+                          onLogin={handleLogin}
+                          visible={loginVisible}
+                        />
+                      </>
+                    )}
+                  </RootStack.Screen>
+                )}
+                {route === "signup" && (
+                  <RootStack.Screen name="signup">
+                    {() => (
+                      <SignupFlowScreen
+                        onCancel={() => {
+                          setPendingSignupProfileImage(null);
+                          setRoute("welcome");
+                        }}
+                        onComplete={(loginId, profileImageAsset) => {
+                          // 방금 만든 계정을 다시 입력하지 않도록 아이디를 채운 로그인 시트를 바로 연다.
+                          setSignupLoginId(loginId);
+                          setPendingSignupProfileImage(
+                            profileImageAsset
+                              ? {asset: profileImageAsset, loginId}
+                              : null,
+                          );
+                          setRoute("welcome");
+                          setLoginVisible(true);
+                        }}
+                      />
+                    )}
+                  </RootStack.Screen>
+                )}
+                {route === "appShell" && (
+                  <RootStack.Screen name="appShell">
+                    {() => (
+                      <AppShell
+                        key={appShellRecoveryVersion}
+                        apiBaseUrl={apiBaseUrl}
+                        authSession={authSession}
+                        accessToken={authSession.getAccessToken()}
+                        currentUserId={user?.id}
+                        currentUserName={user?.name}
+                        deepLinkRequestId={appShellDeepLink?.requestId ?? 0}
+                        deepLinkTarget={appShellDeepLink?.target ?? null}
+                        onDeepLinkConsumed={() => setAppShellDeepLink(null)}
+                        groupStore={groupStore}
+                        groups={resolvedGroups}
+                        initialGroupId={activeGroupId}
+                        initialRoute={appShellEntryRoute}
+                        onCreateGroup={() => openGroupOnboarding("appShell", "create")}
+                        onCurrentGroupChange={handleCurrentGroupChange}
+                        onGroupChange={onGroupChange}
+                        onJoinGroup={() => openGroupOnboarding("appShell", "join")}
+                        onCallResult={onCallResult}
+                        onRequestLogout={handleLogout}
+                        onRequestWithdrawal={handleWithdrawal}
+                        screens={resolvedScreens}
+                      />
+                    )}
+                  </RootStack.Screen>
+                )}
+                {route === "signedInWelcome" && (
+                  <RootStack.Screen name="signedInWelcome">
+                    {/* user 가드는 Screen 등록 조건에 두지 않는다. 등록 Screen이
+                        0개가 되면 내비게이터가 throw하므로, 가드 불충족 시에는
+                        기존의 빈 화면과 등가인 null을 그린다. */}
+                    {() =>
+                      user !== null ? (
+                        <SignedInWelcomeScreen
+                          onLogout={handleLogout}
+                          onRequestWithdrawal={handleSignedInWelcomeWithdrawal}
+                          onStartGroupOnboarding={() =>
+                            openGroupOnboarding("signedInWelcome")
+                          }
+                          userName={user.name}
+                        />
+                      ) : null
+                    }
+                  </RootStack.Screen>
+                )}
+                {route === "groupOnboarding" && (
+                  <RootStack.Screen name="groupOnboarding">
+                    {() => (
+                      <GroupOnboardingScreen
+                        hasJoinedGroups={availableGroups.length > 0}
+                        initialAction={groupOnboardingAction}
+                        onBack={() => {
+                          setGroupOnboardingAction(null);
+                          setRoute(groupOnboardingReturnRoute);
+                        }}
+                        onCreateGroup={handleCreateGroup}
+                        onJoinByCode={handleJoinGroup}
+                        onOpenApprovedGroup={handleOpenApprovedGroup}
+                        pendingRequests={joinRequests}
+                      />
+                    )}
+                  </RootStack.Screen>
+                )}
+                {route === "interestSetup" && (
+                  <RootStack.Screen name="interestSetup">
+                    {() =>
+                      interestGroup !== null ? (
+                        <InterestSelectionScreen
+                          initialInterests={interestInitialValues}
+                          onBack={handleFinishInterestSetup}
+                          onComplete={handleFinishInterestSetup}
+                          onSave={handleSaveInterests}
+                          onSkip={handleFinishInterestSetup}
+                        />
+                      ) : null
+                    }
+                  </RootStack.Screen>
+                )}
+              </RootStack.Navigator>
+            </NavigationContainer>
           </CalendarGatewayProvider>
         </NotificationGatewayProvider>
       </SafeAreaProvider>

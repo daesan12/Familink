@@ -1,4 +1,5 @@
 import React from 'react';
+import {NavigationContainer, useRoute} from '@react-navigation/native';
 import {Pressable, Text} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import TestRenderer from 'react-test-renderer';
@@ -37,6 +38,13 @@ jest.mock('./BottomTabBar', () => ({BottomTabBar: () => null}));
 jest.mock('./CurrentGroupSwitcher', () => ({
   CurrentGroupSwitcher: MockCurrentGroupSwitcher,
 }));
+
+// AppShell이 내부에 셸 스택·탭 내비게이터를 렌더하므로(S15P11B104-320)
+// 컨테이너 없이는 마운트가 실패한다. 프로덕션에서는 App 루트의
+// NavigationContainer를 재사용하므로 테스트도 같은 위상을 재현한다.
+function withNav(element: React.ReactElement) {
+  return <NavigationContainer>{element}</NavigationContainer>;
+}
 
 const GROUP_A: FamilyGroup = {
   id: 'group-a',
@@ -100,12 +108,14 @@ test('현재 그룹이 삭제되고 대체 그룹이 지정되면 대체 그룹�
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <AppShell
-        groups={[GROUP_A, GROUP_B]}
-        initialGroupId={GROUP_A.id}
-        initialRoute="groupInfo"
-        screens={screens}
-      />,
+      withNav(
+        <AppShell
+          groups={[GROUP_A, GROUP_B]}
+          initialGroupId={GROUP_A.id}
+          initialRoute="groupInfo"
+          screens={screens}
+        />,
+      ),
     );
   });
 
@@ -113,12 +123,14 @@ test('현재 그룹이 삭제되고 대체 그룹이 지정되면 대체 그룹�
 
   await TestRenderer.act(async () => {
     renderer!.update(
-      <AppShell
-        groups={[GROUP_B]}
-        initialGroupId={GROUP_B.id}
-        initialRoute="groupInfo"
-        screens={screens}
-      />,
+      withNav(
+        <AppShell
+          groups={[GROUP_B]}
+          initialGroupId={GROUP_B.id}
+          initialRoute="groupInfo"
+          screens={screens}
+        />,
+      ),
     );
   });
 
@@ -131,12 +143,14 @@ test('삭제가 아닌 일반 그룹 전환은 현재 화면을 유지한다', a
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <AppShell
-        groups={[GROUP_A, GROUP_B]}
-        initialGroupId={GROUP_A.id}
-        initialRoute="calendar"
-        screens={screens}
-      />,
+      withNav(
+        <AppShell
+          groups={[GROUP_A, GROUP_B]}
+          initialGroupId={GROUP_A.id}
+          initialRoute="calendar"
+          screens={screens}
+        />,
+      ),
     );
   });
 
@@ -212,14 +226,16 @@ function renderForBack(
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
-        <AppShell
-          groups={[group]}
-          initialGroupId={group.id}
-          initialRoute={initialRoute}
-          screens={backTestScreens}
-        />
-      </SafeAreaProvider>,
+      withNav(
+        <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
+          <AppShell
+            groups={[group]}
+            initialGroupId={group.id}
+            initialRoute={initialRoute}
+            screens={backTestScreens}
+          />
+        </SafeAreaProvider>,
+      ),
     );
   });
   mountedRenderers.push(renderer!);
@@ -314,17 +330,84 @@ const DEEP_LINK_GROUP_B: FamilyGroup = {
   role: 'guardian',
 };
 
+function FeedParamsProbe(props: AppScreenProps) {
+  const route = useRoute();
+  const nested = route.params as
+    | {
+        initial?: boolean;
+        params?: {postId?: string};
+        screen?: string;
+      }
+    | undefined;
+  return (
+    <Text>
+      {`feed:${props.currentGroup.id}:${nested?.screen ?? 'none'}:${nested?.params?.postId ?? 'none'}:${String(nested?.initial ?? 'none')}`}
+    </Text>
+  );
+}
+
+// 가입 승인 딥링크도 그룹정보 탭 route의 중첩 params(GroupInfoStack
+// JoinApproval)로 전달된다. FeedParamsProbe와 같은 방식의 계약 단언용 목.
+function GroupInfoParamsProbe(props: AppScreenProps) {
+  const route = useRoute();
+  const nested = route.params as
+    | {
+        initial?: boolean;
+        params?: {groupId?: string};
+        screen?: string;
+      }
+    | undefined;
+  return (
+    <Text>
+      {`groupInfo:${props.currentGroup.id}:${nested?.screen ?? 'none'}:${nested?.params?.groupId ?? 'none'}:${String(nested?.initial ?? 'none')}`}
+    </Text>
+  );
+}
+
+// 일정 딥링크도 캘린더 탭 route의 중첩 params(CalendarStack CalendarHome)로
+// 전달된다. FeedParamsProbe와 같은 방식의 계약 단언용 목.
+function CalendarParamsProbe(props: AppScreenProps) {
+  const route = useRoute();
+  const nested = route.params as
+    | {
+        initial?: boolean;
+        params?: {openEventId?: string};
+        screen?: string;
+      }
+    | undefined;
+  return (
+    <Text>
+      {`calendar:${props.currentGroup.id}:${nested?.screen ?? 'none'}:${nested?.params?.openEventId ?? 'none'}:${String(nested?.initial ?? 'none')}`}
+    </Text>
+  );
+}
+
+// 리포트 딥링크는 스택 없는 리포트 탭 route params(openReport)로 전달된다.
+function ReportParamsProbe() {
+  const route = useRoute();
+  const nested = route.params as
+    | {
+        openReport?: {
+          callSessionId?: string;
+          memberId?: string;
+          reportDate?: string;
+        };
+      }
+    | undefined;
+  return (
+    <Text>
+      {`report:${nested?.openReport?.memberId ?? 'none'}:${nested?.openReport?.callSessionId ?? 'none'}:${nested?.openReport?.reportDate ?? 'none'}`}
+    </Text>
+  );
+}
+
 function createDeepLinkScreens(): AppScreenRegistry {
   return {
-    calendar: (props: AppScreenProps) => (
-      <Text>
-        {`calendar:${props.currentGroup.id}:${props.openCalendarEventId ?? 'none'}:${props.openCalendarEventRequestId ?? 0}`}
-      </Text>
-    ),
-    feed: (props: AppScreenProps) => <Text>{`feed:${props.currentGroup.id}`}</Text>,
-    groupInfo: (props: AppScreenProps) => (
-      <Text>{`groupInfo:${props.openJoinApprovalRequestId ?? 0}`}</Text>
-    ),
+    calendar: (props: AppScreenProps) => <CalendarParamsProbe {...props} />,
+    // 게시글 딥링크는 피드 탭 route의 중첩 params(FeedStack PostDetail)로
+    // 전달된다. 목 화면이 params를 렌더해 전달 계약을 단언할 수 있게 한다.
+    feed: (props: AppScreenProps) => <FeedParamsProbe {...props} />,
+    groupInfo: (props: AppScreenProps) => <GroupInfoParamsProbe {...props} />,
     notifications: (props: AppScreenProps) => (
       <>
         <Text>screen:notifications</Text>
@@ -358,13 +441,20 @@ function createDeepLinkScreens(): AppScreenRegistry {
         >
           <Text>open-join-approval</Text>
         </Pressable>
+        <Pressable
+          onPress={() =>
+            props.onOpenNotificationTarget?.({
+              groupId: 'group-b',
+              kind: 'post',
+              postId: '42',
+            })
+          }
+        >
+          <Text>open-post</Text>
+        </Pressable>
       </>
     ),
-    report: (props: AppScreenProps) => (
-      <Text>
-        {`report:${props.openReportTarget?.memberId ?? 'none'}:${props.openReportTarget?.callSessionId ?? 'none'}:${props.openReportTarget?.reportDate ?? 'none'}`}
-      </Text>
-    ),
+    report: () => <ReportParamsProbe />,
   };
 }
 
@@ -372,24 +462,36 @@ function renderForDeepLink() {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <AppShell
-        groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
-        initialGroupId={DEEP_LINK_GROUP_A.id}
-        initialRoute="notifications"
-        screens={createDeepLinkScreens()}
-      />,
+      withNav(
+        <AppShell
+          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+          initialGroupId={DEEP_LINK_GROUP_A.id}
+          initialRoute="notifications"
+          screens={createDeepLinkScreens()}
+        />,
+      ),
     );
   });
   mountedRenderers.push(renderer!);
   return renderer!;
 }
 
-test('일정 목적지는 그룹을 전환하고 캘린더로 이동하며 이벤트 id를 전달한다', () => {
+test('게시글 목적지는 그룹을 전환하고 피드 탭에 중첩 PostDetail params를 전달한다', () => {
+  const renderer = renderForDeepLink();
+
+  pressText(renderer, 'open-post');
+
+  // initial:false가 함께 전달되어야 콜드 마운트에서 FeedHome이 스택 밑에 깔린다.
+  expect(hasText(renderer, 'feed:group-b:PostDetail:42:false')).toBe(true);
+});
+
+test('일정 목적지는 그룹을 전환하고 캘린더 탭에 중첩 CalendarHome params를 전달한다', () => {
   const renderer = renderForDeepLink();
 
   pressText(renderer, 'open-event');
 
-  expect(hasText(renderer, 'calendar:group-b:7:1')).toBe(true);
+  // initial:false가 함께 전달되어야 콜드 마운트에서 CalendarHome이 스택 밑에 깔린다.
+  expect(hasText(renderer, 'calendar:group-b:CalendarHome:7:false')).toBe(true);
 });
 
 test('리포트 목적지는 리포트 화면으로 이동하며 통화·날짜를 전달한다', () => {
@@ -400,47 +502,147 @@ test('리포트 목적지는 리포트 화면으로 이동하며 통화·날짜�
   expect(hasText(renderer, 'report:11:21:2026-08-03')).toBe(true);
 });
 
-test('가입 승인 목적지는 그룹정보로 이동하며 요청 id를 올린다', () => {
+test('가입 승인 목적지는 그룹정보 탭에 중첩 JoinApproval params를 전달한다', () => {
   const renderer = renderForDeepLink();
 
   pressText(renderer, 'open-join-approval');
 
-  expect(hasText(renderer, 'groupInfo:1')).toBe(true);
+  // groupId가 없는 목적지는 현재 그룹으로 폴백하고, initial:false가 함께
+  // 전달되어야 콜드 마운트에서 GroupInfoHome이 스택 밑에 깔린다.
+  expect(hasText(renderer, 'groupInfo:group-a:JoinApproval:group-a:false')).toBe(
+    true,
+  );
 });
 
 test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다', () => {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <AppShell
-        deepLinkRequestId={1}
-        deepLinkTarget={{eventId: '9', kind: 'calendarEvent'}}
-        groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
-        initialGroupId={DEEP_LINK_GROUP_A.id}
-        initialRoute="feed"
-        screens={createDeepLinkScreens()}
-      />,
+      withNav(
+        <AppShell
+          deepLinkRequestId={1}
+          deepLinkTarget={{eventId: '9', kind: 'calendarEvent'}}
+          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+          initialGroupId={DEEP_LINK_GROUP_A.id}
+          initialRoute="feed"
+          screens={createDeepLinkScreens()}
+        />,
+      ),
     );
   });
   mountedRenderers.push(renderer!);
 
-  expect(hasText(renderer!, 'calendar:group-a:9:1')).toBe(true);
+  expect(hasText(renderer!, 'calendar:group-a:CalendarHome:9:false')).toBe(
+    true,
+  );
 
   // 같은 requestId로는 재소비하지 않고, 증가하면 새 목적지로 이동한다.
   TestRenderer.act(() => {
     renderer!.update(
-      <AppShell
-        deepLinkRequestId={2}
-        deepLinkTarget={{kind: 'notifications'}}
-        groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
-        initialGroupId={DEEP_LINK_GROUP_A.id}
-        initialRoute="feed"
-        screens={createDeepLinkScreens()}
-      />,
+      withNav(
+        <AppShell
+          deepLinkRequestId={2}
+          deepLinkTarget={{kind: 'notifications'}}
+          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+          initialGroupId={DEEP_LINK_GROUP_A.id}
+          initialRoute="feed"
+          screens={createDeepLinkScreens()}
+        />,
+      ),
     );
   });
 
   expect(hasText(renderer!, 'screen:notifications')).toBe(true);
+});
+
+// 재탭 정규화 계약. 재탭의 key 리마운트는 같은 커밋이라 새 내비게이터가
+// 구 스택 상태를 재수화하므로, 셸이 pop:true 중첩 params를 함께 dispatch해
+// 하위 화면이 살아남지 않게 한다(내부 스택을 가진 세 탭 공통).
+function TabNestedParamsProbe({prefix}: {prefix: string}) {
+  const route = useRoute();
+  const nested = route.params as {pop?: boolean; screen?: string} | undefined;
+  return (
+    <Text>
+      {`${prefix}:${nested?.screen ?? 'none'}:${String(nested?.pop ?? 'none')}`}
+    </Text>
+  );
+}
+
+test('내부 스택을 가진 탭을 다시 누르면 스택 루트로 정규화한다', () => {
+  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
+    BottomTabBar: () => null;
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      withNav(
+        <AppShell
+          groups={[GROUP_A]}
+          initialGroupId={GROUP_A.id}
+          initialRoute="groupInfo"
+          screens={{
+            calendar: () => <TabNestedParamsProbe prefix="calendar" />,
+            feed: () => <Text>screen:feed</Text>,
+            groupInfo: () => <TabNestedParamsProbe prefix="groupInfo" />,
+            profile: () => <TabNestedParamsProbe prefix="profile" />,
+          }}
+        />,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  TestRenderer.act(() => {
+    renderer!.root.findByType(MockTabBar).props.onSelect('groupInfo');
+  });
+  expect(hasText(renderer!, 'groupInfo:GroupInfoHome:true')).toBe(true);
+
+  TestRenderer.act(() => {
+    renderer!.root.findByType(MockTabBar).props.onSelect('profile');
+  });
+  TestRenderer.act(() => {
+    renderer!.root.findByType(MockTabBar).props.onSelect('profile');
+  });
+  expect(hasText(renderer!, 'profile:ProfileHome:true')).toBe(true);
+
+  TestRenderer.act(() => {
+    renderer!.root.findByType(MockTabBar).props.onSelect('calendar');
+  });
+  TestRenderer.act(() => {
+    renderer!.root.findByType(MockTabBar).props.onSelect('calendar');
+  });
+  expect(hasText(renderer!, 'calendar:CalendarHome:true')).toBe(true);
+});
+
+// 스펙 D-3(docs/specs/UI_AND_NAVIGATION.md: 상세 진입 중에도 역할별 하단 탭
+// 유지)의 첫 회귀 테스트. 게시글 상세는 헤더 숨김만 보고하고 풀스크린은
+// 보고하지 않으므로 탭바가 유지되어야 하며, 풀스크린(작성·AI 통화)에서만
+// 탭바가 사라진다.
+test('헤더 숨김 화면에서는 하단 탭을 유지하고 풀스크린에서만 숨긴다', () => {
+  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
+    BottomTabBar: () => null;
+  };
+
+  function HeaderHiddenScreen({onHeaderVisibilityChange}: AppScreenProps) {
+    React.useEffect(() => {
+      onHeaderVisibilityChange?.(false);
+    }, [onHeaderVisibilityChange]);
+    return <Text>screen:feed</Text>;
+  }
+
+  const headerHiddenRenderer = renderForBack('feed', CARE_RECEIVER_GROUP, {
+    ...createBackTestScreens(),
+    feed: HeaderHiddenScreen,
+  });
+  expect(
+    headerHiddenRenderer.root.findAllByType(MockTabBar).length,
+  ).toBeGreaterThan(0);
+
+  const fullscreenRenderer = renderForBack('aiCall', CARE_RECEIVER_GROUP, {
+    ...createBackTestScreens(),
+    aiCall: FullscreenScreen,
+  });
+  expect(fullscreenRenderer.root.findAllByType(MockTabBar)).toHaveLength(0);
 });
 
 test('화면이 전체화면을 보고하면 셸은 뒤로가기를 처리하지 않는다', () => {
@@ -506,14 +708,16 @@ test('앱 실행 중 푸시가 도착하면 미읽음 배지를 다시 조회해
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <NotificationGatewayProvider gateway={gateway}>
-        <AppShell
-          groups={[GROUP_A]}
-          initialGroupId={GROUP_A.id}
-          screens={screens}
-          subscribePushReceived={subscriber.subscribe}
-        />
-      </NotificationGatewayProvider>,
+      withNav(
+        <NotificationGatewayProvider gateway={gateway}>
+          <AppShell
+            groups={[GROUP_A]}
+            initialGroupId={GROUP_A.id}
+            screens={screens}
+            subscribePushReceived={subscriber.subscribe}
+          />
+        </NotificationGatewayProvider>,
+      ),
     );
   });
   mountedRenderers.push(renderer!);
@@ -542,14 +746,16 @@ test('연속 푸시는 진행 중 조회와 합쳐 마지막 값으로 배지를
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <NotificationGatewayProvider gateway={gateway}>
-        <AppShell
-          groups={[GROUP_A]}
-          initialGroupId={GROUP_A.id}
-          screens={screens}
-          subscribePushReceived={subscriber.subscribe}
-        />
-      </NotificationGatewayProvider>,
+      withNav(
+        <NotificationGatewayProvider gateway={gateway}>
+          <AppShell
+            groups={[GROUP_A]}
+            initialGroupId={GROUP_A.id}
+            screens={screens}
+            subscribePushReceived={subscriber.subscribe}
+          />
+        </NotificationGatewayProvider>,
+      ),
     );
   });
   mountedRenderers.push(renderer!);
@@ -576,14 +782,16 @@ test('알림 화면에서는 푸시 도착 구독을 해제해 배지를 조회�
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <NotificationGatewayProvider gateway={gateway}>
-        <AppShell
-          groups={[GROUP_A]}
-          initialGroupId={GROUP_A.id}
-          screens={screens}
-          subscribePushReceived={subscriber.subscribe}
-        />
-      </NotificationGatewayProvider>,
+      withNav(
+        <NotificationGatewayProvider gateway={gateway}>
+          <AppShell
+            groups={[GROUP_A]}
+            initialGroupId={GROUP_A.id}
+            screens={screens}
+            subscribePushReceived={subscriber.subscribe}
+          />
+        </NotificationGatewayProvider>,
+      ),
     );
   });
   mountedRenderers.push(renderer!);
