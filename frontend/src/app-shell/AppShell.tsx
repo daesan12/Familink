@@ -42,6 +42,15 @@ const ShellStack = createNativeStackNavigator<ShellStackParamList>();
 const Tab = createBottomTabNavigator<MainTabsParamList>();
 const renderNullTabBar = () => null;
 
+// 내부 스택을 가진 탭의 루트 화면 이름. 재탭의 key 리마운트는 같은 커밋이라
+// 새 내비게이터가 구 스택 상태를 재수화하므로, pop:true로 루트 위 화면을
+// 함께 정리해 "재탭 = 초기화"를 보장한다(S15P11B104-321에서 검증된 방식).
+const STACK_ROOT_BY_TAB: Partial<Record<MainTabRoute, string>> = {
+  feed: 'FeedHome',
+  groupInfo: 'GroupInfoHome',
+  profile: 'ProfileHome',
+};
+
 type ShellNavigation = NativeStackNavigationProp<ShellStackParamList>;
 
 function isOverlayRoute(route: AppRoute): route is 'archive' | 'notifications' {
@@ -752,14 +761,12 @@ export function AppShell({
               // AI 전화는 재마운트하면 네이티브 통화 선택 상태를 잃으므로 제외한다.
               if (route !== 'aiCall') {
                 setScreenRefreshNonce(nonce => nonce + 1);
-                if (route === 'feed') {
-                  // key 리마운트는 같은 커밋이라 새 FeedStack이 지워지기 전의
-                  // 구 스택 상태([FeedHome, PostDetail])를 재수화한다. pop:true로
-                  // FeedHome 위 화면을 함께 정리해 "재탭 = 초기화"를 보장한다.
+                const stackRoot = STACK_ROOT_BY_TAB[route];
+                if (stackRoot !== undefined) {
                   shellNavRef.current?.dispatch(
                     StackActions.popTo('MainTabs', {
-                      params: { pop: true, screen: 'FeedHome' },
-                      screen: 'feed',
+                      params: { pop: true, screen: stackRoot },
+                      screen: route,
                     })
                   );
                 }

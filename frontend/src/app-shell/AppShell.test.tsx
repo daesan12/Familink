@@ -523,6 +523,56 @@ test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다',
   expect(hasText(renderer!, 'screen:notifications')).toBe(true);
 });
 
+// 재탭 정규화 계약. 재탭의 key 리마운트는 같은 커밋이라 새 내비게이터가
+// 구 스택 상태를 재수화하므로, 셸이 pop:true 중첩 params를 함께 dispatch해
+// 하위 화면이 살아남지 않게 한다(내부 스택을 가진 세 탭 공통).
+function TabNestedParamsProbe({prefix}: {prefix: string}) {
+  const route = useRoute();
+  const nested = route.params as {pop?: boolean; screen?: string} | undefined;
+  return (
+    <Text>
+      {`${prefix}:${nested?.screen ?? 'none'}:${String(nested?.pop ?? 'none')}`}
+    </Text>
+  );
+}
+
+test('내부 스택을 가진 탭을 다시 누르면 스택 루트로 정규화한다', () => {
+  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
+    BottomTabBar: () => null;
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      withNav(
+        <AppShell
+          groups={[GROUP_A]}
+          initialGroupId={GROUP_A.id}
+          initialRoute="groupInfo"
+          screens={{
+            feed: () => <Text>screen:feed</Text>,
+            groupInfo: () => <TabNestedParamsProbe prefix="groupInfo" />,
+            profile: () => <TabNestedParamsProbe prefix="profile" />,
+          }}
+        />,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  TestRenderer.act(() => {
+    renderer!.root.findByType(MockTabBar).props.onSelect('groupInfo');
+  });
+  expect(hasText(renderer!, 'groupInfo:GroupInfoHome:true')).toBe(true);
+
+  TestRenderer.act(() => {
+    renderer!.root.findByType(MockTabBar).props.onSelect('profile');
+  });
+  TestRenderer.act(() => {
+    renderer!.root.findByType(MockTabBar).props.onSelect('profile');
+  });
+  expect(hasText(renderer!, 'profile:ProfileHome:true')).toBe(true);
+});
+
 // 스펙 D-3(docs/specs/UI_AND_NAVIGATION.md: 상세 진입 중에도 역할별 하단 탭
 // 유지)의 첫 회귀 테스트. 게시글 상세는 헤더 숨김만 보고하고 풀스크린은
 // 보고하지 않으므로 탭바가 유지되어야 하며, 풀스크린(작성·AI 통화)에서만
