@@ -458,6 +458,8 @@ function UploadStatusCard({
 
   const mediaLabel =
     mediaKind === 'video' ? '영상' : mediaKind === 'image' ? '사진' : '미디어';
+  const uploadingTitle =
+    mediaKind === null ? '업로드 중' : `${mediaLabel} 업로드 중`;
   const percentage =
     uploadState.status === 'uploading'
       ? Math.round(Math.max(0, Math.min(uploadState.progress, 1)) * 100)
@@ -487,7 +489,7 @@ function UploadStatusCard({
     },
     uploading: {
       description: '앱을 닫지 말고 잠시만 기다려 주세요.',
-      title: `${mediaLabel} 업로드 중`,
+      title: uploadingTitle,
     },
   };
   const currentCopy = copy[uploadState.status];
