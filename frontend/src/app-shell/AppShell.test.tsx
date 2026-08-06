@@ -971,6 +971,40 @@ test('알림 화면에서 피드로 돌아오면 미읽음 배지를 다시 조�
   expect(gateway.getUnreadCount).toHaveBeenCalledTimes(1);
 });
 
+// 스킵은 알림 화면에만 적용된다. 보관함은 읽음 처리를 하지 않으므로 복귀 시
+// 최신 미읽음 수를 다시 조회해야 한다(스킵 조건을 하위 화면 전체로 넓히면 실패).
+test('보관함 화면에서 피드로 돌아오면 미읽음 배지를 다시 조회한다', async () => {
+  const gateway = createNotificationGateway();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      withNav(
+        <NotificationGatewayProvider gateway={gateway}>
+          <AppShell
+            groups={[GROUP_A]}
+            initialGroupId={GROUP_A.id}
+            initialRoute="feed"
+            screens={screens}
+          />
+        </NotificationGatewayProvider>,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(1);
+
+  await TestRenderer.act(async () => {
+    openSubScreen(renderer!, 'archive');
+  });
+  await TestRenderer.act(async () => {
+    selectTab(renderer!, 'feed');
+  });
+
+  expect(gateway.getUnreadCount).toHaveBeenCalledTimes(2);
+});
+
 test('알림 화면이 보고한 미읽음 수를 피드로 돌아온 뒤에도 유지한다', async () => {
   const gateway = createNotificationGateway();
   function NotificationsScreen({onUnreadCountChange}: AppScreenProps) {

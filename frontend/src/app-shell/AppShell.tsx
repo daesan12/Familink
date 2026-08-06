@@ -172,9 +172,9 @@ export function AppShell({
     : 'feed';
   const resolvedRoute: AppRoute = focusedSubRoute ?? resolvedTabRoute;
 
-  // 모든 탭 이동은 popTo 하나로 정규화한다. 오버레이(알림·보관함)가 열려
-  // 있으면 pop하고, 스택에 MainTabs가 없으면(오버레이 단독 시작) 교체하므로
-  // 어떤 상태에서도 스택 깊이 1이 보장된다. 이 불변식 덕에 피드에서
+  // 모든 탭 이동은 popTo 하나로 정규화한다. MainTabs는 항상 셸 스택의 루트고
+  // 그 위에 하위 화면(알림·보관함)만 쌓이므로, popTo가 열려 있던 하위 화면을
+  // pop해 어떤 상태에서도 스택 깊이 1이 보장된다. 이 불변식 덕에 피드에서
   // canGoBack()이 항상 false가 되어, 컨테이너의 useBackButton이 뒤로가기를
   // 가로채지 않는다(피드에서 앱 종료·풀스크린 중 미소비 계약의 전제).
   // v7의 navigate는 pop 없이 push하므로 탭 복귀에 쓰면 스택이 오염된다.
@@ -197,7 +197,7 @@ export function AppShell({
     setFocusedSubRoute(route);
     shellNavRef.current?.navigate(route);
   }, []);
-  // 피드 탭 내부 FeedStack의 화면까지 한 번의 dispatch로 도달한다(오버레이
+  // 피드 탭 내부 FeedStack의 화면까지 한 번의 dispatch로 도달한다(하위 화면
   // pop + 탭 전환 + 중첩 화면 push). initial:false가 없으면 피드 탭 콜드
   // 마운트에서 [PostDetail] 단독 스택이 되어 뒤로가기가 앱 종료로 이어진다.
   const navigateInFeedTab = useCallback(
@@ -713,7 +713,8 @@ export function AppShell({
             {({ navigation }) => {
               // 이동 함수가 렌더 본문 밖(effect·핸들러)에서도 셸 스택을
               // 조작할 수 있도록 렌더 중 ref로 캡처한다(openNotificationTargetRef와
-              // 같은 관용구). 오버레이 단독 시작도 있으므로 세 화면 모두 캡처한다.
+              // 같은 관용구). 하위 화면이 포커스인 동안에도 최신 navigation이
+              // 필요하므로 세 화면 모두 캡처한다.
               shellNavRef.current = navigation;
               return (
                 <Tab.Navigator
@@ -834,11 +835,11 @@ interface ShellRouteScreenProps {
   screens: AppScreenRegistry;
 }
 
-// 탭·오버레이 화면 공용 본문. 포커스를 잃으면 즉시 null을 반환해
+// 탭·하위 화면 공용 본문. 포커스를 잃으면 즉시 null을 반환해
 // "탭 전환 = 언마운트" 의미론(상태 초기화·복귀 시 재조회)을 보존한다.
 // bottom-tabs v7은 한 번 방문한 탭을 마운트 유지하므로 이 게이트가 없으면
 // 비활성 화면이 트리에 남는다. useIsFocused는 컨텍스트 기반이라 부모
-// 스택의 오버레이 push까지 같은 커밋에 반영된다.
+// 스택의 하위 화면 push까지 같은 커밋에 반영된다.
 // 반드시 모듈 레벨로 유지한다 — 렌더 본문 안에서 정의하면 매 렌더마다
 // 컴포넌트 타입이 바뀌어 화면 전체가 리마운트된다.
 function ShellRouteScreen({
@@ -850,7 +851,7 @@ function ShellRouteScreen({
 }: ShellRouteScreenProps) {
   const isFocused = useIsFocused();
 
-  // 셸의 visibleRoute 미러 보정. 내비게이터가 자율적으로 전이한 경우
+  // 셸의 라우트 미러 보정. 내비게이터가 자율적으로 전이한 경우
   // (역할 변경 폴백 등)에도 포커스된 화면이 자기 라우트를 보고한다.
   useEffect(() => {
     if (isFocused) {
