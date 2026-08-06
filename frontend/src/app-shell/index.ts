@@ -21,6 +21,8 @@ export type {
   CurrentGroupStore,
   FamilyGroup,
   GroupRole,
+  MainTabRoute,
   MainTabsParamList,
   ReportDeepLinkParams,
+  SharedSubRoute,
 } from './types';

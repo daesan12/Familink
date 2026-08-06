@@ -13,6 +13,8 @@ import type {
   AppScreenProps,
   AppScreenRegistry,
   FamilyGroup,
+  MainTabRoute,
+  SharedSubRoute,
 } from './types';
 
 function MockCurrentGroupSwitcher({
@@ -219,7 +221,7 @@ function FullscreenScreen({onFullscreenChange}: AppScreenProps) {
 }
 
 function renderForBack(
-  initialRoute: AppRoute,
+  initialRoute: MainTabRoute,
   group: FamilyGroup,
   backTestScreens: AppScreenRegistry = createBackTestScreens(),
 ) {
@@ -253,31 +255,83 @@ function renderedRoute(
   return typeof label === 'string' ? label.slice('screen:'.length) : undefined;
 }
 
-test.each<AppRoute>([
-  'calendar',
-  'aiCall',
-  'groupInfo',
-  'profile',
-  'notifications',
-  'archive',
-])('%s 라우트에서 시스템 Back은 앱을 종료하지 않고 피드로 돌아간다', route => {
-  const back = mockHardwareBack();
+// 알림·보관함은 어느 탭도 소유하지 않는 공유 하위 화면이다. 콜드 스타트로는
+// 진입할 수 없으므로(initialRoute는 탭 라우트만 받는다) 프로덕션과 같은 경로로
+// 피드 헤더의 종·폴더 아이콘을 눌러 연다.
+const SUB_SCREEN_ROUTES: readonly SharedSubRoute[] = ['notifications', 'archive'];
 
-  try {
-    const renderer = renderForBack(route, CARE_RECEIVER_GROUP);
-    expect(renderedRoute(renderer)).toBe(route);
+const SUB_SCREEN_OPENER_LABEL: Record<SharedSubRoute, string> = {
+  archive: '게시글 보관함',
+  notifications: '알림',
+};
 
-    let handled = false;
-    TestRenderer.act(() => {
-      handled = back.press();
-    });
+function openSubScreen(
+  renderer: TestRenderer.ReactTestRenderer,
+  route: SharedSubRoute,
+) {
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: SUB_SCREEN_OPENER_LABEL[route]})
+      .props.onPress();
+  });
+}
 
-    expect(handled).toBe(true);
-    expect(renderedRoute(renderer)).toBe('feed');
-  } finally {
-    back.restore();
-  }
-});
+function selectTab(
+  renderer: TestRenderer.ReactTestRenderer,
+  route: MainTabRoute,
+) {
+  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
+    BottomTabBar: () => null;
+  };
+  TestRenderer.act(() => {
+    renderer.root.findByType(MockTabBar).props.onSelect(route);
+  });
+}
+
+test.each<MainTabRoute>(['calendar', 'aiCall', 'groupInfo', 'profile'])(
+  '%s 라우트에서 시스템 Back은 앱을 종료하지 않고 피드로 돌아간다',
+  route => {
+    const back = mockHardwareBack();
+
+    try {
+      const renderer = renderForBack(route, CARE_RECEIVER_GROUP);
+      expect(renderedRoute(renderer)).toBe(route);
+
+      let handled = false;
+      TestRenderer.act(() => {
+        handled = back.press();
+      });
+
+      expect(handled).toBe(true);
+      expect(renderedRoute(renderer)).toBe('feed');
+    } finally {
+      back.restore();
+    }
+  },
+);
+
+test.each(SUB_SCREEN_ROUTES)(
+  '%s 화면에서 시스템 Back은 앱을 종료하지 않고 피드로 돌아간다',
+  route => {
+    const back = mockHardwareBack();
+
+    try {
+      const renderer = renderForBack('feed', CARE_RECEIVER_GROUP);
+      openSubScreen(renderer, route);
+      expect(renderedRoute(renderer)).toBe(route);
+
+      let handled = false;
+      TestRenderer.act(() => {
+        handled = back.press();
+      });
+
+      expect(handled).toBe(true);
+      expect(renderedRoute(renderer)).toBe('feed');
+    } finally {
+      back.restore();
+    }
+  },
+);
 
 test('보호자 리포트 탭에서 시스템 Back은 앱을 종료하지 않고 피드로 돌아간다', () => {
   const back = mockHardwareBack();
@@ -458,6 +512,7 @@ function createDeepLinkScreens(): AppScreenRegistry {
   };
 }
 
+// 알림 화면은 피드에서 종 아이콘으로 진입한다(콜드 스타트 진입 경로가 없다).
 function renderForDeepLink() {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
@@ -466,13 +521,14 @@ function renderForDeepLink() {
         <AppShell
           groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
           initialGroupId={DEEP_LINK_GROUP_A.id}
-          initialRoute="notifications"
+          initialRoute="feed"
           screens={createDeepLinkScreens()}
         />,
       ),
     );
   });
   mountedRenderers.push(renderer!);
+  openSubScreen(renderer!, 'notifications');
   return renderer!;
 }
 
@@ -818,17 +874,6 @@ test('알림 화면에서는 푸시 도착 구독을 해제해 배지를 조회�
 // 'notifications' 등)에만 의존하고 있어, 두 화면이 탭 스택 안으로 들어가면
 // (S15P11B104-367) 에러 없이 조용히 깨진다.
 
-const SUB_SCREEN_ROUTES: readonly ('archive' | 'notifications')[] = [
-  'notifications',
-  'archive',
-];
-
-// 피드 헤더의 종·폴더 아이콘으로 하위 화면을 연다. 프로덕션 진입 경로와 같다.
-const SUB_SCREEN_OPENER_LABEL: Record<'archive' | 'notifications', string> = {
-  archive: '게시글 보관함',
-  notifications: '알림',
-};
-
 function renderFeedShell(registry: AppScreenRegistry) {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
@@ -845,29 +890,6 @@ function renderFeedShell(registry: AppScreenRegistry) {
   });
   mountedRenderers.push(renderer!);
   return renderer!;
-}
-
-function openSubScreen(
-  renderer: TestRenderer.ReactTestRenderer,
-  route: 'archive' | 'notifications',
-) {
-  TestRenderer.act(() => {
-    renderer.root
-      .findByProps({accessibilityLabel: SUB_SCREEN_OPENER_LABEL[route]})
-      .props.onPress();
-  });
-}
-
-function selectTab(
-  renderer: TestRenderer.ReactTestRenderer,
-  route: AppRoute,
-) {
-  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
-    BottomTabBar: () => null;
-  };
-  TestRenderer.act(() => {
-    renderer.root.findByType(MockTabBar).props.onSelect(route);
-  });
 }
 
 test.each(SUB_SCREEN_ROUTES)(
@@ -899,6 +921,21 @@ test.each(SUB_SCREEN_ROUTES)('%s 화면에서도 하단 탭바는 유지된다',
   openSubScreen(renderer, route);
 
   expect(renderer.root.findAllByType(MockTabBar).length).toBeGreaterThan(0);
+});
+
+// 알림·보관함은 특정 탭에 속한 화면이 아니므로 어떤 탭도 "현재 위치"로 강조하지
+// 않는다. 보관함은 이전에 피드 탭을 강조했고 이 결정으로 알림과 일치시킨다.
+test.each(SUB_SCREEN_ROUTES)('%s 화면에서는 어떤 탭도 강조하지 않는다', route => {
+  const {BottomTabBar: MockTabBar} = jest.requireMock('./BottomTabBar') as {
+    BottomTabBar: () => null;
+  };
+  const renderer = renderFeedShell(screens);
+
+  expect(renderer.root.findByType(MockTabBar).props.activeRoute).toBe('feed');
+
+  openSubScreen(renderer, route);
+
+  expect(renderer.root.findByType(MockTabBar).props.activeRoute).toBeNull();
 });
 
 test('알림 화면에서 피드로 돌아오면 미읽음 배지를 다시 조회하지 않는다', async () => {

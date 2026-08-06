@@ -68,7 +68,9 @@ interface AppShellProps {
   groupStore?: CurrentGroupStore;
   groups: readonly FamilyGroup[];
   initialGroupId?: string | null;
-  initialRoute?: AppRoute;
+  // 콜드 스타트 진입 탭. 알림·보관함으로는 시작하지 않는다 — 프로덕션 진입점은
+  // 모두 탭 라우트이고, 앱 밖 푸시의 알림 폴백은 deepLinkTarget으로 전달된다.
+  initialRoute?: MainTabRoute;
   onCreateGroup?: () => void;
   onGroupChange?: (groupId: string) => void;
   onJoinGroup?: () => void;
@@ -119,12 +121,10 @@ export function AppShell({
   // (S15P11B104-367) resolvedRoute가 계속 탭 이름이 되어 헤더·FAB·배지·
   // 뒤로가기 판단이 에러 없이 조용히 어긋난다. 셸이 신호를 직접 소유한다.
   // visibleTabRoute는 하위 화면이 위에 열려 있어도 유지된다.
-  const [visibleTabRoute, setVisibleTabRoute] = useState<MainTabRoute>(
-    isSharedSubRoute(initialRoute) ? 'feed' : initialRoute
-  );
-  const [focusedSubRoute, setFocusedSubRoute] = useState<SharedSubRoute | null>(
-    isSharedSubRoute(initialRoute) ? initialRoute : null
-  );
+  const [visibleTabRoute, setVisibleTabRoute] =
+    useState<MainTabRoute>(initialRoute);
+  const [focusedSubRoute, setFocusedSubRoute] =
+    useState<SharedSubRoute | null>(null);
   const shellNavRef = useRef<ShellNavigation | null>(null);
   const [currentGroupId, setCurrentGroupId] = useState(initialGroupId);
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
@@ -574,20 +574,10 @@ export function AppShell({
   };
   openNotificationTargetRef.current = handleOpenNotificationTarget;
 
-  // 셸 내비게이터 초기 화면. 초기 라우트가 하위 화면이면 하위 화면 단독으로
-  // 시작한다(MainTabs 미마운트 → 피드 effect 미실행, 현행 초기 진입과 동일).
-  const initialShellRouteName = isSharedSubRoute(initialRoute)
-    ? initialRoute
-    : 'MainTabs';
-  const allowedInitialRoute = resolveAllowedRoute(
+  const initialTabRouteName: MainTabRoute = resolveAllowedRoute(
     currentGroup.role,
     initialRoute
   );
-  const initialTabRouteName: MainTabRoute = isSharedSubRoute(
-    allowedInitialRoute
-  )
-    ? 'feed'
-    : allowedInitialRoute;
 
   const screenProps: AppScreenProps = {
     accessToken,
@@ -716,7 +706,7 @@ export function AppShell({
 
       <View style={styles.content}>
         <ShellStack.Navigator
-          initialRouteName={initialShellRouteName}
+          initialRouteName="MainTabs"
           screenOptions={{ animation: 'none', headerShown: false }}
         >
           <ShellStack.Screen name="MainTabs">
@@ -802,13 +792,9 @@ export function AppShell({
 
       {!isScreenFullscreen ? (
         <BottomTabBar
-          activeRoute={resolvedRoute === 'archive' ? 'feed' : resolvedRoute}
+          // 알림·보관함은 어느 탭에도 속하지 않으므로 아무 탭도 강조하지 않는다.
+          activeRoute={focusedSubRoute === null ? resolvedTabRoute : null}
           onSelect={route => {
-            // 탭바에는 탭 라우트만 있으므로 하위 화면 라우트는 도달하지 않지만,
-            // 타입 좁히기를 위해 방어한다.
-            if (isSharedSubRoute(route)) {
-              return;
-            }
             if (route === resolvedRoute && route === 'aiCall') {
               return;
             }
