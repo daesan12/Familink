@@ -915,6 +915,18 @@ test('비관리자의 그룹 나가기 화면에는 관리자 전용 안내와 �
   ).toHaveLength(0);
 });
 
+test('혼자인 관리자의 그룹 나가기는 H-8 대신 그룹 삭제 확인으로 연결한다', () => {
+  // spec 규칙 11: 위임할 상대가 없으므로 나가기 화면이 아니라 삭제 확인으로 보낸다.
+  const renderer = renderScreen('m-manager', {
+    initialMembers: [MEMBERS[0]],
+  });
+
+  press(renderer, '그룹 나가기');
+
+  expect(hasText(renderer, '정말 그룹을 삭제하시겠어요?')).toBe(true);
+  expect(hasText(renderer, '정말 그룹을 나가시겠어요?')).toBe(false);
+});
+
 test('그룹 삭제 메뉴는 확인 팝업을 띄우고 삭제 콜백을 부른다', () => {
   const deleted: number[] = [];
   let renderer: TestRenderer.ReactTestRenderer;
