@@ -43,25 +43,23 @@ export interface DailyCall {
   startedAt: string;
 }
 
-interface DailyReportResultBase {
+export type DailyReportGenerationStatus =
+  | "notReady"
+  | "available"
+  | "generating"
+  | "ready";
+
+export interface DailyReportResult {
   calls: readonly DailyCall[];
+  dailyReport: DailyReport | null;
   date: string;
+  generationStatus: DailyReportGenerationStatus;
 }
 
-export type DailyReportResult =
-  | (DailyReportResultBase & {
-      calls: readonly [];
-      dailyReport: null;
-      status: "noCalls";
-    })
-  | (DailyReportResultBase & {
-      dailyReport: null;
-      status: "generating";
-    })
-  | (DailyReportResultBase & {
-      dailyReport: DailyReport;
-      status: "ready";
-    });
+export interface DailyReportGenerationResult {
+  generationStatus: "generating" | "ready";
+  reportDate: string;
+}
 
 export type CallReport =
   | {
@@ -94,6 +92,11 @@ export interface ReportGateway {
     memberId: string,
     reportDate: string
   ): Promise<DailyReportResult>;
+
+  requestDailyReportGeneration(
+    groupId: string,
+    memberId: string
+  ): Promise<DailyReportGenerationResult>;
 
   getCallReport(callSessionId: string): Promise<CallReport>;
 
@@ -132,6 +135,7 @@ export interface CareReceiverReportPage {
   latestDailyReport: DailyReportView | null;
   memberId: string;
   reportCalendar?: ReportCalendar;
+  selectedDateGenerationStatus: DailyReportGenerationStatus;
   todayCalls: readonly CallReportView[];
 }
 

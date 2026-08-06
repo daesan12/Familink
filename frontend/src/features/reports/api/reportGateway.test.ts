@@ -8,6 +8,7 @@ import { ApiError } from "../../../shared/api";
 function createClient(payload: unknown): jest.Mocked<ReportHttpClient> {
   return {
     get: jest.fn().mockResolvedValue({ data: payload, status: 200 }),
+    post: jest.fn().mockResolvedValue({ data: payload, status: 200 }),
   };
 }
 
@@ -69,6 +70,7 @@ test("일간 DTO의 null과 숫자 ID를 도메인 결과로 정확히 변환한
           summary: "가족 이야기를 나누셨어요.",
         },
         date: "2026-07-31",
+        generationStatus: "READY",
       })
   );
   const gateway = createReportGateway({ client });
@@ -91,11 +93,11 @@ test("일간 DTO의 null과 숫자 ID를 도메인 결과로 정확히 변환한
       summary: "가족 이야기를 나누셨어요.",
     },
     date: "2026-07-31",
-    status: "ready",
+    generationStatus: "ready",
   });
 });
 
-test("통화만 있고 일간 리포트가 null이면 생성 중으로 변환한다", async () => {
+test("일간 리포트 상태는 통화 수로 추론하지 않고 서버 값을 따른다", async () => {
   const client = createClient(
     success({
         calls: [
@@ -107,6 +109,7 @@ test("통화만 있고 일간 리포트가 null이면 생성 중으로 변환한
         ],
         dailyReport: null,
         date: "2026-07-31",
+        generationStatus: "AVAILABLE",
       })
   );
   const gateway = createReportGateway({ client });
@@ -115,7 +118,7 @@ test("통화만 있고 일간 리포트가 null이면 생성 중으로 변환한
     gateway.getDailyReport("1", "2", "2026-07-31")
   ).resolves.toMatchObject({
     dailyReport: null,
-    status: "generating",
+    generationStatus: "available",
   });
 });
 
@@ -125,6 +128,7 @@ test("통화와 일간 리포트가 모두 없으면 통화 없음으로 변환�
         calls: [],
         dailyReport: null,
         date: "2026-07-31",
+        generationStatus: "NOT_READY",
       })
   );
   const gateway = createReportGateway({ client });
@@ -135,7 +139,7 @@ test("통화와 일간 리포트가 모두 없으면 통화 없음으로 변환�
     calls: [],
     dailyReport: null,
     date: "2026-07-31",
-    status: "noCalls",
+    generationStatus: "notReady",
   });
 });
 
@@ -148,6 +152,7 @@ test("CALL_REPORT_NOT_READY 404는 일반 오류가 아닌 생성 중으로 변�
         "아직 리포트가 준비되지 않았습니다."
       )
     ),
+    post: jest.fn(),
   };
   const gateway = createReportGateway({ client });
 
@@ -164,6 +169,7 @@ test("그 밖의 조회 실패는 상태와 오류 코드를 보존해 거부한
       .mockRejectedValue(
         createServerError(403, "FORBIDDEN", "조회 권한이 없습니다.")
       ),
+    post: jest.fn(),
   };
   const gateway = createReportGateway({ client });
 
@@ -207,6 +213,26 @@ test("건별 리포트 상태를 도메인 상태로 변환한다", async () => 
   });
   expect(client.get).toHaveBeenCalledWith(
     "/call-sessions/31/report/status"
+  );
+});
+
+test("일간 리포트 수동 생성 요청을 POST로 전달한다", async () => {
+  const client = createClient(
+    success({
+      generationStatus: "GENERATING",
+      reportDate: "2026-08-06",
+    })
+  );
+  const gateway = createReportGateway({ client });
+
+  await expect(
+    gateway.requestDailyReportGeneration("group 1", "member/2")
+  ).resolves.toEqual({
+    generationStatus: "generating",
+    reportDate: "2026-08-06",
+  });
+  expect(client.post).toHaveBeenCalledWith(
+    "/groups/group%201/members/member%2F2/reports/daily/generation-requests"
   );
 });
 

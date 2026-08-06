@@ -25,6 +25,7 @@ test("당일 통화가 없어도 최신 일간 리포트가 있으면 준비된 
       summary: "편안하게 하루를 보내셨어요.",
     },
     memberId: "care-receiver-1",
+    selectedDateGenerationStatus: "notReady",
     todayCalls: [],
   };
 

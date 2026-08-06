@@ -8,12 +8,16 @@ import type {
   ApiSuccessResponseDto,
   CallReportResponseDto,
   CallReportStatusResponseDto,
+  DailyReportGenerationResponseDto,
+  DailyReportGenerationStatusDto,
   DailyReportResponseDto,
   ReportCalendarResponseDto,
 } from "./reportDtos";
 import type {
   CallReport,
   CallReportStatus,
+  DailyReportGenerationResult,
+  DailyReportGenerationStatus,
   DailyReportResult,
   ReportCalendar,
   ReportEmotionCategory,
@@ -22,6 +26,10 @@ import type {
 
 export interface ReportHttpClient {
   get(path: string): Promise<{
+    data: unknown;
+    status: number;
+  }>;
+  post(path: string): Promise<{
     data: unknown;
     status: number;
   }>;
@@ -85,6 +93,18 @@ export function createReportGateway(
     }
   }
 
+  async function postData<T>(
+    path: string,
+    parseData: (value: unknown) => T
+  ): Promise<T> {
+    try {
+      const response = await client.post(path);
+      return parseSuccessEnvelope(response.data, parseData);
+    } catch (error) {
+      throw toGatewayError(error);
+    }
+  }
+
   return {
     async getReportDates(groupId, memberId, year, month) {
       const query = `year=${encodeURIComponent(String(year))}&month=${encodeURIComponent(
@@ -108,6 +128,15 @@ export function createReportGateway(
           memberId
         )}/reports/daily/${encodeURIComponent(reportDate)}`,
         parseDailyReport
+      );
+    },
+
+    async requestDailyReportGeneration(groupId, memberId) {
+      return postData(
+        `/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(
+          memberId
+        )}/reports/daily/generation-requests`,
+        parseDailyReportGeneration
       );
     },
 
@@ -216,38 +245,38 @@ function parseDailyReport(value: unknown): DailyReportResult {
     calls,
     dailyReport,
     date: expectString(dto.date, "date"),
+    generationStatus: expectDailyReportGenerationStatus(dto.generationStatus),
   };
   const mappedCalls = responseDto.calls.map((call) => ({
     ...call,
     callSessionId: String(call.callSessionId),
   }));
 
-  if (responseDto.dailyReport) {
-    return {
-      calls: mappedCalls,
-      dailyReport: {
-        ...responseDto.dailyReport,
-        id: String(responseDto.dailyReport.id),
-      },
-      date: responseDto.date,
-      status: "ready",
-    };
-  }
-
-  if (mappedCalls.length > 0) {
-    return {
-      calls: mappedCalls,
-      dailyReport: null,
-      date: responseDto.date,
-      status: "generating",
-    };
-  }
-
   return {
-    calls: [],
-    dailyReport: null,
+    calls: mappedCalls,
+    dailyReport: responseDto.dailyReport
+      ? {
+          ...responseDto.dailyReport,
+          id: String(responseDto.dailyReport.id),
+        }
+      : null,
     date: responseDto.date,
-    status: "noCalls",
+    generationStatus: toDailyReportGenerationStatus(
+      responseDto.generationStatus
+    ),
+  };
+}
+
+function parseDailyReportGeneration(value: unknown): DailyReportGenerationResult {
+  const dto = expectRecord(value, "일간 리포트 생성 요청");
+  const responseDto: DailyReportGenerationResponseDto = {
+    generationStatus: expectReadyOrGeneratingStatus(dto.generationStatus),
+    reportDate: expectString(dto.reportDate, "reportDate"),
+  };
+  return {
+    generationStatus:
+      responseDto.generationStatus === "READY" ? "ready" : "generating",
+    reportDate: responseDto.reportDate,
   };
 }
 
@@ -359,6 +388,45 @@ function expectEmotionCategory(value: unknown): ReportEmotionCategory {
     throw invalidResponse("dailyReport.emotionCategory가 유효하지 않습니다.");
   }
   return value as ReportEmotionCategory;
+}
+
+function expectDailyReportGenerationStatus(
+  value: unknown
+): DailyReportGenerationStatusDto {
+  if (
+    value !== "NOT_READY" &&
+    value !== "AVAILABLE" &&
+    value !== "GENERATING" &&
+    value !== "READY"
+  ) {
+    throw invalidResponse(`지원하지 않는 일간 리포트 상태입니다: ${String(value)}`);
+  }
+  return value;
+}
+
+function expectReadyOrGeneratingStatus(
+  value: unknown
+): "GENERATING" | "READY" {
+  const status = expectDailyReportGenerationStatus(value);
+  if (status !== "GENERATING" && status !== "READY") {
+    throw invalidResponse(`지원하지 않는 생성 요청 상태입니다: ${status}`);
+  }
+  return status;
+}
+
+function toDailyReportGenerationStatus(
+  status: DailyReportGenerationStatusDto
+): DailyReportGenerationStatus {
+  switch (status) {
+    case "NOT_READY":
+      return "notReady";
+    case "AVAILABLE":
+      return "available";
+    case "GENERATING":
+      return "generating";
+    case "READY":
+      return "ready";
+  }
 }
 
 function invalidResponse(message: string): ReportGatewayError {

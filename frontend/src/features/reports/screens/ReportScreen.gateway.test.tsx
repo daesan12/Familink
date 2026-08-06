@@ -73,6 +73,7 @@ function createGateway(): jest.Mocked<ReportGateway> {
       reportDates: [],
       yearMonth: "2026-07",
     }),
+    requestDailyReportGeneration: jest.fn(),
   };
 }
 
@@ -111,7 +112,7 @@ function mockDailyReportWithCall(
     ],
     dailyReport: null,
     date: "2026-07-31",
-    status: "generating",
+    generationStatus: reportAvailable ? "available" : "notReady",
   });
 }
 
@@ -153,7 +154,7 @@ test("일간 조회 실패를 통화 없음과 구분하고 다시 시도할 수
       calls: [],
       dailyReport: null,
       date: "2026-07-31",
-      status: "noCalls",
+      generationStatus: "notReady",
     });
   const renderer = await renderWithGateway(gateway);
 
@@ -169,9 +170,125 @@ test("일간 조회 실패를 통화 없음과 구분하고 다시 시도할 수
 
   expect(gateway.getDailyReport).toHaveBeenCalledTimes(2);
   expect(JSON.stringify(renderer.toJSON())).toContain(
-    "AI 전화를 사용하시지 않으셨어요"
+    "건별 리포트 준비 중"
   );
 }, 10_000);
+
+test("이전 최신 리포트 아래에서 오늘 수동 생성 버튼을 누를 수 있다", async () => {
+  const gateway = createGateway();
+  gateway.getReportDates.mockResolvedValue({
+    latestReportDate: "2026-07-30",
+    reportDates: ["2026-07-30"],
+    yearMonth: "2026-07",
+  });
+  gateway.getDailyReport
+    .mockResolvedValueOnce({
+      calls: [
+        {
+          callSessionId: "31",
+          reportAvailable: true,
+          startedAt: "2026-07-31T00:30:00Z",
+        },
+      ],
+      dailyReport: null,
+      date: "2026-07-31",
+      generationStatus: "available",
+    })
+    .mockResolvedValueOnce({
+      calls: [],
+      dailyReport: {
+        emotionCategory: "NEUTRAL",
+        emotionSubcategory: "평온",
+        guardianMessageSummary: null,
+        id: "daily-30",
+        summary: "어제의 일간 리포트입니다.",
+      },
+      date: "2026-07-30",
+      generationStatus: "ready",
+    });
+  gateway.requestDailyReportGeneration.mockResolvedValue({
+    generationStatus: "generating",
+    reportDate: "2026-07-31",
+  });
+  const renderer = await renderWithGateway(gateway);
+
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "어제의 일간 리포트입니다."
+  );
+  const button = renderer.root.findByProps({
+    accessibilityLabel: "일간 리포트 생성",
+  });
+  expect(button.props.accessibilityState).toEqual({ disabled: false });
+
+  await TestRenderer.act(async () => {
+    button.props.onPress();
+  });
+
+  expect(gateway.requestDailyReportGeneration).toHaveBeenCalledWith(
+    "group-1",
+    "12"
+  );
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "일간 리포트 생성 중…" })
+      .props.accessibilityState
+  ).toEqual({ disabled: true });
+});
+
+test("생성 요청 뒤 5초 간격으로 상태를 확인하고 완료 리포트를 갱신한다", async () => {
+  jest.useFakeTimers();
+  const gateway = createGateway();
+  const availableResult = {
+    calls: [
+      {
+        callSessionId: "31",
+        reportAvailable: true,
+        startedAt: "2026-07-31T00:30:00Z",
+      },
+    ],
+    dailyReport: null,
+    date: "2026-07-31",
+    generationStatus: "available" as const,
+  };
+  const readyResult = {
+    calls: availableResult.calls,
+    dailyReport: {
+      emotionCategory: "JOY" as const,
+      emotionSubcategory: "즐거움",
+      guardianMessageSummary: null,
+      id: "daily-31",
+      summary: "방금 생성한 오늘의 리포트입니다.",
+    },
+    date: "2026-07-31",
+    generationStatus: "ready" as const,
+  };
+  gateway.getDailyReport
+    .mockResolvedValueOnce(availableResult)
+    .mockResolvedValue(readyResult);
+  gateway.requestDailyReportGeneration.mockResolvedValue({
+    generationStatus: "generating",
+    reportDate: "2026-07-31",
+  });
+  const renderer = await renderWithGateway(gateway);
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "일간 리포트 생성" })
+      .props.onPress();
+  });
+  expect(gateway.getDailyReport).toHaveBeenCalledTimes(1);
+
+  await TestRenderer.act(async () => {
+    await jest.advanceTimersByTimeAsync(5_000);
+  });
+
+  expect(gateway.getDailyReport).toHaveBeenCalledTimes(3);
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "방금 생성한 오늘의 리포트입니다."
+  );
+  expect(
+    renderer.root.findAllByProps({ accessibilityLabel: "일간 리포트 생성" })
+  ).toHaveLength(0);
+});
 
 test("건별 행을 누르면 API-REPORTS-003을 조회해 상세를 표시한다", async () => {
   const gateway = createGateway();
@@ -191,7 +308,7 @@ test("건별 행을 누르면 API-REPORTS-003을 조회해 상세를 표시한�
       summary: "즐거운 하루를 보내셨어요.",
     },
     date: "2026-07-31",
-    status: "ready",
+    generationStatus: "ready",
   });
   gateway.getCallReport.mockResolvedValue({
     callSessionId: "31",
@@ -230,7 +347,7 @@ test("건별 404 준비 전 결과는 오류 대신 준비 중으로 표시한�
     ],
     dailyReport: null,
     date: "2026-07-31",
-    status: "generating",
+    generationStatus: "available",
   });
   gateway.getCallReportStatus.mockResolvedValue({
     callSessionId: "31",
@@ -261,7 +378,7 @@ test("당일 리포트가 없으면 이전 달을 포함한 최신 일간 리포
       calls: [],
       dailyReport: null,
       date: "2026-07-31",
-      status: "noCalls",
+      generationStatus: "notReady",
     })
     .mockResolvedValueOnce({
       calls: [],
@@ -273,7 +390,7 @@ test("당일 리포트가 없으면 이전 달을 포함한 최신 일간 리포
         summary: "차분하게 하루를 보내셨어요.",
       },
       date: "2026-06-30",
-      status: "ready",
+      generationStatus: "ready",
     });
 
   const renderer = await renderWithGateway(gateway);
@@ -312,7 +429,7 @@ test("캘린더의 생성 날짜를 누르면 같은 화면을 해당 날짜 리
             : "오늘의 리포트입니다.",
       },
       date,
-      status: "ready",
+      generationStatus: "ready",
     })
   );
   const renderer = await renderWithGateway(gateway);
@@ -359,7 +476,7 @@ test("캘린더 방향 버튼으로 월을 이동하면 이동한 월의 생성 
       summary: "오늘의 리포트입니다.",
     },
     date: "2026-07-31",
-    status: "ready",
+    generationStatus: "ready",
   });
   const renderer = await renderWithGateway(gateway);
 
@@ -398,7 +515,7 @@ test("월을 이동하면 API 응답 전에도 날짜표를 즉시 표시하고 
       summary: "오늘의 리포트입니다.",
     },
     date: "2026-07-31",
-    status: "ready",
+    generationStatus: "ready",
   });
   gateway.getReportDates.mockImplementation(
     async (_groupId, _memberId, year, month) => {
@@ -492,7 +609,7 @@ test("어르신별 캘린더 날짜를 분리하고 화면 로딩 때 받은 현
         summary: `${memberId}번 어르신 리포트`,
       },
       date,
-      status: "ready",
+      generationStatus: "ready",
     })
   );
   gateway.getReportDates.mockImplementation(
@@ -573,7 +690,7 @@ test("알림 딥링크로 진입하면 해당 날짜·멤버 리포트로 이동
         summary: `${memberId}번 ${date} 리포트`,
       },
       date,
-      status: "ready",
+      generationStatus: "ready",
     })
   );
   gateway.getCallReport.mockResolvedValue({
@@ -648,7 +765,7 @@ test("한 피보호자 조회 실패에도 성공한 페이지를 유지하고 �
           summary: `${memberId}번 피보호자 리포트`,
         },
         date,
-        status: "ready",
+        generationStatus: "ready",
       };
     }
   );
@@ -700,7 +817,7 @@ test("리포트 초기 조회의 동시 요청 수를 chunk 상한으로 제한�
       calls: [],
       dailyReport: null,
       date,
-      status: "noCalls" as const,
+      generationStatus: "notReady" as const,
     })
   );
   gateway.getReportDates.mockImplementation(
@@ -956,7 +1073,7 @@ test("피보호자를 바꾼 뒤 이전 통화의 늦은 응답을 무시한다"
     ],
     dailyReport: null,
     date: "2026-07-31",
-    status: "generating",
+    generationStatus: "available",
   }));
   let resolveStatus:
     | ((value: { callSessionId: string; status: "ready" }) => void)

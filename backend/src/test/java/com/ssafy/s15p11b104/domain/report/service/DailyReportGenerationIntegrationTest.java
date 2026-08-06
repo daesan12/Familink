@@ -26,6 +26,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
 import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
+import com.ssafy.s15p11b104.domain.report.dto.DailyReportGenerationStatus;
 import com.ssafy.s15p11b104.domain.report.entity.EmotionCategory;
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
@@ -125,6 +126,33 @@ class DailyReportGenerationIntegrationTest extends IntegrationTest {
 			REPORT_DATE
 		)).isEqualTo(0);
 		verify(analyzer, org.mockito.Mockito.never()).analyze(any());
+	}
+
+	@Test
+	void manualGenerationUsesReadyReportsWithoutWaitingForEveryCallReport() {
+		Fixture fixture = insertFixture();
+		Long readySessionId = insertSession(fixture, CallStatus.COMPLETED, WINDOW_START.plusSeconds(3600));
+		insertSession(fixture, CallStatus.COMPLETED, WINDOW_START.plusSeconds(7200));
+		insertReport(readySessionId, "준비된 통화 요약", null);
+		when(analyzer.analyze(any())).thenReturn(new DailyReportAnalysis(
+			"준비된 리포트만 반영한 하루 요약",
+			EmotionCategory.NEUTRAL,
+			"차분함",
+			null
+		));
+
+		DailyReportGenerationService.ManualClaim claim = generationService.claimManual(
+			REPORT_DATE, fixture.memberId());
+		generationService.generateManual(REPORT_DATE, fixture.memberId(), claim.token());
+
+		assertThat(claim.status()).isEqualTo(DailyReportGenerationStatus.GENERATING);
+		assertThat(jdbcTemplate.queryForObject(
+			"SELECT COUNT(*) FROM daily_reports WHERE care_receiver_member_id = ? AND report_date = ?",
+			Integer.class,
+			fixture.memberId(),
+			REPORT_DATE
+		)).isEqualTo(1);
+		verify(analyzer).analyze(any());
 	}
 
 	@Test

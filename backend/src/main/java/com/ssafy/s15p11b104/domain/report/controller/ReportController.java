@@ -3,17 +3,23 @@ package com.ssafy.s15p11b104.domain.report.controller;
 import java.time.LocalDate;
 
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.s15p11b104.domain.report.dto.CallReportResponse;
 import com.ssafy.s15p11b104.domain.report.dto.CallReportStatusResponse;
+import com.ssafy.s15p11b104.domain.report.dto.DailyReportGenerationResponse;
+import com.ssafy.s15p11b104.domain.report.dto.DailyReportGenerationStatus;
 import com.ssafy.s15p11b104.domain.report.dto.DailyReportResponse;
 import com.ssafy.s15p11b104.domain.report.dto.ReportCalendarResponse;
+import com.ssafy.s15p11b104.domain.report.service.DailyReportManualGenerationService;
 import com.ssafy.s15p11b104.domain.report.service.ReportQueryService;
 import com.ssafy.s15p11b104.global.api.ApiResponse;
 import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
@@ -21,7 +27,7 @@ import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
 /**
  * 보호자의 통화 리포트 조회 API다.
  *
- * <p>{@code API-REPORTS-001}~{@code 004}를 구현한다. 계약의 경로가 {@code /groups}와
+ * <p>{@code API-REPORTS-001}~{@code 005}를 구현한다. 계약의 경로가 {@code /groups}와
  * {@code /call-sessions}로 나뉘므로 클래스 레벨 경로를 두지 않는다. 달력은
  * {@code care-receivers}, 일일 리포트는 {@code members} 세그먼트를 쓰는데 이는 계약이 정한 형태
  * 그대로다.
@@ -34,11 +40,17 @@ public class ReportController {
 	private static final String DAILY_MESSAGE = "일일 리포트 조회 성공";
 	private static final String CALL_REPORT_MESSAGE = "통화 리포트 조회 성공";
 	private static final String CALL_REPORT_STATUS_MESSAGE = "통화 리포트 상태 조회 성공";
+	private static final String DAILY_GENERATION_MESSAGE = "일일 리포트 생성 요청 접수";
 
 	private final ReportQueryService reportQueryService;
+	private final DailyReportManualGenerationService manualGenerationService;
 
-	public ReportController(ReportQueryService reportQueryService) {
+	public ReportController(
+		ReportQueryService reportQueryService,
+		DailyReportManualGenerationService manualGenerationService
+	) {
 		this.reportQueryService = reportQueryService;
+		this.manualGenerationService = manualGenerationService;
 	}
 
 	@GetMapping("/groups/{groupId}/care-receivers/{memberId}/reports/calendar")
@@ -62,6 +74,20 @@ public class ReportController {
 		return ApiResponse.success(
 			DAILY_MESSAGE,
 			reportQueryService.getDailyReport(groupId, memberId, reportDate, authenticatedUser.id()));
+	}
+
+	@PostMapping("/groups/{groupId}/members/{memberId}/reports/daily/generation-requests")
+	public ResponseEntity<ApiResponse<DailyReportGenerationResponse>> requestDailyReportGeneration(
+		@PathVariable Long groupId,
+		@PathVariable Long memberId,
+		@AuthenticationPrincipal AuthenticatedUser authenticatedUser
+	) {
+		DailyReportGenerationResponse response = manualGenerationService.request(
+			groupId, memberId, authenticatedUser.id());
+		HttpStatus status = response.generationStatus() == DailyReportGenerationStatus.READY
+			? HttpStatus.OK
+			: HttpStatus.ACCEPTED;
+		return ResponseEntity.status(status).body(ApiResponse.success(DAILY_GENERATION_MESSAGE, response));
 	}
 
 	@GetMapping("/call-sessions/{callSessionId}/report")

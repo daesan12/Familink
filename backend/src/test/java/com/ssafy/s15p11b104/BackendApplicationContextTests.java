@@ -48,6 +48,7 @@ import com.ssafy.s15p11b104.domain.notification.repository.NotificationCreationS
 import com.ssafy.s15p11b104.domain.notification.repository.NotificationRepository;
 import com.ssafy.s15p11b104.domain.notification.repository.NotificationSettingRepository;
 import com.ssafy.s15p11b104.domain.notification.service.EventReminderService;
+import com.ssafy.s15p11b104.domain.report.repository.DailyReportGenerationClaimRepository;
 import com.ssafy.s15p11b104.domain.report.repository.DailyReportRepository;
 import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationService;
 import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationClaimCleanupService;
@@ -179,6 +180,9 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private DailyReportRepository dailyReportRepository;
+
+	@MockitoBean
+	private DailyReportGenerationClaimRepository dailyReportGenerationClaimRepository;
 
 	/**
 	 * 이 컨텍스트는 JPA 자동 구성을 제외해 {@code TransactionTemplate} 빈이 없으므로, 그것을

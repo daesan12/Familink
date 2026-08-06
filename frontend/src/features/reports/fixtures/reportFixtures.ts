@@ -14,6 +14,7 @@ export const DEVELOPMENT_REPORT_PAGES: readonly CareReceiverReportPage[] = [
         "가족 이야기를 나누며 즐거워하셨고, 저녁 산책을 기대하고 계셨어요.",
     },
     memberId: "care-receiver-sooho",
+    selectedDateGenerationStatus: "available",
     todayCalls: [
       {
         callSessionId: "call-sooho-1032",
@@ -47,6 +48,7 @@ export const DEVELOPMENT_REPORT_PAGES: readonly CareReceiverReportPage[] = [
         "집에서 편안하게 하루를 보내셨고, 가족들의 안부를 궁금해하셨어요.",
     },
     memberId: "care-receiver-malsoon",
+    selectedDateGenerationStatus: "notReady",
     todayCalls: [],
   },
 ];
@@ -55,6 +57,7 @@ export const EMPTY_REPORT_PAGE: CareReceiverReportPage = {
   displayName: "손수호",
   latestDailyReport: null,
   memberId: "care-receiver-empty",
+  selectedDateGenerationStatus: "notReady",
   todayCalls: [],
 };
 
@@ -62,6 +65,7 @@ export const DAILY_PENDING_REPORT_PAGE: CareReceiverReportPage = {
   displayName: "손수호",
   latestDailyReport: null,
   memberId: "care-receiver-daily-pending",
+  selectedDateGenerationStatus: "available",
   todayCalls: [
     {
       callSessionId: "call-first-day-1032",

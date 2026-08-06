@@ -12,6 +12,8 @@ export type {
   ApiErrorResponseDto,
   ApiSuccessResponseDto,
   CallReportResponseDto,
+  DailyReportGenerationResponseDto,
+  DailyReportGenerationStatusDto,
   DailyReportResponseDto,
   ReportCalendarResponseDto,
 } from "./api/reportDtos";
@@ -24,6 +26,8 @@ export type {
   CareReceiverReportPage,
   DailyCall,
   DailyReport,
+  DailyReportGenerationResult,
+  DailyReportGenerationStatus,
   DailyReportResult,
   DailyReportView,
   ReportCalendar,

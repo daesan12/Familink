@@ -11,6 +11,7 @@ import java.util.List;
  */
 public record DailyReportResponse(
 	LocalDate date,
+	DailyReportGenerationStatus generationStatus,
 	DailyReportSummaryResponse dailyReport,
 	List<DailyCallItemResponse> calls) {
 }

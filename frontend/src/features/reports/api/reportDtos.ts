@@ -36,6 +36,18 @@ export interface DailyReportResponseDto {
     summary: string;
   } | null;
   date: string;
+  generationStatus: DailyReportGenerationStatusDto;
+}
+
+export type DailyReportGenerationStatusDto =
+  | "NOT_READY"
+  | "AVAILABLE"
+  | "GENERATING"
+  | "READY";
+
+export interface DailyReportGenerationResponseDto {
+  generationStatus: "GENERATING" | "READY";
+  reportDate: string;
 }
 
 export interface CallReportResponseDto {
