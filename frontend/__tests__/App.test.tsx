@@ -1150,7 +1150,7 @@ test("새 그룹을 만들면 입력한 그룹으로 앱 셸에 진입한다", a
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1457,7 +1457,7 @@ test("초대 코드 참여 요청을 보내면 승인 대기 카드를 표시한
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1474,9 +1474,11 @@ test("초대 코드 참여 요청을 보내면 승인 대기 카드를 표시한
 
   expect(onJoinGroup).toHaveBeenCalledWith("FA12BC", expect.any(Object));
   expect(renderer!.root.findByProps({ children: "가족 소모임" })).toBeTruthy();
-  expect(JSON.stringify(renderer!.toJSON())).toContain(
-    "관리자 승인을 기다리고 있어요"
-  );
+  expect(
+    renderer!.root.findByProps({
+      accessibilityLabel: "가족 소모임, 대기 중",
+    }),
+  ).toBeTruthy();
 });
 
 test("기본 그룹 게이트웨이로 초대 코드 가입 요청과 상태 재조회를 연결한다", async () => {
@@ -1512,7 +1514,7 @@ test("기본 그룹 게이트웨이로 초대 코드 가입 요청과 상태 재
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1577,7 +1579,7 @@ test("가입 대기 화면을 열어 둔 채 승인되면 승인 카드로 전�
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1596,7 +1598,7 @@ test("가입 대기 화면을 열어 둔 채 승인되면 승인 카드로 전�
   expect(
     renderer!.root.findByProps({accessibilityLabel: "승인 가족 열기"}),
   ).toBeTruthy();
-  expect(JSON.stringify(renderer!.toJSON())).toContain("가입이 승인되었어요");
+  expect(JSON.stringify(renderer!.toJSON())).toContain("환영해요!");
 });
 
 test("저장된 가입 요청은 재실행 후 승인 카드로 복원하고 입장 뒤 제거한다", async () => {
@@ -1831,7 +1833,7 @@ test("가입 요청 뒤 그룹 재조회 중 화면이 종료되면 늦은 결�
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1888,7 +1890,7 @@ test("초대 코드 참여 요청이 실패하면 입력창을 유지하고 대�
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1936,7 +1938,7 @@ test("가입 게이트웨이가 없으면 코드 오류 대신 후속 연동을 
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -2036,8 +2038,7 @@ test("승인된 피보호자는 지정된 역할로 그룹에 진입한다", asy
   });
   mountedRenderers.push(renderer!);
 
-  expect(JSON.stringify(renderer!.toJSON())).toContain("가입이 승인되었어요");
-  expect(JSON.stringify(renderer!.toJSON())).toContain("눌러서 입장하기");
+  expect(JSON.stringify(renderer!.toJSON())).toContain("환영해요!");
 
   await TestRenderer.act(() => {
     renderer!.root

@@ -1,7 +1,8 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {Pressable, ScrollView, StyleSheet, View} from 'react-native';
 
 import {COLORS, RADII} from '../design/tokens';
+import {AppText} from '../shared/components/AppText';
 import {DraggableBottomSheet} from '../shared/components/DraggableBottomSheet';
 import type {FamilyGroup} from './types';
 
@@ -39,9 +40,9 @@ export function CurrentGroupSwitcher({
         onPress={onToggle}
         style={styles.trigger}
       >
-        <Text numberOfLines={1} style={styles.triggerText}>
+        <AppText numberOfLines={1} style={styles.triggerText}>
           {currentGroup.name}
-        </Text>
+        </AppText>
         <MaterialDesignIcons
           accessibilityElementsHidden
           color={COLORS.textStrong}
@@ -60,7 +61,7 @@ export function CurrentGroupSwitcher({
         visible={isOpen}
       >
         <View>
-          <Text style={styles.title}>그룹 선택</Text>
+          <AppText style={styles.title}>그룹 선택</AppText>
           <ScrollView
             accessibilityRole="menu"
             contentContainerStyle={styles.options}
@@ -81,14 +82,14 @@ export function CurrentGroupSwitcher({
                     pressed && !isSelected && styles.pressedOption,
                   ]}
                 >
-                  <Text
+                  <AppText
                     style={[
                       styles.optionText,
                       isSelected && styles.selectedOptionText,
                     ]}
                   >
                     {group.name}
-                  </Text>
+                  </AppText>
                 </Pressable>
               );
             })}
@@ -125,7 +126,7 @@ function GroupAction({label, onPress}: GroupActionProps) {
         name="plus"
         size={18}
       />
-      <Text style={styles.actionText}>{label}</Text>
+      <AppText style={styles.actionText}>{label}</AppText>
     </Pressable>
   );
 }

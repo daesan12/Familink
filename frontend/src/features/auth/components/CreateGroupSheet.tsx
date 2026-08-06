@@ -1,5 +1,14 @@
-import {useEffect, useRef, useState} from 'react';
-import {Alert, StyleSheet, Text, TextInput, View} from 'react-native';
+import {
+  useEffect,
+  useRef,
+  useState} from 'react';
+import {Alert,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
+import {FONT_FAMILY} from '../../../design/tokens';
 
 import {AUTH_COLORS} from '../theme';
 import {AnimatedPressable} from './AnimatedPressable';
@@ -110,11 +119,11 @@ export function CreateGroupSheet({
       dismissDisabled={submitting}
       onDismiss={handleDismiss}
       visible={visible}>
-      <Text style={styles.title}>새 그룹 만들기</Text>
+      <AppText style={styles.title}>새 그룹 만들기</AppText>
 
       <View style={styles.form}>
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>그룹 이름</Text>
+          <AppText style={styles.label}>그룹 이름</AppText>
           <TextInput
             accessibilityLabel="그룹 이름"
             autoCapitalize="none"
@@ -131,7 +140,7 @@ export function CreateGroupSheet({
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>내 역할</Text>
+          <AppText style={styles.label}>내 역할</AppText>
           <View
             accessibilityLabel="내 역할"
             accessibilityRole="radiogroup"
@@ -188,9 +197,9 @@ function RoleOption({
       onPress={onPress}
       style={[styles.roleOptionPressable, selected && styles.selectedRole]}>
       <View style={styles.roleOption}>
-        <Text style={[styles.roleLabel, selected && styles.selectedRoleLabel]}>
+        <AppText style={[styles.roleLabel, selected && styles.selectedRoleLabel]}>
           {label}
-        </Text>
+        </AppText>
       </View>
     </AnimatedPressable>
   );
@@ -224,6 +233,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     color: '#13151F',
+    fontFamily: FONT_FAMILY,
     fontSize: 15,
     height: 46,
     paddingHorizontal: 16,

@@ -1,4 +1,5 @@
-import {StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
@@ -13,7 +14,7 @@ export function SubScreenHeader({title, onBack}: SubScreenHeaderProps) {
   return (
     <View style={styles.header}>
       <BackButton onPress={onBack} style={styles.backButton} />
-      <Text style={styles.title}>{title}</Text>
+      <AppText style={styles.title}>{title}</AppText>
     </View>
   );
 }

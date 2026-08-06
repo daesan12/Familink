@@ -1,5 +1,8 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useRef, useState} from 'react';
+import {
+  useEffect,
+  useRef,
+  useState} from 'react';
 import {
   Animated,
   Easing,
@@ -7,10 +10,10 @@ import {
   PanResponder,
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {COLORS, RADII} from '../../../design/tokens';
@@ -174,7 +177,7 @@ function SheetAction({danger = false, icon, label, onPress}: SheetActionProps) {
       style={({pressed}) => [styles.action, pressed && styles.pressedAction]}
     >
       <MaterialDesignIcons color={color} name={icon} size={26} />
-      <Text style={[styles.actionText, {color}]}>{label}</Text>
+      <AppText style={[styles.actionText, {color}]}>{label}</AppText>
     </Pressable>
   );
 }

@@ -1,5 +1,14 @@
-import {useEffect, useMemo, useRef, useState} from 'react';
-import {ScrollView, StyleSheet, Switch, Text, View} from 'react-native';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState} from 'react';
+import {ScrollView,
+  StyleSheet,
+  Switch,
+  View,
+} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
@@ -136,7 +145,7 @@ export function NotificationSettingsScreen({
     }
     return (
       <View key={group.title} style={styles.groupBlock}>
-        <Text style={styles.groupTitle}>{group.title}</Text>
+        <AppText style={styles.groupTitle}>{group.title}</AppText>
         <View style={styles.groupCard}>
           {rows.map((setting, index) => (
             <View
@@ -147,11 +156,11 @@ export function NotificationSettingsScreen({
               ]}
             >
               <View style={styles.settingTexts}>
-                <Text style={styles.settingLabel}>{setting.label}</Text>
+                <AppText style={styles.settingLabel}>{setting.label}</AppText>
                 {setting.description ? (
-                  <Text style={styles.settingDescription}>
+                  <AppText style={styles.settingDescription}>
                     {setting.description}
-                  </Text>
+                  </AppText>
                 ) : null}
               </View>
               <Switch
@@ -173,7 +182,7 @@ export function NotificationSettingsScreen({
     <View style={styles.screen}>
       <View style={styles.header}>
         <BackButton onPress={onBack} />
-        <Text style={styles.headerTitle}>알림 설정</Text>
+        <AppText style={styles.headerTitle}>알림 설정</AppText>
         <View style={styles.headerButton} />
       </View>
 
@@ -181,9 +190,9 @@ export function NotificationSettingsScreen({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.sectionTitle}>앱 푸시 알림</Text>
+        <AppText style={styles.sectionTitle}>앱 푸시 알림</AppText>
         {isLoading ? (
-          <Text style={styles.statusMessage}>설정을 불러오는 중이에요.</Text>
+          <AppText style={styles.statusMessage}>설정을 불러오는 중이에요.</AppText>
         ) : null}
         {errorMessage ? (
           <View style={styles.errorBannerWrap}>

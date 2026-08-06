@@ -1,15 +1,17 @@
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
-import { useRef, useState } from "react";
+import {
+  useRef,
+  useState } from "react";
 import {
   FlatList,
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
+import {AppText} from "../../../shared/components/AppText";
 
 import { COLORS, RADII } from "../../../design/tokens";
 
@@ -73,12 +75,12 @@ export function CalendarTimePickerModal({
                 />
               </View>
               <View style={styles.headerCopy}>
-                <Text accessibilityRole="header" style={styles.title}>
+                <AppText accessibilityRole="header" style={styles.title}>
                   시간 설정
-                </Text>
-                <Text style={styles.description}>
+                </AppText>
+                <AppText style={styles.description}>
                   {label} 시간을 선택해 주세요.
-                </Text>
+                </AppText>
               </View>
             </View>
 
@@ -106,7 +108,7 @@ export function CalendarTimePickerModal({
                 selectedIndex={hourIndex}
                 width={64}
               />
-              <Text style={styles.separator}>:</Text>
+              <AppText style={styles.separator}>:</AppText>
               <WheelColumn
                 accessibilityLabel="분 휠"
                 accessibilitySuffix="분 선택"
@@ -120,13 +122,13 @@ export function CalendarTimePickerModal({
               />
             </View>
 
-            <Text accessibilityLiveRegion="polite" style={styles.summary}>
+            <AppText accessibilityLiveRegion="polite" style={styles.summary}>
               {label} 시간 {formatTimeLabel(selectedTime)}
-            </Text>
+            </AppText>
             {validationMessage ? (
-              <Text accessibilityRole="alert" style={styles.validationMessage}>
+              <AppText accessibilityRole="alert" style={styles.validationMessage}>
                 {validationMessage}
-              </Text>
+              </AppText>
             ) : null}
 
             <View style={styles.actions}>
@@ -140,7 +142,7 @@ export function CalendarTimePickerModal({
                   pressed && styles.buttonPressed,
                 ]}
               >
-                <Text style={styles.cancelText}>취소</Text>
+                <AppText style={styles.cancelText}>취소</AppText>
               </Pressable>
               <Pressable
                 accessibilityLabel="시간 선택 확인"
@@ -157,7 +159,7 @@ export function CalendarTimePickerModal({
                   pressed && styles.buttonPressed,
                 ]}
               >
-                <Text style={styles.confirmText}>확인</Text>
+                <AppText style={styles.confirmText}>확인</AppText>
               </Pressable>
             </View>
           </View>
@@ -231,11 +233,11 @@ function WheelColumn({
             onPress={() => handleSelect(index)}
             style={styles.wheelItem}
           >
-            <Text
+            <AppText
               style={selected ? styles.selectedWheelText : styles.wheelText}
             >
               {item}
-            </Text>
+            </AppText>
           </Pressable>
         );
       }}

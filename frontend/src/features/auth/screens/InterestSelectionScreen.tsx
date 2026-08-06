@@ -1,5 +1,8 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useRef, useState} from 'react';
+import {
+  useEffect,
+  useRef,
+  useState} from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -8,13 +11,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
-import {COLORS} from '../../../design/tokens';
+import {COLORS, FONT_FAMILY} from '../../../design/tokens';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {AnimatedPressable} from '../components/AnimatedPressable';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
@@ -215,10 +218,10 @@ export function InterestSelectionScreen({
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>관심사를 선택해주세요</Text>
-          <Text style={styles.description}>
+          <AppText style={styles.title}>관심사를 선택해주세요</AppText>
+          <AppText style={styles.description}>
             {'AI 안부전화와 대화 주제를 위해\n관심사를 최대 10개까지 선택해주세요.'}
-          </Text>
+          </AppText>
 
           <View style={styles.chipList}>
             {displayedInterests.map(interest => (
@@ -242,7 +245,7 @@ export function InterestSelectionScreen({
                   name="plus"
                   size={18}
                 />
-                <Text style={styles.chipLabel}>직접 입력</Text>
+                <AppText style={styles.chipLabel}>직접 입력</AppText>
               </View>
             </AnimatedPressable>
           </View>
@@ -251,7 +254,7 @@ export function InterestSelectionScreen({
             accessibilityLiveRegion="polite"
             style={styles.feedbackArea}>
             {errorMessage !== null && !customInputVisible && (
-              <Text style={styles.errorMessage}>{errorMessage}</Text>
+              <AppText style={styles.errorMessage}>{errorMessage}</AppText>
             )}
           </View>
         </ScrollView>
@@ -265,7 +268,7 @@ export function InterestSelectionScreen({
               disabled={saving}
               onPress={onSkip}>
               <View style={styles.skipContent}>
-                <Text style={styles.skipLabel}>건너뛰기</Text>
+                <AppText style={styles.skipLabel}>건너뛰기</AppText>
                 <MaterialDesignIcons
                   color={AUTH_COLORS.placeholder}
                   name="arrow-right"
@@ -286,7 +289,7 @@ export function InterestSelectionScreen({
               {saving ? (
                 <ActivityIndicator color={AUTH_COLORS.body} />
               ) : (
-                <Text style={styles.nextLabel}>다음</Text>
+                <AppText style={styles.nextLabel}>다음</AppText>
               )}
             </View>
           </AnimatedPressable>
@@ -333,9 +336,9 @@ function InterestChip({interest, onPress, selected}: InterestChipProps) {
           name={selected ? 'check' : 'plus'}
           size={18}
         />
-        <Text style={[styles.chipLabel, selected && styles.selectedChipLabel]}>
+        <AppText style={[styles.chipLabel, selected && styles.selectedChipLabel]}>
           {interest}
-        </Text>
+        </AppText>
       </View>
     </AnimatedPressable>
   );
@@ -418,9 +421,9 @@ function CustomInterestModal({
                 style={styles.input}
                 value={value}
               />
-              <Text style={styles.counter}>
+              <AppText style={styles.counter}>
                 {value.length}/{MAX_INTEREST_LENGTH}
-              </Text>
+              </AppText>
             </View>
             <AnimatedPressable
               accessibilityLabel="직접 입력 관심사 추가"
@@ -430,7 +433,7 @@ function CustomInterestModal({
               disabled={normalizedValue.length === 0}
               onPress={handleAdd}>
               <View style={styles.addButton}>
-                <Text style={styles.addLabel}>추가</Text>
+                <AppText style={styles.addLabel}>추가</AppText>
               </View>
             </AnimatedPressable>
           </View>
@@ -439,7 +442,7 @@ function CustomInterestModal({
             accessibilityLiveRegion="polite"
             style={styles.modalFeedback}>
             {errorMessage !== null && (
-              <Text style={styles.modalError}>{errorMessage}</Text>
+              <AppText style={styles.modalError}>{errorMessage}</AppText>
             )}
           </View>
         </View>
@@ -478,15 +481,15 @@ function InterestSavedModal({
               size={34}
             />
           </View>
-          <Text style={styles.savedTitle}>{content.title}</Text>
-          <Text style={styles.savedMessage}>{content.message}</Text>
+          <AppText style={styles.savedTitle}>{content.title}</AppText>
+          <AppText style={styles.savedMessage}>{content.message}</AppText>
           <AnimatedPressable
             accessibilityLabel={content.buttonLabel}
             accessibilityRole="button"
             containerStyle={styles.savedButtonContainer}
             onPress={onConfirm}>
             <View style={styles.savedButton}>
-              <Text style={styles.savedButtonLabel}>{content.buttonLabel}</Text>
+              <AppText style={styles.savedButtonLabel}>{content.buttonLabel}</AppText>
             </View>
           </AnimatedPressable>
         </View>
@@ -675,6 +678,7 @@ const styles = StyleSheet.create({
   input: {
     color: AUTH_COLORS.body,
     flex: 1,
+    fontFamily: FONT_FAMILY,
     fontSize: 14,
     height: 40,
     paddingVertical: 0,

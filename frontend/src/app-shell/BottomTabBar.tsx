@@ -4,7 +4,8 @@ import FileChartColumn from 'lucide-react-native/icons/file-chart-column';
 import House from 'lucide-react-native/icons/house';
 import PhoneCall from 'lucide-react-native/icons/phone-call';
 import UsersRound from 'lucide-react-native/icons/users-round';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from '../shared/components/AppText';
 
 import {COLORS} from '../design/tokens';
 import type {GroupRole, MainTabRoute} from './types';
@@ -48,7 +49,7 @@ export function BottomTabBar({activeRoute, onSelect, role}: BottomTabBarProps) {
             style={styles.tab}
           >
             <Icon color={color} size={24} strokeWidth={2} />
-            <Text style={[styles.label, {color}]}>{tab.label}</Text>
+            <AppText style={[styles.label, {color}]}>{tab.label}</AppText>
           </Pressable>
         );
       })}

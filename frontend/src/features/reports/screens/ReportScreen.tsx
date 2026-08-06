@@ -4,9 +4,12 @@ import {
   useNavigation,
   useRoute,
   type RouteProp,
-} from "@react-navigation/native";
+  } from "@react-navigation/native";
 import type { ComponentProps } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback,
+  useEffect,
+  useRef,
+  useState } from "react";
 import {
   ActivityIndicator,
   type NativeScrollEvent,
@@ -14,10 +17,10 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
+import {AppText} from "../../../shared/components/AppText";
 
 import type { AppScreenProps, MainTabsParamList } from "../../../app-shell";
 import { COLORS, RADII } from "../../../design/tokens";
@@ -673,12 +676,12 @@ export function ReportScreen({
         accessibilityLabel="조회할 피보호자가 없는 리포트"
         style={styles.noCareReceiver}
       >
-        <Text style={styles.noCareReceiverTitle}>
+        <AppText style={styles.noCareReceiverTitle}>
           리포트를 확인할 피보호자가 없어요
-        </Text>
-        <Text style={styles.noCareReceiverDescription}>
+        </AppText>
+        <AppText style={styles.noCareReceiverDescription}>
           현재 그룹에 피보호자가 연결되면 통화 리포트를 확인할 수 있어요.
-        </Text>
+        </AppText>
       </View>
     );
   }
@@ -769,8 +772,8 @@ function ReportLoadState({
   return (
     <View accessibilityLabel={title} style={styles.loadState}>
       <MaterialDesignIcons color={COLORS.purpleDeep} name={icon} size={34} />
-      <Text style={styles.loadStateTitle}>{title}</Text>
-      <Text style={styles.loadStateDescription}>{description}</Text>
+      <AppText style={styles.loadStateTitle}>{title}</AppText>
+      <AppText style={styles.loadStateDescription}>{description}</AppText>
       {actionLabel && onAction ? (
         <View style={styles.retryButtonWrap}>
           <RetryButton
@@ -864,7 +867,7 @@ function ReportPage({
       <View style={styles.header}>
         {/* 캘린더 버튼과 같은 폭의 스페이서로 제목을 정확히 가운데에 둔다. */}
         <View style={styles.headerSpacer} />
-        <Text style={styles.title}>{page.displayName} 님의 통화 리포트</Text>
+        <AppText style={styles.title}>{page.displayName} 님의 통화 리포트</AppText>
         <Pressable
           accessibilityHint="생성된 일간 리포트 날짜를 월별로 확인합니다"
           accessibilityLabel="리포트 캘린더"
@@ -900,9 +903,9 @@ function ReportPage({
           ) : null}
 
           <View style={styles.callSection}>
-            <Text style={styles.callSectionTitle}>
+            <AppText style={styles.callSectionTitle}>
               {isToday ? "오늘의 통화" : "선택한 날의 통화"}
-            </Text>
+            </AppText>
             {sortedTodayCalls.length > 0 ? (
               <View style={styles.callList}>
                 {sortedTodayCalls.map((call) => (
@@ -918,11 +921,11 @@ function ReportPage({
                 accessibilityLabel="오늘 통화 리포트 없음"
                 style={styles.emptyCalls}
               >
-                <Text style={styles.emptyCallsText}>
+                <AppText style={styles.emptyCallsText}>
                   {isToday
                     ? "오늘 생성된 통화 리포트가 없어요."
                     : "선택한 날짜에 생성된 통화 리포트가 없어요."}
-                </Text>
+                </AppText>
               </View>
             )}
           </View>
@@ -983,12 +986,12 @@ function DailyReportPendingCard() {
         />
       </View>
       <View style={styles.pendingCopy}>
-        <Text style={styles.pendingTitle}>
+        <AppText style={styles.pendingTitle}>
           아직 일간 리포트가 생성되지 않았어요
-        </Text>
-        <Text style={styles.pendingDescription}>
+        </AppText>
+        <AppText style={styles.pendingDescription}>
           오늘의 통화가 모이면 일간 리포트로 정리해드려요.
-        </Text>
+        </AppText>
       </View>
     </View>
   );
@@ -1042,19 +1045,19 @@ function DailyReportGenerationControl({
             size={20}
           />
         )}
-        <Text
+        <AppText
           style={[
             styles.generationButtonText,
             !isAvailable ? styles.generationButtonTextDisabled : null,
           ]}
         >
           {label}
-        </Text>
+        </AppText>
       </Pressable>
       {message ? (
-        <Text accessibilityLiveRegion="polite" style={styles.generationMessage}>
+        <AppText accessibilityLiveRegion="polite" style={styles.generationMessage}>
           {message}
-        </Text>
+        </AppText>
       ) : null}
     </View>
   );
@@ -1070,12 +1073,12 @@ function EmptyReportState({ displayName }: { displayName: string }) {
           size={34}
         />
       </View>
-      <Text style={styles.emptyTitle}>
+      <AppText style={styles.emptyTitle}>
         {displayName} 님께서 아직{"\n"}AI 전화를 사용하시지 않으셨어요
-      </Text>
-      <Text style={styles.emptyDescription}>
+      </AppText>
+      <AppText style={styles.emptyDescription}>
         통화를 마치면 이곳에서 내용을 확인할 수 있어요.
-      </Text>
+      </AppText>
     </View>
   );
 }

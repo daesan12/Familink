@@ -7,11 +7,11 @@ import {
   PanResponder,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {AppText} from '../../../shared/components/AppText';
 import type {AppNotification} from '../types';
 
 interface NotificationItemProps {
@@ -118,14 +118,14 @@ export function NotificationItem({
           ]}
         >
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{notification.avatarText}</Text>
+            <AppText style={styles.avatarText}>{notification.avatarText}</AppText>
           </View>
           <View style={styles.copy}>
-            <Text numberOfLines={1} style={[styles.title, textStyle]}>
+            <AppText numberOfLines={1} style={[styles.title, textStyle]}>
               {notification.title}
-            </Text>
-            <Text style={[styles.body, textStyle]}>{notification.body}</Text>
-            <Text style={styles.time}>{notification.createdAtLabel}</Text>
+            </AppText>
+            <AppText style={[styles.body, textStyle]}>{notification.body}</AppText>
+            <AppText style={styles.time}>{notification.createdAtLabel}</AppText>
           </View>
           {notification.requestKind === 'groupJoin' &&
           notification.relatedJoinRequestStatus === 'PENDING_ADMIN' ? (

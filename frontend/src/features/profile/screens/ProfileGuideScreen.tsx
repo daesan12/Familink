@@ -1,4 +1,5 @@
-import {ScrollView, StyleSheet, Text, View} from 'react-native';
+import {ScrollView, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
@@ -14,7 +15,7 @@ export function ProfileGuideScreen({onBack}: ProfileGuideScreenProps) {
     <View style={styles.screen}>
       <View style={styles.header}>
         <BackButton onPress={onBack} style={styles.backButton} />
-        <Text style={styles.headerTitle}>이용 가이드</Text>
+        <AppText style={styles.headerTitle}>이용 가이드</AppText>
       </View>
 
       <ScrollView
@@ -22,14 +23,14 @@ export function ProfileGuideScreen({onBack}: ProfileGuideScreenProps) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.introBlock}>
-          <Text style={styles.introTitle}>처음 시작하시나요?</Text>
-          <Text style={styles.introDescription}>
+          <AppText style={styles.introTitle}>처음 시작하시나요?</AppText>
+          <AppText style={styles.introDescription}>
             가족과 일상을 나누는 방법을 차근차근 알려드려요.
-          </Text>
+          </AppText>
         </View>
 
         <View style={styles.quickStartCard}>
-          <Text style={styles.quickStartLabel}>빠른 시작</Text>
+          <AppText style={styles.quickStartLabel}>빠른 시작</AppText>
           {QUICK_START_STEPS.map((step, index) => (
             <View
               key={step.order}
@@ -39,11 +40,11 @@ export function ProfileGuideScreen({onBack}: ProfileGuideScreenProps) {
               ]}
             >
               <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>{step.order}</Text>
+                <AppText style={styles.stepBadgeText}>{step.order}</AppText>
               </View>
               <View style={styles.stepTexts}>
-                <Text style={styles.stepTitle}>{step.title}</Text>
-                <Text style={styles.stepDescription}>{step.description}</Text>
+                <AppText style={styles.stepTitle}>{step.title}</AppText>
+                <AppText style={styles.stepDescription}>{step.description}</AppText>
               </View>
             </View>
           ))}

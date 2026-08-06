@@ -1,5 +1,6 @@
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {Pressable, StyleSheet, View} from "react-native";
+import {AppText} from "../../../shared/components/AppText";
 
 import { COLORS, RADII } from "../../../design/tokens";
 import type { CallReportView } from "../types";
@@ -32,10 +33,10 @@ export function CallReportRow({ call, onPress }: CallReportRowProps) {
         />
       </View>
       <View style={styles.copy}>
-        <Text style={styles.time}>{call.startedAtLabel}</Text>
-        <Text style={styles.caption}>
+        <AppText style={styles.time}>{call.startedAtLabel}</AppText>
+        <AppText style={styles.caption}>
           {isAvailable ? "통화 리포트" : "리포트 준비 중"}
-        </Text>
+        </AppText>
       </View>
       <MaterialDesignIcons
         color={COLORS.textSubtle}

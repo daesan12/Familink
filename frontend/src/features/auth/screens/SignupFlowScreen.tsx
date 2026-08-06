@@ -1,5 +1,9 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState} from 'react';
 import {
   Animated,
   Alert,
@@ -9,10 +13,10 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   type TextInput,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {launchImageLibrary} from 'react-native-image-picker';
 
@@ -612,9 +616,9 @@ function BasicInfoStep({
           </Pressable>
         )}
       </View>
-      <Text style={styles.profileHint}>
+      <AppText style={styles.profileHint}>
         {'선택 사항 · 가입 후 마이페이지에서 다시 등록할 수 있어요'}
-      </Text>
+      </AppText>
       <View style={styles.basicFields}>
         <FormField
           accessibilityLabel="회원가입 이름"
@@ -652,9 +656,9 @@ function BasicInfoStep({
               hitSlop={6}
               onPress={onCheckLoginId}
               style={styles.duplicateButton}>
-              <Text style={styles.duplicateButtonText}>
+              <AppText style={styles.duplicateButtonText}>
                 {availability === 'checking' ? '확인 중' : '중복확인'}
-              </Text>
+              </AppText>
             </Pressable>
           }
           value={draft.loginId}
@@ -779,7 +783,7 @@ function PasswordStep({
         ) : passwordViolation !== null ? (
           <ValidationMessage message={passwordViolation} variant="error" />
         ) : (
-          <Text style={styles.passwordRuleHint}>{PASSWORD_RULE_MESSAGE}</Text>
+          <AppText style={styles.passwordRuleHint}>{PASSWORD_RULE_MESSAGE}</AppText>
         )}
         <FormField
           accessibilityLabel="회원가입 비밀번호 확인"
@@ -836,19 +840,19 @@ function BirthDateStep({
       />
       <ArtworkStage source={BIRTHDATE_ILLUSTRATION} />
       <View style={styles.birthdateField}>
-        <Text style={styles.fieldLabel}>생년월일</Text>
+        <AppText style={styles.fieldLabel}>생년월일</AppText>
         <AnimatedPressable
           accessibilityLabel="생년월일 선택"
           accessibilityRole="button"
           onPress={onOpenPicker}>
           <View style={styles.dateButton}>
-            <Text
+            <AppText
               style={[
                 styles.dateText,
                 birthDate.length === 0 && styles.datePlaceholder,
               ]}>
               {birthDate || 'YYYY-MM-DD'}
-            </Text>
+            </AppText>
             <MaterialDesignIcons
               color={AUTH_COLORS.primary}
               name="calendar-blank-outline"
@@ -950,9 +954,9 @@ function GenderCard({
       <View style={[styles.genderCard, selected && styles.selectedGenderCard]}>
         <Image resizeMode="contain" source={image} style={styles.genderImage} />
       </View>
-      <Text style={[styles.genderLabel, selected && styles.selectedGenderLabel]}>
+      <AppText style={[styles.genderLabel, selected && styles.selectedGenderLabel]}>
         {label}
-      </Text>
+      </AppText>
     </AnimatedPressable>
   );
 }

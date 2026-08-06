@@ -5,11 +5,11 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 
 import { COLORS, RADII } from "../../../design/tokens";
+import { AppText } from "../../../shared/components/AppText";
 import { CachedRemoteImage } from "../../../shared/media/CachedRemoteImage";
 import { formatEventDateRange, formatEventTime } from "../calendarModel";
 import type { CalendarEventDetail, CalendarMember } from "../types";
@@ -84,9 +84,9 @@ export function CalendarEventDetailModal({
           {loading ? (
             <View style={styles.centerState}>
               <ActivityIndicator color={COLORS.purpleDeep} size="large" />
-              <Text style={styles.stateDescription}>
+              <AppText style={styles.stateDescription}>
                 일정 내용을 불러오고 있어요.
-              </Text>
+              </AppText>
             </View>
           ) : errorMessage ? (
             <View style={styles.centerState}>
@@ -95,14 +95,14 @@ export function CalendarEventDetailModal({
                 name="alert-circle-outline"
                 size={34}
               />
-              <Text style={styles.stateTitle}>상세를 불러오지 못했어요</Text>
-              <Text style={styles.stateDescription}>{errorMessage}</Text>
+              <AppText style={styles.stateTitle}>상세를 불러오지 못했어요</AppText>
+              <AppText style={styles.stateDescription}>{errorMessage}</AppText>
               <Pressable
                 accessibilityRole="button"
                 onPress={onRetry}
                 style={styles.retryButton}
               >
-                <Text style={styles.retryText}>다시 시도</Text>
+                <AppText style={styles.retryText}>다시 시도</AppText>
               </Pressable>
             </View>
           ) : detail ? (
@@ -112,7 +112,7 @@ export function CalendarEventDetailModal({
                 showsVerticalScrollIndicator={false}
                 style={styles.detailScroll}
               >
-                <Text style={styles.title}>{detail.title}</Text>
+                <AppText style={styles.title}>{detail.title}</AppText>
                 <View style={styles.schedule}>
                   <MaterialDesignIcons
                     accessibilityElementsHidden
@@ -121,20 +121,20 @@ export function CalendarEventDetailModal({
                     size={20}
                   />
                   <View style={styles.scheduleText}>
-                    <Text style={styles.dateText}>
+                    <AppText style={styles.dateText}>
                       {formatEventDateRange(detail)}
-                    </Text>
-                    <Text style={styles.timeText}>
+                    </AppText>
+                    <AppText style={styles.timeText}>
                       {formatEventTime(detail)}
-                    </Text>
+                    </AppText>
                   </View>
                 </View>
 
                 <View style={styles.descriptionCard}>
-                  <Text style={styles.sectionLabel}>세부 내용</Text>
-                  <Text style={styles.description}>
+                  <AppText style={styles.sectionLabel}>세부 내용</AppText>
+                  <AppText style={styles.description}>
                     {detail.description.trim() || "세부 내용이 없어요."}
-                  </Text>
+                  </AppText>
                 </View>
 
                 <PeopleSection
@@ -151,9 +151,9 @@ export function CalendarEventDetailModal({
               </ScrollView>
 
               {canDelete && deleteErrorMessage ? (
-                <Text accessibilityRole="alert" style={styles.deleteError}>
+                <AppText accessibilityRole="alert" style={styles.deleteError}>
                   {deleteErrorMessage}
-                </Text>
+                </AppText>
               ) : null}
               {canEdit || canDelete ? (
                 <View style={styles.actionRow}>
@@ -175,7 +175,7 @@ export function CalendarEventDetailModal({
                         name="pencil-outline"
                         size={20}
                       />
-                      <Text style={styles.editButtonText}>수정</Text>
+                      <AppText style={styles.editButtonText}>수정</AppText>
                     </Pressable>
                   ) : null}
                   {canDelete ? (
@@ -200,9 +200,9 @@ export function CalendarEventDetailModal({
                           size={20}
                         />
                       )}
-                      <Text style={styles.deleteButtonText}>
+                      <AppText style={styles.deleteButtonText}>
                         {deleting ? "삭제 중" : "삭제"}
-                      </Text>
+                      </AppText>
                     </Pressable>
                   ) : null}
                 </View>
@@ -228,9 +228,9 @@ function PeopleSection({
 }) {
   return (
     <View style={styles.peopleSection}>
-      <Text style={styles.sectionLabel}>{label}</Text>
+      <AppText style={styles.sectionLabel}>{label}</AppText>
       {memberIds.length === 0 ? (
-        <Text style={styles.emptyPeople}>{emptyLabel}</Text>
+        <AppText style={styles.emptyPeople}>{emptyLabel}</AppText>
       ) : (
         <View style={styles.peopleList}>
           {memberIds.map((memberId) => {
@@ -250,9 +250,9 @@ function PeopleSection({
                   }
                   style={styles.avatar}
                 />
-                <Text numberOfLines={1} style={styles.personName}>
+                <AppText numberOfLines={1} style={styles.personName}>
                   {member?.displayName ?? `구성원 ${memberId}`}
-                </Text>
+                </AppText>
               </View>
             );
           })}

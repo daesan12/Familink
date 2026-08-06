@@ -1,19 +1,23 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState} from 'react';
 import {StackActions} from '@react-navigation/native';
 import {
   createNativeStackNavigator,
   type NativeStackNavigationProp,
-} from '@react-navigation/native-stack';
+  } from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
@@ -366,7 +370,7 @@ export function CareReceiverMyPageScreen({
     ) : (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>마이페이지</Text>
+        <AppText style={styles.headerTitle}>마이페이지</AppText>
       </View>
 
       <ScrollView
@@ -497,7 +501,7 @@ function InterestRequestStateScreen({
           accessibilityLabel="관심사 조회에서 뒤로 가기"
           onPress={onBack}
         />
-        <Text style={styles.requestStateHeaderTitle}>관심사 설정</Text>
+        <AppText style={styles.requestStateHeaderTitle}>관심사 설정</AppText>
       </View>
 
       <View
@@ -506,9 +510,9 @@ function InterestRequestStateScreen({
         {isLoading ? (
           <>
             <ActivityIndicator color={COLORS.purpleDeep} size="large" />
-            <Text style={styles.requestStateTitle}>
+            <AppText style={styles.requestStateTitle}>
               관심사를 불러오는 중이에요.
-            </Text>
+            </AppText>
           </>
         ) : (
           <>
@@ -517,10 +521,10 @@ function InterestRequestStateScreen({
               name="alert-circle-outline"
               size={46}
             />
-            <Text style={styles.requestStateTitle}>
+            <AppText style={styles.requestStateTitle}>
               관심사를 불러오지 못했어요
-            </Text>
-            <Text style={styles.requestStateMessage}>{errorMessage}</Text>
+            </AppText>
+            <AppText style={styles.requestStateMessage}>{errorMessage}</AppText>
             <Pressable
               accessibilityLabel="관심사 다시 시도"
               accessibilityRole="button"
@@ -529,7 +533,7 @@ function InterestRequestStateScreen({
                 styles.requestStateRetryButton,
                 pressed && styles.requestStateRetryButtonPressed,
               ]}>
-              <Text style={styles.requestStateRetryLabel}>다시 시도</Text>
+              <AppText style={styles.requestStateRetryLabel}>다시 시도</AppText>
             </Pressable>
           </>
         )}

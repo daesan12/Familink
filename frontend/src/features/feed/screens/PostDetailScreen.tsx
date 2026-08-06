@@ -1,5 +1,7 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useRef, useState} from 'react';
+import {
+  useRef,
+  useState} from 'react';
 import {
   Alert,
   ActivityIndicator,
@@ -8,12 +10,12 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
-import {COLORS, RADII} from '../../../design/tokens';
+import {COLORS, FONT_FAMILY, RADII} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
 import {CommentItem} from '../components/CommentItem';
 import {FeedAvatar} from '../components/FeedAvatar';
@@ -195,9 +197,9 @@ export function PostDetailScreen({
     >
       <View style={styles.header}>
         <BackButton accessibilityLabel="피드로 돌아가기" onPress={onBack} />
-        <Text numberOfLines={1} style={styles.title}>
+        <AppText numberOfLines={1} style={styles.title}>
           {currentGroupName}
-        </Text>
+        </AppText>
         {onOpenNotifications ? (
           <Pressable
             accessibilityLabel="알림"
@@ -246,10 +248,10 @@ export function PostDetailScreen({
             </Pressable>
           )}
           <View style={styles.authorText}>
-            <Text style={styles.authorName}>{post.author.name}</Text>
-            <Text style={styles.createdAt}>
+            <AppText style={styles.authorName}>{post.author.name}</AppText>
+            <AppText style={styles.createdAt}>
               {formatRelativeTime(post.createdAt)}
-            </Text>
+            </AppText>
           </View>
           {post.isOwnedByCurrentUser ? (
             <Pressable
@@ -267,7 +269,7 @@ export function PostDetailScreen({
           ) : null}
         </View>
 
-        <Text style={styles.body}>{post.body}</Text>
+        <AppText style={styles.body}>{post.body}</AppText>
         <PostImageCarousel enableFullscreen images={post.images} />
 
         <View style={styles.metaRow}>
@@ -283,7 +285,7 @@ export function PostDetailScreen({
             reactions={reactions}
             selectedReactionId={selectedReactionId}
           />
-          <Text style={styles.commentCount}>댓글 {commentCount}</Text>
+          <AppText style={styles.commentCount}>댓글 {commentCount}</AppText>
         </View>
 
         <View style={styles.comments}>
@@ -298,25 +300,25 @@ export function PostDetailScreen({
             ))
           ) : (!isCommentsLoading && !commentsError) ? (
             <View accessibilityLabel="댓글 없음" style={styles.emptyComments}>
-              <Text style={styles.emptyCommentsTitle}>
+              <AppText style={styles.emptyCommentsTitle}>
                 아직 댓글이 없어요.
-              </Text>
-              <Text style={styles.emptyCommentsDescription}>
+              </AppText>
+              <AppText style={styles.emptyCommentsDescription}>
                 가족에게 따뜻한 한마디를 남겨보세요.
-              </Text>
+              </AppText>
             </View>
           ) : null}
         </View>
         {commentsError ? (
           <View accessibilityLiveRegion="polite" style={styles.commentsError}>
-            <Text style={styles.commentsErrorText}>{commentsError}</Text>
+            <AppText style={styles.commentsErrorText}>{commentsError}</AppText>
             {onRetryComments ? (
               <Pressable
                 accessibilityRole="button"
                 onPress={onRetryComments}
                 style={styles.retryCommentsButton}
               >
-                <Text style={styles.retryCommentsText}>다시 시도</Text>
+                <AppText style={styles.retryCommentsText}>다시 시도</AppText>
               </Pressable>
             ) : null}
           </View>
@@ -333,7 +335,7 @@ export function PostDetailScreen({
             onPress={onLoadMoreComments}
             style={styles.loadMoreCommentsButton}
           >
-            <Text style={styles.loadMoreCommentsText}>댓글 더 보기</Text>
+            <AppText style={styles.loadMoreCommentsText}>댓글 더 보기</AppText>
           </Pressable>
         ) : null}
       </ScrollView>
@@ -342,14 +344,14 @@ export function PostDetailScreen({
         <View style={styles.composerSection}>
           {editingComment ? (
             <View style={styles.editingHeader}>
-              <Text style={styles.editingLabel}>댓글 수정 중</Text>
+              <AppText style={styles.editingLabel}>댓글 수정 중</AppText>
               <Pressable
                 accessibilityLabel="댓글 수정 취소"
                 accessibilityRole="button"
                 onPress={resetComposer}
                 style={styles.cancelEditButton}
               >
-                <Text style={styles.cancelEditText}>취소</Text>
+                <AppText style={styles.cancelEditText}>취소</AppText>
               </Pressable>
             </View>
           ) : null}
@@ -368,12 +370,12 @@ export function PostDetailScreen({
               style={styles.input}
               value={inputValue}
             />
-            <Text
+            <AppText
               accessibilityLabel={`댓글 글자 수 ${inputValue.length}/${MAX_COMMENT_LENGTH}`}
               style={styles.characterCount}
             >
               {inputValue.length}/{MAX_COMMENT_LENGTH}
-            </Text>
+            </AppText>
             <Pressable
               accessibilityLabel={
                 editingComment ? '댓글 수정 완료' : '댓글 등록'
@@ -399,9 +401,9 @@ export function PostDetailScreen({
         </View>
       ) : (
         <View style={styles.readOnlyNotice}>
-          <Text style={styles.readOnlyNoticeText}>
+          <AppText style={styles.readOnlyNoticeText}>
             그룹 구성원만 댓글과 반응을 남길 수 있어요.
-          </Text>
+          </AppText>
         </View>
       )}
 
@@ -558,6 +560,7 @@ const styles = StyleSheet.create({
   input: {
     color: COLORS.textStrong,
     flex: 1,
+    fontFamily: FONT_FAMILY,
     fontSize: 15,
     minHeight: 48,
     paddingHorizontal: 10,

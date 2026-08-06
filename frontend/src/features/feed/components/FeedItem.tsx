@@ -1,4 +1,5 @@
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS} from '../../../design/tokens';
 import {formatRelativeTime} from '../time';
@@ -70,10 +71,10 @@ export function FeedItem({
           onPress={handlePress}
           style={styles.authorText}
         >
-          <Text style={styles.authorName}>{post.author.name}</Text>
-          <Text style={styles.createdAt}>
+          <AppText style={styles.authorName}>{post.author.name}</AppText>
+          <AppText style={styles.createdAt}>
             {formatRelativeTime(post.createdAt)}
-          </Text>
+          </AppText>
         </Pressable>
       </View>
 
@@ -85,7 +86,7 @@ export function FeedItem({
         onPress={handlePress}
         style={styles.detailBodyPressable}
       >
-        <Text style={styles.body}>{post.body}</Text>
+        <AppText style={styles.body}>{post.body}</AppText>
       </Pressable>
       <PostImageCarousel
         enableFullscreen
@@ -113,7 +114,7 @@ export function FeedItem({
           onPress={handlePress}
           style={styles.commentButton}
         >
-          <Text style={styles.commentText}>댓글 {commentCount}</Text>
+          <AppText style={styles.commentText}>댓글 {commentCount}</AppText>
         </Pressable>
       </View>
     </Pressable>

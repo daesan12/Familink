@@ -1,8 +1,16 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {useEffect, useRef, useState} from 'react';
-import {Animated, Image, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {
+  Animated,
+  Image,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
+import {COLORS} from '../../../design/tokens';
+import {AppText} from '../../../shared/components/AppText';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {AnimatedPressable} from '../components/AnimatedPressable';
 import {
@@ -11,7 +19,6 @@ import {
 } from '../components/CreateGroupSheet';
 import {JoinGroupSheet} from '../components/JoinGroupSheet';
 import {useScreenEntrance} from '../hooks/useScreenEntrance';
-import {COLORS} from '../../../design/tokens';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 
 const FAMILINK_LOGO = require('../../../assets/images/familink-logo.png');
@@ -87,9 +94,6 @@ export function GroupOnboardingScreen({
   const visibleRequests = pendingRequests.filter(
     request => request.status !== 'REJECTED',
   );
-  const hasApprovedRequest = visibleRequests.some(
-    request => request.status === 'APPROVED',
-  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -120,7 +124,7 @@ export function GroupOnboardingScreen({
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>{'가족과\n연결해볼까요?'}</Text>
+          <AppText style={styles.title}>{'가족과\n연결해볼까요?'}</AppText>
 
           <View style={styles.options}>
             <GroupActionCard
@@ -129,31 +133,32 @@ export function GroupOnboardingScreen({
               onPress={() => setCreateGroupVisible(true)}
             />
             <GroupActionCard
-              description="받은 코드로 기존 그룹에 들어가요"
+              description="받은 코드로 기존 그룹에 참여해요"
               label="코드로 참여"
               onPress={() => setJoinGroupVisible(true)}
             />
           </View>
 
-          {!hasApprovedRequest && (
-            <Text style={styles.pendingTitle}>승인 요청 대기</Text>
-          )}
+          <AppText style={styles.pendingTitle}>승인 요청 대기</AppText>
           {visibleRequests.length === 0 ? (
             <View
               accessibilityLiveRegion="polite"
               style={styles.emptyState}>
-              <Text style={styles.emptyText}>
+              <AppText style={styles.emptyText}>
                 {hasJoinedGroups
                   ? '대기 중인 참여 요청이 없어요\n코드를 입력해 다른 그룹에 참가할 수 있어요'
                   : '아직 참가한 그룹이 없어요\n코드를 입력해서 참가해보세요'}
-              </Text>
+              </AppText>
             </View>
           ) : (
-            <View
-              style={[
-                styles.pendingList,
-                hasApprovedRequest && styles.approvedList,
-              ]}>
+            <ScrollView
+              accessibilityLabel="승인 요청 목록"
+              contentContainerStyle={styles.pendingList}
+              horizontal
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator={false}
+              style={styles.pendingScroller}
+              testID="join-request-carousel">
               {visibleRequests.map(request => {
                 const approved = request.status === 'APPROVED';
 
@@ -171,7 +176,7 @@ export function GroupOnboardingScreen({
                   />
                 );
               })}
-            </View>
+            </ScrollView>
           )}
         </ScrollView>
 
@@ -232,15 +237,15 @@ function GroupActionCard({
       containerStyle={styles.optionContainer}
       onPress={onPress}>
       <View style={styles.optionCard}>
-        <View>
-          <Text style={styles.optionLabel}>{label}</Text>
-          <Text style={styles.optionDescription}>{description}</Text>
+        <View style={styles.optionCopy}>
+          <AppText style={styles.optionLabel}>{label}</AppText>
+          <AppText style={styles.optionDescription}>{description}</AppText>
         </View>
         <View style={styles.optionArrow}>
           <MaterialDesignIcons
             color={AUTH_COLORS.background}
             name="arrow-right"
-            size={28}
+            size={22}
           />
         </View>
       </View>
@@ -260,33 +265,38 @@ function JoinRequestCard({
   request,
 }: JoinRequestCardProps) {
   const content = (
-    <View style={[styles.pendingCard, approved && styles.approvedCard]}>
-      <View style={[styles.requestAvatar, approved && styles.approvedAvatar]} />
-      <View style={styles.pendingCopy}>
-        <Text
+    <View
+      accessible={onPress === undefined}
+      accessibilityLabel={
+        onPress === undefined
+          ? `${request.groupName}, ${approved ? '환영해요!' : '대기 중'}`
+          : undefined
+      }
+      style={[styles.pendingCard, approved && styles.approvedCard]}
+      testID={`join-request-card-${request.id}`}>
+      <View style={styles.requestNameArea}>
+        <AppText
+          numberOfLines={2}
           style={[
             styles.pendingGroupName,
             approved && styles.approvedGroupName,
           ]}>
           {request.groupName}
-        </Text>
-        {approved ? (
-          <Text style={styles.approvedDescription}>
-            가입이 승인되었어요{'\n'}
-            눌러서 입장하기
-          </Text>
-        ) : (
-          <Text style={styles.pendingDescription}>
-            참여 요청을 보냈어요{'\n'}
-            관리자 승인을 기다리고 있어요
-          </Text>
-        )}
+        </AppText>
       </View>
       <MaterialDesignIcons
-        color={approved ? '#FFE273' : AUTH_COLORS.body}
-        name="chevron-right"
+        color={approved ? AUTH_COLORS.black : AUTH_COLORS.muted}
+        name={approved ? 'check-circle-outline' : 'clock-outline'}
         size={34}
+        style={styles.requestStatusIcon}
       />
+      <AppText
+        style={[
+          styles.requestStatusText,
+          approved && styles.approvedStatusText,
+        ]}>
+        {approved ? '환영해요!' : '대기 중'}
+      </AppText>
     </View>
   );
 
@@ -340,18 +350,19 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingBottom: 36,
-    paddingHorizontal: AUTH_LAYOUT.horizontalPadding + 16,
+    paddingHorizontal: AUTH_LAYOUT.horizontalPadding,
   },
   title: {
-    color: AUTH_COLORS.body,
+    color: AUTH_COLORS.black,
     fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -0.7,
-    lineHeight: 42,
+    fontWeight: '600',
+    letterSpacing: -0.4,
+    lineHeight: 38,
+    marginLeft: 6,
   },
   options: {
-    gap: 10,
-    marginTop: 20,
+    gap: 7,
+    marginTop: 30,
   },
   optionContainer: {
     width: '100%',
@@ -366,31 +377,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 24,
   },
+  optionCopy: {
+    alignSelf: 'stretch',
+    flex: 1,
+    paddingTop: 21,
+  },
   optionLabel: {
-    color: AUTH_COLORS.body,
-    fontSize: 25,
-    fontWeight: '700',
-    lineHeight: 34,
+    color: AUTH_COLORS.black,
+    fontSize: 27,
+    fontWeight: '600',
+    lineHeight: 36,
   },
   optionDescription: {
-    color: '#666B7D',
-    fontSize: 14,
-    lineHeight: 22,
+    color: AUTH_COLORS.black,
+    fontSize: 15,
+    lineHeight: 21,
+    marginTop: 17,
   },
   optionArrow: {
     alignItems: 'center',
-    backgroundColor: AUTH_COLORS.primarySoft,
+    backgroundColor: AUTH_COLORS.black,
     borderCurve: 'continuous',
-    borderRadius: 23,
-    height: 46,
+    borderRadius: 16,
+    bottom: 29,
+    height: 32,
     justifyContent: 'center',
-    width: 46,
+    position: 'absolute',
+    right: 20,
+    width: 32,
   },
   pendingTitle: {
-    color: AUTH_COLORS.body,
-    fontSize: 22,
-    fontWeight: '700',
-    marginTop: 54,
+    color: AUTH_COLORS.black,
+    fontSize: 18,
+    fontWeight: '500',
+    lineHeight: 26,
+    marginLeft: 5,
+    marginTop: 43,
   },
   emptyState: {
     alignItems: 'center',
@@ -405,60 +427,61 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   pendingList: {
-    gap: 10,
-    marginTop: 18,
+    gap: 13,
+    paddingHorizontal: AUTH_LAYOUT.horizontalPadding,
   },
-  approvedList: {
-    marginTop: 58,
+  pendingScroller: {
+    marginHorizontal: -AUTH_LAYOUT.horizontalPadding,
+    marginTop: 8,
   },
   pendingCardContainer: {
-    width: '100%',
+    width: 114,
   },
   pendingCard: {
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#F5F5F5',
     borderCurve: 'continuous',
-    borderRadius: 18,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 110,
-    paddingHorizontal: 16,
+    borderRadius: 25,
+    height: 138,
+    paddingBottom: 11,
+    paddingHorizontal: 8,
+    paddingTop: 11,
+    width: 114,
   },
   approvedCard: {
     backgroundColor: AUTH_COLORS.action,
   },
-  requestAvatar: {
-    backgroundColor: '#D9D9D9',
-    borderCurve: 'continuous',
-    borderRadius: 30,
-    height: 59,
-    marginRight: 16,
-    width: 59,
-  },
-  approvedAvatar: {
-    backgroundColor: '#FFEB98',
-  },
-  pendingCopy: {
-    flex: 1,
+  requestNameArea: {
+    alignItems: 'center',
+    height: 50,
+    justifyContent: 'center',
+    width: 98,
   },
   pendingGroupName: {
-    color: AUTH_COLORS.body,
-    fontSize: 19,
-    fontWeight: '700',
-    lineHeight: 26,
+    color: '#6A6A6A',
+    fontSize: 18,
+    fontWeight: '500',
+    letterSpacing: -0.2,
+    lineHeight: 22,
+    textAlign: 'center',
   },
   approvedGroupName: {
-    marginTop: 0,
+    color: AUTH_COLORS.black,
+    fontSize: 20,
+    lineHeight: 26,
   },
-  approvedDescription: {
-    color: AUTH_COLORS.body,
-    fontSize: 13,
-    lineHeight: 20,
+  requestStatusIcon: {
+    marginTop: 4,
+  },
+  requestStatusText: {
+    color: '#6A6A6A',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 15,
     marginTop: 2,
+    textAlign: 'center',
   },
-  pendingDescription: {
-    color: AUTH_COLORS.body,
-    fontSize: 14,
-    lineHeight: 20,
+  approvedStatusText: {
+    color: AUTH_COLORS.black,
   },
 });

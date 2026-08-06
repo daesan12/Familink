@@ -1,5 +1,6 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS} from '../../../design/tokens';
 import {AUTH_COLORS} from '../theme';
@@ -50,11 +51,11 @@ export function StepHeader({
         <View style={styles.progressTrack}>
           <View style={[styles.progressValue, {width: `${step * 20}%`}]} />
         </View>
-        <Text style={styles.stepText}>{step}/5</Text>
+        <AppText style={styles.stepText}>{step}/5</AppText>
       </View>
       <View style={styles.titleBlock}>
-        <Text style={styles.eyebrow}>회원가입</Text>
-        <Text style={styles.title}>{title}</Text>
+        <AppText style={styles.eyebrow}>회원가입</AppText>
+        <AppText style={styles.title}>{title}</AppText>
       </View>
     </>
   );

@@ -1,5 +1,8 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useMemo, useState} from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,17 +12,17 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 import {
   launchImageLibrary,
   type Asset,
   type ImageLibraryOptions,
 } from 'react-native-image-picker';
 
-import {COLORS, RADII} from '../../../design/tokens';
+import {COLORS, FONT_FAMILY, RADII} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
 import {PostImageCarousel} from '../components/PostImageCarousel';
 import {
@@ -245,9 +248,9 @@ export function PostComposerScreen({
           accessibilityLabel="게시글 작성 닫기"
           onPress={requestClose}
         />
-        <Text style={styles.title}>
+        <AppText style={styles.title}>
           {mode === 'create' ? '새 게시글' : '게시글 수정'}
-        </Text>
+        </AppText>
         <Pressable
           accessibilityRole="button"
           accessibilityState={{disabled: !canSubmit}}
@@ -255,14 +258,14 @@ export function PostComposerScreen({
           onPress={handleSubmit}
           style={styles.submitButton}
         >
-          <Text
+          <AppText
             style={[
               styles.submitText,
               !canSubmit && styles.disabledSubmitText,
             ]}
           >
             {mode === 'create' ? '작성' : '완료'}
-          </Text>
+          </AppText>
         </Pressable>
       </View>
 
@@ -284,9 +287,9 @@ export function PostComposerScreen({
             textAlignVertical="top"
             value={body}
           />
-          <Text style={styles.counter}>
+          <AppText style={styles.counter}>
             {body.length}/{MAX_POST_BODY_LENGTH}
-          </Text>
+          </AppText>
         </View>
 
         <View style={styles.mediaActions}>
@@ -307,10 +310,10 @@ export function PostComposerScreen({
               name="image-multiple-outline"
               size={24}
             />
-            <Text style={styles.mediaButtonText}>사진</Text>
-            <Text style={styles.mediaCount}>
+            <AppText style={styles.mediaButtonText}>사진</AppText>
+            <AppText style={styles.mediaCount}>
               {imageMedia.length}/{MAX_POST_IMAGES}
-            </Text>
+            </AppText>
           </Pressable>
           <Pressable
             accessibilityLabel="영상 선택"
@@ -329,7 +332,7 @@ export function PostComposerScreen({
               name="video-outline"
               size={25}
             />
-            <Text style={styles.mediaButtonText}>영상</Text>
+            <AppText style={styles.mediaButtonText}>영상</AppText>
           </Pressable>
         </View>
 
@@ -413,16 +416,16 @@ function VideoPreview({media, onRemove}: VideoPreviewProps) {
         </View>
       </View>
       <View style={styles.videoText}>
-        <Text numberOfLines={1} style={styles.videoName}>
+        <AppText numberOfLines={1} style={styles.videoName}>
           {localMedia?.fileName ?? '선택한 영상'}
-        </Text>
-        <Text style={styles.videoDuration}>
+        </AppText>
+        <AppText style={styles.videoDuration}>
           {durationSeconds === null
             ? '재생시간 확인 전'
             : `${Math.floor(durationSeconds / 60)}:${String(
                 durationSeconds % 60,
               ).padStart(2, '0')}`}
-        </Text>
+        </AppText>
       </View>
       {onRemove ? (
         <Pressable
@@ -525,7 +528,7 @@ function UploadStatusCard({
             />
           ) : null}
           {uploadState.status === 'uploading' ? (
-            <Text style={styles.uploadPercentage}>{percentage}%</Text>
+            <AppText style={styles.uploadPercentage}>{percentage}%</AppText>
           ) : (
             <MaterialDesignIcons
               color={isFailure ? COLORS.error : COLORS.purpleDeep}
@@ -536,13 +539,13 @@ function UploadStatusCard({
         </View>
 
         <View style={styles.uploadCopy}>
-          <Text style={styles.uploadTitle}>{currentCopy.title}</Text>
-          <Text
+          <AppText style={styles.uploadTitle}>{currentCopy.title}</AppText>
+          <AppText
             accessibilityRole={isFailure ? 'alert' : undefined}
             style={styles.uploadDescription}
           >
             {currentCopy.description}
-          </Text>
+          </AppText>
         </View>
 
         {isFailure && onRetry ? (
@@ -556,7 +559,7 @@ function UploadStatusCard({
               pressed && styles.uploadRetryButtonPressed,
             ]}
           >
-            <Text style={styles.uploadRetryText}>다시 시도</Text>
+            <AppText style={styles.uploadRetryText}>다시 시도</AppText>
           </Pressable>
         ) : null}
       </View>
@@ -613,6 +616,7 @@ const styles = StyleSheet.create({
   },
   input: {
     color: COLORS.text,
+    fontFamily: FONT_FAMILY,
     fontSize: 16,
     lineHeight: 24,
     minHeight: 140,

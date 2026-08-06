@@ -1,13 +1,14 @@
-import {useState} from 'react';
+import {
+  useState} from 'react';
 import {
   ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
@@ -136,7 +137,7 @@ export function JoinApprovalScreen({
         </View>
       ) : joinRequests.status === 'error' ? (
         <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
-          <Text style={styles.errorText}>{joinRequests.message}</Text>
+          <AppText style={styles.errorText}>{joinRequests.message}</AppText>
           <RetryButton onPress={joinRequests.retry} />
         </View>
       ) : (
@@ -145,14 +146,14 @@ export function JoinApprovalScreen({
           showsVerticalScrollIndicator={false}
         >
           {processError ? (
-            <Text accessibilityLiveRegion="polite" style={styles.errorText}>
+            <AppText accessibilityLiveRegion="polite" style={styles.errorText}>
               {processError}
-            </Text>
+            </AppText>
           ) : null}
-          <Text style={styles.heading}>
+          <AppText style={styles.heading}>
             승인 요청 {joinRequests.requests.length}건
-          </Text>
-          <Text style={styles.subtitle}>가족인지 확인한 뒤 승인해 주세요.</Text>
+          </AppText>
+          <AppText style={styles.subtitle}>가족인지 확인한 뒤 승인해 주세요.</AppText>
 
           {joinRequests.requests.length > 0 ? (
             joinRequests.requests.map((request) => (
@@ -165,14 +166,14 @@ export function JoinApprovalScreen({
                     />
                   ) : (
                     <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>
+                      <AppText style={styles.avatarText}>
                         {avatarInitial(request.applicantName)}
-                      </Text>
+                      </AppText>
                     </View>
                   )}
-                  <Text style={styles.applicantName}>
+                  <AppText style={styles.applicantName}>
                     {request.applicantName}
-                  </Text>
+                  </AppText>
                 </View>
                 <View style={styles.actionRow}>
                   <Pressable
@@ -182,7 +183,7 @@ export function JoinApprovalScreen({
                     onPress={() => handleReject(request)}
                     style={[styles.actionButton, styles.rejectButton]}
                   >
-                    <Text style={styles.rejectText}>거절</Text>
+                    <AppText style={styles.rejectText}>거절</AppText>
                   </Pressable>
                   <Pressable
                     accessibilityLabel={`${request.applicantName} 승인`}
@@ -191,22 +192,22 @@ export function JoinApprovalScreen({
                     onPress={() => setApproving(request)}
                     style={[styles.actionButton, styles.approveButton]}
                   >
-                    <Text style={styles.approveText}>승인</Text>
+                    <AppText style={styles.approveText}>승인</AppText>
                   </Pressable>
                 </View>
               </View>
             ))
           ) : (
-            <Text style={styles.emptyText}>
+            <AppText style={styles.emptyText}>
               대기 중인 가입 요청이 없어요.
-            </Text>
+            </AppText>
           )}
 
           <View style={styles.noticeCard}>
-            <Text style={styles.noticeTitle}>확인해 주세요</Text>
-            <Text style={styles.noticeBody}>
+            <AppText style={styles.noticeTitle}>확인해 주세요</AppText>
+            <AppText style={styles.noticeBody}>
               승인된 구성원은 가족 기록과 그룹 정보를 볼 수 있어요.
-            </Text>
+            </AppText>
           </View>
         </ScrollView>
       )}
@@ -249,9 +250,9 @@ function DecisionErrorModal({
           accessibilityViewIsModal
           style={styles.alertCard}
         >
-          <Text style={styles.alertTitle}>{alert.title}</Text>
+          <AppText style={styles.alertTitle}>{alert.title}</AppText>
           {alert.message ? (
-            <Text style={styles.alertMessage}>{alert.message}</Text>
+            <AppText style={styles.alertMessage}>{alert.message}</AppText>
           ) : null}
           <Pressable
             accessibilityLabel={alert.confirmAccessibilityLabel}
@@ -259,7 +260,7 @@ function DecisionErrorModal({
             onPress={onClose}
             style={styles.alertButton}
           >
-            <Text style={styles.alertButtonText}>확인</Text>
+            <AppText style={styles.alertButtonText}>확인</AppText>
           </Pressable>
         </View>
       </View>
@@ -301,13 +302,13 @@ function RoleSelectModal({
             onPress={() => {}}
             style={styles.roleCard}
           >
-            <Text style={styles.roleText}>
+            <AppText style={styles.roleText}>
               {request.applicantName}님이 우리 가족에 참여했습니다.
-            </Text>
-            <Text style={styles.roleText}>가족의 역할을 정해주세요</Text>
-            <Text style={styles.roleSubject}>
+            </AppText>
+            <AppText style={styles.roleText}>가족의 역할을 정해주세요</AppText>
+            <AppText style={styles.roleSubject}>
               [{request.applicantName}]님의 역할
-            </Text>
+            </AppText>
             <View style={styles.roleButtonRow}>
               {roles.map((role) => (
                 <Pressable
@@ -318,7 +319,7 @@ function RoleSelectModal({
                   onPress={() => onSelect(role)}
                   style={[styles.roleButton, processing && styles.roleButtonDisabled]}
                 >
-                  <Text style={styles.roleButtonText}>{roleLabel(role)}</Text>
+                  <AppText style={styles.roleButtonText}>{roleLabel(role)}</AppText>
                 </Pressable>
               ))}
             </View>

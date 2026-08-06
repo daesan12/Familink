@@ -1,5 +1,6 @@
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
-import { StyleSheet, Text, View } from "react-native";
+import {StyleSheet, View} from "react-native";
+import {AppText} from "../../../shared/components/AppText";
 
 import { COLORS, RADII } from "../../../design/tokens";
 import type { DailyReportView } from "../types";
@@ -26,20 +27,20 @@ export function DailyReportCard({ report }: DailyReportCardProps) {
           />
         </View>
         <View style={styles.headingCopy}>
-          <Text style={styles.eyebrow}>일간 리포트</Text>
-          <Text style={styles.emotionLabel}>{report.emotion.label}</Text>
+          <AppText style={styles.eyebrow}>일간 리포트</AppText>
+          <AppText style={styles.emotionLabel}>{report.emotion.label}</AppText>
         </View>
-        <Text style={styles.date}>{report.reportDateLabel}</Text>
+        <AppText style={styles.date}>{report.reportDateLabel}</AppText>
       </View>
 
-      <Text style={styles.summary}>{report.summary}</Text>
+      <AppText style={styles.summary}>{report.summary}</AppText>
 
       {report.guardianMessageSummary ? (
         <View style={styles.messageCard}>
-          <Text style={styles.messageTitle}>전달할 말씀</Text>
-          <Text style={styles.messageBody}>
+          <AppText style={styles.messageTitle}>전달할 말씀</AppText>
+          <AppText style={styles.messageBody}>
             {report.guardianMessageSummary}
-          </Text>
+          </AppText>
         </View>
       ) : null}
     </View>

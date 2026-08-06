@@ -1,18 +1,20 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useState} from 'react';
+import {
+  useEffect,
+  useState} from 'react';
 import Video from 'react-native-video';
 import {
   ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
   type ImageSourcePropType,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
@@ -238,7 +240,7 @@ function FeedImageFrame({
 
       {hasPoster && loadState === 'error' ? (
         <View accessibilityLiveRegion="polite" style={styles.errorState}>
-          <Text style={styles.errorText}>이미지를 불러오지 못했어요</Text>
+          <AppText style={styles.errorText}>이미지를 불러오지 못했어요</AppText>
           <RetryButton
             accessibilityLabel="이미지 다시 불러오기"
             onPress={() => {
@@ -311,9 +313,9 @@ function FeedImageFrame({
           pointerEvents="none"
           style={styles.videoError}
         >
-          <Text style={styles.videoErrorText}>
+          <AppText style={styles.videoErrorText}>
             영상을 재생할 수 없어요. 다시 시도해 주세요.
-          </Text>
+          </AppText>
         </View>
       ) : null}
 

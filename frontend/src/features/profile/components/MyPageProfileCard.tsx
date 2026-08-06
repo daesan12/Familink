@@ -1,5 +1,6 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
@@ -68,20 +69,20 @@ export function MyPageProfileCard({
         <View style={styles.nameRow}>
           {rank !== undefined ? (
             <View style={styles.rankBadge}>
-              <Text style={styles.rankBadgeText}>{rank}</Text>
+              <AppText style={styles.rankBadgeText}>{rank}</AppText>
             </View>
           ) : null}
-          <Text numberOfLines={2} style={styles.name}>
+          <AppText numberOfLines={2} style={styles.name}>
             {name} 님
-          </Text>
+          </AppText>
         </View>
         <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>나이</Text>
-          <Text style={styles.metaValue}>만 {age}세</Text>
+          <AppText style={styles.metaLabel}>나이</AppText>
+          <AppText style={styles.metaValue}>만 {age}세</AppText>
         </View>
         <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>성별</Text>
-          <Text style={styles.metaValue}>{formatGenderLabel(gender)}</Text>
+          <AppText style={styles.metaLabel}>성별</AppText>
+          <AppText style={styles.metaValue}>{formatGenderLabel(gender)}</AppText>
         </View>
       </View>
     </View>

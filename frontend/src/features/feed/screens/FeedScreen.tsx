@@ -1,19 +1,24 @@
-import {useCallback, useEffect, useRef, useState} from 'react';
-import {StackActions, useIsFocused} from '@react-navigation/native';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState} from 'react';
+import {StackActions,
+  useIsFocused} from '@react-navigation/native';
 import {
   createNativeStackNavigator,
   type NativeStackNavigationProp,
-} from '@react-navigation/native-stack';
+  } from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   StyleSheet,
-  Text,
   Vibration,
   View,
   type ViewToken,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS} from '../../../design/tokens';
@@ -1056,7 +1061,7 @@ export function FeedScreen({
                   </View>
                 ) : feed.status === 'error' ? (
                   <View accessibilityLiveRegion="polite" style={styles.centered}>
-                    <Text style={styles.errorText}>{feed.message}</Text>
+                    <AppText style={styles.errorText}>{feed.message}</AppText>
                     <RetryButton onPress={feed.retry} />
                   </View>
                 ) : (
@@ -1318,11 +1323,11 @@ function isUploadCancelled(error: unknown): boolean {
 function EmptyFeedState() {
   return (
     <View accessibilityLabel="게시물이 없는 피드" style={styles.emptyState}>
-      <Text style={styles.emptyText}>
+      <AppText style={styles.emptyText}>
         아직 공유된 일상이 없어요.{'\n'}
         사랑하는 가족에게 오늘의{'\n'}
         이야기를 전해보세요.
-      </Text>
+      </AppText>
     </View>
   );
 }

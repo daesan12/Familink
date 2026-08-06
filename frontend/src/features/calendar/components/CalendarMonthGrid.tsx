@@ -1,11 +1,12 @@
-import {useState} from 'react';
+import {
+  useState} from 'react';
 import {
   type LayoutChangeEvent,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {
@@ -124,7 +125,7 @@ export function CalendarMonthGrid({
                         isToday && styles.todayCircle,
                       ]}
                     >
-                      <Text
+                      <AppText
                         style={[
                           styles.dayNumber,
                           columnIndex === 0 &&
@@ -135,12 +136,12 @@ export function CalendarMonthGrid({
                         ]}
                       >
                         {day.day}
-                      </Text>
+                      </AppText>
                     </View>
                     {overflowCount > 0 ? (
-                      <Text style={styles.overflowText}>
+                      <AppText style={styles.overflowText}>
                         +{overflowCount}
-                      </Text>
+                      </AppText>
                     ) : null}
                   </Pressable>
                 );
@@ -193,12 +194,12 @@ function EventBar({
           segment.continuesAfter && styles.continuesAfter,
         ]}
       >
-        <Text
+        <AppText
           numberOfLines={1}
           style={[styles.eventTitle, {color: color.foreground}]}
         >
           {segment.event.title}
-        </Text>
+        </AppText>
       </View>
     </View>
   );

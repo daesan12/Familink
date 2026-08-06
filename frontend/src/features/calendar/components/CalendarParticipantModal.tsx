@@ -4,9 +4,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
+import {AppText} from "../../../shared/components/AppText";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS, RADII } from "../../../design/tokens";
@@ -56,9 +56,9 @@ export function CalendarParticipantModal({
         <View style={[styles.sheet, { paddingBottom: insets.bottom }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <Text accessibilityRole="header" style={styles.title}>
+            <AppText accessibilityRole="header" style={styles.title}>
               참여자 선택
-            </Text>
+            </AppText>
             <Pressable
               accessibilityLabel="참여자 선택 완료"
               accessibilityRole="button"
@@ -68,14 +68,14 @@ export function CalendarParticipantModal({
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.doneText}>완료</Text>
+              <AppText style={styles.doneText}>완료</AppText>
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={styles.list}>
             {members.length === 0 ? (
-              <Text style={styles.emptyText}>
+              <AppText style={styles.emptyText}>
                 선택할 수 있는 그룹 구성원이 없어요.
-              </Text>
+              </AppText>
             ) : (
               members.map((member) => {
                 const selected = selectedMemberIds.includes(member.memberId);
@@ -102,13 +102,13 @@ export function CalendarParticipantModal({
                       style={styles.avatar}
                     />
                     <View style={styles.memberText}>
-                      <Text style={styles.memberName}>
+                      <AppText style={styles.memberName}>
                         {member.displayName}
-                      </Text>
-                      <Text style={styles.memberRole}>
+                      </AppText>
+                      <AppText style={styles.memberRole}>
                         {member.role === "careReceiver" ? "피보호자" : "보호자"}
                         {member.isManager ? " · 관리자" : ""}
-                      </Text>
+                      </AppText>
                     </View>
                     <MaterialDesignIcons
                       color={selected ? COLORS.purpleDeep : COLORS.inactive}

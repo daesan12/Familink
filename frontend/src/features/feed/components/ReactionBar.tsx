@@ -1,12 +1,14 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useRef} from 'react';
+import {
+  useEffect,
+  useRef} from 'react';
 import {
   Animated,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import type {FeedReaction, ReactionId} from '../types';
@@ -133,15 +135,15 @@ export function ReactionBar({
 
           const chipContent = (
             <>
-              <Text style={styles.emoji}>{reaction.emoji}</Text>
-              <Text
+              <AppText style={styles.emoji}>{reaction.emoji}</AppText>
+              <AppText
                 style={[
                   styles.count,
                   isSelected && styles.selectedCount,
                 ]}
               >
                 {reaction.count}
-              </Text>
+              </AppText>
             </>
           );
 

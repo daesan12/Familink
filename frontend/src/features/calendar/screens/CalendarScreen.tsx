@@ -1,9 +1,10 @@
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
-import { StackActions } from "@react-navigation/native";
+import {
+  StackActions } from "@react-navigation/native";
 import {
   createNativeStackNavigator,
   type NativeStackNavigationProp,
-} from "@react-navigation/native-stack";
+  } from "@react-navigation/native-stack";
 import {
   ActivityIndicator,
   Alert,
@@ -12,9 +13,9 @@ import {
   PanResponder,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
+import {AppText} from "../../../shared/components/AppText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { AppScreenProps } from "../../../app-shell";
@@ -532,14 +533,14 @@ export function CalendarScreen({
                   openEventId={route.params?.openEventId}
                 />
                 <View style={styles.monthToolbar}>
-                  <Text accessibilityRole="header" style={styles.monthTitle}>
+                  <AppText accessibilityRole="header" style={styles.monthTitle}>
                     {formatMonthLabel(visibleMonth)}
-                  </Text>
+                  </AppText>
                 </View>
 
                 <View style={styles.weekdays}>
                   {WEEKDAY_LABELS.map((label, index) => (
-                    <Text
+                    <AppText
                       key={label}
                       style={[
                         styles.weekday,
@@ -548,7 +549,7 @@ export function CalendarScreen({
                       ]}
                     >
                       {label}
-                    </Text>
+                    </AppText>
                   ))}
                 </View>
 
@@ -588,12 +589,12 @@ export function CalendarScreen({
                       size={22}
                     />
                     <View style={styles.messageContent}>
-                      <Text style={styles.messageTitle}>
+                      <AppText style={styles.messageTitle}>
                         일정을 불러오지 못했어요
-                      </Text>
-                      <Text style={styles.messageDescription}>
+                      </AppText>
+                      <AppText style={styles.messageDescription}>
                         {errorMessage}
-                      </Text>
+                      </AppText>
                     </View>
                     <Pressable
                       accessibilityLabel="일정 다시 시도"
@@ -601,7 +602,7 @@ export function CalendarScreen({
                       onPress={reload}
                       style={styles.retryButton}
                     >
-                      <Text style={styles.retryText}>재시도</Text>
+                      <AppText style={styles.retryText}>재시도</AppText>
                     </Pressable>
                   </View>
                 ) : null}

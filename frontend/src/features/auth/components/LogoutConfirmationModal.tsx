@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState } from "react";
 import {
   ActivityIndicator,
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
+import {AppText} from "../../../shared/components/AppText";
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
 
 import { AUTH_COLORS } from "../theme";
@@ -118,8 +120,8 @@ export function AccountActionConfirmationModal({
             />
           </AnimatedPressable>
 
-          <Text style={styles.title}>{copy.title}</Text>
-          <Text style={styles.message}>{copy.message}</Text>
+          <AppText style={styles.title}>{copy.title}</AppText>
+          <AppText style={styles.message}>{copy.message}</AppText>
 
           <View style={styles.actions}>
             <AnimatedPressable
@@ -130,7 +132,7 @@ export function AccountActionConfirmationModal({
               onPress={handleCancel}
             >
               <View style={[styles.action, styles.cancelAction]}>
-                <Text style={styles.cancelLabel}>취소</Text>
+                <AppText style={styles.cancelLabel}>취소</AppText>
               </View>
             </AnimatedPressable>
 
@@ -146,7 +148,7 @@ export function AccountActionConfirmationModal({
                 {submitting ? (
                   <ActivityIndicator color={AUTH_COLORS.primaryDeep} />
                 ) : (
-                  <Text style={styles.confirmLabel}>{copy.confirmText}</Text>
+                  <AppText style={styles.confirmLabel}>{copy.confirmText}</AppText>
                 )}
               </View>
             </AnimatedPressable>

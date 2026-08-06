@@ -1,4 +1,5 @@
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
@@ -31,11 +32,11 @@ export function RoleToggle({memberName, onSelect, role}: RoleToggleProps) {
             onPress={() => onSelect(segment.role)}
             style={[styles.segment, isActive && styles.segmentActive]}
           >
-            <Text
+            <AppText
               style={[styles.label, isActive && styles.labelActive]}
             >
               {segment.label}
-            </Text>
+            </AppText>
           </Pressable>
         );
       })}

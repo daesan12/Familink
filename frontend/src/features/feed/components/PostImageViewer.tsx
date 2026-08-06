@@ -1,17 +1,19 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useState} from 'react';
+import {
+  useEffect,
+  useState} from 'react';
 import {
   FlatList,
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
   type ImageSourcePropType,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
@@ -112,9 +114,9 @@ export function PostImageViewer({
             accessibilityLabel={`${images.length}장 중 ${activeIndex + 1}번째 사진`}
             style={styles.counter}
           >
-            <Text style={styles.counterText}>
+            <AppText style={styles.counterText}>
               {activeIndex + 1} / {images.length}
-            </Text>
+            </AppText>
           </View>
         ) : null}
       </View>
