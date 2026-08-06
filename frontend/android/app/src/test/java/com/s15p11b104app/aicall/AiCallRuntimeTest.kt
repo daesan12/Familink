@@ -53,6 +53,31 @@ class AiCallRuntimeTest {
   }
 
   @Test
+  fun `microphone toggles reach the media session as plain user intent`() = runBlocking {
+    // Runtime은 사용자 조작을 해석하지 않고 1:1로 전달만 한다. AI 발화 게이팅은
+    // AiCallWebRtcSession 내부에서 처리하므로, 나중에 게이팅 판단을 Runtime으로 옮기면
+    // 이 단정이 깨진다. 게이팅 자체의 합성 동작은 AiCallMicrophoneGateControllerTest가 본다.
+    val mediaSession = RecordingMediaSession()
+    val runtime =
+        AiCallRuntime(
+            context = ContextWrapper(null),
+            sessionClient = RecordingSessionClient(endResults = ArrayDeque(emptyList())),
+            accessTokenProvider = RecordingAccessTokenProvider(),
+            onCaptionUpdate = {},
+            onConnectionLost = {},
+            mediaSessionFactory = { _, _, _ -> mediaSession },
+            mediaContext = Dispatchers.Unconfined,
+        )
+
+    runtime.start(personaId = 4L)
+    runtime.setMicrophoneEnabled(false)
+    runtime.setMicrophoneEnabled(true)
+    runtime.setMicrophoneEnabled(false)
+
+    assertEquals(listOf(false, true, false), mediaSession.microphoneStates)
+  }
+
+  @Test
   fun `failed start closes owned media session and clears controls`() = runBlocking {
     val mediaSession = RecordingMediaSession(connectionFailure = IllegalStateException("failed"))
     val runtime =
