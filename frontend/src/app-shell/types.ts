@@ -69,8 +69,10 @@ export interface AppScreenProps {
 }
 
 // 셸 내부 내비게이션 화면 이름 집합 (S15P11B104-320).
-// notifications·archive는 탭이 아니라 ShellStack에서 탭 위로 쌓이는 화면이다.
-export type MainTabRoute = Exclude<AppRoute, 'notifications' | 'archive'>;
+// 어느 탭도 소유하지 않고 현재 화면 위에 쌓이는 공유 하위 화면. 지금은
+// ShellStack에서 MainTabs 위에 쌓인다(S15P11B104-366에서 이름을 부여).
+export type SharedSubRoute = 'archive' | 'notifications';
+export type MainTabRoute = Exclude<AppRoute, SharedSubRoute>;
 
 // feed·calendar·groupInfo·profile 탭은 내부 스택을 가진다. 딥링크·재탭 정규화가
 // 중첩 params로 스택 화면까지 도달할 수 있도록 params 타입을 연결한다.
