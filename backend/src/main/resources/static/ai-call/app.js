@@ -254,8 +254,9 @@ function handleRealtimeEvent(message) {
 		return;
 	}
 
-	// 오디오 chunk는 매우 자주 오므로 개발 로그에서 제외한다.
-	if (event.type !== "response.output_audio.delta") {
+	// 스트리밍 delta 이벤트는 초당 수십 건 도착해 로그 보관 한도를 잡아먹으므로 제외한다.
+	// 각 delta에는 로그에 남는 done·completed 이벤트가 대응된다.
+	if (event.type?.endsWith(".delta") !== true) {
 		log(`Realtime: ${event.type}`);
 	}
 
