@@ -549,8 +549,8 @@ const styles = StyleSheet.create({
     height: 30,
     justifyContent: 'center',
     position: 'absolute',
-    right: -4,
-    top: -4,
+    right: 2,
+    top: 2,
     width: 30,
   },
   avatarWrap: {
