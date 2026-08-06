@@ -50,7 +50,6 @@ export function DraggableBottomSheet({
   const [reduceMotion, setReduceMotion] = useState(false);
   const currentSnapRef = useRef(0);
   const gestureStartRef = useRef(0);
-  const didInitializeRef = useRef(false);
   const wasVisibleRef = useRef(false);
   const collapsedOffset = Math.max(sheetHeight - collapsedHeight, 0);
 
@@ -116,7 +115,16 @@ export function DraggableBottomSheet({
   useEffect(() => {
     if (!visible) {
       wasVisibleRef.current = false;
-      didInitializeRef.current = false;
+      return;
+    }
+    // A collapsed sheet needs its measured height before its first snap can
+    // be calculated. Keep the entrance state ready, then initialize after the
+    // layout pass instead of letting the expanded default overwrite it.
+    if (initialSnap === 'collapsed' && sheetHeight === 0) {
+      translateY.setValue(reduceMotion ? 0 : 32);
+      backdropOpacity.setValue(
+        backdropVisible && reduceMotion ? 1 : 0,
+      );
       return;
     }
     if (wasVisibleRef.current) {
@@ -190,25 +198,6 @@ export function DraggableBottomSheet({
             const nextHeight = event.nativeEvent.layout.height;
             if (nextHeight !== sheetHeight) {
               setSheetHeight(nextHeight);
-            }
-            if (
-              visible &&
-              initialSnap === 'collapsed' &&
-              !didInitializeRef.current &&
-              nextHeight > 0
-            ) {
-              const nextOffset = Math.max(nextHeight - collapsedHeight, 0);
-              didInitializeRef.current = true;
-              currentSnapRef.current = nextOffset;
-              if (reduceMotion) {
-                translateY.setValue(nextOffset);
-              } else {
-                Animated.spring(translateY, {
-                  bounciness: 0,
-                  toValue: nextOffset,
-                  useNativeDriver: true,
-                }).start();
-              }
             }
           }}
           style={[styles.sheet, sheetStyle, {transform: [{translateY}]}]}
