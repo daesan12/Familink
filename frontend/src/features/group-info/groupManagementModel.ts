@@ -22,13 +22,6 @@ export function isGroupNameSaveable(
   );
 }
 
-// H-6 그룹관리자 변경 후보. 관리자는 보호자(guardian) 구성원에게만 넘길 수 있다.
-export function managerCandidates(
-  members: readonly GroupMember[],
-): readonly GroupMember[] {
-  return members.filter((member) => member.role === 'guardian');
-}
-
 // 현재 그룹관리자의 memberId. 없으면 null.
 export function currentManagerId(
   members: readonly GroupMember[],
