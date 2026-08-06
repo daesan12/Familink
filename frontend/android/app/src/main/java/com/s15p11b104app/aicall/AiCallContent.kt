@@ -376,19 +376,9 @@ internal fun AiCallRoute(
   }
 
   BackHandler(enabled = phase != AiCallPhase.Selecting) {
-    when (phase) {
-      AiCallPhase.Connecting,
-      AiCallPhase.InProgress,
-      -> finishCall()
-
-      AiCallPhase.Ending -> Unit
-
-      AiCallPhase.Failed ->
-          if (isFailedCallSelectionAllowed(failureReason == AiCallFailureReason.EndRequest)) {
-            returnToSelection()
-          }
-
-      else -> returnToSelection()
+    when (aiCallBackAction(phase, failureReason == AiCallFailureReason.EndRequest)) {
+      AiCallBackAction.Ignore -> Unit
+      AiCallBackAction.ReturnToSelection -> returnToSelection()
     }
   }
 
