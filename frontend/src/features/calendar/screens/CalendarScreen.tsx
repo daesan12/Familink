@@ -143,7 +143,6 @@ function HomeDeepLinkSync({
 export function CalendarScreen({
   currentGroup,
   currentUserId,
-  currentUserName = "사용자",
   gateway,
   initialDateKey,
   now,
@@ -628,8 +627,6 @@ export function CalendarScreen({
                   savingRef={savingRef}
                 />
                 <CalendarEventFormScreen
-                  currentMember={currentMember}
-                  currentUserName={currentUserName}
                   gateway={resolvedGateway}
                   groupId={currentGroup.id}
                   initialDate={selectedDate}
