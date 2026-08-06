@@ -129,14 +129,7 @@ import {
   subscribeGroupAccessDenied,
 } from "./src/shared/api";
 import { imageDiskCache } from "./src/shared/media/imageDiskCache";
-
-type RootRoute =
-  | "welcome"
-  | "signup"
-  | "signedInWelcome"
-  | "groupOnboarding"
-  | "interestSetup"
-  | "appShell";
+import type { RootRoute, RootStackParamList } from "./src/navigation/types";
 
 type FamilyGroupWithMemberId = FamilyGroup & {
   myMemberId?: string;
@@ -559,9 +552,10 @@ const DEFAULT_SCREENS: AppScreenRegistry = {
 
 const DEFAULT_API_BASE_URL = API_BASE_URL;
 
-// react-navigation 도입 1단계: 화면 1개짜리 루트 스택. 기존 route 상태 머신을
-// 감싸기만 하며, 실제 화면 분리는 후속 티켓(S15P11B104-319~)에서 진행한다.
-const RootStack = createNativeStackNavigator();
+// 루트 스택. route useState가 단일 소스이며, 매 시점 route에 해당하는 Screen
+// 하나만 조건부 등록한다. 등록 Screen이 1개뿐이라 내비게이터의 초기 화면
+// fallback이 곧 현재 route가 되어 navigate 호출 없이 전환이 일어난다.
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 function createProfileScreenRenderer(
   profileGateway: ProfileGateway,
@@ -2125,17 +2119,18 @@ export default function App({
   return (
     <GroupInfoIntegrationContext.Provider value={groupInfoIntegration}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-        <NavigationContainer>
-          <RootStack.Navigator screenOptions={{ headerShown: false }}>
-            <RootStack.Screen name="Root">
-              {() => (
-                <NotificationGatewayProvider
-                  gateway={resolvedNotificationGateway}
-                >
-                  <CalendarGatewayProvider gateway={resolvedCalendarGateway}>
-                    {/* edge-to-edge에서는 상태바 배경색 지정이 무시되므로 barStyle만 사용한다. */}
-                    <StatusBar barStyle="dark-content" />
-                    {route === "welcome" && (
+        <NotificationGatewayProvider gateway={resolvedNotificationGateway}>
+          <CalendarGatewayProvider gateway={resolvedCalendarGateway}>
+            {/* edge-to-edge에서는 상태바 배경색 지정이 무시되므로 barStyle만 사용한다. */}
+            <StatusBar barStyle="dark-content" />
+            <NavigationContainer>
+              {/* 기존 조건부 렌더링과 등가 유지를 위해 전환 애니메이션은 사용하지 않는다. */}
+              <RootStack.Navigator
+                screenOptions={{ animation: "none", headerShown: false }}
+              >
+                {route === "welcome" && (
+                  <RootStack.Screen name="welcome">
+                    {() => (
                       <>
                         <WelcomeScreen
                           onStartLogin={() => setLoginVisible(true)}
@@ -2149,7 +2144,11 @@ export default function App({
                         />
                       </>
                     )}
-                    {route === "signup" && (
+                  </RootStack.Screen>
+                )}
+                {route === "signup" && (
+                  <RootStack.Screen name="signup">
+                    {() => (
                       <SignupFlowScreen
                         onCancel={() => {
                           setPendingSignupProfileImage(null);
@@ -2168,7 +2167,11 @@ export default function App({
                         }}
                       />
                     )}
-                    {route === "appShell" && (
+                  </RootStack.Screen>
+                )}
+                {route === "appShell" && (
+                  <RootStack.Screen name="appShell">
+                    {() => (
                       <AppShell
                         key={appShellRecoveryVersion}
                         apiBaseUrl={apiBaseUrl}
@@ -2193,17 +2196,30 @@ export default function App({
                         screens={resolvedScreens}
                       />
                     )}
-                    {route === "signedInWelcome" && user !== null && (
-                      <SignedInWelcomeScreen
-                        onLogout={handleLogout}
-                        onRequestWithdrawal={handleSignedInWelcomeWithdrawal}
-                        onStartGroupOnboarding={() =>
-                          openGroupOnboarding("signedInWelcome")
-                        }
-                        userName={user.name}
-                      />
-                    )}
-                    {route === "groupOnboarding" && (
+                  </RootStack.Screen>
+                )}
+                {route === "signedInWelcome" && (
+                  <RootStack.Screen name="signedInWelcome">
+                    {/* user 가드는 Screen 등록 조건에 두지 않는다. 등록 Screen이
+                        0개가 되면 내비게이터가 throw하므로, 가드 불충족 시에는
+                        기존의 빈 화면과 등가인 null을 그린다. */}
+                    {() =>
+                      user !== null ? (
+                        <SignedInWelcomeScreen
+                          onLogout={handleLogout}
+                          onRequestWithdrawal={handleSignedInWelcomeWithdrawal}
+                          onStartGroupOnboarding={() =>
+                            openGroupOnboarding("signedInWelcome")
+                          }
+                          userName={user.name}
+                        />
+                      ) : null
+                    }
+                  </RootStack.Screen>
+                )}
+                {route === "groupOnboarding" && (
+                  <RootStack.Screen name="groupOnboarding">
+                    {() => (
                       <GroupOnboardingScreen
                         hasJoinedGroups={availableGroups.length > 0}
                         initialAction={groupOnboardingAction}
@@ -2217,21 +2233,27 @@ export default function App({
                         pendingRequests={joinRequests}
                       />
                     )}
-                    {route === "interestSetup" && interestGroup !== null && (
-                      <InterestSelectionScreen
-                        initialInterests={interestInitialValues}
-                        onBack={handleFinishInterestSetup}
-                        onComplete={handleFinishInterestSetup}
-                        onSave={handleSaveInterests}
-                        onSkip={handleFinishInterestSetup}
-                      />
-                    )}
-                  </CalendarGatewayProvider>
-                </NotificationGatewayProvider>
-              )}
-            </RootStack.Screen>
-          </RootStack.Navigator>
-        </NavigationContainer>
+                  </RootStack.Screen>
+                )}
+                {route === "interestSetup" && (
+                  <RootStack.Screen name="interestSetup">
+                    {() =>
+                      interestGroup !== null ? (
+                        <InterestSelectionScreen
+                          initialInterests={interestInitialValues}
+                          onBack={handleFinishInterestSetup}
+                          onComplete={handleFinishInterestSetup}
+                          onSave={handleSaveInterests}
+                          onSkip={handleFinishInterestSetup}
+                        />
+                      ) : null
+                    }
+                  </RootStack.Screen>
+                )}
+              </RootStack.Navigator>
+            </NavigationContainer>
+          </CalendarGatewayProvider>
+        </NotificationGatewayProvider>
       </SafeAreaProvider>
     </GroupInfoIntegrationContext.Provider>
   );
