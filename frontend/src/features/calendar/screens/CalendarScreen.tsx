@@ -1,4 +1,9 @@
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
+import { StackActions } from "@react-navigation/native";
+import {
+  createNativeStackNavigator,
+  type NativeStackNavigationProp,
+} from "@react-navigation/native-stack";
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { AppScreenProps } from "../../../app-shell";
 import { COLORS, RADII } from "../../../design/tokens";
+import { RouteFocusReporter } from "../../../shared/navigation/RouteFocusReporter";
 import { useCalendarGateway } from "../CalendarGatewayContext";
 import {
   createCalendarMonth,
@@ -34,6 +40,7 @@ import {
   CalendarMonthGrid,
 } from "../components/CalendarMonthGrid";
 import { toErrorMessage, useCalendarData } from "../hooks/useCalendarData";
+import type { CalendarStackParamList } from "../navigationTypes";
 import { CalendarEventFormScreen } from "./CalendarEventFormScreen";
 import type { CalendarEventDetail, CalendarGateway, DateKey } from "../types";
 
@@ -55,10 +62,6 @@ interface DetailState {
   visible: boolean;
 }
 
-interface EditorState {
-  detail: CalendarEventDetail | null;
-}
-
 const CLOSED_DETAIL: DetailState = {
   deleteErrorMessage: null,
   deleting: false,
@@ -68,6 +71,51 @@ const CLOSED_DETAIL: DetailState = {
   loading: false,
   visible: false,
 };
+
+// 캘린더 탭 내부 스택. 일정 편집이 조건부 렌더링 대신 스택 화면으로 열린다.
+const CalendarStack = createNativeStackNavigator<CalendarStackParamList>();
+
+type CalendarNavigation = NativeStackNavigationProp<CalendarStackParamList>;
+
+// 저장 중에는 스택 pop(하드웨어 백·제스처 포함)을 차단한다. 편집 화면의
+// useHardwareBack이 하던 saving 소비를 스택 계층에서 대체한다.
+function SavingBackGuard({
+  navigation,
+  savingRef,
+}: {
+  navigation: CalendarNavigation;
+  savingRef: { current: boolean };
+}) {
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (event) => {
+      if (savingRef.current) {
+        event.preventDefault();
+      }
+    });
+    return () => {
+      // 화면이 사라지면 저장 미러도 초기화해 다음 pop이 막히지 않게 한다.
+      savingRef.current = false;
+      unsubscribe();
+    };
+  }, [navigation, savingRef]);
+
+  return null;
+}
+
+// 재수화로 스태시가 사라진 수정 폼은 낡은 초기값(신규 작성)으로 저장될 수
+// 있어 홈으로 되돌린다 — 상세 데이터를 params에 싣지 않는 대가다.
+function ExpiredEditGuard({ navigation }: { navigation: CalendarNavigation }) {
+  const hasPopped = useRef(false);
+
+  useEffect(() => {
+    if (!hasPopped.current) {
+      hasPopped.current = true;
+      navigation.goBack();
+    }
+  }, [navigation]);
+
+  return null;
+}
 
 export function CalendarScreen({
   createCalendarEventRequestId,
@@ -95,12 +143,20 @@ export function CalendarScreen({
     useState<DateKey>(initialSelectedDate);
   const [isSheetVisible, setIsSheetVisible] = useState(false);
   const [detailState, setDetailState] = useState<DetailState>(CLOSED_DETAIL);
-  const [editorState, setEditorState] = useState<EditorState | null>(null);
+  // 편집 화면(스택)의 포커스 미러. 셸 풀스크린 신호와 모달 게이트의 기준이다.
+  const [isFormFocused, setIsFormFocused] = useState(false);
   const [isAnimatingMonth, setIsAnimatingMonth] = useState(false);
   const translateY = useRef(new Animated.Value(0)).current;
   const calendarViewportHeightRef = useRef(CALENDAR_MONTH_HEIGHT);
   const detailController = useRef<AbortController | null>(null);
   const deleteController = useRef<AbortController | null>(null);
+  // 이동 함수가 effect·핸들러에서도 스택을 조작할 수 있게 렌더 중 캡처한다
+  // (FeedScreen feedNavRef 관용구).
+  const calNavRef = useRef<CalendarNavigation | null>(null);
+  // 수정 폼의 초기값 스태시. params에는 eventId만 싣는다(navigationTypes 주석).
+  const editorDetailRef = useRef<CalendarEventDetail | null>(null);
+  // 저장 진행 미러. SavingBackGuard가 beforeRemove에서 읽는다.
+  const savingRef = useRef(false);
   const lastCreateRequestId = useRef(createCalendarEventRequestId ?? 0);
   const lastOpenEventRequestId = useRef(0);
   // 알림 딥링크로 연 상세는 로드 성공 시 선택 날짜를 이벤트 날짜로 맞춰,
@@ -147,8 +203,14 @@ export function CalendarScreen({
     detailController.current?.abort();
     deleteController.current?.abort();
     setDetailState(CLOSED_DETAIL);
-    setEditorState(null);
     setIsSheetVisible(false);
+    editorDetailRef.current = null;
+    // 그룹이 바뀌면 열려 있던 편집 화면을 홈으로 되돌린다(GroupInfoScreen 선례).
+    const stackState = calNavRef.current?.getState();
+    const topRoute = stackState?.routes[stackState.index];
+    if (topRoute !== undefined && topRoute.name !== "CalendarHome") {
+      calNavRef.current?.dispatch(StackActions.popToTop());
+    }
   }, [currentGroup.id]);
 
   useEffect(() => {
@@ -157,21 +219,26 @@ export function CalendarScreen({
       lastCreateRequestId.current = requestId;
       setDetailState(CLOSED_DETAIL);
       setIsSheetVisible(false);
-      setEditorState({ detail: null });
+      editorDetailRef.current = null;
+      calNavRef.current?.navigate("CalendarEventForm", { mode: "create" });
     }
   }, [createCalendarEventRequestId]);
 
   useEffect(() => {
-    if (!editorState) {
+    if (!isFormFocused) {
       return;
     }
+    // 진입 핸들러가 모달 state를 닫지만, 재수화로 복원된 폼도 같은 정리를
+    // 받도록 여기서 한 번 더 닫는다(F-16).
+    setDetailState(CLOSED_DETAIL);
+    setIsSheetVisible(false);
     onFullscreenChange?.(true);
     onHeaderVisibilityChange?.(false);
     return () => {
       onFullscreenChange?.(false);
       onHeaderVisibilityChange?.(true);
     };
-  }, [editorState, onFullscreenChange, onHeaderVisibilityChange]);
+  }, [isFormFocused, onFullscreenChange, onHeaderVisibilityChange]);
 
   useEffect(
     () => () => {
@@ -378,9 +445,13 @@ export function CalendarScreen({
 
   const handleEditDetail = () => {
     if (visibleDetail && canManageSelectedEvent) {
-      setEditorState({ detail: visibleDetail });
+      editorDetailRef.current = visibleDetail;
       setDetailState(CLOSED_DETAIL);
       setIsSheetVisible(false);
+      calNavRef.current?.navigate("CalendarEventForm", {
+        eventId: visibleDetail.id,
+        mode: "edit",
+      });
     }
   };
 
@@ -434,113 +505,147 @@ export function CalendarScreen({
     ]);
   };
 
-  // 편집 화면은 시트·상세 Modal을 마운트 해제하지 않고 같은 트리에서 전환한다.
-  // 표시 중인 Modal을 언마운트하면 native 팝업이 정리되지 않고 겹겹이 남을 수 있다.
-  const editorScreen = editorState ? (
-    <CalendarEventFormScreen
-      currentMember={currentMember}
-      currentUserName={currentUserName}
-      gateway={resolvedGateway}
-      groupId={currentGroup.id}
-      initialDate={selectedDate}
-      initialDetail={editorState.detail ?? undefined}
-      members={members}
-      now={now}
-      onCancel={() => setEditorState(null)}
-      onSaved={() => {
-        setEditorState(null);
-        setDetailState(CLOSED_DETAIL);
-        setIsSheetVisible(true);
-        reload();
-      }}
-    />
-  ) : null;
-
   return (
     <View style={styles.screen}>
-      {editorScreen ?? (
-        <>
-          <View style={styles.monthToolbar}>
-            <Text accessibilityRole="header" style={styles.monthTitle}>
-              {formatMonthLabel(visibleMonth)}
-            </Text>
-          </View>
+      <CalendarStack.Navigator
+        screenOptions={{ animation: "none", headerShown: false }}
+      >
+        <CalendarStack.Screen name="CalendarHome">
+          {({ navigation }) => {
+            calNavRef.current = navigation;
+            return (
+              <View style={styles.screen}>
+                <View style={styles.monthToolbar}>
+                  <Text accessibilityRole="header" style={styles.monthTitle}>
+                    {formatMonthLabel(visibleMonth)}
+                  </Text>
+                </View>
 
-          <View style={styles.weekdays}>
-            {WEEKDAY_LABELS.map((label, index) => (
-              <Text
-                key={label}
-                style={[
-                  styles.weekday,
-                  index === 0 && styles.sunday,
-                  index === 6 && styles.saturday,
-                ]}
-              >
-                {label}
-              </Text>
-            ))}
-          </View>
+                <View style={styles.weekdays}>
+                  {WEEKDAY_LABELS.map((label, index) => (
+                    <Text
+                      key={label}
+                      style={[
+                        styles.weekday,
+                        index === 0 && styles.sunday,
+                        index === 6 && styles.saturday,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  ))}
+                </View>
 
-          <View
-            accessibilityHint="위로 밀면 다음 달, 아래로 밀면 이전 달로 이동합니다"
-            onLayout={handleCalendarViewportLayout}
-            style={styles.calendarViewport}
-            {...panResponder.panHandlers}
-          >
-            <Animated.View
-              style={[styles.monthAnimation, { transform: [{ translateY }] }]}
-            >
-              <CalendarMonthGrid
-                events={events}
-                month={calendarMonth}
-                onSelectDate={handleSelectDate}
-                selectedDate={selectedDate}
-                today={today}
-              />
-            </Animated.View>
+                <View
+                  accessibilityHint="위로 밀면 다음 달, 아래로 밀면 이전 달로 이동합니다"
+                  onLayout={handleCalendarViewportLayout}
+                  style={styles.calendarViewport}
+                  {...panResponder.panHandlers}
+                >
+                  <Animated.View
+                    style={[
+                      styles.monthAnimation,
+                      { transform: [{ translateY }] },
+                    ]}
+                  >
+                    <CalendarMonthGrid
+                      events={events}
+                      month={calendarMonth}
+                      onSelectDate={handleSelectDate}
+                      selectedDate={selectedDate}
+                      today={today}
+                    />
+                  </Animated.View>
 
-            {status === "loading" ? (
-              <View pointerEvents="none" style={styles.loadingOverlay}>
-                <ActivityIndicator color={COLORS.purpleDeep} />
+                  {status === "loading" ? (
+                    <View pointerEvents="none" style={styles.loadingOverlay}>
+                      <ActivityIndicator color={COLORS.purpleDeep} />
+                    </View>
+                  ) : null}
+                </View>
+
+                {status === "error" ? (
+                  <View style={styles.messageCard}>
+                    <MaterialDesignIcons
+                      color={COLORS.error}
+                      name="alert-circle-outline"
+                      size={22}
+                    />
+                    <View style={styles.messageContent}>
+                      <Text style={styles.messageTitle}>
+                        일정을 불러오지 못했어요
+                      </Text>
+                      <Text style={styles.messageDescription}>
+                        {errorMessage}
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityLabel="일정 다시 시도"
+                      accessibilityRole="button"
+                      onPress={reload}
+                      style={styles.retryButton}
+                    >
+                      <Text style={styles.retryText}>재시도</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
               </View>
-            ) : null}
-          </View>
+            );
+          }}
+        </CalendarStack.Screen>
+        <CalendarStack.Screen name="CalendarEventForm">
+          {({ navigation, route }) => {
+            calNavRef.current = navigation;
+            const initialDetail =
+              route.params.mode === "edit" ? editorDetailRef.current : null;
+            if (route.params.mode === "edit" && initialDetail === null) {
+              return <ExpiredEditGuard navigation={navigation} />;
+            }
+            return (
+              <>
+                <RouteFocusReporter onFocusChange={setIsFormFocused} />
+                <SavingBackGuard
+                  navigation={navigation}
+                  savingRef={savingRef}
+                />
+                <CalendarEventFormScreen
+                  currentMember={currentMember}
+                  currentUserName={currentUserName}
+                  gateway={resolvedGateway}
+                  groupId={currentGroup.id}
+                  initialDate={selectedDate}
+                  initialDetail={initialDetail ?? undefined}
+                  members={members}
+                  now={now}
+                  onCancel={() => navigation.goBack()}
+                  onSaved={() => {
+                    // 저장 성공 시 saving은 true인 채 pop되므로 가드를 먼저 푼다.
+                    savingRef.current = false;
+                    navigation.goBack();
+                    setDetailState(CLOSED_DETAIL);
+                    setIsSheetVisible(true);
+                    reload();
+                  }}
+                  onSavingChange={(saving) => {
+                    savingRef.current = saving;
+                  }}
+                />
+              </>
+            );
+          }}
+        </CalendarStack.Screen>
+      </CalendarStack.Navigator>
 
-          {status === "error" ? (
-            <View style={styles.messageCard}>
-              <MaterialDesignIcons
-                color={COLORS.error}
-                name="alert-circle-outline"
-                size={22}
-              />
-              <View style={styles.messageContent}>
-                <Text style={styles.messageTitle}>
-                  일정을 불러오지 못했어요
-                </Text>
-                <Text style={styles.messageDescription}>{errorMessage}</Text>
-              </View>
-              <Pressable
-                accessibilityLabel="일정 다시 시도"
-                accessibilityRole="button"
-                onPress={reload}
-                style={styles.retryButton}
-              >
-                <Text style={styles.retryText}>재시도</Text>
-              </Pressable>
-            </View>
-          ) : null}
-        </>
-      )}
-
-      {/* RN Modal은 동시에 하나만 표시한다(F-16). 시트·상세 상호배제를 렌더에서 강제한다. */}
+      {/* RN Modal은 동시에 하나만 표시한다(F-16). 시트·상세 상호배제를 렌더에서
+          강제한다. Modal은 스택의 형제로 두어 편집 화면이 열려도 마운트를
+          유지한다 — 표시 중인 Modal을 언마운트하면 native 팝업이 정리되지
+          않고 겹겹이 남을 수 있다. */}
       <CalendarEventsSheet
         dateKey={selectedDate}
         events={selectedEvents}
         onClose={() => setIsSheetVisible(false)}
         onOpenEvent={loadEventDetail}
-        visible={
-          isSheetVisible && !detailState.visible && editorScreen === null
-        }
+        visible={isSheetVisible && !detailState.visible && !isFormFocused}
       />
       <CalendarEventDetailModal
         canManage={canManageSelectedEvent}
@@ -554,7 +659,7 @@ export function CalendarScreen({
         onDelete={handleRequestDelete}
         onEdit={handleEditDetail}
         onRetry={handleRetryDetail}
-        visible={detailState.visible && editorScreen === null}
+        visible={detailState.visible && !isFormFocused}
       />
     </View>
   );

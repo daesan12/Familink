@@ -1,7 +1,9 @@
 import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
 import { Alert, Modal, Text } from "react-native";
 import TestRenderer from "react-test-renderer";
 
+import { mockHardwareBack } from "../../../shared/testing/hardwareBack";
 import { CalendarEventDetailModal } from "../components/CalendarEventDetailModal";
 import { CalendarEventsSheet } from "../components/CalendarEventsSheet";
 import type { CalendarGateway } from "../types";
@@ -9,14 +11,24 @@ import { CalendarScreen } from "./CalendarScreen";
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
 jest.mock("react-native-safe-area-context", () => {
+  const mockReact = jest.requireActual("react");
   const {View} = jest.requireActual("react-native");
+  const insets = {bottom: 0, left: 0, right: 0, top: 0};
 
   return {
+    // CalendarStack(native-stack)의 SafeAreaProviderCompat이 이 컨텍스트를 구독한다.
+    SafeAreaInsetsContext: mockReact.createContext(insets),
     SafeAreaProvider: View,
     SafeAreaView: View,
-    useSafeAreaInsets: () => ({bottom: 0, left: 0, right: 0, top: 0}),
+    initialWindowMetrics: null,
+    useSafeAreaInsets: () => insets,
   };
 });
+
+// CalendarScreen이 내부에 CalendarStack 내비게이터를 렌더하므로 컨테이너가 필요하다.
+function withNav(element: React.ReactElement) {
+  return <NavigationContainer>{element}</NavigationContainer>;
+}
 
 jest.mock("@react-native-community/datetimepicker", () => ({
   DateTimePickerAndroid: { open: jest.fn() },
@@ -105,7 +117,7 @@ async function renderCalendar(
   let renderer: TestRenderer.ReactTestRenderer;
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <CalendarScreen {...baseProps} {...props} gateway={gateway} />
+      withNav(<CalendarScreen {...baseProps} {...props} gateway={gateway} />)
     );
     await Promise.resolve();
   });
@@ -400,6 +412,82 @@ test("일정 수정 저장 후에는 상세 팝업 없이 시트만 열린다", 
   expect(visibleModals).toHaveLength(1);
 });
 
+test("편집 화면의 취소는 스택을 되돌려 캘린더 홈으로 복귀한다", async () => {
+  const gateway = createGateway();
+  const { renderer } = await renderCalendar(gateway);
+
+  await openEventDetail(renderer);
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "일정 수정" })
+      .props.onPress();
+  });
+  expect(
+    renderer.root.findByProps({ accessibilityLabel: "일정 제목" })
+  ).toBeTruthy();
+
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "일정 작성 취소" })
+      .props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(
+    renderer.root.findAllByProps({ accessibilityLabel: "일정 제목" })
+  ).toHaveLength(0);
+  expect(renderer.root.findByProps({ children: "2026년 7월" })).toBeTruthy();
+});
+
+test("저장 중 하드웨어 뒤로가기는 편집 화면을 유지한다", async () => {
+  // 컨테이너의 useBackButton이 mock에 등록되도록 렌더 전에 설치한다.
+  const back = mockHardwareBack();
+  try {
+    const gateway = createGateway();
+    let resolveUpdate: () => void = () => {};
+    gateway.updateEvent.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveUpdate = () => resolve(undefined);
+        })
+    );
+    const { renderer } = await renderCalendar(gateway);
+
+    await openEventDetail(renderer);
+    await TestRenderer.act(async () => {
+      renderer.root
+        .findByProps({ accessibilityLabel: "일정 수정" })
+        .props.onPress();
+    });
+    await TestRenderer.act(async () => {
+      renderer.root
+        .findByProps({ accessibilityLabel: "일정 저장" })
+        .props.onPress();
+    });
+
+    await TestRenderer.act(async () => {
+      back.press();
+      await Promise.resolve();
+    });
+    // 저장 중에는 beforeRemove가 pop을 막아 편집 화면이 유지된다.
+    expect(
+      renderer.root.findByProps({ accessibilityLabel: "일정 제목" })
+    ).toBeTruthy();
+
+    await TestRenderer.act(async () => {
+      resolveUpdate();
+      await Promise.resolve();
+    });
+    // 저장이 끝나면 홈으로 복귀하고 시트가 열린다.
+    expect(
+      renderer.root.findAllByProps({ accessibilityLabel: "일정 제목" })
+    ).toHaveLength(0);
+    expect(sheetVisible(renderer)).toBe(true);
+  } finally {
+    back.restore();
+  }
+});
+
 test("상단 추가 요청은 선택 날짜의 시간 설정이 꺼진 새 폼을 연다", async () => {
   const gateway = createGateway();
   const { renderer } = await renderCalendar(gateway, {
@@ -408,11 +496,13 @@ test("상단 추가 요청은 선택 날짜의 시간 설정이 꺼진 새 폼�
 
   await TestRenderer.act(async () => {
     renderer.update(
-      <CalendarScreen
-        {...baseProps}
-        createCalendarEventRequestId={1}
-        gateway={gateway}
-      />
+      withNav(
+        <CalendarScreen
+          {...baseProps}
+          createCalendarEventRequestId={1}
+          gateway={gateway}
+        />
+      )
     );
   });
 
@@ -500,15 +590,17 @@ test("그룹이 바뀌면 열린 상세를 닫고 새 그룹 일정과 구성원
 
   await TestRenderer.act(async () => {
     renderer.update(
-      <CalendarScreen
-        {...baseProps}
-        currentGroup={{
-          id: "4",
-          name: "외갓집 식구들",
-          role: "guardian",
-        }}
-        gateway={gateway}
-      />
+      withNav(
+        <CalendarScreen
+          {...baseProps}
+          currentGroup={{
+            id: "4",
+            name: "외갓집 식구들",
+            role: "guardian",
+          }}
+          gateway={gateway}
+        />
+      )
     );
     await Promise.resolve();
   });
