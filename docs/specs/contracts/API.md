@@ -234,7 +234,7 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 | `API-CALENDAR-001` | `GET /groups/{groupId}/events` | Spring Boot · 해당 그룹 활성 구성원 | path `groupId`; query `startDate`, `endDate` | `200`: `events[{id,title,eventDate,endDate,startAt,endAt}]` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-CALENDAR-002` | `GET /events/{eventId}` | Spring Boot · 해당 그룹 활성 구성원 | path `eventId` | `200`: `id`, `groupId`, `title`, `description`, `eventDate`, `endDate`, `startAt`, `endAt`, `creatorMemberId`, `participantMemberIds` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-CALENDAR-003` | `POST /groups/{groupId}/events` | Spring Boot · 해당 그룹 활성 구성원 | `title`, `description`, `eventDate`, `endDate`, `startAt`, `endAt`, `participantMemberIds` | `201`: `eventId`, `createdAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
-| `API-CALENDAR-004` | `PATCH /events/{eventId}` | Spring Boot · 작성자 또는 그룹 관리자 | `title`, `description`, `eventDate`, `endDate`, `startAt`, `endAt`, `participantMemberIds` | `200`: `id`, `lastEditorMemberId`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
+| `API-CALENDAR-004` | `PATCH /events/{eventId}` | Spring Boot · 해당 그룹 활성 구성원 | `title`, `description`, `eventDate`, `endDate`, `startAt`, `endAt`, `participantMemberIds` | `200`: `id`, `lastEditorMemberId`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-CALENDAR-005` | `DELETE /events/{eventId}` | Spring Boot · 작성자 또는 그룹 관리자 | path `eventId` | `204 No Content` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 
 - 모든 일정은 시작 날짜 전날 09:00 KST에 알림을 생성하고, 시간 일정은

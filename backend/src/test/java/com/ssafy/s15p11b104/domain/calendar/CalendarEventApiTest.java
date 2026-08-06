@@ -416,25 +416,69 @@ class CalendarEventApiTest extends IntegrationTest {
 	}
 
 	@Test
-	void memberOfAnotherGroupCannotReadEventDetail() throws Exception {
+	void memberOfAnotherGroupCannotReadOrModifyEvent() throws Exception {
 		Long eventId = persistAllDayEvent("일정", LocalDate.of(2026, 8, 5), LocalDate.of(2026, 8, 5));
+		RequestPostProcessor otherGroupUserAuth = authenticatedAs(otherGroupUser.getId());
 
-		mockMvc.perform(get("/events/{eventId}", eventId).with(authenticatedAs(otherGroupUser.getId())))
+		mockMvc.perform(get("/events/{eventId}", eventId).with(otherGroupUserAuth))
+			.andExpect(status().isForbidden());
+		mockMvc.perform(patch("/events/{eventId}", eventId).with(otherGroupUserAuth)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"title": "타그룹 수정", "eventDate": "2026-08-05"}
+					"""))
+			.andExpect(status().isForbidden());
+		mockMvc.perform(delete("/events/{eventId}", eventId).with(otherGroupUserAuth))
 			.andExpect(status().isForbidden());
 	}
 
 	@Test
-	void plainMemberCannotUpdateOrDeleteEventOfAnother() throws Exception {
+	void plainMemberCanUpdateButCannotDeleteEventOfAnother() throws Exception {
 		Long eventId = persistAllDayEvent("일정", LocalDate.of(2026, 8, 5), LocalDate.of(2026, 8, 5));
 
 		mockMvc.perform(patch("/events/{eventId}", eventId)
 				.with(authenticatedAs(memberUser.getId()))
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-					{"title": "수정 시도", "eventDate": "2026-08-05"}
+					{
+					  "title": "공동 수정",
+					  "description": "구성원이 수정",
+					  "startAt": "2026-08-06T01:00:00Z",
+					  "endAt": "2026-08-06T02:00:00Z",
+					  "participantMemberIds": [%d]
+					}
+					""".formatted(managerMember.getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.lastEditorMemberId").value(memberMember.getId()));
+
+		entityManager.flush();
+		entityManager.clear();
+		CalendarEvent updated = calendarEventRepository.findById(eventId).orElseThrow();
+		assertThat(updated.getCreatorMember().getId()).isEqualTo(creatorMember.getId());
+		assertThat(updated.getLastEditorMember().getId()).isEqualTo(memberMember.getId());
+		assertThat(updated.getTitle()).isEqualTo("공동 수정");
+		assertThat(updated.getDescription()).isEqualTo("구성원이 수정");
+		assertThat(updated.getEventDate()).isEqualTo(LocalDate.of(2026, 8, 6));
+		assertThat(updated.getEndDate()).isEqualTo(LocalDate.of(2026, 8, 6));
+		assertThat(eventParticipantRepository.findMemberIdsByEventId(eventId))
+			.containsExactly(managerMember.getId());
+
+		mockMvc.perform(delete("/events/{eventId}", eventId).with(authenticatedAs(memberUser.getId())))
+			.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void inactiveMemberCannotUpdateOrDeleteEvent() throws Exception {
+		Long eventId = persistAllDayEvent("일정", LocalDate.of(2026, 8, 5), LocalDate.of(2026, 8, 5));
+		RequestPostProcessor leftUserAuth = authenticatedAs(leftUser.getId());
+
+		mockMvc.perform(patch("/events/{eventId}", eventId).with(leftUserAuth)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"title": "탈퇴자 수정", "eventDate": "2026-08-05"}
 					"""))
 			.andExpect(status().isForbidden());
-		mockMvc.perform(delete("/events/{eventId}", eventId).with(authenticatedAs(memberUser.getId())))
+		mockMvc.perform(delete("/events/{eventId}", eventId).with(leftUserAuth))
 			.andExpect(status().isForbidden());
 	}
 
