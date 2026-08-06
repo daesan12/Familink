@@ -9,8 +9,14 @@ import {Pressable} from "react-native";
 import TestRenderer from "react-test-renderer";
 
 import type { MainTabsParamList } from "../../../app-shell";
-import type { ReportGateway } from "../types";
+import type {
+  CareReceiverReportTarget,
+  DailyReportResult,
+  ReportGateway,
+} from "../types";
+import * as reportTargetHooks from "../hooks/useCareReceiverReportTargets";
 import { REPORT_PAGE_REQUEST_CONCURRENCY } from "../hooks/useReportPages";
+import * as reportPageHooks from "../hooks/useReportPages";
 import { ReportScreen } from "./ReportScreen";
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
@@ -102,6 +108,14 @@ function createGateway(): jest.Mocked<ReportGateway> {
   };
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 async function renderWithGateway(gateway: ReportGateway, targets = [target]) {
   let renderer: TestRenderer.ReactTestRenderer;
 
@@ -158,6 +172,126 @@ function readyCallReport() {
     summary: "아침 식사와 가족 이야기를 나누셨어요.",
   };
 }
+
+test("원격 리포트 초기 조회가 끝날 때까지 잘못된 빈 화면을 노출하지 않는다", async () => {
+  const gateway = createGateway();
+  const targetRequest =
+    createDeferred<readonly CareReceiverReportTarget[]>();
+  const dailyReportRequest = createDeferred<DailyReportResult>();
+  const loadTargets = jest.fn(() => targetRequest.promise);
+  gateway.getDailyReport.mockReturnValue(dailyReportRequest.promise);
+  let renderer!: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      withReportRoute(
+        <ReportScreen
+          careReceiverTargetsLoader={loadTargets}
+          currentGroup={currentGroup}
+          reportDate="2026-07-31"
+          reportGateway={gateway}
+          role="guardian"
+        />
+      )
+    );
+  });
+  renderedScreens.add(renderer);
+
+  const initialTree = JSON.stringify(renderer.toJSON());
+  expect(initialTree).toContain("피보호자 목록을 불러오고 있어요");
+  expect(initialTree).not.toContain("리포트를 확인할 피보호자가 없어요");
+
+  await TestRenderer.act(async () => {
+    targetRequest.resolve([target]);
+    await targetRequest.promise;
+  });
+
+  const reportLoadingTree = JSON.stringify(renderer.toJSON());
+  expect(reportLoadingTree).toContain("리포트를 불러오고 있어요");
+  expect(reportLoadingTree).not.toContain("리포트를 확인할 피보호자가 없어요");
+
+  await TestRenderer.act(async () => {
+    dailyReportRequest.resolve({
+      calls: [],
+      dailyReport: {
+        emotionCategory: "JOY",
+        emotionSubcategory: "즐거움",
+        guardianMessageSummary: null,
+        id: "daily-31",
+        summary: "오늘의 안정적인 리포트입니다.",
+      },
+      date: "2026-07-31",
+      generationStatus: "ready",
+    });
+    await dailyReportRequest.promise;
+  });
+
+  const readyTree = JSON.stringify(renderer.toJSON());
+  expect(readyTree).toContain("오늘의 안정적인 리포트입니다.");
+  expect(readyTree).not.toContain("리포트를 불러오고 있어요");
+});
+
+test("피보호자 조회가 idle인 첫 렌더를 로딩 화면으로 표시한다", async () => {
+  const targetStateSpy = jest
+    .spyOn(reportTargetHooks, "useCareReceiverReportTargets")
+    .mockReturnValue({ retry: jest.fn(), status: "idle" });
+  const gateway = createGateway();
+  let renderer!: TestRenderer.ReactTestRenderer;
+
+  try {
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        withReportRoute(
+          <ReportScreen
+            careReceiverTargetsLoader={jest.fn()}
+            currentGroup={currentGroup}
+            reportDate="2026-07-31"
+            reportGateway={gateway}
+            role="guardian"
+          />
+        )
+      );
+    });
+    renderedScreens.add(renderer);
+
+    const tree = JSON.stringify(renderer.toJSON());
+    expect(tree).toContain("피보호자 목록을 불러오고 있어요");
+    expect(tree).not.toContain("리포트를 확인할 피보호자가 없어요");
+  } finally {
+    targetStateSpy.mockRestore();
+  }
+});
+
+test("리포트 조회가 idle인 첫 렌더를 로딩 화면으로 표시한다", async () => {
+  const reportPagesSpy = jest
+    .spyOn(reportPageHooks, "useReportPages")
+    .mockReturnValue({ retry: jest.fn(), status: "idle" });
+  const gateway = createGateway();
+  let renderer!: TestRenderer.ReactTestRenderer;
+
+  try {
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        withReportRoute(
+          <ReportScreen
+            careReceiverTargets={[target]}
+            currentGroup={currentGroup}
+            reportDate="2026-07-31"
+            reportGateway={gateway}
+            role="guardian"
+          />
+        )
+      );
+    });
+    renderedScreens.add(renderer);
+
+    const tree = JSON.stringify(renderer.toJSON());
+    expect(tree).toContain("리포트를 불러오고 있어요");
+    expect(tree).not.toContain("리포트를 확인할 피보호자가 없어요");
+  } finally {
+    reportPagesSpy.mockRestore();
+  }
+});
 
 function isCallReportDetailVisible(renderer: TestRenderer.ReactTestRenderer) {
   const detailModal = renderer.root

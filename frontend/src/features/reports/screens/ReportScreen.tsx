@@ -662,7 +662,10 @@ export function ReportScreen({
     selectedReportDate,
   ]);
 
-  if (shouldLoadTargets && targetState.status === "loading") {
+  if (
+    shouldLoadTargets &&
+    (targetState.status === "idle" || targetState.status === "loading")
+  ) {
     return (
       <ReportLoadState
         description="현재 그룹의 피보호자를 확인하고 있어요."
@@ -684,7 +687,7 @@ export function ReportScreen({
     );
   }
 
-  if (hasRemoteSource && remotePages.status === "loading") {
+  if (hasRemoteSource && remotePages.status !== "ready") {
     return (
       <ReportLoadState
         description="피보호자의 일간·건별 리포트를 확인하고 있어요."
