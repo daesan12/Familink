@@ -672,7 +672,7 @@ test("로그인 후 A-10을 거쳐 B-3으로 이동하고 다시 돌아온다", 
   });
 
   expect(
-    renderer.root.findByProps({ children: "가족과\n연결해볼까요?" })
+    renderer.root.findByProps({ children: "우리 가족을\n연결해볼까요?" })
   ).toBeTruthy();
   expect(JSON.stringify(renderer.toJSON())).toContain(
     "아직 참가한 그룹이 없어요"
@@ -1796,7 +1796,7 @@ test("실제 3초 폴링은 그룹 요약이 함께 보일 때 승인 카드로 
     expect(
       renderer!.root.findAllByProps({accessibilityLabel: "폴링 가족 열기"}),
     ).toHaveLength(0);
-    expect(JSON.stringify(renderer!.toJSON())).toContain("승인 요청 대기");
+    expect(JSON.stringify(renderer!.toJSON())).toContain("폴링 가족, 대기 중");
 
     await TestRenderer.act(async () => {
       jest.advanceTimersByTime(3_000);
@@ -1984,7 +1984,7 @@ test("피드의 생성·참여 버튼은 시트를 바로 열고 취소하면 �
     renderer!.root.findByType(AppShell).props.onJoinGroup();
   });
   expect(
-    renderer!.root.findByProps({ children: "가족과\n연결해볼까요?" })
+    renderer!.root.findByProps({ children: "우리 가족을\n연결해볼까요?" })
   ).toBeTruthy();
   expect(
     renderer!.root.findByProps({ accessibilityLabel: "6자리 초대 코드" })
