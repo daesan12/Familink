@@ -1,12 +1,22 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState } from 'react';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import { StackActions, useIsFocused } from '@react-navigation/native';
+import { StackActions,
+  useIsFocused } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import {
   createNativeStackNavigator,
   type NativeStackNavigationProp,
-} from '@react-navigation/native-stack';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+  } from '@react-navigation/native-stack';
+import { Pressable,
+  StyleSheet,
+  View,
+} from 'react-native';
+import {AppText} from '../shared/components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../design/tokens';
@@ -406,9 +416,9 @@ export function AppShell({
   if (isRestoringGroup) {
     return (
       <SafeAreaView style={styles.emptyContainer}>
-        <Text accessibilityRole="text" style={styles.emptyDescription}>
+        <AppText accessibilityRole="text" style={styles.emptyDescription}>
           최근 이용 그룹을 불러오고 있어요.
-        </Text>
+        </AppText>
       </SafeAreaView>
     );
   }
@@ -416,10 +426,10 @@ export function AppShell({
   if (!currentGroup) {
     return (
       <SafeAreaView style={styles.emptyContainer}>
-        <Text style={styles.emptyTitle}>참여 중인 그룹이 없어요</Text>
-        <Text style={styles.emptyDescription}>
+        <AppText style={styles.emptyTitle}>참여 중인 그룹이 없어요</AppText>
+        <AppText style={styles.emptyDescription}>
           그룹을 만들거나 초대 코드로 가입을 요청해 주세요.
-        </Text>
+        </AppText>
         <View style={styles.emptyActions}>
           <Pressable
             accessibilityRole="button"
@@ -430,7 +440,7 @@ export function AppShell({
               !onCreateGroup && styles.disabledAction,
             ]}
           >
-            <Text style={styles.primaryActionText}>그룹 만들기</Text>
+            <AppText style={styles.primaryActionText}>그룹 만들기</AppText>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -441,7 +451,7 @@ export function AppShell({
               !onJoinGroup && styles.disabledAction,
             ]}
           >
-            <Text style={styles.secondaryActionText}>초대 코드 입력</Text>
+            <AppText style={styles.secondaryActionText}>초대 코드 입력</AppText>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -648,11 +658,11 @@ export function AppShell({
               />
               {unreadNotificationCount > 0 ? (
                 <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>
+                  <AppText style={styles.notificationBadgeText}>
                     {unreadNotificationCount > 99
                       ? '99+'
                       : unreadNotificationCount}
-                  </Text>
+                  </AppText>
                 </View>
               ) : null}
             </Pressable>
@@ -827,12 +837,12 @@ function ShellRouteScreen({
   if (!ScreenComponent) {
     return (
       <View style={styles.placeholder}>
-        <Text style={styles.placeholderTitle}>
+        <AppText style={styles.placeholderTitle}>
           {getPlaceholderTitle(route)}
-        </Text>
-        <Text style={styles.placeholderDescription}>
+        </AppText>
+        <AppText style={styles.placeholderDescription}>
           담당 기능 화면이 연결될 예정입니다.
-        </Text>
+        </AppText>
       </View>
     );
   }

@@ -1,15 +1,17 @@
-import {useRef, useState} from 'react';
+import {
+  useRef,
+  useState} from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
-import {COLORS, RADII} from '../../../design/tokens';
+import {COLORS, FONT_FAMILY, RADII} from '../../../design/tokens';
 import {SubScreenHeader} from '../components/SubScreenHeader';
 import {
   GROUP_NAME_MAX_LENGTH,
@@ -61,8 +63,8 @@ export function RenameGroupScreen({
       <SubScreenHeader onBack={onBack} title="그룹명 변경" />
 
       <View style={styles.content}>
-        <Text style={styles.heading}>그룹 이름을 변경하세요</Text>
-        <Text style={styles.subtitle}>언제든지 자유롭게 변경 가능합니다.</Text>
+        <AppText style={styles.heading}>그룹 이름을 변경하세요</AppText>
+        <AppText style={styles.subtitle}>언제든지 자유롭게 변경 가능합니다.</AppText>
 
         <TextInput
           accessibilityLabel="그룹 이름 입력"
@@ -86,7 +88,7 @@ export function RenameGroupScreen({
             styles.submitButton,
             !canSubmit && styles.submitButtonDisabled,
           ]}>
-          <Text style={styles.submitButtonText}>변경하기</Text>
+          <AppText style={styles.submitButtonText}>변경하기</AppText>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -117,6 +119,7 @@ const styles = StyleSheet.create({
     borderRadius: RADII.medium,
     borderWidth: 1,
     color: COLORS.textStrong,
+    fontFamily: FONT_FAMILY,
     fontSize: 16,
     marginTop: 16,
     minHeight: 56,

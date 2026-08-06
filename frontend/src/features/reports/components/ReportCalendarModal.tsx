@@ -4,9 +4,9 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
+import {AppText} from "../../../shared/components/AppText";
 
 import { COLORS, RADII } from "../../../design/tokens";
 import { RetryButton } from "../../../shared/components/RetryButton";
@@ -70,9 +70,9 @@ export function ReportCalendarModal({
               onPress={onPreviousMonth}
             />
             <View style={styles.monthTitleContainer}>
-              <Text accessibilityRole="header" style={styles.monthTitle}>
+              <AppText accessibilityRole="header" style={styles.monthTitle}>
                 {year}년 {month}월
-              </Text>
+              </AppText>
               {status === "loading" ? (
                 <ActivityIndicator
                   accessibilityLabel="리포트 날짜 확인 중"
@@ -132,7 +132,7 @@ export function ReportCalendarModal({
                         isSelected && styles.selectedDay,
                       ]}
                     >
-                      <Text
+                      <AppText
                         style={[
                           styles.dayText,
                           isAvailable && styles.availableDayText,
@@ -140,7 +140,7 @@ export function ReportCalendarModal({
                         ]}
                       >
                         {day}
-                      </Text>
+                      </AppText>
                     </Pressable>
                   </View>
                 );
@@ -189,7 +189,7 @@ function CalendarStatus({
   return (
     <View style={styles.status}>
       <MaterialDesignIcons color={COLORS.purpleDeep} name={icon} size={30} />
-      <Text style={styles.statusText}>{message}</Text>
+      <AppText style={styles.statusText}>{message}</AppText>
       {actionLabel && onAction ? (
         <RetryButton label={actionLabel} onPress={onAction} />
       ) : null}

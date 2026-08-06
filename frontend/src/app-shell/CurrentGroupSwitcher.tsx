@@ -1,5 +1,8 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useRef, useState} from 'react';
+import {
+  useEffect,
+  useRef,
+  useState} from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -7,10 +10,10 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import {AppText} from '../shared/components/AppText';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {COLORS, RADII} from '../design/tokens';
@@ -116,9 +119,9 @@ export function CurrentGroupSwitcher({
         onPress={onToggle}
         style={styles.trigger}
       >
-        <Text numberOfLines={1} style={styles.triggerText}>
+        <AppText numberOfLines={1} style={styles.triggerText}>
           {currentGroup.name}
-        </Text>
+        </AppText>
         <MaterialDesignIcons
           accessibilityElementsHidden
           color={COLORS.textStrong}
@@ -160,7 +163,7 @@ export function CurrentGroupSwitcher({
             ]}
           >
             <View accessibilityElementsHidden style={styles.handle} />
-            <Text style={styles.title}>그룹 선택</Text>
+            <AppText style={styles.title}>그룹 선택</AppText>
             <View accessibilityRole="menu" style={styles.options}>
               {orderedGroups.map(group => {
                 const isSelected = group.id === currentGroup.id;
@@ -177,14 +180,14 @@ export function CurrentGroupSwitcher({
                       pressed && !isSelected && styles.pressedOption,
                     ]}
                   >
-                    <Text
+                    <AppText
                       style={[
                         styles.optionText,
                         isSelected && styles.selectedOptionText,
                       ]}
                     >
                       {group.name}
-                    </Text>
+                    </AppText>
                   </Pressable>
                 );
               })}
@@ -225,7 +228,7 @@ function GroupAction({label, onPress}: GroupActionProps) {
         name="plus"
         size={18}
       />
-      <Text style={styles.actionText}>{label}</Text>
+      <AppText style={styles.actionText}>{label}</AppText>
     </Pressable>
   );
 }

@@ -1,4 +1,5 @@
-import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
+import {
+  DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
 import { useState } from "react";
 import {
@@ -8,12 +9,12 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
   TextInput,
   View,
 } from "react-native";
+import {AppText} from "../../../shared/components/AppText";
 
-import { COLORS, RADII } from "../../../design/tokens";
+import { COLORS, FONT_FAMILIES, FONT_FAMILY, RADII } from "../../../design/tokens";
 import { CachedRemoteImage } from "../../../shared/media/CachedRemoteImage";
 import {
   createCalendarEventDraft,
@@ -157,9 +158,9 @@ export function CalendarEventFormScreen({
             size={25}
           />
         </Pressable>
-        <Text accessibilityRole="header" style={styles.headerTitle}>
+        <AppText accessibilityRole="header" style={styles.headerTitle}>
           {initialDetail ? "일정 수정" : "새 일정"}
-        </Text>
+        </AppText>
         <Pressable
           accessibilityLabel="일정 저장"
           accessibilityRole="button"
@@ -200,7 +201,7 @@ export function CalendarEventFormScreen({
             style={styles.titleInput}
             value={draft.title}
           />
-          <Text style={styles.counter}>{draft.title.length}/20</Text>
+          <AppText style={styles.counter}>{draft.title.length}/20</AppText>
           {errors.title ? <ErrorText message={errors.title} /> : null}
         </View>
 
@@ -214,12 +215,12 @@ export function CalendarEventFormScreen({
               />
             </View>
             <View style={styles.timeSettingCopy}>
-              <Text style={styles.label}>시간 설정</Text>
-              <Text style={styles.timeSettingDescription}>
+              <AppText style={styles.label}>시간 설정</AppText>
+              <AppText style={styles.timeSettingDescription}>
                 {draft.timeEnabled
                   ? "시작과 종료 시간을 직접 정해요."
                   : "하루 종일 일정으로 저장돼요."}
-              </Text>
+              </AppText>
             </View>
             <Switch
               accessibilityLabel="시간 설정"
@@ -261,7 +262,7 @@ export function CalendarEventFormScreen({
 
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.label}>참여자</Text>
+            <AppText style={styles.label}>참여자</AppText>
             <Pressable
               accessibilityLabel="참여자 추가"
               accessibilityRole="button"
@@ -280,7 +281,7 @@ export function CalendarEventFormScreen({
           </View>
           <View style={styles.chips}>
             {draft.participantMemberIds.length === 0 ? (
-              <Text style={styles.emptyText}>참여자를 추가할 수 있어요.</Text>
+              <AppText style={styles.emptyText}>참여자를 추가할 수 있어요.</AppText>
             ) : (
               draft.participantMemberIds.map((memberId) => {
                 const member = memberById.get(memberId);
@@ -337,16 +338,16 @@ export function CalendarEventFormScreen({
             textAlignVertical="top"
             value={draft.description}
           />
-          <Text style={styles.counter}>{draft.description.length}/50</Text>
+          <AppText style={styles.counter}>{draft.description.length}/50</AppText>
           {errors.description ? (
             <ErrorText message={errors.description} />
           ) : null}
         </View>
 
         {saveError ? (
-          <Text accessibilityRole="alert" style={styles.saveError}>
+          <AppText accessibilityRole="alert" style={styles.saveError}>
             {saveError}
-          </Text>
+          </AppText>
         ) : null}
       </ScrollView>
 
@@ -402,7 +403,7 @@ function ScheduleRow({
     <View style={styles.scheduleRow}>
       <View style={styles.scheduleLabelGroup}>
         <View style={styles.scheduleDot} />
-        <Text style={styles.scheduleLabel}>{label}</Text>
+        <AppText style={styles.scheduleLabel}>{label}</AppText>
       </View>
       <View style={styles.scheduleValues}>
         <Pressable
@@ -414,7 +415,7 @@ function ScheduleRow({
             pressed && styles.pressed,
           ]}
         >
-          <Text style={styles.valueText}>{formatDateLabel(date)}</Text>
+          <AppText style={styles.valueText}>{formatDateLabel(date)}</AppText>
         </Pressable>
         {showTime ? (
           <Pressable
@@ -426,7 +427,7 @@ function ScheduleRow({
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.timeValueText}>{time}</Text>
+            <AppText style={styles.timeValueText}>{time}</AppText>
           </Pressable>
         ) : null}
       </View>
@@ -448,18 +449,18 @@ function PersonChip({
         source={imageUrl ? { uri: imageUrl } : PROFILE_PLACEHOLDER}
         style={styles.avatar}
       />
-      <Text numberOfLines={1} style={styles.personName}>
+      <AppText numberOfLines={1} style={styles.personName}>
         {name}
-      </Text>
+      </AppText>
     </View>
   );
 }
 
 function ErrorText({ message }: { message: string }) {
   return (
-    <Text accessibilityRole="alert" style={styles.fieldError}>
+    <AppText accessibilityRole="alert" style={styles.fieldError}>
       {message}
-    </Text>
+    </AppText>
   );
 }
 
@@ -522,6 +523,7 @@ const styles = StyleSheet.create({
   },
   descriptionInput: {
     color: COLORS.textStrong,
+    fontFamily: FONT_FAMILY,
     fontSize: 15,
     lineHeight: 22,
     minHeight: 92,
@@ -697,6 +699,7 @@ const styles = StyleSheet.create({
   },
   titleInput: {
     color: COLORS.textStrong,
+    fontFamily: FONT_FAMILIES.bold,
     fontSize: 20,
     fontWeight: "700",
     minHeight: 44,

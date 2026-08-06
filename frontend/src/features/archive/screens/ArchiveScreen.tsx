@@ -1,13 +1,17 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
@@ -268,7 +272,7 @@ export function ArchiveScreen({
           accessibilityLabel="피드로 돌아가기"
           onPress={onCloseArchive}
         />
-        <Text style={styles.title}>보관함</Text>
+        <AppText style={styles.title}>보관함</AppText>
         <Pressable
           accessibilityHint="날짜별로 게시글을 찾습니다"
           accessibilityLabel="날짜로 찾기"
@@ -303,9 +307,9 @@ export function ArchiveScreen({
             onPress={() => setSelectedDateKey(null)}
             style={styles.dateFilterChip}
           >
-            <Text style={styles.dateFilterText}>
+            <AppText style={styles.dateFilterText}>
               {formatDateLabel(selectedDateKey)}
-            </Text>
+            </AppText>
             <MaterialDesignIcons
               color={COLORS.purpleDeep}
               name="close"
@@ -400,7 +404,7 @@ function ArchiveErrorState({
 }) {
   return (
     <View style={styles.errorState}>
-      <Text style={styles.errorText}>{message}</Text>
+      <AppText style={styles.errorText}>{message}</AppText>
       <RetryButton accessibilityLabel="보관함 다시 시도" onPress={onRetry} />
     </View>
   );
@@ -416,14 +420,14 @@ function ArchiveEmptyState({memberName}: {memberName: string | null}) {
           size={30}
         />
       </View>
-      <Text style={styles.emptyTitle}>
+      <AppText style={styles.emptyTitle}>
         {memberName
           ? `${memberName}님이 작성한 게시글이 없어요`
           : '아직 보관된 게시글이 없어요'}
-      </Text>
-      <Text style={styles.emptyDescription}>
+      </AppText>
+      <AppText style={styles.emptyDescription}>
         가족이 새로운 이야기를 올리면{'\n'}여기에서 모아 볼 수 있어요.
-      </Text>
+      </AppText>
     </View>
   );
 }

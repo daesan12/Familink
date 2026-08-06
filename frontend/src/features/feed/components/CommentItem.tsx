@@ -1,5 +1,6 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS} from '../../../design/tokens';
 import {formatRelativeTime} from '../time';
@@ -24,12 +25,12 @@ export function CommentItem({
       <FeedAvatar member={comment.author} />
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.authorName}>{comment.author.name}</Text>
-          <Text style={styles.createdAt}>
+          <AppText style={styles.authorName}>{comment.author.name}</AppText>
+          <AppText style={styles.createdAt}>
             {formatRelativeTime(comment.createdAt)}
-          </Text>
+          </AppText>
         </View>
-        <Text style={styles.body}>{comment.body}</Text>
+        <AppText style={styles.body}>{comment.body}</AppText>
       </View>
       {isOwnedByCurrentUser ? (
         <Pressable

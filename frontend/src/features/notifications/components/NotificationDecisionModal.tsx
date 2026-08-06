@@ -1,4 +1,5 @@
-import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Modal, Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 
@@ -39,11 +40,11 @@ export function NotificationDecisionModal({
         >
           {isApprove ? (
             <>
-              <Text style={styles.message}>
+              <AppText style={styles.message}>
                 {displayName}님이 우리 가족에 참여했습니다.{'\n'}
                 가족의 역할을 정해주세요
-              </Text>
-              <Text style={styles.roleTitle}>[{displayName}]님의 역할</Text>
+              </AppText>
+              <AppText style={styles.roleTitle}>[{displayName}]님의 역할</AppText>
               <View style={styles.roleActions}>
                 <RoleButton
                   disabled={submitting}
@@ -58,9 +59,9 @@ export function NotificationDecisionModal({
               </View>
             </>
           ) : (
-            <Text style={styles.message}>
+            <AppText style={styles.message}>
               {displayName}님의 그룹 참여 신청이 거절되었습니다.
-            </Text>
+            </AppText>
           )}
         </Pressable>
       </Pressable>
@@ -88,7 +89,7 @@ function RoleButton({
         disabled && styles.roleButtonDisabled,
       ]}
     >
-      <Text style={styles.roleButtonText}>{label}</Text>
+      <AppText style={styles.roleButtonText}>{label}</AppText>
     </Pressable>
   );
 }

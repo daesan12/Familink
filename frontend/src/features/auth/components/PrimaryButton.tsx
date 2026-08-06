@@ -1,4 +1,5 @@
-import {ActivityIndicator, StyleSheet, Text, View} from 'react-native';
+import {ActivityIndicator, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 import {AnimatedPressable} from './AnimatedPressable';
@@ -34,7 +35,7 @@ export function PrimaryButton({
         {loading ? (
           <ActivityIndicator color={AUTH_COLORS.body} />
         ) : (
-          <Text style={styles.label}>{label}</Text>
+          <AppText style={styles.label}>{label}</AppText>
         )}
       </View>
     </AnimatedPressable>

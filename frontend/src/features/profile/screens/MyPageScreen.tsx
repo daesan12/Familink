@@ -1,19 +1,23 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState} from 'react';
 import {StackActions} from '@react-navigation/native';
 import {
   createNativeStackNavigator,
   type NativeStackNavigationProp,
-} from '@react-navigation/native-stack';
+  } from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
@@ -449,7 +453,7 @@ export function MyPageScreen({
     ) : (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>마이페이지</Text>
+        <AppText style={styles.headerTitle}>마이페이지</AppText>
       </View>
 
       <ScrollView
@@ -473,10 +477,10 @@ export function MyPageScreen({
         <View style={styles.stampCard}>
           <View style={styles.stampHeader}>
             <View style={styles.stampHeading}>
-              <Text style={styles.stampTitle}>효자 도장 현황</Text>
-              <Text style={styles.weekRange}>
+              <AppText style={styles.stampTitle}>효자 도장 현황</AppText>
+              <AppText style={styles.weekRange}>
                 {formatWeekRange(weekRange.weekStart, weekRange.weekEnd)}
-              </Text>
+              </AppText>
             </View>
             <Pressable
               accessibilityLabel="월간 효자 도장 보기"
@@ -583,7 +587,7 @@ function WeeklyStampBoard({
   if (state.status === 'error') {
     return (
       <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
-        <Text style={styles.errorText}>{state.message}</Text>
+        <AppText style={styles.errorText}>{state.message}</AppText>
         <RetryButton
           accessibilityLabel="주간 카네이션 다시 시도"
           onPress={onRetry}
@@ -593,7 +597,7 @@ function WeeklyStampBoard({
   }
 
   if (state.status === 'empty') {
-    return <Text style={styles.emptyText}>이번 주에는 기록이 없어요.</Text>;
+    return <AppText style={styles.emptyText}>이번 주에는 기록이 없어요.</AppText>;
   }
 
   return (

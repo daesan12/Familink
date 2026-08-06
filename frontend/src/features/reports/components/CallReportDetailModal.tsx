@@ -5,9 +5,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
+import {AppText} from "../../../shared/components/AppText";
 
 import { COLORS, RADII } from "../../../design/tokens";
 import { RetryButton } from "../../../shared/components/RetryButton";
@@ -48,10 +48,10 @@ export function CallReportDetailModal({
           <View style={styles.modalCard}>
             <View style={styles.header}>
               <View style={styles.titleCopy}>
-                <Text style={styles.date}>{call.reportDateLabel}</Text>
-                <Text style={styles.title}>
+                <AppText style={styles.date}>{call.reportDateLabel}</AppText>
+                <AppText style={styles.title}>
                   {call.startedAtLabel} 통화 리포트
-                </Text>
+                </AppText>
               </View>
               <Pressable
                 accessibilityLabel="닫기"
@@ -126,14 +126,14 @@ export function CallReportDetailModal({
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.summaryCard}>
-                  <Text style={styles.sectionTitle}>통화 내용</Text>
-                  <Text style={styles.body}>{call.summary}</Text>
+                  <AppText style={styles.sectionTitle}>통화 내용</AppText>
+                  <AppText style={styles.body}>{call.summary}</AppText>
                 </View>
 
                 {call.guardianMessage ? (
                   <View style={styles.messageCard}>
-                    <Text style={styles.sectionTitle}>전달하신 말씀</Text>
-                    <Text style={styles.body}>{call.guardianMessage}</Text>
+                    <AppText style={styles.sectionTitle}>전달하신 말씀</AppText>
+                    <AppText style={styles.body}>{call.guardianMessage}</AppText>
                   </View>
                 ) : null}
               </ScrollView>
@@ -163,8 +163,8 @@ function DetailStatus({
   return (
     <View style={styles.status}>
       <MaterialDesignIcons color={COLORS.purpleDeep} name={icon} size={30} />
-      <Text style={styles.statusTitle}>{title}</Text>
-      <Text style={styles.statusDescription}>{description}</Text>
+      <AppText style={styles.statusTitle}>{title}</AppText>
+      <AppText style={styles.statusDescription}>{description}</AppText>
       {actionLabel && onAction ? (
         <RetryButton label={actionLabel} onPress={onAction} />
       ) : null}

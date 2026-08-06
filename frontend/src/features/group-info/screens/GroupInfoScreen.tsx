@@ -1,10 +1,15 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useCallback, useEffect, useRef, useState} from 'react';
-import {StackActions, useIsFocused} from '@react-navigation/native';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState} from 'react';
+import {StackActions,
+  useIsFocused} from '@react-navigation/native';
 import {
   createNativeStackNavigator,
   type NativeStackNavigationProp,
-} from '@react-navigation/native-stack';
+  } from '@react-navigation/native-stack';
 import {
   Alert,
   ActivityIndicator,
@@ -12,9 +17,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {AppScreenProps, GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
@@ -876,7 +881,7 @@ export function GroupInfoScreen({
   const homeScreenContent = (
     <KeyboardAvoidingView behavior="padding" style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>그룹 정보</Text>
+        <AppText style={styles.title}>그룹 정보</AppText>
       </View>
 
       <ScrollView
@@ -888,9 +893,9 @@ export function GroupInfoScreen({
           accessibilityRole="button"
           onPress={() => setIsRankingOpen(true)}
           style={styles.rankingCard}>
-          <Text style={styles.rankingText}>
+          <AppText style={styles.rankingText}>
             이번주 우리 가족{'\n'}효자 랭킹 조회하기
-          </Text>
+          </AppText>
           <View style={styles.rankingChevron}>
             <MaterialDesignIcons
               color={COLORS.background}
@@ -902,8 +907,8 @@ export function GroupInfoScreen({
 
         <View style={styles.memberCard}>
           <View style={styles.memberCardHeader}>
-            <Text style={styles.memberCardTitle}>그룹 구성원</Text>
-            <Text style={styles.memberCounts}>{memberCounts}</Text>
+            <AppText style={styles.memberCardTitle}>그룹 구성원</AppText>
+            <AppText style={styles.memberCounts}>{memberCounts}</AppText>
           </View>
 
           {membersLoadState === 'loading' ? (
@@ -912,14 +917,14 @@ export function GroupInfoScreen({
             </View>
           ) : membersLoadState === 'error' ? (
             <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
-              <Text style={styles.errorText}>{membersLoadError}</Text>
+              <AppText style={styles.errorText}>{membersLoadError}</AppText>
               <RetryButton
                 accessibilityLabel="구성원 정보 다시 시도"
                 onPress={() => setMembersReloadCount(count => count + 1)}
               />
             </View>
           ) : members.length === 0 ? (
-            <Text style={styles.emptyMembersText}>현재 구성원이 없습니다.</Text>
+            <AppText style={styles.emptyMembersText}>현재 구성원이 없습니다.</AppText>
           ) : (
             members.map((member, index) => (
               <View

@@ -4,9 +4,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {COLORS, RADII} from '../../../design/tokens';
@@ -54,10 +54,10 @@ export function CalendarEventsSheet({
           <View accessibilityElementsHidden style={styles.handle} />
           <View style={styles.header}>
             <View style={styles.headerText}>
-              <Text style={styles.eyebrow}>선택한 날짜</Text>
-              <Text style={styles.title}>
+              <AppText style={styles.eyebrow}>선택한 날짜</AppText>
+              <AppText style={styles.title}>
                 {formatSelectedDateLabel(dateKey)}
-              </Text>
+              </AppText>
             </View>
             <Pressable
               accessibilityLabel="선택 날짜 일정 닫기"
@@ -82,10 +82,10 @@ export function CalendarEventsSheet({
                   size={28}
                 />
               </View>
-              <Text style={styles.emptyTitle}>등록된 일정이 없어요</Text>
-              <Text style={styles.emptyDescription}>
+              <AppText style={styles.emptyTitle}>등록된 일정이 없어요</AppText>
+              <AppText style={styles.emptyDescription}>
                 이 날짜에 새 일정을 추가할 수 있어요.
-              </Text>
+              </AppText>
             </View>
           ) : (
             <ScrollView
@@ -111,12 +111,12 @@ export function CalendarEventsSheet({
                     style={styles.eventDot}
                   />
                   <View style={styles.eventContent}>
-                    <Text numberOfLines={1} style={styles.eventTitle}>
+                    <AppText numberOfLines={1} style={styles.eventTitle}>
                       {event.title}
-                    </Text>
-                    <Text style={styles.eventTime}>
+                    </AppText>
+                    <AppText style={styles.eventTime}>
                       {formatEventTime(event)}
-                    </Text>
+                    </AppText>
                   </View>
                   <MaterialDesignIcons
                     accessibilityElementsHidden

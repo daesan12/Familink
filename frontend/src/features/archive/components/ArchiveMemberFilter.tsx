@@ -1,13 +1,15 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useRef, useState} from 'react';
+import {
+  useRef,
+  useState} from 'react';
 import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import type {ArchiveMember, ArchiveMemberFilter as MemberFilter} from '../types';
@@ -69,9 +71,9 @@ export function ArchiveMemberFilter({
         ref={triggerRef}
         style={styles.trigger}
       >
-        <Text numberOfLines={1} style={styles.triggerText}>
+        <AppText numberOfLines={1} style={styles.triggerText}>
           {triggerLabel}
-        </Text>
+        </AppText>
         <MaterialDesignIcons
           accessibilityElementsHidden
           color={COLORS.textStrong}
@@ -146,11 +148,11 @@ function MenuOption({isSelected, label, onPress}: MenuOptionProps) {
         pressed && styles.optionPressed,
       ]}
     >
-      <Text
+      <AppText
         style={[styles.optionText, isSelected && styles.optionTextSelected]}
       >
         {label}
-      </Text>
+      </AppText>
     </Pressable>
   );
 }

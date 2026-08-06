@@ -4,9 +4,9 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {RetryButton} from '../../../shared/components/RetryButton';
@@ -110,7 +110,7 @@ export function MonthlyStampModal({
                   size={24}
                 />
               </Pressable>
-              <Text style={styles.title}>{formatMonthTitle(year, month)}</Text>
+              <AppText style={styles.title}>{formatMonthTitle(year, month)}</AppText>
               <Pressable
                 accessibilityLabel="다음 달"
                 accessibilityRole="button"
@@ -137,7 +137,7 @@ export function MonthlyStampModal({
               </View>
             ) : state.status === 'error' ? (
               <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
-                <Text style={styles.errorText}>{state.message}</Text>
+                <AppText style={styles.errorText}>{state.message}</AppText>
                 <RetryButton
                   accessibilityLabel="월간 카네이션 다시 시도"
                   onPress={onRetry}
@@ -146,13 +146,13 @@ export function MonthlyStampModal({
             ) : (
               <>
                 {state.status === 'empty' ? (
-                  <Text style={styles.emptyText}>이번 달에는 기록이 없어요.</Text>
+                  <AppText style={styles.emptyText}>이번 달에는 기록이 없어요.</AppText>
                 ) : null}
                 <View style={styles.weekdayRow}>
                   {WEEKDAY_LABELS.map(label => (
-                    <Text key={label} style={styles.weekdayLabel}>
+                    <AppText key={label} style={styles.weekdayLabel}>
                       {label}
-                    </Text>
+                    </AppText>
                   ))}
                 </View>
 

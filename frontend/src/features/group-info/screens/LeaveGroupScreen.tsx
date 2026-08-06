@@ -1,12 +1,13 @@
-import {useState} from 'react';
+import {
+  useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {NoticeBanner} from '../../../shared/components/NoticeBanner';
@@ -83,23 +84,23 @@ export function LeaveGroupScreen({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.heading}>정말 그룹을 나가시겠어요?</Text>
-        <Text style={styles.subtitle}>
+        <AppText style={styles.heading}>정말 그룹을 나가시겠어요?</AppText>
+        <AppText style={styles.subtitle}>
           나가면 다시 초대받기 전까지 그룹을 볼 수 없어요.
-        </Text>
+        </AppText>
 
         <View style={styles.summaryCard}>
-          <Text style={styles.groupName}>{groupName}</Text>
+          <AppText style={styles.groupName}>{groupName}</AppText>
           {/* 가족 기록 개수는 어떤 조회 API도 제공하지 않아(계약 밖) 표시하지 않는다. */}
-          <Text style={styles.summaryLine}>구성원 {memberCount}명</Text>
-          <Text style={styles.summaryLine}>그룹관리자 · {managerName}</Text>
+          <AppText style={styles.summaryLine}>구성원 {memberCount}명</AppText>
+          <AppText style={styles.summaryLine}>그룹관리자 · {managerName}</AppText>
         </View>
 
         <View style={styles.noticeCard}>
-          <Text style={styles.noticeTitle}>그룹관리자는 바로 나갈 수 없어요</Text>
-          <Text style={styles.noticeBody}>
+          <AppText style={styles.noticeTitle}>그룹관리자는 바로 나갈 수 없어요</AppText>
+          <AppText style={styles.noticeBody}>
             먼저 다른 구성원에게 그룹관리자 역할을 넘긴 뒤 그룹을 나가 주세요.
-          </Text>
+          </AppText>
           <Pressable
             accessibilityLabel="그룹관리자 변경하기"
             accessibilityRole="button"
@@ -107,7 +108,7 @@ export function LeaveGroupScreen({
             onPress={onGoToChangeManager}
             style={styles.noticeLink}
           >
-            <Text style={styles.noticeLinkText}>그룹관리자 변경하기 ›</Text>
+            <AppText style={styles.noticeLinkText}>그룹관리자 변경하기 ›</AppText>
           </Pressable>
         </View>
         {errorMessage ? <NoticeBanner message={errorMessage} /> : null}
@@ -128,7 +129,7 @@ export function LeaveGroupScreen({
           {isSubmitting ? (
             <ActivityIndicator color={COLORS.background} />
           ) : (
-            <Text style={styles.submitButtonText}>그룹 나가기</Text>
+            <AppText style={styles.submitButtonText}>그룹 나가기</AppText>
           )}
         </Pressable>
       </View>

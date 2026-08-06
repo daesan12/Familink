@@ -1,6 +1,15 @@
 import BellOff from 'lucide-react-native/icons/bell-off';
-import {useEffect, useMemo, useRef, useState} from 'react';
-import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState} from 'react';
+import {FlatList,
+  Pressable,
+  StyleSheet,
+  View,
+} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 import type {AppScreenProps, GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
@@ -506,10 +515,10 @@ export function NotificationsScreen({
       <ScreenHeader onBack={onCloseNotifications} title="알림" />
       <View style={styles.summary}>
         <View>
-          <Text style={styles.sectionTitle}>최근 알림</Text>
-          <Text style={styles.unreadCount}>
+          <AppText style={styles.sectionTitle}>최근 알림</AppText>
+          <AppText style={styles.unreadCount}>
             읽지 않은 알림 {displayedUnreadCount}개
-          </Text>
+          </AppText>
         </View>
         <Pressable
           accessibilityRole="button"
@@ -517,14 +526,14 @@ export function NotificationsScreen({
           onPress={handleReadAll}
           style={styles.readAllButton}
         >
-          <Text
+          <AppText
             style={[
               styles.readAllText,
               displayedUnreadCount === 0 && styles.disabledText,
             ]}
           >
             모두 읽음
-          </Text>
+          </AppText>
         </Pressable>
       </View>
       <FlatList
@@ -605,7 +614,7 @@ function ScreenHeader({onBack, title}: {onBack?: () => void; title: string}) {
   return (
     <View style={styles.header}>
       <BackButton accessibilityLabel="알림 화면 닫기" onPress={onBack} />
-      <Text style={styles.headerTitle}>{title}</Text>
+      <AppText style={styles.headerTitle}>{title}</AppText>
       <View style={styles.headerButton} />
     </View>
   );
@@ -616,17 +625,17 @@ function EmptyNotificationState() {
       <View style={styles.emptyIcon}>
         <BellOff color={COLORS.purpleDeep} size={31} strokeWidth={1.8} />
       </View>
-      <Text style={styles.emptyTitle}>새로운 알림이 없어요</Text>
-      <Text style={styles.emptyDescription}>
+      <AppText style={styles.emptyTitle}>새로운 알림이 없어요</AppText>
+      <AppText style={styles.emptyDescription}>
         가족의 새로운 소식이 생기면{'\n'}여기에서 알려드릴게요.
-      </Text>
+      </AppText>
     </View>
   );
 }
 function LoadingNotificationState() {
   return (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyTitle}>알림을 불러오는 중이에요</Text>
+      <AppText style={styles.emptyTitle}>알림을 불러오는 중이에요</AppText>
     </View>
   );
 }

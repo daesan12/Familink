@@ -5,6 +5,7 @@ import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
+import com.facebook.react.common.assets.ReactFontManager
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.s15p11b104app.aicall.AiCallPackage
 import com.s15p11b104app.notifications.NotificationPresenter
@@ -27,6 +28,13 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    ReactFontManager.getInstance().apply {
+      addCustomFont(this@MainApplication, "Wanted Sans Regular", R.font.wanted_sans_regular)
+      addCustomFont(this@MainApplication, "Wanted Sans Medium", R.font.wanted_sans_medium)
+      addCustomFont(this@MainApplication, "Wanted Sans SemiBold", R.font.wanted_sans_semibold)
+      addCustomFont(this@MainApplication, "Wanted Sans Bold", R.font.wanted_sans_bold)
+      addCustomFont(this@MainApplication, "Wanted Sans ExtraBold", R.font.wanted_sans_extrabold)
+    }
     // 백그라운드 알림은 FCM SDK가 표시하므로, 그 전에 채널이 존재해야 한다.
     NotificationPresenter.ensureChannel(this)
     loadReactNative(this)

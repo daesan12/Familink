@@ -1,5 +1,11 @@
-import {useState} from 'react';
-import {ActivityIndicator, Modal, Pressable, StyleSheet, Text} from 'react-native';
+import {
+  useState} from 'react';
+import {ActivityIndicator,
+  Modal,
+  Pressable,
+  StyleSheet,
+} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {NoticeBanner} from '../../../shared/components/NoticeBanner';
@@ -77,7 +83,7 @@ export function DeleteGroupModal({
           onPress={() => {}}
           style={styles.card}
         >
-          <Text style={styles.title}>정말 그룹을 삭제하시겠어요?</Text>
+          <AppText style={styles.title}>정말 그룹을 삭제하시겠어요?</AppText>
           {errorMessage ? <NoticeBanner message={errorMessage} /> : null}
           <Pressable
             accessibilityLabel="그룹 삭제 확정"
@@ -89,7 +95,7 @@ export function DeleteGroupModal({
             {isSubmitting ? (
               <ActivityIndicator color={COLORS.background} />
             ) : (
-              <Text style={styles.deleteButtonText}>그룹 삭제</Text>
+              <AppText style={styles.deleteButtonText}>그룹 삭제</AppText>
             )}
           </Pressable>
         </Pressable>

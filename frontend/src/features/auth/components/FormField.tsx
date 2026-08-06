@@ -1,11 +1,16 @@
-import {createContext, forwardRef, useContext, useRef} from 'react';
+import {
+  createContext,
+  forwardRef,
+  useContext,
+  useRef} from 'react';
 import {
   StyleSheet,
-  Text,
   TextInput,
   type TextInputProps,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
+import {FONT_FAMILY} from '../../../design/tokens';
 
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 
@@ -33,7 +38,7 @@ export const FormField = forwardRef<TextInput, FormFieldProps>(
     return (
       <View style={styles.wrapper}>
         {label !== undefined && label.length > 0 && (
-          <Text style={styles.label}>{label}</Text>
+          <AppText style={styles.label}>{label}</AppText>
         )}
         <View style={[styles.field, invalid && styles.invalidField]}>
           <TextInput
@@ -93,6 +98,7 @@ const styles = StyleSheet.create({
   input: {
     color: AUTH_COLORS.body,
     flex: 1,
+    fontFamily: FONT_FAMILY,
     fontSize: 15,
     height: '100%',
     padding: 0,

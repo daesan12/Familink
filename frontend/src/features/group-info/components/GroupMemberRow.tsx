@@ -1,8 +1,9 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
+import {Pressable, StyleSheet, TextInput, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {GroupRole} from '../../../app-shell';
-import {COLORS, RADII} from '../../../design/tokens';
+import {COLORS, FONT_FAMILIES, RADII} from '../../../design/tokens';
 import {
   ALIAS_MAX_LENGTH,
   isAliasSaveable,
@@ -70,9 +71,9 @@ export function GroupMemberRow({
               style={styles.aliasInput}
               value={aliasDraft}
             />
-            <Text style={styles.counter}>
+            <AppText style={styles.counter}>
               {draftLength}/{ALIAS_MAX_LENGTH}
-            </Text>
+            </AppText>
             <Pressable
               accessibilityLabel={`${member.name} 호칭 저장`}
               accessibilityRole="button"
@@ -81,7 +82,7 @@ export function GroupMemberRow({
               onPress={onSaveAlias}
               style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
             >
-              <Text style={styles.saveButtonText}>저장</Text>
+              <AppText style={styles.saveButtonText}>저장</AppText>
             </Pressable>
             <Pressable
               accessibilityLabel={`${member.name} 호칭 편집 취소`}
@@ -89,14 +90,14 @@ export function GroupMemberRow({
               onPress={onCancelEditAlias}
               style={styles.cancelButton}
             >
-              <Text style={styles.cancelButtonText}>취소</Text>
+              <AppText style={styles.cancelButtonText}>취소</AppText>
             </Pressable>
           </View>
         ) : (
           <View style={styles.nameLine}>
-            <Text numberOfLines={2} style={styles.displayName}>
+            <AppText numberOfLines={2} style={styles.displayName}>
               {displayName}
-            </Text>
+            </AppText>
             {canEditAlias ? (
               <Pressable
                 accessibilityLabel={`${member.name} 호칭 수정`}
@@ -116,13 +117,13 @@ export function GroupMemberRow({
         )}
 
         {isEditing || hasAlias ? (
-          <Text numberOfLines={1} style={styles.realName}>
+          <AppText numberOfLines={1} style={styles.realName}>
             {member.name}
-          </Text>
+          </AppText>
         ) : null}
         {member.isManager ? (
           <View style={styles.managerTag}>
-            <Text style={styles.managerTagText}>그룹관리자</Text>
+            <AppText style={styles.managerTagText}>그룹관리자</AppText>
           </View>
         ) : null}
       </View>
@@ -145,6 +146,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1.5,
     color: COLORS.textStrong,
     flexShrink: 1,
+    fontFamily: FONT_FAMILIES.bold,
     fontSize: 15,
     fontWeight: '700',
     minWidth: 90,

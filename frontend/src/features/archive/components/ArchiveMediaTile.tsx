@@ -1,5 +1,6 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
@@ -29,9 +30,9 @@ export function ArchiveMediaTile({onPress, post}: ArchiveMediaTileProps) {
       ]}
     >
       {post.mediaKind === 'text' ? (
-        <Text numberOfLines={4} style={styles.textBody}>
+        <AppText numberOfLines={4} style={styles.textBody}>
           {post.text}
-        </Text>
+        </AppText>
       ) : (
         <>
           {post.thumbnail ? (

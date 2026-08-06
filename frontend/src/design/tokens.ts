@@ -26,3 +26,13 @@ export const RADII = {
   sheet: 24,
   pill: 999,
 } as const;
+
+export const FONT_FAMILIES = {
+  regular: 'Wanted Sans Regular',
+  medium: 'Wanted Sans Medium',
+  semiBold: 'Wanted Sans SemiBold',
+  bold: 'Wanted Sans Bold',
+  extraBold: 'Wanted Sans ExtraBold',
+} as const;
+
+export const FONT_FAMILY = FONT_FAMILIES.regular;

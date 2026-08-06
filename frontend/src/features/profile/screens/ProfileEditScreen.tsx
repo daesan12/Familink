@@ -1,5 +1,8 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useRef, useState, type ReactNode} from 'react';
+import {
+  useRef,
+  useState,
+  type ReactNode} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -7,10 +10,10 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 import {launchImageLibrary} from 'react-native-image-picker';
 
 import {
@@ -19,7 +22,7 @@ import {
   SIGNUP_LIMITS,
   ValidationMessage,
 } from '../../auth';
-import {COLORS, RADII} from '../../../design/tokens';
+import {COLORS, FONT_FAMILY, RADII} from '../../../design/tokens';
 import {useHardwareBack} from '../../../shared/hooks/useHardwareBack';
 import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import {
@@ -254,7 +257,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
             size={28}
           />
         </Pressable>
-        <Text style={styles.headerTitle}>프로필 편집</Text>
+        <AppText style={styles.headerTitle}>프로필 편집</AppText>
         <Pressable
           accessibilityLabel="프로필 저장"
           accessibilityRole="button"
@@ -363,7 +366,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
         <Field label="아이디">
           {/* 아이디(로그인 ID) 변경은 이번 범위 밖이라 읽기 전용으로 표시한다. */}
           <View style={[styles.fieldBox, styles.readOnlyBox]}>
-            <Text style={styles.readOnlyText}>{profile.loginId}</Text>
+            <AppText style={styles.readOnlyText}>{profile.loginId}</AppText>
           </View>
         </Field>
 
@@ -376,7 +379,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
             onPress={handleOpenDate}
             style={styles.fieldBox}
           >
-            <Text style={styles.fieldValue}>{birthDate}</Text>
+            <AppText style={styles.fieldValue}>{birthDate}</AppText>
             <MaterialDesignIcons
               color={COLORS.textMuted}
               name="calendar-blank-outline"
@@ -394,7 +397,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
             onPress={toggleGender}
             style={[styles.fieldBox, isGenderOpen && styles.fieldBoxActive]}
           >
-            <Text style={styles.fieldValue}>{formatGenderLabel(gender)}</Text>
+            <AppText style={styles.fieldValue}>{formatGenderLabel(gender)}</AppText>
             <MaterialDesignIcons
               color={COLORS.textMuted}
               name={isGenderOpen ? 'chevron-up' : 'chevron-down'}
@@ -422,14 +425,14 @@ export function ProfileEditScreen<T extends BaseProfile>({
                       isSelected && styles.dropdownRowSelected,
                     ]}
                   >
-                    <Text
+                    <AppText
                       style={[
                         styles.dropdownText,
                         isSelected && styles.dropdownTextSelected,
                       ]}
                     >
                       {option.label}
-                    </Text>
+                    </AppText>
                     {isSelected ? (
                       <MaterialDesignIcons
                         color={COLORS.purpleDeep}
@@ -478,7 +481,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
           }}
           style={styles.withdrawButton}
         >
-          <Text style={styles.withdrawText}>회원 탈퇴</Text>
+          <AppText style={styles.withdrawText}>회원 탈퇴</AppText>
         </Pressable>
       </ScrollView>
 
@@ -508,7 +511,7 @@ function getProfileImageValidationMessage(
 function Field({label, children}: {label: string; children: ReactNode}) {
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <AppText style={styles.fieldLabel}>{label}</AppText>
       {children}
     </View>
   );
@@ -670,6 +673,7 @@ const styles = StyleSheet.create({
     borderRadius: RADII.medium,
     borderWidth: 1,
     color: COLORS.text,
+    fontFamily: FONT_FAMILY,
     fontSize: 15,
     minHeight: 52,
     paddingHorizontal: 16,

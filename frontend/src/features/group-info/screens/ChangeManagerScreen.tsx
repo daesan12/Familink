@@ -1,13 +1,14 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useState} from 'react';
+import {
+  useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {NoticeBanner} from '../../../shared/components/NoticeBanner';
@@ -90,10 +91,10 @@ export function ChangeManagerScreen({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.heading}>새 그룹관리자를 선택하세요</Text>
-        <Text style={styles.subtitle}>
+        <AppText style={styles.heading}>새 그룹관리자를 선택하세요</AppText>
+        <AppText style={styles.subtitle}>
           변경 후에는 새 그룹관리자만 그룹을 관리할 수 있어요.
-        </Text>
+        </AppText>
 
         <View style={styles.list}>
           {members.map((member) => {
@@ -119,13 +120,13 @@ export function ChangeManagerScreen({
               >
                 <GroupMemberAvatar member={member} />
                 <View style={styles.rowText}>
-                  <Text style={styles.name}>{member.name}</Text>
+                  <AppText style={styles.name}>{member.name}</AppText>
                   {subtitle ? (
-                    <Text style={styles.relation}>{subtitle}</Text>
+                    <AppText style={styles.relation}>{subtitle}</AppText>
                   ) : null}
                 </View>
                 {isCurrentManager ? (
-                  <Text style={styles.currentTag}>현재 그룹관리자</Text>
+                  <AppText style={styles.currentTag}>현재 그룹관리자</AppText>
                 ) : null}
                 <MaterialDesignIcons
                   color={isSelected ? COLORS.purple : COLORS.inactive}
@@ -138,11 +139,11 @@ export function ChangeManagerScreen({
         </View>
 
         <View style={styles.noticeCard}>
-          <Text style={styles.noticeTitle}>변경 전에 확인해 주세요</Text>
+          <AppText style={styles.noticeTitle}>변경 전에 확인해 주세요</AppText>
           {CONFIRM_NOTES.map((note) => (
-            <Text key={note} style={styles.noticeBody}>
+            <AppText key={note} style={styles.noticeBody}>
               • {note}
-            </Text>
+            </AppText>
           ))}
         </View>
         {errorMessage ? <NoticeBanner message={errorMessage} /> : null}
@@ -163,14 +164,14 @@ export function ChangeManagerScreen({
           {isSubmitting ? (
             <ActivityIndicator color={COLORS.background} />
           ) : (
-            <Text
+            <AppText
               style={[
                 styles.submitButtonText,
                 !canSubmit && styles.submitButtonTextDisabled,
               ]}
             >
               그룹관리자 변경하기
-            </Text>
+            </AppText>
           )}
         </Pressable>
       </View>

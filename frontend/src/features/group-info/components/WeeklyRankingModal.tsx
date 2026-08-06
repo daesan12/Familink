@@ -5,9 +5,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
@@ -59,7 +59,7 @@ export function WeeklyRankingModal({
           >
             <View style={styles.header}>
               <BackButton onPress={onClose} style={styles.backButton} />
-              <Text style={styles.title}>주간 효자 랭킹</Text>
+              <AppText style={styles.title}>주간 효자 랭킹</AppText>
             </View>
 
             <WeeklyRankingBody
@@ -97,7 +97,7 @@ function WeeklyRankingBody({
   if (state.status === 'error') {
     return (
       <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
-        <Text style={styles.errorText}>{state.message}</Text>
+        <AppText style={styles.errorText}>{state.message}</AppText>
         <RetryButton onPress={onRetry} />
       </View>
     );
@@ -111,8 +111,8 @@ function WeeklyRankingBody({
     <>
       {weekRange ? (
         <View style={styles.weekBlock}>
-          <Text style={styles.weekLabel}>이번 주</Text>
-          <Text style={styles.weekRange}>{weekRange}</Text>
+          <AppText style={styles.weekLabel}>이번 주</AppText>
+          <AppText style={styles.weekRange}>{weekRange}</AppText>
         </View>
       ) : null}
 
@@ -131,7 +131,7 @@ function WeeklyRankingBody({
               key={entry.memberId}
               style={[styles.row, index > 0 && styles.rowDivider]}
             >
-              <Text style={styles.rank}>{entry.rank}</Text>
+              <AppText style={styles.rank}>{entry.rank}</AppText>
               <View style={styles.avatarWrap}>
                 <GroupMemberAvatar
                   member={
@@ -154,12 +154,12 @@ function WeeklyRankingBody({
                   </View>
                 ) : null}
               </View>
-              <Text style={styles.name}>{entry.displayName}</Text>
+              <AppText style={styles.name}>{entry.displayName}</AppText>
             </View>
           ))}
         </ScrollView>
       ) : (
-        <Text style={styles.emptyText}>아직 집계된 랭킹이 없어요.</Text>
+        <AppText style={styles.emptyText}>아직 집계된 랭킹이 없어요.</AppText>
       )}
     </>
   );

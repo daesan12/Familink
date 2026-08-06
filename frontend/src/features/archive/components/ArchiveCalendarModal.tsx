@@ -1,6 +1,13 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useState} from 'react';
-import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import {
+  useEffect,
+  useState} from 'react';
+import {Modal,
+  Pressable,
+  StyleSheet,
+  View,
+} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {
@@ -78,9 +85,9 @@ export function ArchiveCalendarModal({
                 size={22}
               />
             </Pressable>
-            <Text style={styles.monthLabel}>
+            <AppText style={styles.monthLabel}>
               {formatMonthLabel(year, month)}
-            </Text>
+            </AppText>
             <Pressable
               accessibilityLabel="다음 달"
               accessibilityRole="button"
@@ -97,9 +104,9 @@ export function ArchiveCalendarModal({
 
           <View style={styles.weekdayRow}>
             {WEEKDAY_LABELS.map(label => (
-              <Text key={label} style={styles.weekdayLabel}>
+              <AppText key={label} style={styles.weekdayLabel}>
                 {label}
-              </Text>
+              </AppText>
             ))}
           </View>
 
@@ -119,7 +126,7 @@ export function ArchiveCalendarModal({
                 if (!hasPosts) {
                   return (
                     <View key={day} style={styles.dayCell}>
-                      <Text style={styles.dayDisabledText}>{day}</Text>
+                      <AppText style={styles.dayDisabledText}>{day}</AppText>
                     </View>
                   );
                 }
@@ -133,7 +140,7 @@ export function ArchiveCalendarModal({
                       onPress={() => onSelectDate(toDateKey(year, month, day))}
                       style={styles.dayActive}
                     >
-                      <Text style={styles.dayActiveText}>{day}</Text>
+                      <AppText style={styles.dayActiveText}>{day}</AppText>
                     </Pressable>
                   </View>
                 );
