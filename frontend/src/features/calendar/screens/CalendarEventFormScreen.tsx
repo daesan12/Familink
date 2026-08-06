@@ -14,7 +14,6 @@ import {
 } from "react-native";
 
 import { COLORS, RADII } from "../../../design/tokens";
-import { useHardwareBack } from "../../../shared/hooks/useHardwareBack";
 import { CachedRemoteImage } from "../../../shared/media/CachedRemoteImage";
 import {
   createCalendarEventDraft,
@@ -54,6 +53,9 @@ interface CalendarEventFormScreenProps {
   now?: Date;
   onCancel: () => void;
   onSaved: (eventId: string) => void;
+  // 저장 진행 상태를 부모에 미러링한다. 스택 화면 부모가 beforeRemove에서
+  // 저장 중 pop을 차단할 근거로 쓴다(이 화면은 navigation 비의존 유지).
+  onSavingChange?: (saving: boolean) => void;
 }
 
 export function CalendarEventFormScreen({
@@ -67,6 +69,7 @@ export function CalendarEventFormScreen({
   now,
   onCancel,
   onSaved,
+  onSavingChange,
 }: CalendarEventFormScreenProps) {
   const [draft, setDraft] = useState<CalendarEventDraft>(() =>
     initialDetail
@@ -80,13 +83,6 @@ export function CalendarEventFormScreen({
   const [timePickerField, setTimePickerField] =
     useState<TimePickerField | null>(null);
 
-  useHardwareBack(() => {
-    if (saving) {
-      return true;
-    }
-    onCancel();
-    return true;
-  });
   const openDatePicker = (field: DatePickerField) => {
     const dateKey = field.startsWith("start") ? draft.startDate : draft.endDate;
     const time = field.startsWith("start") ? draft.startTime : draft.endTime;
@@ -126,6 +122,7 @@ export function CalendarEventFormScreen({
       return;
     }
     setSaving(true);
+    onSavingChange?.(true);
     try {
       const input = toCalendarEventWriteInput(draft);
       if (initialDetail) {
@@ -137,6 +134,7 @@ export function CalendarEventFormScreen({
     } catch (error) {
       setSaveError(toErrorMessage(error));
       setSaving(false);
+      onSavingChange?.(false);
     }
   };
 
@@ -146,10 +144,7 @@ export function CalendarEventFormScreen({
   );
 
   return (
-    <KeyboardAvoidingView
-      behavior="padding"
-      style={styles.screen}
-    >
+    <KeyboardAvoidingView behavior="padding" style={styles.screen}>
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="일정 작성 취소"

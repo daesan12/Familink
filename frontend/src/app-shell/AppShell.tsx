@@ -19,6 +19,7 @@ import {
 import { useHardwareBack } from '../shared/hooks/useHardwareBack';
 import { BottomTabBar } from './BottomTabBar';
 import { CurrentGroupSwitcher } from './CurrentGroupSwitcher';
+import type { CalendarStackParamList } from '../features/calendar/navigationTypes';
 import type { FeedStackParamList } from '../features/feed/navigationTypes';
 import type { GroupInfoStackParamList } from '../features/group-info/navigationTypes';
 import { getTabsForRole, resolveAllowedRoute, resolveCurrentGroup } from './navigation';
@@ -31,7 +32,6 @@ import type {
   FamilyGroup,
   MainTabRoute,
   MainTabsParamList,
-  ReportDeepLinkParams,
   ShellStackParamList,
 } from './types';
 
@@ -46,6 +46,7 @@ const renderNullTabBar = () => null;
 // 새 내비게이터가 구 스택 상태를 재수화하므로, pop:true로 루트 위 화면을
 // 함께 정리해 "재탭 = 초기화"를 보장한다(S15P11B104-321에서 검증된 방식).
 const STACK_ROOT_BY_TAB: Partial<Record<MainTabRoute, string>> = {
+  calendar: 'CalendarHome',
   feed: 'FeedHome',
   groupInfo: 'GroupInfoHome',
   profile: 'ProfileHome',
@@ -115,18 +116,8 @@ export function AppShell({
   const shellNavRef = useRef<ShellNavigation | null>(null);
   const [currentGroupId, setCurrentGroupId] = useState(initialGroupId);
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
-  const [createCalendarEventRequestId, setCreateCalendarEventRequestId] =
-    useState(0);
   const [isScreenFullscreen, setIsScreenFullscreen] = useState(false);
   const [isScreenHeaderVisible, setIsScreenHeaderVisible] = useState(true);
-  const [openCalendarEventId, setOpenCalendarEventId] = useState<string | null>(
-    null
-  );
-  const [openCalendarEventRequestId, setOpenCalendarEventRequestId] =
-    useState(0);
-  const [openReportTarget, setOpenReportTarget] =
-    useState<ReportDeepLinkParams | null>(null);
-  const [openReportRequestId, setOpenReportRequestId] = useState(0);
   const [readNotificationIds, setReadNotificationIds] = useState<
     readonly string[]
   >([]);
@@ -216,6 +207,35 @@ export function AppShell({
     },
     []
   );
+  // 캘린더 탭 내부 CalendarStack의 화면까지 한 번의 dispatch로 도달한다
+  // (navigateInFeedTab과 같은 관용구 — initial:false 필수, getId 금지).
+  const navigateInCalendarTab = useCallback(
+    (
+      screen: 'CalendarEventForm' | 'CalendarHome',
+      params:
+        | CalendarStackParamList['CalendarEventForm']
+        | CalendarStackParamList['CalendarHome'],
+    ) => {
+      setVisibleRoute('calendar');
+      shellNavRef.current?.dispatch(
+        StackActions.popTo('MainTabs', {
+          params: { initial: false, params, screen },
+          screen: 'calendar',
+        })
+      );
+    },
+    []
+  );
+  // 리포트 탭은 내부 스택이 없어 탭 route params(openReport)로 딥링크를 전달한다.
+  const navigateToReportTab = useCallback(
+    (params: MainTabsParamList['report']) => {
+      setVisibleRoute('report');
+      shellNavRef.current?.dispatch(
+        StackActions.popTo('MainTabs', { params, screen: 'report' })
+      );
+    },
+    []
+  );
   const handleFocusedRouteChange = useCallback((route: AppRoute) => {
     setVisibleRoute(route);
   }, []);
@@ -230,8 +250,6 @@ export function AppShell({
 
   useHardwareBack(() => {
     setIsScreenHeaderVisible(true);
-    setOpenCalendarEventId(null);
-    setOpenReportTarget(null);
     goToTab('feed');
     return true;
   }, canReturnToFeed && !isScreenFullscreen);
@@ -382,8 +400,6 @@ export function AppShell({
       setIsScreenFullscreen(false);
       setIsScreenHeaderVisible(true);
       setIsGroupMenuOpen(false);
-      setOpenCalendarEventId(null);
-      setOpenReportTarget(null);
     }
   }, [currentGroupId, goToTab, groups, initialGroupId]);
 
@@ -435,8 +451,6 @@ export function AppShell({
   const handleGroupSelect = (groupId: string) => {
     setCurrentGroupId(groupId);
     onCurrentGroupChange?.(groupId);
-    setOpenCalendarEventId(null);
-    setOpenReportTarget(null);
     setIsGroupMenuOpen(false);
     onGroupChange?.(groupId);
     if (groupStore) {
@@ -486,21 +500,19 @@ export function AppShell({
     }
     setIsScreenHeaderVisible(true);
     if (target.kind === 'calendarEvent') {
-      setOpenCalendarEventId(target.eventId);
-      setOpenCalendarEventRequestId(requestId => requestId + 1);
-      goToTab('calendar');
+      navigateInCalendarTab('CalendarHome', { openEventId: target.eventId });
       return;
     }
     if (target.kind === 'callReport' || target.kind === 'dailyReport') {
-      setOpenReportTarget({
-        ...(target.kind === 'callReport'
-          ? {callSessionId: target.callSessionId}
-          : {}),
-        memberId: target.memberId,
-        reportDate: target.reportDate,
+      navigateToReportTab({
+        openReport: {
+          ...(target.kind === 'callReport'
+            ? {callSessionId: target.callSessionId}
+            : {}),
+          memberId: target.memberId,
+          reportDate: target.reportDate,
+        },
       });
-      setOpenReportRequestId(requestId => requestId + 1);
-      goToTab('report');
       return;
     }
     navigateInGroupInfoTab('JoinApproval', {
@@ -530,7 +542,6 @@ export function AppShell({
     accessToken,
     apiBaseUrl,
     authSession,
-    createCalendarEventRequestId,
     currentGroup,
     currentUserId,
     currentUserName,
@@ -547,10 +558,6 @@ export function AppShell({
     onRequestLogout,
     onRequestWithdrawal,
     onUnreadCountChange: setUnreadNotificationCount,
-    openCalendarEventId,
-    openCalendarEventRequestId,
-    openReportRequestId,
-    openReportTarget,
     readNotificationIds,
     role: currentGroup.role,
   };
@@ -589,7 +596,7 @@ export function AppShell({
               accessibilityLabel="일정 추가"
               accessibilityRole="button"
               onPress={() =>
-                setCreateCalendarEventRequestId(requestId => requestId + 1)
+                navigateInCalendarTab('CalendarEventForm', { mode: 'create' })
               }
               style={({ pressed }) => [
                 styles.calendarAddButton,
@@ -753,8 +760,6 @@ export function AppShell({
               return;
             }
             setIsScreenHeaderVisible(true);
-            setOpenCalendarEventId(null);
-            setOpenReportTarget(null);
             // 같은 화면의 탭을 다시 누르면 재마운트해 최신 데이터를 다시 조회한다.
             // 아카이브처럼 탭과 화면이 다른 상태에서는 일반 이동으로 처리한다.
             if (route === resolvedRoute) {

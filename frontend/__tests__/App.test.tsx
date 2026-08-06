@@ -1,4 +1,5 @@
 import React from "react";
+import { useRoute } from "@react-navigation/native";
 import {
   AccessibilityInfo,
   Alert,
@@ -3652,8 +3653,21 @@ test("AI 전화 탭은 다시 눌러도 재마운트하지 않는다", async () 
   ).toHaveLength(0);
 });
 
+// 캘린더 탭 route의 중첩 params(CalendarStack) 계약을 텍스트로 렌더하는 프로브.
+// 셸의 navigateInCalendarTab이 전달하는 screen과 mode·openEventId를 단언한다.
+function CalendarTabParamsProbe() {
+  const route = useRoute();
+  const nested = route.params as
+    | { params?: { mode?: string; openEventId?: string }; screen?: string }
+    | undefined;
+  return (
+    <Text>
+      {`screen:calendar:${nested?.screen ?? "none"}:${nested?.params?.mode ?? nested?.params?.openEventId ?? "none"}`}
+    </Text>
+  );
+}
+
 test("캘린더 헤더는 일정 추가 버튼과 그룹 전환만 표시한다", async () => {
-  let createCalendarEventRequestId = 0;
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(() => {
@@ -3662,11 +3676,7 @@ test("캘린더 헤더는 일정 추가 버튼과 그룹 전환만 표시한다"
         initialRootRoute="appShell"
         initialShellRoute="calendar"
         screens={{
-          calendar: (props) => {
-            createCalendarEventRequestId =
-              props.createCalendarEventRequestId ?? 0;
-            return null;
-          },
+          calendar: () => <CalendarTabParamsProbe />,
         }}
       />
     );
@@ -3693,7 +3703,9 @@ test("캘린더 헤더는 일정 추가 버튼과 그룹 전환만 표시한다"
         ? "group"
         : "add"
     );
-  expect([...new Set(headerActionOrder)]).toEqual(["group", "add"]);
+  // 그룹 전환기는 중앙 절대배치라(S15P11B104-265) DOM 순서가 시각 순서를
+  // 반영하지 않는다. 두 동작만 존재하는지 집합으로 단언한다.
+  expect(new Set(headerActionOrder)).toEqual(new Set(["add", "group"]));
   expect(
     renderer!.root.findAllByProps({ accessibilityLabel: "오늘 일정 보기" })
   ).toHaveLength(0);
@@ -3702,7 +3714,10 @@ test("캘린더 헤더는 일정 추가 버튼과 그룹 전환만 표시한다"
     addButton.props.onPress();
   });
 
-  expect(createCalendarEventRequestId).toBe(1);
+  // 일정 추가 버튼은 캘린더 스택의 편집 화면으로 중첩 navigate한다.
+  expect(JSON.stringify(renderer!.toJSON())).toContain(
+    "screen:calendar:CalendarEventForm:create"
+  );
 });
 
 test("보호자 리포트 탭에 리포트 화면을 연결한다", async () => {
@@ -3992,9 +4007,7 @@ test("푸시 탭은 앱 셸 진입 후 알림을 해석해 목적지로 이동�
   const { renderer, tapProvider } = await renderAppWithPendingTap({
     notificationGateway,
     screens: {
-      calendar: (props) => (
-        <Text>{`screen:calendar:${props.openCalendarEventId ?? "none"}`}</Text>
-      ),
+      calendar: () => <CalendarTabParamsProbe />,
     },
     tap: { notificationId: "77", type: "EVENT_CHANGED" },
   });
@@ -4002,7 +4015,9 @@ test("푸시 탭은 앱 셸 진입 후 알림을 해석해 목적지로 이동�
   expect(tapProvider.consumePendingTap).toHaveBeenCalled();
   expect(notificationGateway.loadPage).toHaveBeenCalledWith(0);
   expect(notificationGateway.markRead).toHaveBeenCalledWith("77");
-  expect(JSON.stringify(renderer.toJSON())).toContain("screen:calendar:9");
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "screen:calendar:CalendarHome:9"
+  );
 });
 
 test("푸시 탭의 알림을 첫 페이지에서 찾지 못하면 알림 목록으로 폴백한다", async () => {

@@ -364,13 +364,46 @@ function GroupInfoParamsProbe(props: AppScreenProps) {
   );
 }
 
+// 일정 딥링크도 캘린더 탭 route의 중첩 params(CalendarStack CalendarHome)로
+// 전달된다. FeedParamsProbe와 같은 방식의 계약 단언용 목.
+function CalendarParamsProbe(props: AppScreenProps) {
+  const route = useRoute();
+  const nested = route.params as
+    | {
+        initial?: boolean;
+        params?: {openEventId?: string};
+        screen?: string;
+      }
+    | undefined;
+  return (
+    <Text>
+      {`calendar:${props.currentGroup.id}:${nested?.screen ?? 'none'}:${nested?.params?.openEventId ?? 'none'}:${String(nested?.initial ?? 'none')}`}
+    </Text>
+  );
+}
+
+// 리포트 딥링크는 스택 없는 리포트 탭 route params(openReport)로 전달된다.
+function ReportParamsProbe() {
+  const route = useRoute();
+  const nested = route.params as
+    | {
+        openReport?: {
+          callSessionId?: string;
+          memberId?: string;
+          reportDate?: string;
+        };
+      }
+    | undefined;
+  return (
+    <Text>
+      {`report:${nested?.openReport?.memberId ?? 'none'}:${nested?.openReport?.callSessionId ?? 'none'}:${nested?.openReport?.reportDate ?? 'none'}`}
+    </Text>
+  );
+}
+
 function createDeepLinkScreens(): AppScreenRegistry {
   return {
-    calendar: (props: AppScreenProps) => (
-      <Text>
-        {`calendar:${props.currentGroup.id}:${props.openCalendarEventId ?? 'none'}:${props.openCalendarEventRequestId ?? 0}`}
-      </Text>
-    ),
+    calendar: (props: AppScreenProps) => <CalendarParamsProbe {...props} />,
     // 게시글 딥링크는 피드 탭 route의 중첩 params(FeedStack PostDetail)로
     // 전달된다. 목 화면이 params를 렌더해 전달 계약을 단언할 수 있게 한다.
     feed: (props: AppScreenProps) => <FeedParamsProbe {...props} />,
@@ -421,11 +454,7 @@ function createDeepLinkScreens(): AppScreenRegistry {
         </Pressable>
       </>
     ),
-    report: (props: AppScreenProps) => (
-      <Text>
-        {`report:${props.openReportTarget?.memberId ?? 'none'}:${props.openReportTarget?.callSessionId ?? 'none'}:${props.openReportTarget?.reportDate ?? 'none'}`}
-      </Text>
-    ),
+    report: () => <ReportParamsProbe />,
   };
 }
 
@@ -456,12 +485,13 @@ test('게시글 목적지는 그룹을 전환하고 피드 탭에 중첩 PostDet
   expect(hasText(renderer, 'feed:group-b:PostDetail:42:false')).toBe(true);
 });
 
-test('일정 목적지는 그룹을 전환하고 캘린더로 이동하며 이벤트 id를 전달한다', () => {
+test('일정 목적지는 그룹을 전환하고 캘린더 탭에 중첩 CalendarHome params를 전달한다', () => {
   const renderer = renderForDeepLink();
 
   pressText(renderer, 'open-event');
 
-  expect(hasText(renderer, 'calendar:group-b:7:1')).toBe(true);
+  // initial:false가 함께 전달되어야 콜드 마운트에서 CalendarHome이 스택 밑에 깔린다.
+  expect(hasText(renderer, 'calendar:group-b:CalendarHome:7:false')).toBe(true);
 });
 
 test('리포트 목적지는 리포트 화면으로 이동하며 통화·날짜를 전달한다', () => {
@@ -502,7 +532,9 @@ test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다',
   });
   mountedRenderers.push(renderer!);
 
-  expect(hasText(renderer!, 'calendar:group-a:9:1')).toBe(true);
+  expect(hasText(renderer!, 'calendar:group-a:CalendarHome:9:false')).toBe(
+    true,
+  );
 
   // 같은 requestId로는 재소비하지 않고, 증가하면 새 목적지로 이동한다.
   TestRenderer.act(() => {
@@ -549,6 +581,7 @@ test('내부 스택을 가진 탭을 다시 누르면 스택 루트로 정규화
           initialGroupId={GROUP_A.id}
           initialRoute="groupInfo"
           screens={{
+            calendar: () => <TabNestedParamsProbe prefix="calendar" />,
             feed: () => <Text>screen:feed</Text>,
             groupInfo: () => <TabNestedParamsProbe prefix="groupInfo" />,
             profile: () => <TabNestedParamsProbe prefix="profile" />,
@@ -571,6 +604,14 @@ test('내부 스택을 가진 탭을 다시 누르면 스택 루트로 정규화
     renderer!.root.findByType(MockTabBar).props.onSelect('profile');
   });
   expect(hasText(renderer!, 'profile:ProfileHome:true')).toBe(true);
+
+  TestRenderer.act(() => {
+    renderer!.root.findByType(MockTabBar).props.onSelect('calendar');
+  });
+  TestRenderer.act(() => {
+    renderer!.root.findByType(MockTabBar).props.onSelect('calendar');
+  });
+  expect(hasText(renderer!, 'calendar:CalendarHome:true')).toBe(true);
 });
 
 // 스펙 D-3(docs/specs/UI_AND_NAVIGATION.md: 상세 진입 중에도 역할별 하단 탭
