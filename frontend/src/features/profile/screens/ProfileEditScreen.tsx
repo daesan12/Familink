@@ -42,7 +42,6 @@ const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.
 // 이름 검증 문구. OS 팝업이 아니라 회원가입처럼 입력칸 아래 인라인으로 보여준다.
 const NAME_EMPTY_MESSAGE = '빈 칸을 채워주세요.';
 const NAME_LENGTH_MESSAGE = '이름은 2 ~ 10자로 입력해주세요.';
-const NAME_UNCHANGED_MESSAGE = '기존과 동일한 이름입니다.';
 
 interface ProfileEditScreenProps<T extends BaseProfile> {
   profile: T;
@@ -111,9 +110,6 @@ export function ProfileEditScreen<T extends BaseProfile>({
     if (!isValidName(trimmedName)) {
       return NAME_LENGTH_MESSAGE;
     }
-    if (!hasChanges(trimmedName)) {
-      return NAME_UNCHANGED_MESSAGE;
-    }
     return null;
   };
 
@@ -126,6 +122,10 @@ export function ProfileEditScreen<T extends BaseProfile>({
     const currentNameError = getNameError(trimmedName);
     if (currentNameError !== null) {
       setNameError(currentNameError);
+      return;
+    }
+    if (!hasChanges(trimmedName)) {
+      onBack();
       return;
     }
 
