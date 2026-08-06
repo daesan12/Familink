@@ -1,4 +1,6 @@
 import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import TestRenderer from "react-test-renderer";
 
 import {
@@ -9,6 +11,20 @@ import type { CareReceiverReportPage } from "../types";
 import { ReportScreen } from "./ReportScreen";
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
+jest.mock("react-native-safe-area-context", () => {
+  const mockReact = jest.requireActual("react");
+  const { View } = jest.requireActual("react-native");
+  const insets = { bottom: 0, left: 0, right: 0, top: 0 };
+
+  return {
+    // 라우트 컨텍스트용 native-stack의 SafeAreaProviderCompat이 이 컨텍스트를 구독한다.
+    SafeAreaInsetsContext: mockReact.createContext(insets),
+    SafeAreaProvider: View,
+    SafeAreaView: View,
+    initialWindowMetrics: null,
+    useSafeAreaInsets: () => insets,
+  };
+});
 
 const currentGroup = {
   id: "group-1",
@@ -16,16 +32,32 @@ const currentGroup = {
   role: "guardian" as const,
 };
 
+// ReportScreen이 useRoute로 리포트 탭 route params를 읽으므로, 단독 렌더도
+// 셸과 같은 'report' route 이름의 화면으로 감싼다.
+const RouteStack = createNativeStackNavigator();
+
+function withReportRoute(element: React.ReactElement) {
+  return (
+    <NavigationContainer>
+      <RouteStack.Navigator screenOptions={{ headerShown: false }}>
+        <RouteStack.Screen name="report">{() => element}</RouteStack.Screen>
+      </RouteStack.Navigator>
+    </NavigationContainer>
+  );
+}
+
 function renderReportScreen(careReceivers: readonly CareReceiverReportPage[]) {
   let renderer: TestRenderer.ReactTestRenderer;
 
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <ReportScreen
-        careReceivers={careReceivers}
-        currentGroup={currentGroup}
-        role="guardian"
-      />
+      withReportRoute(
+        <ReportScreen
+          careReceivers={careReceivers}
+          currentGroup={currentGroup}
+          role="guardian"
+        />
+      )
     );
   });
 
@@ -203,11 +235,13 @@ test("피보호자 구성이 바뀌면 첫 페이지로 안전하게 돌아간�
 
   TestRenderer.act(() => {
     renderer.update(
-      <ReportScreen
-        careReceivers={[firstPage]}
-        currentGroup={currentGroup}
-        role="guardian"
-      />
+      withReportRoute(
+        <ReportScreen
+          careReceivers={[firstPage]}
+          currentGroup={currentGroup}
+          role="guardian"
+        />
+      )
     );
   });
 
@@ -223,14 +257,16 @@ test("기본 개발 fixture는 지정된 보호자 그룹에만 노출한다", (
 
   TestRenderer.act(() => {
     renderer = TestRenderer.create(
-      <ReportScreen
-        currentGroup={{
-          id: "development-empty-group",
-          name: "빈 그룹",
-          role: "guardian",
-        }}
-        role="guardian"
-      />
+      withReportRoute(
+        <ReportScreen
+          currentGroup={{
+            id: "development-empty-group",
+            name: "빈 그룹",
+            role: "guardian",
+          }}
+          role="guardian"
+        />
+      )
     );
   });
 

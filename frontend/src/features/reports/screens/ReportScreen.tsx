@@ -1,4 +1,10 @@
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import {
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from "@react-navigation/native";
 import type { ComponentProps } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -12,7 +18,7 @@ import {
   View,
 } from "react-native";
 
-import type { AppScreenProps } from "../../../app-shell";
+import type { AppScreenProps, MainTabsParamList } from "../../../app-shell";
 import { COLORS, RADII } from "../../../design/tokens";
 import { RetryButton } from "../../../shared/components/RetryButton";
 import { CallReportDetailModal } from "../components/CallReportDetailModal";
@@ -53,6 +59,10 @@ interface ReportYearMonth {
   year: number;
 }
 
+// 리포트 탭 route 계약. 테스트의 단독 렌더도 같은 route 이름으로 감싼다.
+type ReportTabRoute = RouteProp<MainTabsParamList, "report">;
+type ReportTabNavigation = BottomTabNavigationProp<MainTabsParamList, "report">;
+
 export interface ReportScreenProps extends AppScreenProps {
   careReceivers?: readonly CareReceiverReportPage[];
   careReceiverTargets?: readonly CareReceiverReportTarget[];
@@ -66,12 +76,13 @@ export function ReportScreen({
   careReceiverTargets,
   careReceiverTargetsLoader,
   currentGroup,
-  openReportRequestId,
-  openReportTarget,
   reportDate = getKoreaReportDate(),
   reportGateway,
 }: ReportScreenProps) {
   const { width } = useWindowDimensions();
+  const navigation = useNavigation<ReportTabNavigation>();
+  const route = useRoute<ReportTabRoute>();
+  const openReport = route.params?.openReport;
   const [selectedReportDate, setSelectedReportDate] = useState(reportDate);
   const shouldLoadTargets =
     careReceiverTargets === undefined &&
@@ -138,9 +149,9 @@ export function ReportScreen({
   const calendarRequests = useRef(new Map<string, number>());
   const callRequestId = useRef(0);
   const pagerRef = useRef<ScrollView>(null);
-  const lastOpenReportRequestId = useRef(0);
   // 알림 딥링크로 진입할 멤버·통화. 목적지 날짜의 페이지 로드가 끝난 뒤 적용한다.
-  const pendingDeepLinkRef = useRef<{
+  // state여야 새 딥링크 소비가 적용 effect를 다시 실행한다.
+  const [pendingDeepLink, setPendingDeepLink] = useState<{
     callSessionId?: string;
     memberId: string;
     reportDate: string;
@@ -539,57 +550,58 @@ export function ReportScreen({
     }
   };
 
+  // 알림 딥링크(리포트 탭 route params)를 소비한다. 탭 route params는 재탭
+  // 리마운트 뒤에도 남아 있으므로 소비 직후 setParams로 비운다. 비우면
+  // undefined→값 전이가 되어 같은 알림을 두 번 탭해도 다시 발화한다.
   useEffect(() => {
-    const requestId = openReportRequestId ?? 0;
-    if (
-      openReportTarget &&
-      requestId > 0 &&
-      requestId !== lastOpenReportRequestId.current
-    ) {
-      lastOpenReportRequestId.current = requestId;
-      pendingDeepLinkRef.current = {
-        ...(openReportTarget.callSessionId === undefined
-          ? {}
-          : { callSessionId: openReportTarget.callSessionId }),
-        memberId: openReportTarget.memberId,
-        reportDate: openReportTarget.reportDate,
-      };
-      handleSelectReportDate(openReportTarget.reportDate);
+    if (openReport === undefined) {
+      return;
     }
-  }, [handleSelectReportDate, openReportTarget, openReportRequestId]);
+    navigation.setParams({ openReport: undefined });
+    setPendingDeepLink({
+      ...(openReport.callSessionId === undefined
+        ? {}
+        : { callSessionId: openReport.callSessionId }),
+      memberId: openReport.memberId,
+      reportDate: openReport.reportDate,
+    });
+    handleSelectReportDate(openReport.reportDate);
+  }, [handleSelectReportDate, navigation, openReport]);
 
   // 페이지 로드가 끝나면 딥링크 대상 멤버로 페이저를 이동하고,
   // callSessionId가 지정된 경우 해당 통화 상세까지 연다.
   useEffect(() => {
-    const pending = pendingDeepLinkRef.current;
-    if (!pending || reportItems.length === 0 || width <= 0) {
+    if (!pendingDeepLink || reportItems.length === 0 || width <= 0) {
       return;
     }
     // 날짜 변경 직후의 effect 실행은 아직 이전 날짜의 페이지를 들고 있으므로
     // 선택 날짜가 목적지 날짜로 반영된 뒤에만 적용한다.
-    if (pending.reportDate !== selectedReportDate) {
+    if (pendingDeepLink.reportDate !== selectedReportDate) {
       return;
     }
     if (hasRemoteSource && remotePages.status !== "ready") {
       return;
     }
     const index = reportItems.findIndex(
-      (item) => item.target.memberId === pending.memberId
+      (item) => item.target.memberId === pendingDeepLink.memberId
     );
     if (index < 0) {
-      pendingDeepLinkRef.current = null;
+      setPendingDeepLink(null);
       return;
     }
     const item = reportItems[index];
     if (item.status === "loading") {
       return;
     }
-    pendingDeepLinkRef.current = null;
+    setPendingDeepLink(null);
     pagerRef.current?.scrollTo({ animated: false, x: index * width });
     setCurrentIndex(index);
-    if (item.status === "ready" && pending.callSessionId !== undefined) {
+    if (
+      item.status === "ready" &&
+      pendingDeepLink.callSessionId !== undefined
+    ) {
       const call = item.page.todayCalls.find(
-        (todayCall) => todayCall.callSessionId === pending.callSessionId
+        (todayCall) => todayCall.callSessionId === pendingDeepLink.callSessionId
       );
       if (call) {
         handleOpenCall(call).catch(() => {
@@ -597,15 +609,16 @@ export function ReportScreen({
         });
       }
     }
-    // 이미 같은 날짜를 보고 있으면 페이지 재로딩이 없어 openReportRequestId 변화로
-    // 트리거된다. pendingDeepLinkRef 가드로 1회만 적용한다.
+    // 이미 같은 날짜를 보고 있으면 페이지 재로딩이 없지만 pendingDeepLink가
+    // state라 새 딥링크 소비가 이 effect를 다시 실행한다. state 초기화로
+    // 1회만 적용한다.
   }, [
     reportItems,
     width,
     hasRemoteSource,
     remotePages.status,
     handleOpenCall,
-    openReportRequestId,
+    pendingDeepLink,
     selectedReportDate,
   ]);
 

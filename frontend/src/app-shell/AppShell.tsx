@@ -32,7 +32,6 @@ import type {
   FamilyGroup,
   MainTabRoute,
   MainTabsParamList,
-  ReportDeepLinkParams,
   ShellStackParamList,
 } from './types';
 
@@ -119,9 +118,6 @@ export function AppShell({
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
   const [isScreenFullscreen, setIsScreenFullscreen] = useState(false);
   const [isScreenHeaderVisible, setIsScreenHeaderVisible] = useState(true);
-  const [openReportTarget, setOpenReportTarget] =
-    useState<ReportDeepLinkParams | null>(null);
-  const [openReportRequestId, setOpenReportRequestId] = useState(0);
   const [readNotificationIds, setReadNotificationIds] = useState<
     readonly string[]
   >([]);
@@ -230,6 +226,16 @@ export function AppShell({
     },
     []
   );
+  // 리포트 탭은 내부 스택이 없어 탭 route params(openReport)로 딥링크를 전달한다.
+  const navigateToReportTab = useCallback(
+    (params: MainTabsParamList['report']) => {
+      setVisibleRoute('report');
+      shellNavRef.current?.dispatch(
+        StackActions.popTo('MainTabs', { params, screen: 'report' })
+      );
+    },
+    []
+  );
   const handleFocusedRouteChange = useCallback((route: AppRoute) => {
     setVisibleRoute(route);
   }, []);
@@ -244,7 +250,6 @@ export function AppShell({
 
   useHardwareBack(() => {
     setIsScreenHeaderVisible(true);
-    setOpenReportTarget(null);
     goToTab('feed');
     return true;
   }, canReturnToFeed && !isScreenFullscreen);
@@ -395,7 +400,6 @@ export function AppShell({
       setIsScreenFullscreen(false);
       setIsScreenHeaderVisible(true);
       setIsGroupMenuOpen(false);
-      setOpenReportTarget(null);
     }
   }, [currentGroupId, goToTab, groups, initialGroupId]);
 
@@ -447,7 +451,6 @@ export function AppShell({
   const handleGroupSelect = (groupId: string) => {
     setCurrentGroupId(groupId);
     onCurrentGroupChange?.(groupId);
-    setOpenReportTarget(null);
     setIsGroupMenuOpen(false);
     onGroupChange?.(groupId);
     if (groupStore) {
@@ -501,15 +504,15 @@ export function AppShell({
       return;
     }
     if (target.kind === 'callReport' || target.kind === 'dailyReport') {
-      setOpenReportTarget({
-        ...(target.kind === 'callReport'
-          ? {callSessionId: target.callSessionId}
-          : {}),
-        memberId: target.memberId,
-        reportDate: target.reportDate,
+      navigateToReportTab({
+        openReport: {
+          ...(target.kind === 'callReport'
+            ? {callSessionId: target.callSessionId}
+            : {}),
+          memberId: target.memberId,
+          reportDate: target.reportDate,
+        },
       });
-      setOpenReportRequestId(requestId => requestId + 1);
-      goToTab('report');
       return;
     }
     navigateInGroupInfoTab('JoinApproval', {
@@ -555,8 +558,6 @@ export function AppShell({
     onRequestLogout,
     onRequestWithdrawal,
     onUnreadCountChange: setUnreadNotificationCount,
-    openReportRequestId,
-    openReportTarget,
     readNotificationIds,
     role: currentGroup.role,
   };
@@ -759,7 +760,6 @@ export function AppShell({
               return;
             }
             setIsScreenHeaderVisible(true);
-            setOpenReportTarget(null);
             // 같은 화면의 탭을 다시 누르면 재마운트해 최신 데이터를 다시 조회한다.
             // 아카이브처럼 탭과 화면이 다른 상태에서는 일반 이동으로 처리한다.
             if (route === resolvedRoute) {

@@ -1,11 +1,28 @@
 import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import TestRenderer from "react-test-renderer";
 
+import type { MainTabsParamList } from "../../../app-shell";
 import type { ReportGateway } from "../types";
 import { REPORT_PAGE_REQUEST_CONCURRENCY } from "../hooks/useReportPages";
 import { ReportScreen } from "./ReportScreen";
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
+jest.mock("react-native-safe-area-context", () => {
+  const mockReact = jest.requireActual("react");
+  const { View } = jest.requireActual("react-native");
+  const insets = { bottom: 0, left: 0, right: 0, top: 0 };
+
+  return {
+    // 라우트 컨텍스트용 native-stack의 SafeAreaProviderCompat이 이 컨텍스트를 구독한다.
+    SafeAreaInsetsContext: mockReact.createContext(insets),
+    SafeAreaProvider: View,
+    SafeAreaView: View,
+    initialWindowMetrics: null,
+    useSafeAreaInsets: () => insets,
+  };
+});
 
 const currentGroup = {
   id: "group-1",
@@ -17,6 +34,25 @@ const target = {
   displayName: "김말순",
   memberId: "12",
 };
+
+// ReportScreen이 useRoute로 리포트 탭 route params를 읽으므로, 단독 렌더도
+// 셸과 같은 'report' route 이름의 화면으로 감싼다.
+const RouteStack = createNativeStackNavigator();
+
+function withReportRoute(
+  element: React.ReactElement,
+  params?: MainTabsParamList["report"]
+) {
+  return (
+    <NavigationContainer>
+      <RouteStack.Navigator screenOptions={{ headerShown: false }}>
+        <RouteStack.Screen initialParams={params} name="report">
+          {() => element}
+        </RouteStack.Screen>
+      </RouteStack.Navigator>
+    </NavigationContainer>
+  );
+}
 const renderedScreens = new Set<TestRenderer.ReactTestRenderer>();
 
 afterEach(() => {
@@ -45,13 +81,15 @@ async function renderWithGateway(gateway: ReportGateway, targets = [target]) {
 
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <ReportScreen
-        careReceiverTargets={targets}
-        currentGroup={currentGroup}
-        reportDate="2026-07-31"
-        reportGateway={gateway}
-        role="guardian"
-      />
+      withReportRoute(
+        <ReportScreen
+          careReceiverTargets={targets}
+          currentGroup={currentGroup}
+          reportDate="2026-07-31"
+          reportGateway={gateway}
+          role="guardian"
+        />
+      )
     );
   });
 
@@ -553,19 +591,22 @@ test("알림 딥링크로 진입하면 해당 날짜·멤버 리포트로 이동
   let renderer: TestRenderer.ReactTestRenderer;
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
-      <ReportScreen
-        careReceiverTargets={targets}
-        currentGroup={currentGroup}
-        openReportRequestId={1}
-        openReportTarget={{
-          callSessionId: "31",
-          memberId: "12",
-          reportDate: "2026-07-17",
-        }}
-        reportDate="2026-07-31"
-        reportGateway={gateway}
-        role="guardian"
-      />
+      withReportRoute(
+        <ReportScreen
+          careReceiverTargets={targets}
+          currentGroup={currentGroup}
+          reportDate="2026-07-31"
+          reportGateway={gateway}
+          role="guardian"
+        />,
+        {
+          openReport: {
+            callSessionId: "31",
+            memberId: "12",
+            reportDate: "2026-07-17",
+          },
+        }
+      )
     );
   });
   renderedScreens.add(renderer!);

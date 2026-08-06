@@ -382,6 +382,25 @@ function CalendarParamsProbe(props: AppScreenProps) {
   );
 }
 
+// 리포트 딥링크는 스택 없는 리포트 탭 route params(openReport)로 전달된다.
+function ReportParamsProbe() {
+  const route = useRoute();
+  const nested = route.params as
+    | {
+        openReport?: {
+          callSessionId?: string;
+          memberId?: string;
+          reportDate?: string;
+        };
+      }
+    | undefined;
+  return (
+    <Text>
+      {`report:${nested?.openReport?.memberId ?? 'none'}:${nested?.openReport?.callSessionId ?? 'none'}:${nested?.openReport?.reportDate ?? 'none'}`}
+    </Text>
+  );
+}
+
 function createDeepLinkScreens(): AppScreenRegistry {
   return {
     calendar: (props: AppScreenProps) => <CalendarParamsProbe {...props} />,
@@ -435,11 +454,7 @@ function createDeepLinkScreens(): AppScreenRegistry {
         </Pressable>
       </>
     ),
-    report: (props: AppScreenProps) => (
-      <Text>
-        {`report:${props.openReportTarget?.memberId ?? 'none'}:${props.openReportTarget?.callSessionId ?? 'none'}:${props.openReportTarget?.reportDate ?? 'none'}`}
-      </Text>
-    ),
+    report: () => <ReportParamsProbe />,
   };
 }
 
