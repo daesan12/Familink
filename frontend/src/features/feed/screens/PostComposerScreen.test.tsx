@@ -58,6 +58,31 @@ test('업로드 중에는 본문과 미디어 선택·제거를 잠근다', () =
   act(() => renderer!.unmount());
 });
 
+test('텍스트 게시글은 미디어 표현 없이 업로드 상태를 안내한다', () => {
+  let renderer: ReactTestRenderer;
+
+  act(() => {
+    renderer = create(
+      <PostComposerScreen
+        initialValue={{body: '텍스트 게시글', media: []}}
+        mode="create"
+        onCancel={jest.fn()}
+        onSubmit={jest.fn()}
+        uploadState={{progress: 1, status: 'uploading'}}
+      />,
+    );
+  });
+
+  expect(
+    renderer!.root.findByProps({accessibilityLabel: '업로드 중 100%'}),
+  ).toBeTruthy();
+  expect(
+    renderer!.root.findAllByProps({children: '미디어 업로드 중'}),
+  ).toHaveLength(0);
+
+  act(() => renderer!.unmount());
+});
+
 test('업로드 실패 카드에서 상세 원인과 다시 시도 동작을 제공한다', () => {
   const onRetryUpload = jest.fn();
   let renderer: ReactTestRenderer;
