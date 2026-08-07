@@ -814,7 +814,8 @@ test('그룹을 바꾸면 편집 중이던 상태가 초기화된다', () => {
 });
 
 // 공동 2위(손수호·홍유라)와 지난주 1위 왕관(홍유라)을 담은 랭킹 목업.
-// 필드명은 API-CARNATION-001 응답(rankings/displayName/previousWeekWinner)에 맞춘다.
+// 필드명은 API-CARNATION-001 응답(rankings/displayName/postCount/previousWeekWinner)에 맞춘다.
+// 강다영의 12건은 주 7일을 넘는 값으로, 순위 기준이 날짜 수가 아니라 게시글 수임을 드러낸다.
 const RANKING: WeeklyRankingSnapshot = {
   weekStart: '2026-07-20',
   weekEnd: '2026-07-26',
@@ -822,19 +823,19 @@ const RANKING: WeeklyRankingSnapshot = {
     {
       memberId: 'r-first',
       displayName: '강다영',
-      carnationCount: 5,
+      postCount: 12,
       previousWeekWinner: false,
     },
     {
       memberId: 'r-crown',
       displayName: '홍유라',
-      carnationCount: 3,
+      postCount: 3,
       previousWeekWinner: true,
     },
     {
       memberId: 'r-tie',
       displayName: '손수호',
-      carnationCount: 3,
+      postCount: 3,
       previousWeekWinner: false,
     },
   ],
@@ -868,28 +869,40 @@ test('랭킹 카드를 누르면 주간 효자 랭킹을 순위·날짜와 함�
 
   expect(hasText(renderer, '주간 효자 랭킹')).toBe(true);
   expect(hasText(renderer, '2026년 7월 20일 ~ 26일')).toBe(true);
-  // 카네이션 5개인 강다영이 1위다.
+  // 게시글 12건인 강다영이 1위다.
   expect(
-    renderer.root.findByProps({accessibilityLabel: '1위 강다영'}),
+    renderer.root.findByProps({accessibilityLabel: '1위 강다영 12개'}),
   ).toBeTruthy();
 });
 
-test('같은 카네이션 수는 공동 순위로, 지난주 1위는 왕관으로 표시한다', async () => {
+test('각 행에 이번 주 게시글 수를 표시한다', async () => {
   const renderer = await renderWithRanking();
 
   press(renderer, '이번주 우리 가족 효자 랭킹 조회하기');
 
-  // 손수호·홍유라는 카네이션 3개로 공동 2위다. 손수호 행에는 왕관 표시가 없다.
+  // 순위 근거를 화면에서 확인할 수 있어야 한다. 7을 넘는 값도 그대로 보인다.
+  expect(hasText(renderer, '12개')).toBe(true);
+  expect(hasText(renderer, '3개')).toBe(true);
+});
+
+test('같은 게시글 수는 공동 순위로, 지난주 1위는 왕관으로 표시한다', async () => {
+  const renderer = await renderWithRanking();
+
+  press(renderer, '이번주 우리 가족 효자 랭킹 조회하기');
+
+  // 손수호·홍유라는 게시글 3건으로 공동 2위다. 손수호 행에는 왕관 표시가 없다.
   expect(
-    renderer.root.findByProps({accessibilityLabel: '2위 손수호'}),
+    renderer.root.findByProps({accessibilityLabel: '2위 손수호 3개'}),
   ).toBeTruthy();
   // 홍유라는 공동 2위이면서 지난주 1위라 왕관을 단다(라벨에만 왕관 표기가 붙는다).
   expect(
-    renderer.root.findByProps({accessibilityLabel: '2위 홍유라, 지난주 1위'}),
+    renderer.root.findByProps({
+      accessibilityLabel: '2위 홍유라 3개, 지난주 1위',
+    }),
   ).toBeTruthy();
   // 1위(강다영)는 지난주 1위가 아니라 왕관 표기가 없다.
   expect(
-    renderer.root.findByProps({accessibilityLabel: '1위 강다영'}),
+    renderer.root.findByProps({accessibilityLabel: '1위 강다영 12개'}),
   ).toBeTruthy();
 });
 
@@ -977,7 +990,7 @@ test('로더 실패 시 에러와 다시 시도를 보여주고, 재시도로 �
   });
 
   expect(
-    renderer!.root.findByProps({accessibilityLabel: '1위 강다영'}),
+    renderer!.root.findByProps({accessibilityLabel: '1위 강다영 12개'}),
   ).toBeTruthy();
   expect(
     hasText(renderer!, '랭킹을 불러오지 못했어요. 다시 시도해 주세요.'),

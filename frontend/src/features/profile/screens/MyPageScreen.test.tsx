@@ -388,15 +388,15 @@ test('KST 현재 주 월요일부터 일요일까지 병렬 조회하고 도장�
   const loadWeeklyRanking = jest.fn().mockResolvedValue({
     rankings: [
       {
-        carnationCount: 5,
         displayName: '다른 보호자',
         memberId: 'member-2',
+        postCount: 5,
         previousWeekWinner: false,
       },
       {
-        carnationCount: 3,
         displayName: '이종철',
         memberId: 'member-1',
+        postCount: 3,
         previousWeekWinner: true,
       },
     ],

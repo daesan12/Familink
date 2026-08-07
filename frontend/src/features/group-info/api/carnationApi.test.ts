@@ -22,9 +22,9 @@ describe('carnationApi', () => {
       success({
         rankings: [
           {
-            carnationCount: 3,
             displayName: '아빠',
             memberId: 12,
+            postCount: 3,
             previousWeekWinner: true,
             rank: 1,
           },
@@ -38,9 +38,9 @@ describe('carnationApi', () => {
     await expect(gateway.loadWeeklyRanking('group/1')).resolves.toEqual({
       rankings: [
         {
-          carnationCount: 3,
           displayName: '아빠',
           memberId: '12',
+          postCount: 3,
           previousWeekWinner: true,
         },
       ],
@@ -105,6 +105,34 @@ describe('carnationApi', () => {
       kind: 'invalidResponse',
     });
     expect(client.get).not.toHaveBeenCalled();
+  });
+
+  it('postCount 없이 옛 carnationCount만 오면 거부한다', async () => {
+    // carnationCount → postCount는 값의 의미까지 바뀐 차단 변경이다.
+    // 옛 서버 응답을 조용히 0으로 읽지 않고 fail-fast 해야 한다.
+    const client = createClient();
+    client.get.mockResolvedValueOnce(
+      success({
+        rankings: [
+          {
+            carnationCount: 3,
+            displayName: '아빠',
+            memberId: 12,
+            previousWeekWinner: true,
+          },
+        ],
+        weekEnd: '2026-08-02',
+        weekStart: '2026-07-27',
+      }),
+    );
+    const gateway = createCarnationGateway({client});
+
+    await expect(gateway.loadWeeklyRanking('group-1')).rejects.toMatchObject<
+      Partial<ApiError>
+    >({
+      code: 'INVALID_API_RESPONSE',
+      kind: 'invalidResponse',
+    });
   });
 
   it('응답 날짜가 실제 주간 범위와 다르면 거부한다', async () => {
