@@ -22,12 +22,14 @@ import {
   joinRequestDecisionErrorMessage,
   roleLabel,
 } from '../joinRequestModel';
-import {avatarInitial} from '../rankingModel';
 import type {
   JoinRequestProcessor,
   JoinRequestsLoader,
 } from '../api/groupMembershipApi';
 import type {JoinRequest} from '../types';
+
+// 회원가입 때 프로필 사진을 등록하지 않은 신청자에게 쓰는 기본 이미지.
+const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
 
 interface JoinApprovalScreenProps {
   groupId: string;
@@ -150,41 +152,32 @@ export function JoinApprovalScreen({
               {processError}
             </AppText>
           ) : null}
-          <AppText style={styles.heading}>
-            승인 요청 {joinRequests.requests.length}건
-          </AppText>
-          <AppText style={styles.subtitle}>가족인지 확인한 뒤 승인해 주세요.</AppText>
+          <View style={styles.headingBlock}>
+            <AppText style={styles.heading}>
+              승인 요청 {joinRequests.requests.length}건
+            </AppText>
+            <AppText style={styles.subtitle}>
+              가족인지 확인한 뒤 승인해 주세요.
+            </AppText>
+          </View>
 
           {joinRequests.requests.length > 0 ? (
             joinRequests.requests.map((request) => (
               <View key={request.joinRequestId} style={styles.requestCard}>
                 <View style={styles.applicantRow}>
-                  {request.profileImageUrl ? (
-                    <CachedRemoteImage
-                      source={{uri: request.profileImageUrl}}
-                      style={styles.avatar}
-                    />
-                  ) : (
-                    <View style={styles.avatar}>
-                      <AppText style={styles.avatarText}>
-                        {avatarInitial(request.applicantName)}
-                      </AppText>
-                    </View>
-                  )}
+                  <CachedRemoteImage
+                    source={
+                      request.profileImageUrl
+                        ? {uri: request.profileImageUrl}
+                        : PROFILE_PLACEHOLDER
+                    }
+                    style={styles.avatar}
+                  />
                   <AppText style={styles.applicantName}>
                     {request.applicantName}
                   </AppText>
                 </View>
                 <View style={styles.actionRow}>
-                  <Pressable
-                    accessibilityLabel={`${request.applicantName} 거절`}
-                    accessibilityRole="button"
-                    disabled={processingId !== null}
-                    onPress={() => handleReject(request)}
-                    style={[styles.actionButton, styles.rejectButton]}
-                  >
-                    <AppText style={styles.rejectText}>거절</AppText>
-                  </Pressable>
                   <Pressable
                     accessibilityLabel={`${request.applicantName} 승인`}
                     accessibilityRole="button"
@@ -193,6 +186,15 @@ export function JoinApprovalScreen({
                     style={[styles.actionButton, styles.approveButton]}
                   >
                     <AppText style={styles.approveText}>승인</AppText>
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel={`${request.applicantName} 거절`}
+                    accessibilityRole="button"
+                    disabled={processingId !== null}
+                    onPress={() => handleReject(request)}
+                    style={[styles.actionButton, styles.rejectButton]}
+                  >
+                    <AppText style={styles.rejectText}>거절</AppText>
                   </Pressable>
                 </View>
               </View>
@@ -377,7 +379,7 @@ const styles = StyleSheet.create({
   actionButton: {
     alignItems: 'center',
     borderCurve: 'continuous',
-    borderRadius: RADII.small,
+    borderRadius: RADII.pill,
     flex: 1,
     justifyContent: 'center',
     minHeight: 46,
@@ -389,7 +391,7 @@ const styles = StyleSheet.create({
   },
   applicantName: {
     color: COLORS.textStrong,
-    fontSize: 16,
+    fontSize: 22,
     fontWeight: '700',
   },
   applicantRow: {
@@ -398,10 +400,10 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   approveButton: {
-    backgroundColor: COLORS.textMuted,
+    backgroundColor: COLORS.lavenderSurface,
   },
   approveText: {
-    color: COLORS.background,
+    color: COLORS.textStrong,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -412,11 +414,6 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     width: 48,
-  },
-  avatarText: {
-    color: COLORS.textMuted,
-    fontSize: 16,
-    fontWeight: '700',
   },
   backdrop: {
     alignItems: 'center',
@@ -447,7 +444,11 @@ const styles = StyleSheet.create({
     color: COLORS.textStrong,
     fontSize: 22,
     fontWeight: '700',
-    marginTop: 8,
+  },
+  // 제목과 안내 문구는 한 덩어리로 묶어 목록보다 좁은 간격을 쓴다.
+  headingBlock: {
+    gap: 6,
+    marginTop: 24,
   },
   noticeBody: {
     color: COLORS.textMuted,
@@ -455,7 +456,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   noticeCard: {
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: COLORS.lavenderSurface,
     borderCurve: 'continuous',
     borderRadius: RADII.medium,
     gap: 8,
@@ -468,10 +469,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   rejectButton: {
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: COLORS.lemon,
   },
   rejectText: {
-    color: COLORS.error,
+    color: COLORS.textStrong,
     fontSize: 15,
     fontWeight: '700',
   },
