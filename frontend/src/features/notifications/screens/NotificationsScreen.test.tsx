@@ -1,5 +1,5 @@
 import React from 'react';
-import {FlatList, Text} from 'react-native';
+import {Alert, FlatList, Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import {ApiError} from '../../../shared/api';
@@ -927,6 +927,54 @@ test('푸시가 도착하면 새 알림만 목록 맨 위에 끼워 넣고 미�
     }),
   ).toBeTruthy();
   expect(unreadLabelShown(renderer!, 2)).toBe(true);
+});
+
+test('deleted post notifications stay on the list and show an unavailable-post alert', () => {
+  const alertSpy = jest
+    .spyOn(Alert, 'alert')
+    .mockImplementation(() => undefined);
+  const onOpenPost = jest.fn();
+  const notifications: readonly AppNotification[] = [
+    {
+      avatarText: 'A',
+      body: 'A new post was created.',
+      createdAtLabel: 'a moment ago',
+      groupId: 'group-1',
+      id: 'post-deleted-1',
+      isRead: false,
+      relatedJoinRequestStatus: null,
+      title: '새 게시글이 올라왔어요',
+      type: 'NEW_POST',
+    },
+  ];
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        initialNotifications={notifications}
+        onOpenPost={onOpenPost}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityLabel: '새 게시글이 올라왔어요, a moment ago',
+      })
+      .props.onPress();
+  });
+
+  expect(onOpenPost).not.toHaveBeenCalled();
+  expect(alertSpy).toHaveBeenCalledWith(
+    '게시글을 볼 수 없어요',
+    '작성자가 게시글을 삭제했거나 더 이상 볼 수 없습니다.',
+    [{text: '확인'}],
+  );
+  alertSpy.mockRestore();
 });
 
 test('푸시 도착 병합은 읽음 커밋 전 서버 값으로 기존 읽음 상태를 되돌리지 않는다', async () => {
