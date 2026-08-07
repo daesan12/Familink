@@ -1,4 +1,4 @@
-import {KeyboardAvoidingView, ScrollView, StyleSheet} from 'react-native';
+import {ScrollView, StyleSheet} from 'react-native';
 
 import {DraggableBottomSheet} from '../../../shared/components/DraggableBottomSheet';
 import {AUTH_COLORS} from '../theme';
@@ -33,15 +33,13 @@ export function GroupBottomSheet({
       sheetStyle={styles.sheet}
       visible={visible}
     >
-      <KeyboardAvoidingView behavior="padding">
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {children}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {children}
+      </ScrollView>
     </DraggableBottomSheet>
   );
 }
