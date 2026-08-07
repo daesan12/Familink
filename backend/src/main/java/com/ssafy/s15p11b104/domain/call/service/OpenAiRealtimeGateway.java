@@ -140,25 +140,38 @@ public class OpenAiRealtimeGateway {
 		);
 		recentPostTool.put("parameters", toolParameters);
 
-		Map<String, Object> dateExpressionProperty = new LinkedHashMap<>();
-		dateExpressionProperty.put("type", "string");
-		dateExpressionProperty.put("description", "사용자가 말한 원문 날짜 표현");
+		Map<String, Object> startDateProperty = new LinkedHashMap<>();
+		startDateProperty.put("type", "string");
+		startDateProperty.put(
+			"description",
+			"조회 시작 날짜. Asia/Seoul 기준 오늘 날짜로부터 직접 계산한 yyyy-MM-dd 형식의 절대 날짜입니다."
+		);
+
+		Map<String, Object> endDateProperty = new LinkedHashMap<>();
+		endDateProperty.put("type", "string");
+		endDateProperty.put(
+			"description",
+			"조회 종료 날짜. yyyy-MM-dd 절대 날짜이며 start_date와 같거나 이후여야 합니다."
+				+ " 하루만 조회하면 start_date와 같은 값을 넣습니다. 최대 7일까지 조회합니다."
+		);
 
 		Map<String, Object> calendarToolProperties = new LinkedHashMap<>();
-		calendarToolProperties.put("date_expression", dateExpressionProperty);
+		calendarToolProperties.put("start_date", startDateProperty);
+		calendarToolProperties.put("end_date", endDateProperty);
 
 		Map<String, Object> calendarToolParameters = new LinkedHashMap<>();
 		calendarToolParameters.put("type", "object");
 		calendarToolParameters.put("properties", calendarToolProperties);
-		calendarToolParameters.put("required", List.of("date_expression"));
+		calendarToolParameters.put("required", List.of("start_date", "end_date"));
 		calendarToolParameters.put("additionalProperties", false);
 
 		Map<String, Object> calendarTool = new LinkedHashMap<>();
 		calendarTool.put("type", "function");
-		calendarTool.put("name", "get_calendar_events_by_date");
+		calendarTool.put("name", "get_calendar_events_by_date_range");
 		calendarTool.put(
 			"description",
-			"Asia/Seoul 기준 특정 하루와 겹치는 현재 그룹의 모든 일정을 조회합니다."
+			"Asia/Seoul 기준 start_date부터 end_date까지의 기간과 겹치는 현재 그룹의 모든 일정을 조회합니다."
+				+ " 최대 7일이며 상대 날짜 표현은 받지 않습니다."
 		);
 		calendarTool.put("parameters", calendarToolParameters);
 

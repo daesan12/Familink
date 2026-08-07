@@ -18,6 +18,7 @@ import com.ssafy.s15p11b104.domain.account.repository.UserRepository;
 import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationDispatcher;
 import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationRequestRepository;
 import com.ssafy.s15p11b104.domain.call.report.CallReportGenerationService;
+import com.ssafy.s15p11b104.domain.call.repository.CalendarEventCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallTranscriptEventClaimStore;
@@ -96,6 +97,9 @@ class BackendApplicationContextTests {
 
 	@MockitoBean
 	private GroupMemberCallRepository groupMemberCallRepository;
+
+	@MockitoBean
+	private CalendarEventCallRepository calendarEventCallRepository;
 
 	@MockitoBean
 	private DailyReportGenerationService dailyReportGenerationService;
