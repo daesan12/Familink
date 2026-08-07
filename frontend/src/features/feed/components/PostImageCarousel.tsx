@@ -1,8 +1,10 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {
   useEffect,
-  useState} from 'react';
-import Video from 'react-native-video';
+  useRef,
+  useState,
+} from 'react';
+import Video, {type VideoRef} from 'react-native-video';
 import {
   ActivityIndicator,
   FlatList,
@@ -182,55 +184,124 @@ function FeedImageFrame({
   const [retryCount, setRetryCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoPlayGeneration, setVideoPlayGeneration] = useState(0);
+  const [videoEnded, setVideoEnded] = useState(false);
   const [videoError, setVideoError] = useState(false);
+  const videoRef = useRef<VideoRef>(null);
+  const isVideoFullscreenRef = useRef(false);
   const isVideo = image.mediaType === 'VIDEO';
   const hasPoster = !isVideo || image.hasPoster !== false;
-  const canPlayVideo =
-    isVisible &&
+  const hasPlayableVideo =
     isVideo &&
     image.fileUrl !== undefined &&
     image.fileUrl.trim().length > 0;
+  const canPlayVideo = isVisible && hasPlayableVideo;
+  const keepsFullscreenVideoMounted =
+    isPlaying && !isVisible && hasPlayableVideo && isVideoFullscreenRef.current;
 
   useEffect(() => {
+    if (isVideoFullscreenRef.current) {
+      videoRef.current?.dismissFullscreenPlayer();
+      isVideoFullscreenRef.current = false;
+    }
     setIsPlaying(false);
+    setVideoEnded(false);
     setVideoError(false);
   }, [image.fileUrl, image.id]);
 
   useEffect(() => {
     if (!isVisible) {
+      if (isVideoFullscreenRef.current) {
+        videoRef.current?.dismissFullscreenPlayer();
+        isVideoFullscreenRef.current = false;
+      }
       setIsPlaying(false);
+      setVideoEnded(false);
     }
   }, [isVisible]);
 
-  if (isPlaying && canPlayVideo) {
+  const handleVideoPlayPress = () => {
+    if (!canPlayVideo) {
+      onPress?.();
+      return;
+    }
+
+    setVideoError(false);
+    setVideoEnded(false);
+    setVideoPlayGeneration(generation => generation + 1);
+    setIsPlaying(true);
+  };
+
+  if (isPlaying && (canPlayVideo || keepsFullscreenVideoMounted)) {
     return (
       <View style={[styles.imageFrame, {height, width}]}>
         <Video
-          controls
+          controls={!videoEnded}
           key={`${image.id}-${videoPlayGeneration}`}
-          onEnd={() => setIsPlaying(false)}
+          onEnd={() => {
+            // Native fullscreen is rendered in a separate player window, so
+            // the React replay overlay cannot appear inside it. Close it at
+            // the end and reveal the replay button in the carousel frame.
+            if (isVideoFullscreenRef.current) {
+              videoRef.current?.dismissFullscreenPlayer();
+              isVideoFullscreenRef.current = false;
+            }
+            setVideoEnded(true);
+          }}
           onError={() => {
+            if (isVideoFullscreenRef.current) {
+              videoRef.current?.dismissFullscreenPlayer();
+              isVideoFullscreenRef.current = false;
+            }
             setIsPlaying(false);
+            setVideoEnded(false);
             setVideoError(true);
           }}
+          onFullscreenPlayerDidDismiss={() => {
+            isVideoFullscreenRef.current = false;
+          }}
+          onFullscreenPlayerDidPresent={() => {
+            isVideoFullscreenRef.current = true;
+          }}
+          onFullscreenPlayerWillDismiss={() => {
+            isVideoFullscreenRef.current = false;
+          }}
+          onFullscreenPlayerWillPresent={() => {
+            isVideoFullscreenRef.current = true;
+          }}
+          paused={!isVisible || videoEnded}
+          ref={videoRef}
           resizeMode="contain"
           source={{uri: image.fileUrl}}
           style={[styles.videoPlayer, {height, width}]}
           testID="post-video-player"
         />
+        {videoEnded ? (
+          <View style={styles.videoEndedOverlay}>
+            <Pressable
+              accessibilityLabel="동영상 다시보기"
+              accessibilityRole="button"
+              onPress={handleVideoPlayPress}
+              style={({pressed}) => [
+                styles.replayButton,
+                pressed && styles.replayButtonPressed,
+              ]}
+              testID="post-video-replay-button"
+            >
+              <MaterialDesignIcons
+                color={COLORS.background}
+                name="replay"
+                size={22}
+              />
+              <AppText style={styles.replayButtonText}>다시보기</AppText>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
     );
   }
 
   const handleMediaPress = () => {
-    if (canPlayVideo) {
-      setVideoError(false);
-      setVideoPlayGeneration(generation => generation + 1);
-      setIsPlaying(true);
-      return;
-    }
-
-    onPress?.();
+    handleVideoPlayPress();
   };
 
   return (
@@ -274,6 +345,7 @@ function FeedImageFrame({
         accessibilityRole={canPlayVideo || onPress ? 'button' : undefined}
         disabled={!canPlayVideo && !onPress}
         onPress={handleMediaPress}
+        testID={canPlayVideo ? 'post-video-poster' : undefined}
       >
         {hasPoster ? (
           <CachedRemoteImage
@@ -441,7 +513,39 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  videoEndedOverlay: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.46)',
+    bottom: 0,
+    elevation: 2,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 2,
+  },
   videoPlayer: {
     backgroundColor: COLORS.textStrong,
+  },
+  replayButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(20, 20, 28, 0.86)',
+    borderColor: 'rgba(255, 255, 255, 0.72)',
+    borderRadius: RADII.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 48,
+    paddingHorizontal: 20,
+  },
+  replayButtonPressed: {
+    opacity: 0.76,
+    transform: [{scale: 0.96}],
+  },
+  replayButtonText: {
+    color: COLORS.background,
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
