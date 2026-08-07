@@ -153,6 +153,8 @@ function renderShell(
   navRef: NavigationContainerRefWithCurrent<ParamListBase>,
   overrides?: AppScreenRegistry,
   onSubRouteClosed?: (route: SharedSubRoute) => void,
+  // 딥링크 목적지 판정이 그룹 속성(isManager)에 걸리는 테스트만 바꿔 넘긴다.
+  group: FamilyGroup = GROUP,
 ) {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
@@ -160,8 +162,8 @@ function renderShell(
       <NavigationContainer ref={navRef}>
         <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
           <AppShell
-            groups={[GROUP]}
-            initialGroupId={GROUP.id}
+            groups={[group]}
+            initialGroupId={group.id}
             initialRoute="feed"
             screens={createScreens(overrides, onSubRouteClosed)}
           />
@@ -595,4 +597,147 @@ test('보관함이 열린 채 현재 그룹이 삭제되면 대체 그룹의 피
   });
 
   expect(currentRouteName(navRef)).toBe('FeedHome');
+});
+
+// 가입 승인 대기의 진입 지점 복귀 (S15P11B104-336). 알림 화면만 딥링크 목적지를
+// 넘기게 하고 라우팅은 셸이 하게 둔다 — 목이 직접 열면 배선이 죽어도 초록이 된다.
+// 관리자 그룹이 필요하다: 셸은 isManager가 true인 그룹에서만 승인 화면을 연다.
+const MANAGER_GROUP: FamilyGroup = {
+  id: 'group-2',
+  isManager: true,
+  name: '관리자가족',
+  role: 'guardian',
+};
+
+function NotificationsDeepLinkMock({
+  onOpenNotificationTarget,
+}: AppScreenProps) {
+  return (
+    <>
+      <Text>screen:notifications</Text>
+      <Pressable
+        accessibilityLabel="open-join-approval"
+        onPress={() => onOpenNotificationTarget?.({kind: 'joinApproval'})}
+      >
+        <Text>open-join-approval</Text>
+      </Pressable>
+    </>
+  );
+}
+
+// 프로덕션의 ConnectedJoinApprovalScreen은 탭바를 숨기려고 전체화면을 보고한다
+// (팀 결정). 자매 하위 화면 중 유일하므로 셸이 그 조합을 어떻게 다루는지 별도로
+// 확인한다.
+function FullscreenJoinApprovalMock(props: AppScreenProps) {
+  const {onFullscreenChange} = props;
+
+  React.useEffect(() => {
+    onFullscreenChange?.(true);
+
+    return () => onFullscreenChange?.(false);
+  }, [onFullscreenChange]);
+
+  return createSubScreenMock('joinApproval')(props);
+}
+
+function renderShellAsManager(
+  navRef: NavigationContainerRefWithCurrent<ParamListBase>,
+  overrides?: AppScreenRegistry,
+) {
+  return renderShell(
+    navRef,
+    {notifications: NotificationsDeepLinkMock, ...overrides},
+    undefined,
+    MANAGER_GROUP,
+  );
+}
+
+test('알림에서 연 가입 승인 대기는 알림 위에 쌓이고 그룹정보 탭으로 가지 않는다', () => {
+  // 완료 기준 2. 승인 대기가 그룹정보 탭 화면이면 탭 전환이 FeedStack을
+  // 언마운트해 중첩 state가 지워지고 알림이 소멸한다 — 그것이 이 결함이었다.
+  const navRef = createNavigationContainerRef();
+  const renderer = renderShellAsManager(navRef);
+
+  press(renderer, OPENER_LABEL.notifications);
+  press(renderer, 'open-join-approval');
+
+  expect(currentRouteName(navRef)).toBe('joinApproval');
+  expect(
+    renderer.root.findAllByProps({children: 'screen:notifications'}),
+  ).not.toHaveLength(0);
+  expect(
+    renderer.root.findAllByProps({children: 'screen:groupInfo'}),
+  ).toHaveLength(0);
+  // 셸 크롬은 자매 하위 화면과 같이 물러난다.
+  expect(hasHeader(renderer)).toBe(false);
+  expect(hasFab(renderer)).toBe(false);
+  expect(renderer.root.findByType(MockTabBar).props.activeRoute).toBeNull();
+});
+
+test('알림에서 연 가입 승인 대기의 시스템 Back은 알림 화면으로 돌아온다', () => {
+  // 완료 기준 1. 셸이 뒤로가기를 소비하면 pop이 막혀 복귀가 구조적으로
+  // 불가능해지므로 리스너 수까지 함께 고정한다.
+  const back = mockHardwareBack();
+
+  try {
+    const navRef = createNavigationContainerRef();
+    const renderer = renderShellAsManager(navRef);
+    const listenersOnFeed = back.size();
+
+    press(renderer, OPENER_LABEL.notifications);
+    press(renderer, 'open-join-approval');
+
+    expect(back.size()).toBe(listenersOnFeed);
+
+    let handled = false;
+    TestRenderer.act(() => {
+      handled = back.press();
+    });
+
+    expect(handled).toBe(true);
+    expect(currentRouteName(navRef)).toBe('notifications');
+
+    // 알림 화면 자신의 뒤로가기는 그대로 피드 목록으로 간다.
+    TestRenderer.act(() => {
+      navRef.goBack();
+    });
+
+    expect(currentRouteName(navRef)).toBe('FeedHome');
+  } finally {
+    back.restore();
+  }
+});
+
+test('알림에서 연 가입 승인 대기의 헤더 뒤로가기도 알림 화면으로 돌아온다', () => {
+  // onCloseJoinApproval → closeSubRoute → 등록 지점의 navigation.goBack() 배선.
+  // JoinApprovalScreen에는 내비게이션 훅이 없어 이 배선은 여기서만 깨진다.
+  const navRef = createNavigationContainerRef();
+  const renderer = renderShellAsManager(navRef);
+
+  press(renderer, OPENER_LABEL.notifications);
+  press(renderer, 'open-join-approval');
+  press(renderer, CLOSE_LABEL.joinApproval);
+
+  expect(currentRouteName(navRef)).toBe('notifications');
+});
+
+test('전체화면을 보고하는 가입 승인 대기는 탭바를 숨기고 닫으면 되돌린다', () => {
+  // 프로덕션 연결 화면의 전체화면 보고를 재현한다. 언마운트 정리가 끊기면
+  // 알림으로 돌아온 뒤에도 탭바가 영구히 사라진다.
+  const navRef = createNavigationContainerRef();
+  const renderer = renderShellAsManager(navRef, {
+    joinApproval: FullscreenJoinApprovalMock,
+  });
+
+  press(renderer, OPENER_LABEL.notifications);
+  expect(renderer.root.findAllByType(MockTabBar)).not.toHaveLength(0);
+
+  press(renderer, 'open-join-approval');
+
+  expect(renderer.root.findAllByType(MockTabBar)).toHaveLength(0);
+
+  press(renderer, CLOSE_LABEL.joinApproval);
+
+  expect(currentRouteName(navRef)).toBe('notifications');
+  expect(renderer.root.findAllByType(MockTabBar)).not.toHaveLength(0);
 });

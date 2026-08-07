@@ -598,6 +598,16 @@ export function AppShell({
     if (resolvedGroupId !== currentGroup.id) {
       handleGroupSelect(resolvedGroupId);
     }
+    // 가입 승인 대기는 피드 탭 스택의 공유 하위 화면이다(S15P11B104-336). 알림
+    // 위에 쌓이므로 뒤로가기가 진입 지점인 알림으로 돌아간다 — 그룹정보 탭 화면
+    // 이면 탭 전환이 FeedStack을 언마운트해 알림이 소멸한다.
+    // 목적지 그룹은 params가 아니라 위 handleGroupSelect가 갱신한 currentGroup
+    // 으로 전달된다(그룹정보 탭 등록분도 같은 방식이다).
+    // 알림 분기와 같이 헤더 표시 값은 건드리지 않는다 — 피드 탭 화면이 소유한다.
+    if (target.kind === 'joinApproval' && targetGroup.isManager === true) {
+      openSubScreen('joinApproval');
+      return;
+    }
     setIsScreenHeaderVisible(true);
     if (target.kind === 'calendarEvent') {
       navigateInCalendarTab('CalendarHome', { openEventId: target.eventId });
@@ -615,17 +625,9 @@ export function AppShell({
       });
       return;
     }
-    if (target.kind === 'groupInfo') {
-      navigateInGroupInfoTab('GroupInfoHome', undefined);
-      return;
-    }
-    if (target.kind === 'joinApproval' && targetGroup.isManager !== true) {
-      navigateInGroupInfoTab('GroupInfoHome', undefined);
-      return;
-    }
-    navigateInGroupInfoTab('JoinApproval', {
-      groupId: resolvedGroupId,
-    });
+    // 남은 목적지는 그룹정보 홈이다: kind 'groupInfo'와, 승인 화면을 볼 수 없는
+    // 비관리자의 'joinApproval'(관리자 판정은 그룹 목록의 isManager).
+    navigateInGroupInfoTab('GroupInfoHome', undefined);
   };
   openNotificationTargetRef.current = handleOpenNotificationTarget;
 
