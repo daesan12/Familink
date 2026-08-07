@@ -34,6 +34,7 @@ import {
 } from "../components/ReportCalendarModal";
 import { ReportPageIndicator } from "../components/ReportPageIndicator";
 import { DEVELOPMENT_REPORT_PAGES } from "../fixtures/reportFixtures";
+import { reportCache } from "../reportCache";
 import { useCareReceiverReportTargets } from "../hooks/useCareReceiverReportTargets";
 import {
   type DailyReportGenerationUiState,
@@ -382,6 +383,23 @@ export function ReportScreen({
       }
       const gateway = reportGateway;
 
+      // 준비된 건별 리포트는 서버가 재생성하지 않으므로 조회 없이 그대로 쓴다.
+      // 이전 조회가 남아 있으면 무효화해 늦게 온 응답이 덮어쓰지 못하게 한다.
+      // 준비 전 상태는 캐시하지 않으므로 상태 다시 확인은 항상 서버로 간다.
+      const cachedReport = reportCache.getCallReport(call.callSessionId);
+      if (cachedReport) {
+        invalidateCallDetail();
+        setSelectedDetail({
+          call: {
+            ...call,
+            guardianMessage: cachedReport.guardianMessage,
+            summary: cachedReport.summary,
+          },
+          status: "ready",
+        });
+        return;
+      }
+
       const requestId = ++callRequestId.current;
       const pollingStartedAt = Date.now();
       setSelectedDetail({ call, status: "loading" });
@@ -461,6 +479,10 @@ export function ReportScreen({
 
         try {
           const report = await gateway.getCallReport(call.callSessionId);
+          if (report.status === "ready") {
+            // 준비된 리포트는 불변이라 조회가 무효화된 뒤 도착해도 캐시에 남긴다.
+            reportCache.setCallReport(report);
+          }
           if (requestId !== callRequestId.current) {
             return;
           }
@@ -495,6 +517,7 @@ export function ReportScreen({
       clearCallPollTimer,
       clearCallReportTimers,
       expireCallReportPolling,
+      invalidateCallDetail,
       reportGateway,
     ]
   );
