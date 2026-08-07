@@ -139,6 +139,7 @@ internal fun AiCallRoute(
   var permissionResult by remember { mutableStateOf<Boolean?>(null) }
   var connectionLostSignal by remember { mutableIntStateOf(0) }
   var isEnding by rememberSaveable { mutableStateOf(false) }
+  var endedByDurationLimit by rememberSaveable { mutableStateOf(false) }
   var failedEndPhase by remember { mutableStateOf<AiCallPhase?>(null) }
   var failureReason by rememberSaveable { mutableStateOf(AiCallFailureReason.Connection) }
   var hasRequestedMicrophonePermission by rememberSaveable { mutableStateOf(false) }
@@ -204,15 +205,6 @@ internal fun AiCallRoute(
     onFullscreenChange(phase != AiCallPhase.Selecting)
   }
 
-  LaunchedEffect(phase) {
-    if (phase == AiCallPhase.InProgress) {
-      while (isActive) {
-        delay(1_000)
-        durationSeconds += 1
-      }
-    }
-  }
-
   LaunchedEffect(connectionLostSignal, phase) {
     if (connectionLostSignal == 0 || phase != AiCallPhase.InProgress || isEnding) {
       return@LaunchedEffect
@@ -239,6 +231,7 @@ internal fun AiCallRoute(
     } else {
       callJob?.cancel()
       isEnding = false
+      endedByDurationLimit = false
       failedEndPhase = null
       failureReason = AiCallFailureReason.Connection
       durationSeconds = 0
@@ -324,6 +317,7 @@ internal fun AiCallRoute(
     callJob?.cancel()
     callRuntime?.close()
     isEnding = false
+    endedByDurationLimit = false
     failedEndPhase = null
     failureReason = AiCallFailureReason.Connection
     pendingPersonaId = null
@@ -369,9 +363,30 @@ internal fun AiCallRoute(
     }
   }
 
+  // 종료를 실제로 시작했는지 알려 준다. 이미 종료 중이거나 활성 단계가 아니면 아무것도 하지 않으므로,
+  // 상한 판정처럼 종료를 자기 원인으로 기록해야 하는 호출부가 이 결과로 구분할 수 있다.
   val finishCall = {
-    if (!isEnding && (phase == AiCallPhase.Connecting || phase == AiCallPhase.InProgress)) {
+    val started = !isEnding && (phase == AiCallPhase.Connecting || phase == AiCallPhase.InProgress)
+    if (started) {
       finishCallFromPhase(phase)
+    }
+    started
+  }
+
+  // 통화 시간을 세면서 상한 도달을 함께 판정한다. 상한에 닿으면 종료 버튼과 같은 경로로 끝내므로
+  // 서버에는 사용자 종료로 접수되고 통화는 COMPLETED로 마감된다. 사용자가 상한 직전에 종료 버튼을
+  // 누르면 이 코루틴이 해제되기 전에 마지막 틱이 돌 수 있으므로, 종료를 실제로 시작했을 때만
+  // 시간 만료로 기록해 사용자 종료가 시간 만료로 표시되지 않게 한다.
+  LaunchedEffect(phase) {
+    if (phase == AiCallPhase.InProgress) {
+      while (isActive) {
+        delay(1_000)
+        durationSeconds += 1
+        if (isAiCallDurationLimitReached(durationSeconds)) {
+          endedByDurationLimit = finishCall()
+          return@LaunchedEffect
+        }
+      }
     }
   }
 
@@ -393,6 +408,7 @@ internal fun AiCallRoute(
               isSpeakerOn = isSpeakerOn,
               captionDraft = captionDraft,
               captionHistory = captionHistory,
+              endedByDurationLimit = endedByDurationLimit,
           ),
       selectedPersonaId = selectedPersonaId,
       onPersonaSelected = { selectedPersonaId = it },
@@ -409,7 +425,7 @@ internal fun AiCallRoute(
         isSpeakerOn = !isSpeakerOn
         callRuntime?.setSpeakerEnabled(isSpeakerOn)
       },
-      onEndCall = finishCall,
+      onEndCall = { finishCall() },
       onConfirm = returnToSelection,
       onRetry = {
         when (failureReason) {
@@ -1152,12 +1168,7 @@ private fun CallEndedScreen(
     )
     Spacer(modifier = Modifier.height(10.dp))
     Text(
-        text =
-            if (wasCancelled) {
-              "준비되면 다시 이야기해 보세요."
-            } else {
-              "오늘 나눈 이야기는 소중히 기억할게요."
-            },
+        text = aiCallEndedDescription(wasCancelled, state.endedByDurationLimit),
         color = AiCallColors.OnDarkMuted,
         fontSize = 16.sp,
         lineHeight = 24.sp,

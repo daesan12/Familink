@@ -445,8 +445,39 @@ class AiCallContentTest {
     }
 
     composeRule.onNodeWithText("통화가 종료되었어요.").assertIsDisplayed()
+    composeRule.onNodeWithText("오늘 나눈 이야기는 소중히 기억할게요.").assertIsDisplayed()
     composeRule.onNodeWithTag("call-gradient-background").assertIsDisplayed()
     composeRule.onNodeWithText("02:05").assertIsDisplayed()
+    composeRule.onNodeWithTag("confirm-call-ended").assertIsDisplayed()
+  }
+
+  @Test
+  fun 시간_만료로_끝난_통화는_종료_화면에서_사용자_종료와_구분된다() {
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state =
+                AiCallUiState(
+                    phase = AiCallPhase.Completed,
+                    persona = aiPersonas[3],
+                    durationSeconds = AI_CALL_MAX_DURATION_SECONDS,
+                    endedByDurationLimit = true,
+                ),
+            selectedPersonaId = 4,
+            onPersonaSelected = {},
+            onStartCall = {},
+            onToggleMute = {},
+            onToggleSpeaker = {},
+            onEndCall = {},
+            onConfirm = {},
+            onRetry = {},
+        )
+      }
+    }
+
+    composeRule.onNodeWithText("통화가 종료되었어요.").assertIsDisplayed()
+    composeRule.onNodeWithText("통화 가능한 시간이 다 되어 마무리했어요.").assertIsDisplayed()
+    composeRule.onNodeWithText("10:00").assertIsDisplayed()
     composeRule.onNodeWithTag("confirm-call-ended").assertIsDisplayed()
   }
 
