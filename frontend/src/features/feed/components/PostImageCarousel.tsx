@@ -181,6 +181,7 @@ function FeedImageFrame({
   );
   const [retryCount, setRetryCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [videoPlayGeneration, setVideoPlayGeneration] = useState(0);
   const [videoError, setVideoError] = useState(false);
   const isVideo = image.mediaType === 'VIDEO';
   const hasPoster = !isVideo || image.hasPoster !== false;
@@ -206,6 +207,7 @@ function FeedImageFrame({
       <View style={[styles.imageFrame, {height, width}]}>
         <Video
           controls
+          key={`${image.id}-${videoPlayGeneration}`}
           onEnd={() => setIsPlaying(false)}
           onError={() => {
             setIsPlaying(false);
@@ -223,6 +225,7 @@ function FeedImageFrame({
   const handleMediaPress = () => {
     if (canPlayVideo) {
       setVideoError(false);
+      setVideoPlayGeneration(generation => generation + 1);
       setIsPlaying(true);
       return;
     }

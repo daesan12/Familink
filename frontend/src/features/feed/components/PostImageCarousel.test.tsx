@@ -54,6 +54,37 @@ describe('PostImageCarousel', () => {
     act(() => renderer!.unmount());
   });
 
+  it('restarts a video from the beginning after playback ends', () => {
+    const image = {
+      fileUrl: 'https://cdn.example.com/video.mp4?signature=valid',
+      hasPoster: true,
+      id: 'video-replay',
+      mediaType: 'VIDEO' as const,
+      source: {uri: 'https://cdn.example.com/thumbnail.jpg'},
+    };
+    let renderer: ReactTestRenderer;
+
+    act(() => {
+      renderer = create(<PostImageCarousel images={[image]} />);
+    });
+
+    act(() => {
+      renderer!.root.findByProps({accessibilityLabel: '동영상 재생'}).props.onPress();
+    });
+    const firstPlayer = renderer!.root.findByProps({testID: 'post-video-player'});
+
+    act(() => firstPlayer.props.onEnd());
+    expect(() => renderer!.root.findByProps({testID: 'post-video-player'})).toThrow();
+
+    act(() => {
+      renderer!.root.findByProps({accessibilityLabel: '동영상 재생'}).props.onPress();
+    });
+    const replayedPlayer = renderer!.root.findByProps({testID: 'post-video-player'});
+    expect(replayedPlayer).not.toBe(firstPlayer);
+
+    act(() => renderer!.unmount());
+  });
+
   it('stops video playback when its feed item becomes invisible', () => {
     const image = {
       fileUrl: 'https://cdn.example.com/video.mp4?signature=valid',
