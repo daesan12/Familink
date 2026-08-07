@@ -52,9 +52,9 @@ import type {
 const Tab = createBottomTabNavigator<MainTabsParamList>();
 const renderNullTabBar = () => null;
 
-// 내부 스택을 가진 탭의 루트 화면 이름. 재탭의 key 리마운트는 같은 커밋이라
-// 새 내비게이터가 구 스택 상태를 재수화하므로, pop:true로 루트 위 화면을
-// 함께 정리해 "재탭 = 초기화"를 보장한다(S15P11B104-321에서 검증된 방식).
+// 내부 스택을 가진 탭의 루트 화면 이름. goToTabRoot가 pop:true 중첩 params로
+// 여기까지 되감는다 — 재탭 초기화(S15P11B104-321)와, 하위 화면이 위에 있는
+// 자기 탭 누르기·그룹 교체 정리(S15P11B104-368)가 이 표를 공유한다.
 const STACK_ROOT_BY_TAB: Partial<Record<MainTabRoute, string>> = {
   calendar: 'CalendarHome',
   feed: 'FeedHome',
@@ -184,7 +184,7 @@ export function AppShell({
     route: SharedSubRoute;
   } | null>(null);
 
-  const handleSubRouteOpened = useCallback(
+  const handleSubRouteFocused = useCallback(
     (route: SharedSubRoute, close: () => void) => {
       openSubRouteRef.current = { close, route };
       setFocusedSubRoute(route);
@@ -192,9 +192,10 @@ export function AppShell({
     []
   );
 
-  // 호스트 언마운트(= pop) 보고. 헤더 뒤로가기·하드웨어 뒤로가기·탭 이동이 모두
-  // 여기로 수렴하므로 신호를 내리는 지점이 하나로 유지된다.
-  const handleSubRouteClosed = useCallback((route: SharedSubRoute) => {
+  // 호스트 blur 보고. 헤더 뒤로가기·하드웨어 뒤로가기·상세 push가 모두 여기로
+  // 수렴하므로 신호를 내리는 지점이 하나로 유지된다. 닫기 함수도 함께 비워
+  // closeSubRoute가 최상단이 아닌 하위 화면을 잘못 pop하지 못하게 한다.
+  const handleSubRouteBlurred = useCallback((route: SharedSubRoute) => {
     if (openSubRouteRef.current?.route === route) {
       openSubRouteRef.current = null;
     }
@@ -224,17 +225,27 @@ export function AppShell({
   // 컨테이너의 useBackButton이 뒤로가기를 가로채지 않는다(피드에서 앱 종료·
   // 풀스크린 중 미소비 계약의 전제).
   //
-  // 하위 화면(알림·보관함)은 탭 스택 안에 있어 중첩 params로 pop할 수 없으므로
-  // 먼저 닫는다. 이 한 줄이 "하위 화면은 다른 화면 밑에 깔리지 않는다"는 이
-  // 티켓의 불변식을 만든다 — 뒤로가기 목적지를 바꾸는 후속 티켓
-  // (S15P11B104-368)에서 제거할 이음새다.
-  const mirrorTabRoute = useCallback(
-    (route: MainTabRoute) => {
-      closeSubRoute();
-      setVisibleTabRoute(route);
-    },
-    [closeSubRoute]
-  );
+  // 하위 화면(알림·보관함)은 스택에 남긴다 — 게시글 상세가 그 위에 쌓여야
+  // 뒤로가기가 진입 지점으로 돌아간다(S15P11B104-368). 미러만 낙관적으로
+  // 갱신하고, 스택 정리가 필요한 곳은 goToTabRoot를 따로 호출한다.
+  // 신호를 여기서 즉시 내리는 이유: 호스트 blur 보고를 기다리면 그 사이 한
+  // 커밋 동안 "다른 탭인데 하위 화면 기준으로 판단"하는 상태가 낀다.
+  const mirrorTabRoute = useCallback((route: MainTabRoute) => {
+    setFocusedSubRoute(null);
+    setVisibleTabRoute(route);
+  }, []);
+  // 탭 스택을 루트 화면으로 되감는다. 내부 스택이 없는 탭(리포트·AI 전화)에는
+  // dispatch하지 않는다 — 리포트 재탭이 openReport params를 유지해 통화 상세
+  // 팝업을 다시 여는 현재 계약을 깨지 않기 위해서다.
+  const goToTabRoot = useCallback((route: MainTabRoute) => {
+    const stackRoot = STACK_ROOT_BY_TAB[route];
+    if (stackRoot === undefined) {
+      return;
+    }
+    tabNavRef.current?.dispatch(
+      CommonActions.navigate(route, { pop: true, screen: stackRoot })
+    );
+  }, []);
   const goToTab = useCallback(
     (route: MainTabRoute) => {
       mirrorTabRoute(route);
@@ -311,8 +322,8 @@ export function AppShell({
   //
   // 하위 화면(알림·보관함)은 피드 탭 스택 화면이므로 셸이 소비하면 안 된다.
   // 컨테이너의 useBackButton이 최심 포커스 스택을 pop해 진입 지점으로 돌아가고,
-  // 호스트의 언마운트 cleanup이 신호를 내린다. 셸이 가로채면 pop이 일어나지 않아
-  // 진입 지점 복귀(S15P11B104-368)가 구조적으로 막힌다.
+  // 호스트의 blur cleanup이 신호를 내린다. 셸이 가로채면 pop이 일어나지 않아
+  // 진입 지점 복귀가 구조적으로 막힌다.
   const canReturnToFeed =
     focusedSubRoute === null && resolvedTabRoute !== 'feed';
 
@@ -471,14 +482,16 @@ export function AppShell({
       initialGroupStillExists
     ) {
       setCurrentGroupId(initialGroupId);
-      // 삭제·탈퇴한 그룹의 하위 화면을 다음 그룹에 그대로 보여주면 삭제된
-      // 그룹 정보가 남은 것처럼 보인다. 대체 그룹은 피드에서 새로 시작한다.
+      // 삭제·탈퇴한 그룹의 하위 화면(보관함·알림)을 다음 그룹에 그대로 보여주면
+      // 삭제된 그룹 정보가 남은 것처럼 보인다. 대체 그룹은 피드 목록에서 새로
+      // 시작한다 — goToTab은 더 이상 pop하지 않으므로 루트를 명시한다.
       goToTab('feed');
+      goToTabRoot('feed');
       setIsScreenFullscreen(false);
       setIsScreenHeaderVisible(true);
       setIsGroupMenuOpen(false);
     }
-  }, [currentGroupId, goToTab, groups, initialGroupId]);
+  }, [currentGroupId, goToTab, goToTabRoot, groups, initialGroupId]);
 
   if (isRestoringGroup) {
     return (
@@ -652,10 +665,10 @@ export function AppShell({
   // ref로 방어하고 있다.
   screenProps.renderSharedSubRoute = (route, options) => (
     <SharedSubRouteScreen
+      onBlurred={handleSubRouteBlurred}
       onClose={options.onClose}
-      onClosed={handleSubRouteClosed}
+      onFocused={handleSubRouteFocused}
       onHostClosed={options.onClosed}
-      onOpened={handleSubRouteOpened}
       route={route}
       screenProps={screenProps}
       screens={screens}
@@ -842,16 +855,17 @@ export function AppShell({
               // AI 전화는 재마운트하면 네이티브 통화 선택 상태를 잃으므로 제외한다.
               if (route !== 'aiCall') {
                 setScreenRefreshNonce(nonce => nonce + 1);
-                const stackRoot = STACK_ROOT_BY_TAB[route];
-                if (stackRoot !== undefined) {
-                  tabNavRef.current?.dispatch(
-                    CommonActions.navigate(route, {
-                      pop: true,
-                      screen: stackRoot,
-                    })
-                  );
-                }
+                goToTabRoot(route);
               }
+              return;
+            }
+            // 하위 화면(알림·보관함)이 위에 있는 자기 탭을 누른 경우. 아무 탭도
+            // 강조돼 있지 않으니 재탭은 아니지만, 누른 탭에 도착하지 못하면
+            // 탭바가 거짓말이 된다. 탭 전환이 없어 navigate만으로는 중첩 스택에
+            // 아무 액션도 가지 않으므로 루트를 명시한다. 재마운트는 하지 않는다.
+            if (route === resolvedTabRoute) {
+              mirrorTabRoute(route);
+              goToTabRoot(route);
               return;
             }
             goToTab(route);
@@ -944,58 +958,58 @@ function ShellRouteScreen({
 }
 
 interface SharedSubRouteScreenProps {
+  onBlurred: (route: SharedSubRoute) => void;
   onClose: () => void;
-  onClosed: (route: SharedSubRoute) => void;
+  onFocused: (route: SharedSubRoute, close: () => void) => void;
   // 등록한 스택이 닫힘 뒤에 하고 싶은 일(예: 목록 재조회).
   onHostClosed?: () => void;
-  onOpened: (route: SharedSubRoute, close: () => void) => void;
   route: SharedSubRoute;
   screenProps: AppScreenProps;
   screens: AppScreenRegistry;
 }
 
 // 공유 하위 화면(알림·보관함) 호스트. 셸이 소유하지만 렌더 위치는 스택이다.
-// 포커스로 "열림 + 닫기 함수"를, 언마운트 cleanup으로 "닫힘"을 셸에 보고한다.
-// GroupInfoScreen의 SubScreenRouteSync와 같은 관용구 — 헤더 뒤로가기·하드웨어
-// 뒤로가기·탭 이동이 모두 pop 한 번으로 수렴한다.
+// 포커스로 "열림 + 닫기 함수"를, blur로 "더 이상 최상단이 아님"을 셸에 보고한다.
+// GroupInfoScreen의 SubScreenRouteSync와 같은 관용구.
 // 탭 화면과 달리 비포커스에서 null을 반환하지 않는다: 스택은 아래 화면을 마운트
-// 유지하는 것이 정상이고, 후속 티켓에서 상세가 위에 쌓여도 보존돼야 한다.
+// 유지하는 것이 정상이고, 게시글 상세가 위에 쌓여도 보존돼야 한다.
 // 반드시 모듈 레벨로 유지한다(ShellRouteScreen과 같은 이유).
 function SharedSubRouteScreen({
+  onBlurred,
   onClose,
-  onClosed,
+  onFocused,
   onHostClosed,
-  onOpened,
   route,
   screenProps,
   screens,
 }: SharedSubRouteScreenProps) {
   const isFocused = useIsFocused();
   // 콜백 신원에 의존하지 않는다. 셸이 렌더마다 새 렌더러를 만들기 때문에, deps에
-  // 콜백을 넣으면 닫힘 cleanup이 매 렌더 실행되어 신호가 조용히 내려간다.
+  // 콜백을 넣으면 blur cleanup이 매 렌더 실행되어 신호가 조용히 내려간다.
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const close = useRef(() => closeRef.current()).current;
-  const onOpenedRef = useRef(onOpened);
-  onOpenedRef.current = onOpened;
-  const onClosedRef = useRef(onClosed);
-  onClosedRef.current = onClosed;
+  const onFocusedRef = useRef(onFocused);
+  onFocusedRef.current = onFocused;
+  const onBlurredRef = useRef(onBlurred);
+  onBlurredRef.current = onBlurred;
   const onHostClosedRef = useRef(onHostClosed);
   onHostClosedRef.current = onHostClosed;
 
+  // 포커스로 올리고 blur로 내린다. 상세가 위에 쌓이면 호스트는 마운트된 채
+  // 비포커스가 되므로, 언마운트만 보고하면 신호가 굳어 상세를 보는 동안
+  // 미읽음 배지가 갱신되지 않고 푸시 구독도 해제된 채로 남는다.
   useEffect(() => {
-    if (isFocused) {
-      onOpenedRef.current(route, close);
+    if (!isFocused) {
+      return;
     }
+    onFocusedRef.current(route, close);
+    return () => onBlurredRef.current(route);
   }, [close, isFocused, route]);
 
-  useEffect(
-    () => () => {
-      onClosedRef.current(route);
-      onHostClosedRef.current?.();
-    },
-    [route]
-  );
+  // 닫힘 후처리(피드 목록 재조회)는 언마운트 전용이다 — blur로 부르면 상세가
+  // 쌓일 때마다 목록이 재조회된다.
+  useEffect(() => () => onHostClosedRef.current?.(), []);
 
   return (
     <ShellScreenBody

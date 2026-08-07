@@ -196,7 +196,11 @@ export function PostDetailScreen({
       style={styles.container}
     >
       <View style={styles.header}>
-        <BackButton accessibilityLabel="피드로 돌아가기" onPress={onBack} />
+        {/* 목적지가 아니라 닫는 대상을 말한다. 뒤로가기가 진입 지점으로
+            돌아가면서(S15P11B104-368) 목적지가 피드·알림·보관함으로 갈리는데,
+            entrySource는 보관함을 구분하지 못한다(기본값 feed).
+            알림의 "알림 화면 닫기", 보관함의 "보관함 닫기"와 같은 계열. */}
+        <BackButton accessibilityLabel="게시글 닫기" onPress={onBack} />
         <AppText numberOfLines={1} style={styles.title}>
           {currentGroupName}
         </AppText>
