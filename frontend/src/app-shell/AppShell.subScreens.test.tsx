@@ -91,6 +91,29 @@ function createSubScreenMock(route: SharedSubRoute) {
   };
 }
 
+// 하위 화면에서 게시글 상세를 여는 목. 호출자 차이를 그대로 재현한다 —
+// NotificationsScreen은 entrySource로 'notification'을 넘기고 ArchiveScreen은
+// 넘기지 않는다(기본값 'feed').
+function createOpenPostMock(route: SharedSubRoute) {
+  return function OpenPostMock({onOpenPost}: AppScreenProps) {
+    return (
+      <>
+        <Text>{`screen:${route}`}</Text>
+        <Pressable
+          accessibilityLabel={`open-post:${route}`}
+          onPress={() =>
+            route === 'notifications'
+              ? onOpenPost?.('42', GROUP.id, 'notification')
+              : onOpenPost?.('42', GROUP.id)
+          }
+        >
+          <Text>{`open-post:${route}`}</Text>
+        </Pressable>
+      </>
+    );
+  };
+}
+
 function createScreens(
   overrides?: AppScreenRegistry,
   onSubRouteClosed?: (route: SharedSubRoute) => void,
@@ -285,9 +308,11 @@ test.each(SUB_SCREEN_ROUTES)(
   },
 );
 
-test('알림 화면에서 다른 탭으로 이동하면 하위 화면이 정리되고 셸이 다시 뒤로가기를 처리한다', () => {
-  // 하위 화면이 스택에 남으면 피드로 돌아올 때 다시 열린다. goToTab의
-  // closeSubRoute 선행이 그것을 막는다.
+test('알림 화면에서 다른 탭으로 이동하면 셸이 다시 뒤로가기를 처리하고 피드는 목록에서 시작한다', () => {
+  // 피드 복귀가 FeedHome인 근거는 셸의 정리가 아니라 라이브러리 계약이다:
+  // ShellRouteScreen이 비포커스에서 null을 반환해 FeedStack이 언마운트되고,
+  // useNavigationBuilder의 언마운트 cleanup이 부모 route의 중첩 state를 지운다.
+  // goToTab의 navigate가 탭 params까지 비우므로 재진입은 항상 스택 루트다.
   const back = mockHardwareBack();
 
   try {
@@ -310,45 +335,39 @@ test('알림 화면에서 다른 탭으로 이동하면 하위 화면이 정리�
     });
 
     expect(handled).toBe(true);
-    // 알림이 스택에 남아 있었다면 여기서 'notifications'가 나온다.
     expect(currentRouteName(navRef)).toBe('FeedHome');
   } finally {
     back.restore();
   }
 });
 
-test('알림에서 게시글을 열면 알림이 스택에서 빠지고 상세의 뒤로가기는 피드 목록으로 간다', () => {
-  // 이 티켓은 뒤로가기 목적지를 바꾸지 않는다. 알림이 상세 밑에 남으면 목적지가
-  // 알림으로 바뀌어 버리므로, navigateInTab의 closeSubRoute 선행이 유일한
-  // 방어선이다(S15P11B104-368에서 의도적으로 제거할 이음새).
-  const navRef = createNavigationContainerRef();
-  const renderer = renderShell(navRef, {
-    notifications: ({onOpenPost}: AppScreenProps) => (
-      <Pressable onPress={() => onOpenPost?.('42', GROUP.id, 'notification')}>
-        <Text>open-post</Text>
-      </Pressable>
-    ),
-  });
+test.each(SUB_SCREEN_ROUTES)(
+  '%s에서 연 게시글 상세의 뒤로가기는 진입 지점으로 돌아온다',
+  route => {
+    // 이 티켓의 본체(완료 기준 1·2). 하위 화면이 상세 밑에 남는 것이 유일한
+    // 근거다 — mirrorTabRoute가 다시 pop하기 시작하면 여기서 FeedHome이 나온다.
+    const navRef = createNavigationContainerRef();
+    const renderer = renderShell(navRef, {[route]: createOpenPostMock(route)});
 
-  press(renderer, OPENER_LABEL.notifications);
-  TestRenderer.act(() => {
-    renderer.root
-      .findAll(
-        node =>
-          typeof node.props.onPress === 'function' &&
-          node.findAllByType(Text).some(t => t.props.children === 'open-post'),
-      )[0]
-      .props.onPress();
-  });
+    press(renderer, OPENER_LABEL[route]);
+    press(renderer, `open-post:${route}`);
 
-  expect(currentRouteName(navRef)).toBe('PostDetail');
+    expect(currentRouteName(navRef)).toBe('PostDetail');
 
-  TestRenderer.act(() => {
-    navRef.goBack();
-  });
+    TestRenderer.act(() => {
+      navRef.goBack();
+    });
 
-  expect(currentRouteName(navRef)).toBe('FeedHome');
-});
+    expect(currentRouteName(navRef)).toBe(route);
+
+    // 하위 화면 자신의 뒤로가기는 그대로 피드 목록으로 간다.
+    TestRenderer.act(() => {
+      navRef.goBack();
+    });
+
+    expect(currentRouteName(navRef)).toBe('FeedHome');
+  },
+);
 
 function createNotificationGateway(): jest.Mocked<NotificationGateway> {
   return {
@@ -409,4 +428,152 @@ test('알림 화면을 열면 푸시 구독을 해제하고 닫으면 다시 구
   });
 
   expect(listeners.size).toBe(1);
+});
+
+test('알림 위에 게시글 상세가 쌓이면 푸시 구독이 되살아난다', async () => {
+  // 신호를 blur가 아니라 언마운트로만 내리면, 상세를 보는 동안 구독이 해제된
+  // 채로 굳어 미읽음 배지가 갱신되지 않는다(S15P11B104-368).
+  const gateway = createNotificationGateway();
+  const listeners = new Set<() => void>();
+  const subscribe = jest.fn((listener: () => void) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  });
+  const navRef = createNavigationContainerRef();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NavigationContainer ref={navRef}>
+        <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
+          <NotificationGatewayProvider gateway={gateway}>
+            <AppShell
+              groups={[GROUP]}
+              initialGroupId={GROUP.id}
+              initialRoute="feed"
+              screens={createScreens({
+                notifications: createOpenPostMock('notifications'),
+              })}
+              subscribePushReceived={subscribe}
+            />
+          </NotificationGatewayProvider>
+        </SafeAreaProvider>
+      </NavigationContainer>,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(listeners.size).toBe(1);
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: OPENER_LABEL.notifications})
+      .props.onPress();
+  });
+  expect(listeners.size).toBe(0);
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: 'open-post:notifications'})
+      .props.onPress();
+  });
+  expect(listeners.size).toBe(1);
+
+  await TestRenderer.act(async () => {
+    navRef.goBack();
+  });
+  expect(listeners.size).toBe(0);
+});
+
+test('알림 위에 게시글 상세가 쌓이면 피드 탭이 다시 강조된다', () => {
+  // 하위 화면이 최상단일 때만 어떤 탭도 강조하지 않는다. 상세는 피드 탭의
+  // 화면이므로 피드에서 들어간 상세와 같게 보여야 한다.
+  const navRef = createNavigationContainerRef();
+  const renderer = renderShell(navRef, {
+    notifications: createOpenPostMock('notifications'),
+  });
+  const activeRoute = () =>
+    renderer.root.findByType(MockTabBar).props.activeRoute;
+
+  press(renderer, OPENER_LABEL.notifications);
+  expect(activeRoute()).toBeNull();
+
+  press(renderer, 'open-post:notifications');
+  expect(activeRoute()).toBe('feed');
+
+  TestRenderer.act(() => {
+    navRef.goBack();
+  });
+  expect(activeRoute()).toBeNull();
+});
+
+test('피드 목록에서 연 게시글 상세의 뒤로가기는 피드 목록으로 간다', () => {
+  // 완료 기준 3 전반. 하위 화면이 끼어들지 않는 경로의 회귀 방어.
+  const navRef = createNavigationContainerRef();
+  const renderer = renderShell(navRef, {
+    feed: createFeedTabHostScreen({
+      renderHome: ({props}) => (
+        <Pressable
+          accessibilityLabel="open-post:feed"
+          onPress={() => props.onOpenPost?.('42', GROUP.id)}
+        >
+          <Text>screen:feed</Text>
+        </Pressable>
+      ),
+    }),
+  });
+
+  press(renderer, 'open-post:feed');
+
+  expect(currentRouteName(navRef)).toBe('PostDetail');
+  // 알림이 스택에 있었다면 그 목이 마운트된다.
+  expect(
+    renderer.root.findAllByProps({children: 'screen:notifications'}),
+  ).toHaveLength(0);
+
+  TestRenderer.act(() => {
+    navRef.goBack();
+  });
+
+  expect(currentRouteName(navRef)).toBe('FeedHome');
+});
+
+test('보관함이 열린 채 현재 그룹이 삭제되면 대체 그룹의 피드 목록에서 시작한다', async () => {
+  // 삭제된 그룹의 하위 화면을 다음 그룹에 그대로 보여주면 안 된다. goToTab이
+  // 더 이상 pop하지 않으므로(S15P11B104-368) 셸이 스택 루트를 명시해야 하는데,
+  // 그 호출을 지워도 잡히는 테스트가 없었다.
+  const otherGroup: FamilyGroup = {
+    id: 'group-2',
+    name: '남은 가족',
+    role: 'careReceiver',
+  };
+  const navRef = createNavigationContainerRef();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  const tree = (groups: readonly FamilyGroup[], initialGroupId: string) => (
+    <NavigationContainer ref={navRef}>
+      <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
+        <AppShell
+          groups={groups}
+          initialGroupId={initialGroupId}
+          initialRoute="feed"
+          screens={createScreens()}
+        />
+      </SafeAreaProvider>
+    </NavigationContainer>
+  );
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(tree([GROUP, otherGroup], GROUP.id));
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, OPENER_LABEL.archive);
+  expect(currentRouteName(navRef)).toBe('archive');
+
+  await TestRenderer.act(async () => {
+    renderer!.update(tree([otherGroup], otherGroup.id));
+  });
+
+  expect(currentRouteName(navRef)).toBe('FeedHome');
 });
