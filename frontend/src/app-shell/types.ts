@@ -115,12 +115,6 @@ export type MainTabsParamList = Omit<
     | undefined;
 };
 
-export type ShellStackParamList = {
-  MainTabs: NavigatorScreenParams<MainTabsParamList> | undefined;
-  archive: undefined;
-  notifications: undefined;
-};
-
 export type AppScreenRenderer = (props: AppScreenProps) => ReactNode;
 
 export type AppScreenRegistry = Partial<Record<AppRoute, AppScreenRenderer>>;
