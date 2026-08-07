@@ -2,6 +2,7 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {
   Animated,
   AccessibilityInfo,
+  KeyboardAvoidingView,
   Modal,
   PanResponder,
   Pressable,
@@ -51,7 +52,11 @@ export function DraggableBottomSheet({
   const currentSnapRef = useRef(0);
   const gestureStartRef = useRef(0);
   const wasVisibleRef = useRef(false);
-  const collapsedOffset = Math.max(sheetHeight - collapsedHeight, 0);
+  // 접힌 상태에서도 collapsedHeight만큼은 시스템 내비게이션 바 위로 보여야 한다.
+  const collapsedOffset = Math.max(
+    sheetHeight - collapsedHeight - insets.bottom,
+    0,
+  );
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
@@ -193,30 +198,38 @@ export function DraggableBottomSheet({
           onPress={onClose}
           style={StyleSheet.absoluteFill}
         />
-        <Animated.View
-          onLayout={event => {
-            const nextHeight = event.nativeEvent.layout.height;
-            if (nextHeight !== sheetHeight) {
-              setSheetHeight(nextHeight);
-            }
-          }}
-          style={[styles.sheet, sheetStyle, {transform: [{translateY}]}]}
+        {/* edge-to-edge에서는 Modal이 adjustResize를 받지 못하므로
+            시트 전체를 padding으로 밀어 올려 키보드 위에 유지한다. */}
+        <KeyboardAvoidingView
+          behavior="padding"
+          pointerEvents="box-none"
+          style={styles.keyboardArea}
         >
-          <View
-            {...(dismissDisabled ? {} : panResponder.panHandlers)}
-            style={styles.handleHitArea}
+          <Animated.View
+            onLayout={event => {
+              const nextHeight = event.nativeEvent.layout.height;
+              if (nextHeight !== sheetHeight) {
+                setSheetHeight(nextHeight);
+              }
+            }}
+            style={[styles.sheet, sheetStyle, {transform: [{translateY}]}]}
           >
-            <View accessibilityElementsHidden style={styles.handle} />
-          </View>
-          <View
-            style={[
-              styles.contentContainer,
-              {paddingBottom: Math.max(insets.bottom, 12)},
-            ]}
-          >
-            {children}
-          </View>
-        </Animated.View>
+            <View
+              {...(dismissDisabled ? {} : panResponder.panHandlers)}
+              style={styles.handleHitArea}
+            >
+              <View accessibilityElementsHidden style={styles.handle} />
+            </View>
+            <View
+              style={[
+                styles.contentContainer,
+                {paddingBottom: Math.max(insets.bottom, 12)},
+              ]}
+            >
+              {children}
+            </View>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -242,6 +255,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 42,
+  },
+  keyboardArea: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   root: {
     flex: 1,
