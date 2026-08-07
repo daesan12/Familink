@@ -5,7 +5,7 @@ import {
   type NavigationProp,
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import {Pressable, StyleSheet} from "react-native";
+import {Dimensions, Pressable, StyleSheet} from "react-native";
 import TestRenderer from "react-test-renderer";
 
 import type {MainTabsParamList} from "../../../app-shell";
@@ -252,17 +252,46 @@ test("통화가 4건이어도 모든 건별 리포트를 그린다", () => {
   });
 });
 
-// 4번째 카드가 첫 줄 아래로 내려가려면 한 줄이 3건으로 끊겨야 한다.
-test("건별 카드는 한 줄에 3건이 오도록 폭을 3분할한다", () => {
+// 카드 좌우 끝이 일간 리포트 카드와 나란해야 한다. 페이지 여백 24를 뺀 폭에서
+// 카드 사이 간격 14 두 칸을 빼고 3등분한 값이 카드 폭이다.
+test("건별 카드 폭은 페이지 여백을 뺀 폭을 3등분한 값이다", () => {
+  const {width} = Dimensions.get("window");
+  const expected = Math.floor((width - 24 * 2 - 14 * 2) / 3);
   const renderer = renderReportScreen([createFourCallPage()]);
+
+  ["11:00", "12:00", "13:00", "14:00"].forEach((label) => {
+    const card = renderer.root.findByProps({
+      accessibilityLabel: `${label} 통화 리포트 열기`,
+    });
+    const style = StyleSheet.flatten(card.props.style({ pressed: false }));
+
+    expect(style.width).toBe(expected);
+  });
+});
+
+// 통화가 3건 미만이어도 카드가 줄을 채우려고 늘어나면 안 된다.
+test("통화가 한 건이면 카드 폭이 줄 전체로 늘어나지 않는다", () => {
+  const {width} = Dimensions.get("window");
+  const page: CareReceiverReportPage = {
+    ...createLatestOnlyPage(),
+    todayCalls: [
+      {
+        callSessionId: "call-1",
+        guardianMessage: null,
+        reportAvailable: true,
+        reportDateLabel: "2026.07.18",
+        startedAtLabel: "10:32",
+        summary: "요약",
+      },
+    ],
+  };
+  const renderer = renderReportScreen([page]);
   const card = renderer.root.findByProps({
-    accessibilityLabel: "11:00 통화 리포트 열기",
+    accessibilityLabel: "10:32 통화 리포트 열기",
   });
   const style = StyleSheet.flatten(card.props.style({ pressed: false }));
 
-  expect(style.flexBasis).toBe("30%");
-  expect(style.maxWidth).toBe(100);
-  expect(style.width).toBeUndefined();
+  expect(style.width).toBe(Math.floor((width - 24 * 2 - 14 * 2) / 3));
 });
 
 test("좌우 넘김 결과에 맞춰 현재 피보호자 인디케이터를 변경한다", () => {

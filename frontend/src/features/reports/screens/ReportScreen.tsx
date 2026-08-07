@@ -62,6 +62,21 @@ const EMPTY_REPORT_TARGETS: readonly CareReceiverReportTarget[] = [];
 const EMPTY_REPORT_DATES: readonly string[] = [];
 const CALL_REPORT_POLL_INTERVAL_MS = 5_000;
 const CALL_REPORT_POLL_TIMEOUT_MS = 90_000;
+// 통화 카드 좌우 끝을 일간 리포트 카드와 맞추기 위해 페이지 여백·간격을
+// 공유한다. 카드 폭은 남는 폭을 3등분해 계산한다.
+const PAGE_HORIZONTAL_PADDING = 24;
+const CALL_LIST_GAP = 14;
+const CALL_LIST_COLUMNS = 3;
+
+function callCardWidth(pageWidth: number): number {
+  const available =
+    pageWidth -
+    PAGE_HORIZONTAL_PADDING * 2 -
+    CALL_LIST_GAP * (CALL_LIST_COLUMNS - 1);
+  // 남는 폭을 그대로 3등분하면 한 줄 합계가 컨테이너와 같아져, 부동소수점
+  // 오차만으로 세 번째 카드가 다음 줄로 밀린다. 내림해 여유를 1px 남긴다.
+  return Math.max(0, Math.floor(available / CALL_LIST_COLUMNS));
+}
 
 interface ReportYearMonth {
   month: number;
@@ -930,6 +945,7 @@ function ReportPage({
                     call={call}
                     key={call.callSessionId}
                     onPress={onOpenCall}
+                    width={callCardWidth(width)}
                   />
                 ))}
               </View>
@@ -1121,9 +1137,8 @@ const styles = StyleSheet.create({
   callList: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 14,
+    gap: CALL_LIST_GAP,
     paddingBottom: 8,
-    paddingHorizontal: 4,
   },
   callSection: {
     marginTop: 42,
@@ -1264,7 +1279,7 @@ const styles = StyleSheet.create({
   },
   pageContent: {
     paddingBottom: 28,
-    paddingHorizontal: 24,
+    paddingHorizontal: PAGE_HORIZONTAL_PADDING,
     paddingTop: 30,
   },
   pendingCard: {
