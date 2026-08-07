@@ -184,7 +184,7 @@ export function AppShell({
     route: SharedSubRoute;
   } | null>(null);
 
-  const handleSubRouteOpened = useCallback(
+  const handleSubRouteFocused = useCallback(
     (route: SharedSubRoute, close: () => void) => {
       openSubRouteRef.current = { close, route };
       setFocusedSubRoute(route);
@@ -192,9 +192,10 @@ export function AppShell({
     []
   );
 
-  // 호스트 언마운트(= pop) 보고. 헤더 뒤로가기·하드웨어 뒤로가기·탭 이동이 모두
-  // 여기로 수렴하므로 신호를 내리는 지점이 하나로 유지된다.
-  const handleSubRouteClosed = useCallback((route: SharedSubRoute) => {
+  // 호스트 blur 보고. 헤더 뒤로가기·하드웨어 뒤로가기·상세 push가 모두 여기로
+  // 수렴하므로 신호를 내리는 지점이 하나로 유지된다. 닫기 함수도 함께 비워
+  // closeSubRoute가 최상단이 아닌 하위 화면을 잘못 pop하지 못하게 한다.
+  const handleSubRouteBlurred = useCallback((route: SharedSubRoute) => {
     if (openSubRouteRef.current?.route === route) {
       openSubRouteRef.current = null;
     }
@@ -652,10 +653,10 @@ export function AppShell({
   // ref로 방어하고 있다.
   screenProps.renderSharedSubRoute = (route, options) => (
     <SharedSubRouteScreen
+      onBlurred={handleSubRouteBlurred}
       onClose={options.onClose}
-      onClosed={handleSubRouteClosed}
+      onFocused={handleSubRouteFocused}
       onHostClosed={options.onClosed}
-      onOpened={handleSubRouteOpened}
       route={route}
       screenProps={screenProps}
       screens={screens}
@@ -944,58 +945,58 @@ function ShellRouteScreen({
 }
 
 interface SharedSubRouteScreenProps {
+  onBlurred: (route: SharedSubRoute) => void;
   onClose: () => void;
-  onClosed: (route: SharedSubRoute) => void;
+  onFocused: (route: SharedSubRoute, close: () => void) => void;
   // 등록한 스택이 닫힘 뒤에 하고 싶은 일(예: 목록 재조회).
   onHostClosed?: () => void;
-  onOpened: (route: SharedSubRoute, close: () => void) => void;
   route: SharedSubRoute;
   screenProps: AppScreenProps;
   screens: AppScreenRegistry;
 }
 
 // 공유 하위 화면(알림·보관함) 호스트. 셸이 소유하지만 렌더 위치는 스택이다.
-// 포커스로 "열림 + 닫기 함수"를, 언마운트 cleanup으로 "닫힘"을 셸에 보고한다.
-// GroupInfoScreen의 SubScreenRouteSync와 같은 관용구 — 헤더 뒤로가기·하드웨어
-// 뒤로가기·탭 이동이 모두 pop 한 번으로 수렴한다.
+// 포커스로 "열림 + 닫기 함수"를, blur로 "더 이상 최상단이 아님"을 셸에 보고한다.
+// GroupInfoScreen의 SubScreenRouteSync와 같은 관용구.
 // 탭 화면과 달리 비포커스에서 null을 반환하지 않는다: 스택은 아래 화면을 마운트
-// 유지하는 것이 정상이고, 후속 티켓에서 상세가 위에 쌓여도 보존돼야 한다.
+// 유지하는 것이 정상이고, 게시글 상세가 위에 쌓여도 보존돼야 한다.
 // 반드시 모듈 레벨로 유지한다(ShellRouteScreen과 같은 이유).
 function SharedSubRouteScreen({
+  onBlurred,
   onClose,
-  onClosed,
+  onFocused,
   onHostClosed,
-  onOpened,
   route,
   screenProps,
   screens,
 }: SharedSubRouteScreenProps) {
   const isFocused = useIsFocused();
   // 콜백 신원에 의존하지 않는다. 셸이 렌더마다 새 렌더러를 만들기 때문에, deps에
-  // 콜백을 넣으면 닫힘 cleanup이 매 렌더 실행되어 신호가 조용히 내려간다.
+  // 콜백을 넣으면 blur cleanup이 매 렌더 실행되어 신호가 조용히 내려간다.
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const close = useRef(() => closeRef.current()).current;
-  const onOpenedRef = useRef(onOpened);
-  onOpenedRef.current = onOpened;
-  const onClosedRef = useRef(onClosed);
-  onClosedRef.current = onClosed;
+  const onFocusedRef = useRef(onFocused);
+  onFocusedRef.current = onFocused;
+  const onBlurredRef = useRef(onBlurred);
+  onBlurredRef.current = onBlurred;
   const onHostClosedRef = useRef(onHostClosed);
   onHostClosedRef.current = onHostClosed;
 
+  // 포커스로 올리고 blur로 내린다. 상세가 위에 쌓이면 호스트는 마운트된 채
+  // 비포커스가 되므로, 언마운트만 보고하면 신호가 굳어 상세를 보는 동안
+  // 미읽음 배지가 갱신되지 않고 푸시 구독도 해제된 채로 남는다.
   useEffect(() => {
-    if (isFocused) {
-      onOpenedRef.current(route, close);
+    if (!isFocused) {
+      return;
     }
+    onFocusedRef.current(route, close);
+    return () => onBlurredRef.current(route);
   }, [close, isFocused, route]);
 
-  useEffect(
-    () => () => {
-      onClosedRef.current(route);
-      onHostClosedRef.current?.();
-    },
-    [route]
-  );
+  // 닫힘 후처리(피드 목록 재조회)는 언마운트 전용이다 — blur로 부르면 상세가
+  // 쌓일 때마다 목록이 재조회된다.
+  useEffect(() => () => onHostClosedRef.current?.(), []);
 
   return (
     <ShellScreenBody
