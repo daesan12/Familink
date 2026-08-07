@@ -6,6 +6,7 @@
 - 차단 변경: 아니오
 - 영향 스펙·계약: `docs/specs/domains/NOTIFICATIONS.md`(화면 규칙), `docs/specs/UI_AND_NAVIGATION.md` 확인 필요
 - 관련 작업: `docs/spec-changes/pending/CHG-S15P11B104-274-foreground-push-display.md`(딥링크를 별도 결정으로 보류), 관련 별도 Jira 티켓 확인 필요
+- 관련 제안: `CHG-S15P11B104-369-sub-screen-back-destination.md`(하위 화면 뒤로 가기 목적지)
 
 ## 기존 내용
 
@@ -31,7 +32,7 @@ NOTIFICATIONS.md 화면 규칙에 다음 알림 탭 이동 동작을 추가한�
    | `EVENT_CHANGED`, `EVENT_REMINDER` | 캘린더의 해당 일정 상세 모달. 상세를 닫으면 일정 날짜의 시트가 열린다 |
    | `CALL_REPORT` | 리포트 화면의 해당 날짜·피보호자 페이지로 이동 후 해당 통화 상세 모달 |
    | `DAILY_REPORT` | 리포트 화면의 해당 날짜·피보호자 페이지(그 자체가 일일 리포트) |
-   | `GROUP_JOIN_REQUEST` | 그룹정보의 가입 승인 화면. 알림 행 내 인라인 승인·거부 버튼은 유지한다 |
+   | `GROUP_JOIN_REQUEST` | 가입 승인 대기 화면. 알림 위에 쌓이며 뒤로 가기는 알림으로 돌아간다(`CHG-S15P11B104-369` 1번). 알림 행 내 인라인 승인·거부 버튼은 유지한다 |
 
 2. 이동에 필요한 관련 참조(`relatedPostId`, `relatedEventId`, 리포트 조회 키)가
    응답에 없으면 탭은 읽음 처리만 하고 이동하지 않는다. 목적지 대상이
@@ -67,7 +68,12 @@ NOTIFICATIONS.md 화면 규칙에 다음 알림 탭 이동 동작을 추가한�
 - 영향 도메인: NOTIFICATIONS(화면 규칙만). 알림 저장·발송 규칙은 무변경.
 - 영향 계약: 리포트 딥링크는 `API-NOTIFICATIONS-003` 응답 보강이 전제 —
   별도 제안 `CHG-20260805-rudgh8182-notification-list-report-routing-fields.md`.
-- 영향 화면: 알림 목록, 피드(게시글 상세), 캘린더, 리포트, 그룹정보(가입 승인).
+- 영향 화면: 알림 목록, 피드(게시글 상세), 캘린더, 리포트, 가입 승인 대기.
+  가입 승인 대기는 작성 시점에 그룹정보 탭 스택 화면뿐이었으나, S15P11B104-336이
+  피드 탭 스택에 공유 하위 화면 인스턴스를 추가해 **알림 딥링크만** 그쪽으로
+  보낸다. 딥링크가 그룹정보 탭으로 전환하면 그 탭 스택이 언마운트되며 진입 지점인
+  알림 화면이 소멸했기 때문이다. 그룹정보 메뉴 진입 경로는 기존 등록분을 그대로
+  쓴다.
 - 검증 범위: frontend jest(딥링크 해석기·알림 화면·AppShell·목적지 3화면),
   Android 단위·계측 테스트(extras·requestCode·tap store), 수동 3상태
   (포그라운드/백그라운드/종료) 푸시 탭 확인 필요.

@@ -1204,8 +1204,11 @@ test('그룹 코드 카드를 누르면 그룹 코드 화면으로 이동한다'
   expect(hasText(renderer!, '그룹 정보')).toBe(true);
 });
 
-test('내비게이션으로 전달된 가입 승인 딥링크는 승인 화면을 바로 연다', async () => {
-  // 셸의 중첩 navigate(딥링크)가 도달하는 경로를 컨테이너 ref로 재현한다.
+test('가입 승인 화면이 초기 포커스여도 요청 목록을 렌더한다', async () => {
+  // 컨테이너 ref로 스택 최상단을 JoinApproval로 만들어, 홈을 거치지 않고 이
+  // 화면이 포커스를 받아도 목록이 조회·렌더되는지 본다. 딥링크 재현이 아니다 —
+  // 가입 승인 딥링크는 피드 탭 스택으로 가므로 이 스택에 도달하지 않는다
+  // (S15P11B104-336, 369).
   const navRef = createNavigationContainerRef<GroupInfoStackParamList>();
   let renderer: TestRenderer.ReactTestRenderer;
   await TestRenderer.act(async () => {
@@ -1238,7 +1241,7 @@ test('내비게이션으로 전달된 가입 승인 딥링크는 승인 화면�
   mountedRenderers.push(renderer!);
 
   await TestRenderer.act(async () => {
-    navRef.navigate('JoinApproval', {groupId: 'group-1'});
+    navRef.navigate('JoinApproval');
     await Promise.resolve();
   });
 
@@ -1620,7 +1623,11 @@ test('그룹을 바꾸면 열려 있던 하위 화면이 닫힌다', () => {
   expect(hasText(renderer!, '새 그룹관리자를 선택하세요')).toBe(false);
 });
 
-test('그룹 전환과 함께 도착한 새 그룹의 가입 승인 딥링크는 닫지 않는다', async () => {
+test('가입 승인 대기가 열려 있어도 그룹을 전환하면 그룹정보 홈으로 되돌린다', async () => {
+  // S15P11B104-369에서 딥링크 예외 판별자를 지운 뒤의 계약. 되돌리지 않으면
+  // 새 그룹 화면 위에 옛 그룹의 요청 목록이 남는다. 예외가 있던 시절에는 그룹
+  // 전환이 동반된 승인 딥링크가 이 스택에 도달했으나, 336에서 그 목적지가
+  // 피드 탭 스택으로 옮겨져 판별자가 영구히 false가 됐다.
   const navRef = createNavigationContainerRef<GroupInfoStackParamList>();
   const joinRequestsLoader = jest.fn().mockResolvedValue([]);
   let renderer: TestRenderer.ReactTestRenderer;
@@ -1643,9 +1650,8 @@ test('그룹 전환과 함께 도착한 새 그룹의 가입 승인 딥링크는
   });
   mountedRenderers.push(renderer!);
 
-  // 그룹 전환이 동반된 딥링크: 새 그룹(g-b)의 승인 화면이 먼저 push된다.
   await TestRenderer.act(async () => {
-    navRef.navigate('JoinApproval', {groupId: GROUP_B.id});
+    navRef.navigate('JoinApproval');
     await Promise.resolve();
   });
 
@@ -1666,8 +1672,7 @@ test('그룹 전환과 함께 도착한 새 그룹의 가입 승인 딥링크는
     await Promise.resolve();
   });
 
-  // params.groupId가 새 그룹과 일치하므로 그룹 전환 정리(popToTop)에서 제외된다.
-  expect(navRef.getCurrentRoute()?.name).toBe('JoinApproval');
+  expect(navRef.getCurrentRoute()?.name).toBe('GroupInfoHome');
 });
 
 test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공 후 상태를 갱신한다', async () => {

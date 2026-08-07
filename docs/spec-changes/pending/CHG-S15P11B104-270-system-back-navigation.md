@@ -6,7 +6,8 @@
 - 차단 변경: 아니오
 - 영향 스펙·계약: `docs/specs/UI_AND_NAVIGATION.md`
 - 관련 작업: S15P11B104-270
-- 관련 제안: `CHG-S15P11B104-272-signup-complete-back-navigation.md`
+- 관련 제안: `CHG-S15P11B104-272-signup-complete-back-navigation.md`,
+  `CHG-S15P11B104-369-sub-screen-back-destination.md`
 
 ## 기존 내용
 
@@ -31,7 +32,10 @@
 `docs/specs/UI_AND_NAVIGATION.md`에 시스템 뒤로 가기 공통 규칙을 추가한다.
 
 1. 하단 탭 루트에서 시스템 뒤로 가기를 누르면 피드 탭으로 돌아간다. 피드 탭
-   루트에서만 앱을 종료한다.
+   루트에서만 앱을 종료한다. 이 규칙은 **탭 루트에만** 적용한다. 어느 탭도
+   소유하지 않는 하위 화면(알림, 게시글 보관함, 가입 승인 대기)과 그 위에 쌓인
+   화면은 진입 지점으로 돌아가며, 그 규칙은
+   `CHG-S15P11B104-369-sub-screen-back-destination.md`에서 정한다.
 2. 화면 내부에 되돌릴 상태(하위 전체화면, 인라인 편집, 열린 목록)가 있으면 그
    상태를 먼저 한 단계 되돌리고, 되돌릴 상태가 없을 때 1번을 적용한다.
 3. 저장·삭제·처리가 진행 중인 동안에는 시스템 뒤로 가기를 소비하고 현재 화면을
@@ -61,6 +65,11 @@
 - 수정 전 `AppShell`은 `archive`, `notifications`, `profile` 세 라우트만 열거해
   뒤로 가기를 처리했고, 하단 탭인 `calendar`, `report`, `aiCall`, `groupInfo`는
   목록에 없어 앱이 종료되었다.
+- 아래에서 `notifications`와 `archive`를 하단 탭 라우트와 같은 층으로 적은 것은
+  작성 시점(2026-08-04) 구현을 따른 것이다. 당시 셸이 단일 `activeRoute` 상태로
+  탭과 이 둘을 같은 층에서 다뤘다. S15P11B104-367 이후 두 화면은 피드 탭 스택의
+  하위 화면이므로 더 이상 탭 라우트가 아니다. 이 제안의 규칙 자체는 그 전환
+  이후에도 그대로 성립한다 — 목적지가 아니라 소속 층만 달라졌다.
 - 1번의 목적지를 피드 탭으로 정한 근거는 React Navigation의 하단 탭 기본값
   `backBehavior: 'firstRoute'`다. 널리 쓰이는 Android 관례이며, 이미 이 앱이
   `archive`·`notifications`·`profile`에서 사용하던 정책과 같다.
@@ -82,9 +91,10 @@
 
 - 영향 도메인: 전 도메인의 화면 전환. 특정 도메인 규칙이 아니라 공통 규칙이다.
 - 영향 계약: `UI_AND_NAVIGATION` 화면 전이 계약. API·데이터 계약 변경은 없다.
-- 영향 화면: 하단 탭 8개 라우트(`feed`, `calendar`, `report`, `aiCall`,
-  `groupInfo`, `profile`, `notifications`, `archive`)와 그룹정보 호칭 인라인
-  편집, 프로필 편집 성별 드롭다운.
+- 영향 화면: 하단 탭 라우트(`feed`, `calendar`, `report`, `aiCall`, `groupInfo`,
+  `profile`)와 하위 화면(`notifications`, `archive`), 그리고 그룹정보 호칭 인라인
+  편집, 프로필 편집 성별 드롭다운. 작성 시점에는 하위 화면 둘도 탭 라우트로
+  구현돼 있어 "탭 8개"로 적었다(위 변경 근거 참고).
 - 검증 범위: Jest(`npm test`), TypeScript 타입 검사, ESLint, 에뮬레이터 수동
   확인. 역할별로 노출 탭이 달라 보호자·피보호자 두 계정으로 확인한다.
 - 커버리지 갱신 후보: `docs/specs/COVERAGE.md`의 `REQ-009 역할별 화면 및 하단
