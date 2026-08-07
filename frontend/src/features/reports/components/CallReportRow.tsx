@@ -8,9 +8,11 @@ import type { CallReportView } from "../types";
 interface CallReportRowProps {
   call: CallReportView;
   onPress: (call: CallReportView) => void;
+  // 한 줄에 세 건이 좌우 여백까지 꽉 차도록 호출부가 계산해 넘긴다.
+  width: number;
 }
 
-export function CallReportRow({ call, onPress }: CallReportRowProps) {
+export function CallReportRow({ call, onPress, width }: CallReportRowProps) {
   const isAvailable = call.reportAvailable;
 
   return (
@@ -22,6 +24,7 @@ export function CallReportRow({ call, onPress }: CallReportRowProps) {
       onPress={() => onPress(call)}
       style={({ pressed }) => [
         styles.row,
+        { width },
         pressed && styles.pressed,
       ]}
     >
@@ -52,7 +55,6 @@ const styles = StyleSheet.create({
     boxShadow: '0px 3px 14px rgba(18, 23, 41, 0.055)',
     height: 132,
     justifyContent: "center",
-    width: 100,
   },
   time: {
     color: COLORS.text,

@@ -62,6 +62,21 @@ const EMPTY_REPORT_TARGETS: readonly CareReceiverReportTarget[] = [];
 const EMPTY_REPORT_DATES: readonly string[] = [];
 const CALL_REPORT_POLL_INTERVAL_MS = 5_000;
 const CALL_REPORT_POLL_TIMEOUT_MS = 90_000;
+// 통화 카드 좌우 끝을 일간 리포트 카드와 맞추기 위해 페이지 여백·간격을
+// 공유한다. 카드 폭은 남는 폭을 3등분해 계산한다.
+const PAGE_HORIZONTAL_PADDING = 24;
+const CALL_LIST_GAP = 14;
+const CALL_LIST_COLUMNS = 3;
+
+function callCardWidth(pageWidth: number): number {
+  const available =
+    pageWidth -
+    PAGE_HORIZONTAL_PADDING * 2 -
+    CALL_LIST_GAP * (CALL_LIST_COLUMNS - 1);
+  // 남는 폭을 그대로 3등분하면 한 줄 합계가 컨테이너와 같아져, 부동소수점
+  // 오차만으로 세 번째 카드가 다음 줄로 밀린다. 내림해 여유를 1px 남긴다.
+  return Math.max(0, Math.floor(available / CALL_LIST_COLUMNS));
+}
 
 interface ReportYearMonth {
   month: number;
@@ -921,19 +936,19 @@ function ReportPage({
               {isToday ? "오늘의 통화" : "선택한 날의 통화"}
             </AppText>
             {sortedTodayCalls.length > 0 ? (
-              <ScrollView
-                contentContainerStyle={styles.callList}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-              >
+              // 한 줄에 3건씩 채우고 넘치면 아래 줄로 내린다. 가로 ScrollView를
+              // 쓰면 바깥 피보호자 페이저(역시 가로)에 제스처를 뺏겨 스크롤되지
+              // 않으므로, 세로로 쌓아 페이지 스크롤에 맡긴다.
+              <View style={styles.callList} testID="call-report-list">
                 {sortedTodayCalls.map((call) => (
                   <CallReportRow
                     call={call}
                     key={call.callSessionId}
                     onPress={onOpenCall}
+                    width={callCardWidth(width)}
                   />
                 ))}
-              </ScrollView>
+              </View>
             ) : (
               <View
                 accessibilityLabel="오늘 통화 리포트 없음"
@@ -1120,9 +1135,10 @@ function EmptyReportState({ displayName }: { displayName: string }) {
 
 const styles = StyleSheet.create({
   callList: {
-    gap: 14,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: CALL_LIST_GAP,
     paddingBottom: 8,
-    paddingHorizontal: 4,
   },
   callSection: {
     marginTop: 42,
@@ -1263,7 +1279,7 @@ const styles = StyleSheet.create({
   },
   pageContent: {
     paddingBottom: 28,
-    paddingHorizontal: 24,
+    paddingHorizontal: PAGE_HORIZONTAL_PADDING,
     paddingTop: 30,
   },
   pendingCard: {

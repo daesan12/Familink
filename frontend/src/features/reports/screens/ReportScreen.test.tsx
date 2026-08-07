@@ -5,7 +5,7 @@ import {
   type NavigationProp,
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import {Pressable} from "react-native";
+import {Dimensions, Pressable, StyleSheet} from "react-native";
 import TestRenderer from "react-test-renderer";
 
 import type {MainTabsParamList} from "../../../app-shell";
@@ -207,6 +207,91 @@ test("건별 리포트를 누르면 텍스트 상세를 열고 null 메시지 �
   expect(tree).toContain("10시 32분 통화리포트");
   expect(tree).toContain("오늘 아침 식사와 날씨에 관해 이야기하셨어요.");
   expect(tree).not.toContain("전달하신 말씀");
+});
+
+// 통화 4건은 화면 너비를 넘겨 가로 스크롤이 필요한 대표 상황이다.
+function createFourCallPage(): CareReceiverReportPage {
+  return {
+    ...createLatestOnlyPage(),
+    todayCalls: [1, 2, 3, 4].map((index) => ({
+      callSessionId: `call-${index}`,
+      guardianMessage: null,
+      reportAvailable: true,
+      reportDateLabel: "2026.07.18",
+      startedAtLabel: `1${index}:00`,
+      summary: `${index}번째 통화 요약`,
+    })),
+  };
+}
+
+function callList(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findByProps({ testID: "call-report-list" });
+}
+
+// 가로 ScrollView를 가로 페이저 안에 두면 Android가 제스처를 페이저에 넘겨
+// 목록이 스크롤되지 않는다. 가로 스크롤을 쓰지 않는다는 것을 고정한다.
+test("통화 목록은 가로 스크롤 대신 줄바꿈으로 쌓는다", () => {
+  const renderer = renderReportScreen([createFourCallPage()]);
+  const list = callList(renderer);
+  const style = StyleSheet.flatten(list.props.style);
+
+  expect(list.props.horizontal).toBeUndefined();
+  expect(style.flexWrap).toBe("wrap");
+  expect(style.flexDirection).toBe("row");
+});
+
+test("통화가 4건이어도 모든 건별 리포트를 그린다", () => {
+  const renderer = renderReportScreen([createFourCallPage()]);
+
+  ["11:00", "12:00", "13:00", "14:00"].forEach((label) => {
+    expect(
+      renderer.root.findByProps({
+        accessibilityLabel: `${label} 통화 리포트 열기`,
+      })
+    ).toBeTruthy();
+  });
+});
+
+// 카드 좌우 끝이 일간 리포트 카드와 나란해야 한다. 페이지 여백 24를 뺀 폭에서
+// 카드 사이 간격 14 두 칸을 빼고 3등분한 값이 카드 폭이다.
+test("건별 카드 폭은 페이지 여백을 뺀 폭을 3등분한 값이다", () => {
+  const {width} = Dimensions.get("window");
+  const expected = Math.floor((width - 24 * 2 - 14 * 2) / 3);
+  const renderer = renderReportScreen([createFourCallPage()]);
+
+  ["11:00", "12:00", "13:00", "14:00"].forEach((label) => {
+    const card = renderer.root.findByProps({
+      accessibilityLabel: `${label} 통화 리포트 열기`,
+    });
+    const style = StyleSheet.flatten(card.props.style({ pressed: false }));
+
+    expect(style.width).toBe(expected);
+  });
+});
+
+// 통화가 3건 미만이어도 카드가 줄을 채우려고 늘어나면 안 된다.
+test("통화가 한 건이면 카드 폭이 줄 전체로 늘어나지 않는다", () => {
+  const {width} = Dimensions.get("window");
+  const page: CareReceiverReportPage = {
+    ...createLatestOnlyPage(),
+    todayCalls: [
+      {
+        callSessionId: "call-1",
+        guardianMessage: null,
+        reportAvailable: true,
+        reportDateLabel: "2026.07.18",
+        startedAtLabel: "10:32",
+        summary: "요약",
+      },
+    ],
+  };
+  const renderer = renderReportScreen([page]);
+  const card = renderer.root.findByProps({
+    accessibilityLabel: "10:32 통화 리포트 열기",
+  });
+  const style = StyleSheet.flatten(card.props.style({ pressed: false }));
+
+  expect(style.width).toBe(Math.floor((width - 24 * 2 - 14 * 2) / 3));
 });
 
 test("좌우 넘김 결과에 맞춰 현재 피보호자 인디케이터를 변경한다", () => {
