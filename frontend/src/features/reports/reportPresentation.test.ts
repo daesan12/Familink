@@ -2,7 +2,11 @@ import {
   DAILY_PENDING_REPORT_PAGE,
   EMPTY_REPORT_PAGE,
 } from "./fixtures/reportFixtures";
-import { getReportPageState, sortCallsByStartedAt } from "./reportPresentation";
+import {
+  getReportPageState,
+  sortCallsByStartedAt,
+  toCareReceiverReportPage,
+} from "./reportPresentation";
 import type { CallReportView, CareReceiverReportPage } from "./types";
 
 test("리포트가 한 건도 없으면 전체 빈 상태를 반환한다", () => {
@@ -30,6 +34,54 @@ test("당일 통화가 없어도 최신 일간 리포트가 있으면 준비된 
   };
 
   expect(getReportPageState(page)).toBe("ready");
+});
+
+test("생성 완료된 건별 리포트만 화면 카드로 변환한다", () => {
+  const page = toCareReceiverReportPage(
+    { displayName: "김말순", memberId: "care-receiver-1" },
+    {
+      calls: [
+        {
+          callSessionId: "ready-call",
+          reportAvailable: true,
+          startedAt: "2026-07-18T01:32:00Z",
+        },
+        {
+          callSessionId: "not-ready-call",
+          reportAvailable: false,
+          startedAt: "2026-07-18T02:32:00Z",
+        },
+      ],
+      dailyReport: null,
+      date: "2026-07-18",
+      generationStatus: "available",
+    }
+  );
+
+  expect(page.todayCalls.map((call) => call.callSessionId)).toEqual([
+    "ready-call",
+  ]);
+});
+
+test("생성 완료되지 않은 통화만 있으면 리포트 빈 상태를 반환한다", () => {
+  const page = toCareReceiverReportPage(
+    { displayName: "김말순", memberId: "care-receiver-1" },
+    {
+      calls: [
+        {
+          callSessionId: "not-ready-call",
+          reportAvailable: false,
+          startedAt: "2026-07-18T02:32:00Z",
+        },
+      ],
+      dailyReport: null,
+      date: "2026-07-18",
+      generationStatus: "notReady",
+    }
+  );
+
+  expect(page.todayCalls).toEqual([]);
+  expect(getReportPageState(page)).toBe("empty");
 });
 
 test("건별 리포트를 통화 시작 시각 오름차순으로 정렬한다", () => {
