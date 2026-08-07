@@ -57,8 +57,10 @@ internal enum class AiCallBackAction {
 
 /**
  * 연결 중·통화 중·종료 중에는 뒤로 가기를 소비만 한다. 실수로 한 번 누른 것으로 통화가 끊기지 않도록
- * 통화 종료는 화면의 통화 종료 버튼으로만 실행한다. [AiCallPhase.Selecting]은 뒤로 가기를 앱 셸에
- * 넘기므로 여기까지 오지 않지만, 단계가 늘어날 때 누락을 컴파일러가 잡도록 분기를 모두 적는다.
+ * 사용자 조작으로 통화를 끝내는 수단은 화면의 통화 종료 버튼뿐이다.
+ * [AI_CALL_MAX_DURATION_SECONDS] 상한 도달은 사용자 조작이 아닌 자동 마감이라 이 규칙과 무관하다.
+ * [AiCallPhase.Selecting]은 뒤로 가기를 앱 셸에 넘기므로 여기까지 오지 않지만, 단계가 늘어날 때
+ * 누락을 컴파일러가 잡도록 분기를 모두 적는다.
  */
 internal fun aiCallBackAction(
     phase: AiCallPhase,
@@ -169,6 +171,15 @@ internal const val AI_CALL_DEFAULT_IS_MUTED = false
  */
 internal const val AI_CALL_DEFAULT_IS_SPEAKER_ON = false
 
+/**
+ * 한 통화가 이어질 수 있는 최대 시간. 사용자가 말하지 않아도 통화는 스스로 끝나지 않으므로, 상한이
+ * 없으면 화면을 켜 둔 채 방치된 통화가 Realtime 비용을 무한히 누적한다.
+ */
+internal const val AI_CALL_MAX_DURATION_SECONDS = 600
+
+internal fun isAiCallDurationLimitReached(durationSeconds: Int): Boolean =
+    durationSeconds >= AI_CALL_MAX_DURATION_SECONDS
+
 internal data class AiCallUiState(
     val phase: AiCallPhase,
     val persona: AiPersona?,
@@ -178,7 +189,22 @@ internal data class AiCallUiState(
     val isSpeakerOn: Boolean = AI_CALL_DEFAULT_IS_SPEAKER_ON,
     val captionDraft: String = "",
     val captionHistory: List<String> = emptyList(),
+    val endedByDurationLimit: Boolean = false,
 )
+
+/**
+ * 종료 결과 화면의 안내 문구. 시간이 다 되어 끝난 통화를 고장으로 오해하지 않도록 사용자 종료와 다른
+ * 문구를 쓴다. 취소는 연결 전에 끝난 통화이므로 시간 만료와 겹치지 않는다.
+ */
+internal fun aiCallEndedDescription(
+    wasCancelled: Boolean,
+    endedByDurationLimit: Boolean,
+): String =
+    when {
+      wasCancelled -> "준비되면 다시 이야기해 보세요."
+      endedByDurationLimit -> "통화 가능한 시간이 다 되어 마무리했어요."
+      else -> "오늘 나눈 이야기는 소중히 기억할게요."
+    }
 
 /**
  * 화면에 그릴 자막 줄을 오래된 것부터 최신 순으로 반환한다. 발화 중에는 [AiCallUiState.captionDraft]가
