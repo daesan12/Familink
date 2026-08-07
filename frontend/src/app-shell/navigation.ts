@@ -1,4 +1,10 @@
-import type {AppRoute, FamilyGroup, GroupRole, MainTabRoute} from './types.ts';
+import type {
+  AppRoute,
+  FamilyGroup,
+  GroupRole,
+  MainTabRoute,
+  SharedSubRoute,
+} from './types.ts';
 
 export type TabIconName =
   | 'calendar'
@@ -42,10 +48,18 @@ export function getTabsForRole(role: GroupRole): readonly TabDefinition[] {
   return [...COMMON_START_TABS, ROLE_TAB[role], ...COMMON_END_TABS];
 }
 
+// 공유 하위 화면은 어느 탭도 소유하지 않으므로 역할과 무관하게 항상 허용된다.
+// Record로 두면 SharedSubRoute가 늘어날 때 컴파일 에러가 난다 — 목록을 빠뜨리면
+// resolveAllowedRoute가 조용히 'feed'로 폴백해 하위 화면이 열리지 않는다.
+const IS_SHARED_SUB_ROUTE: Record<SharedSubRoute, true> = {
+  archive: true,
+  joinApproval: true,
+  notifications: true,
+};
+
 export function isRouteAllowed(role: GroupRole, route: AppRoute): boolean {
   return (
-    route === 'notifications' ||
-    route === 'archive' ||
+    route in IS_SHARED_SUB_ROUTE ||
     getTabsForRole(role).some((tab) => tab.route === route)
   );
 }

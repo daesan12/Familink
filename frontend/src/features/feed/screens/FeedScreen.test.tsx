@@ -473,6 +473,47 @@ test('공유 하위 화면을 닫으면 목록으로 돌아오고 피드를 다�
   });
 });
 
+test('가입 승인 대기를 닫을 때는 피드를 다시 조회하지 않는다', async () => {
+  // 승인 처리는 게시글을 바꾸지 않으므로 자매 화면과 달리 후처리를 걸지 않는다.
+  const loader = jest.fn().mockResolvedValue([post]);
+  const navRef = createNavigationContainerRef<FeedStackParamList>();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NavigationContainer ref={navRef}>
+        <FeedScreen
+          currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+          currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+          loader={loader}
+          renderSharedSubRoute={(route, {onClose, onClosed}) => (
+            <SubRouteProbe onClose={onClose} onClosed={onClosed} route={route} />
+          )}
+          role="guardian"
+        />
+      </NavigationContainer>,
+    );
+    await Promise.resolve();
+  });
+
+  const loadsAfterMount = loader.mock.calls.length;
+
+  await TestRenderer.act(async () => {
+    navRef.navigate('joinApproval');
+  });
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({accessibilityLabel: '닫기'}).props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(navRef.getCurrentRoute()?.name).toBe('FeedHome');
+  expect(loader.mock.calls.length).toBe(loadsAfterMount);
+
+  await TestRenderer.act(() => {
+    renderer!.unmount();
+  });
+});
+
 function SubRouteProbe({
   onClose,
   onClosed,
@@ -494,3 +535,38 @@ function SubRouteProbe({
     </>
   );
 }
+
+// 셸이 주입하는 공유 하위 화면 3종이 모두 FeedStack에 등록됐는지 확인한다.
+// 빠뜨리면 딥링크 NAVIGATE가 "처리되지 않았다" 경고만 남기고 조용히 무동작이 된다.
+test.each(['notifications', 'archive', 'joinApproval'] as const)(
+  '공유 하위 화면 %s를 피드 스택 화면으로 등록한다',
+  async route => {
+    const navRef = createNavigationContainerRef<FeedStackParamList>();
+    let renderer: TestRenderer.ReactTestRenderer;
+
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        <NavigationContainer ref={navRef}>
+          <FeedScreen
+            currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+            currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+            loader={jest.fn().mockResolvedValue([post])}
+            renderSharedSubRoute={() => null}
+            role="guardian"
+          />
+        </NavigationContainer>,
+      );
+      await Promise.resolve();
+    });
+
+    await TestRenderer.act(async () => {
+      navRef.navigate(route);
+    });
+
+    expect(navRef.getCurrentRoute()?.name).toBe(route);
+
+    await TestRenderer.act(() => {
+      renderer!.unmount();
+    });
+  },
+);
