@@ -20,6 +20,7 @@ import {
 import {AppText} from '../../../shared/components/AppText';
 
 import type {AppScreenProps} from '../../../app-shell';
+import {AccountActionConfirmationModal} from '../../auth/components/LogoutConfirmationModal';
 import {COLORS, RADII} from '../../../design/tokens';
 import {RetryButton} from '../../../shared/components/RetryButton';
 import {RouteFocusReporter} from '../../../shared/navigation/RouteFocusReporter';
@@ -138,6 +139,8 @@ export function MyPageScreen({
   // 초기값 true — false로 시작하면 첫 커밋에서 탭바가 잠깐 숨는다.
   const [isHomeFocused, setIsHomeFocused] = useState(true);
   const [isMonthlyOpen, setIsMonthlyOpen] = useState(false);
+  const [isLogoutConfirmationVisible, setIsLogoutConfirmationVisible] =
+    useState(false);
   // 이동 함수가 effect·핸들러에서도 스택을 조작할 수 있게 렌더 중 ref로
   // 캡처한다(FeedScreen feedNavRef 관용구).
   const profileNavRef = useRef<ProfileNavigation | null>(null);
@@ -419,10 +422,15 @@ export function MyPageScreen({
 
   const handleLogout = () => {
     if (onRequestLogout) {
-      onRequestLogout();
+      setIsLogoutConfirmationVisible(true);
       return;
     }
     Alert.alert('로그아웃', '후속 작업에서 연결될 기능입니다.');
+  };
+
+  const confirmLogout = async () => {
+    onRequestLogout?.();
+    setIsLogoutConfirmationVisible(false);
   };
 
   const handleMonthlyOpen = () => {
@@ -525,6 +533,12 @@ export function MyPageScreen({
         state={monthlyState}
         visible={isMonthlyOpen}
         year={selectedMonth.year}
+      />
+      <AccountActionConfirmationModal
+        action="logout"
+        onCancel={() => setIsLogoutConfirmationVisible(false)}
+        onConfirm={confirmLogout}
+        visible={isLogoutConfirmationVisible}
       />
     </View>
     );
