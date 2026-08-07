@@ -50,9 +50,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
     boxShadow: '0px 3px 14px rgba(18, 23, 41, 0.055)',
+    // 목록이 wrap될 때 한 줄에 정확히 3건만 오도록 폭을 3분할한다.
+    // 화면이 넓어도 원래 디자인 폭(100)을 넘기지 않는다.
+    flexBasis: "30%",
+    flexGrow: 1,
     height: 132,
     justifyContent: "center",
-    width: 100,
+    maxWidth: 100,
   },
   time: {
     color: COLORS.text,

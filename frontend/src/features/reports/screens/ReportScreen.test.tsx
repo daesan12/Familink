@@ -5,7 +5,7 @@ import {
   type NavigationProp,
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import {Pressable} from "react-native";
+import {Pressable, StyleSheet} from "react-native";
 import TestRenderer from "react-test-renderer";
 
 import type {MainTabsParamList} from "../../../app-shell";
@@ -224,75 +224,45 @@ function createFourCallPage(): CareReceiverReportPage {
   };
 }
 
-function layoutCallList(
-  renderer: TestRenderer.ReactTestRenderer,
-  {
-    contentWidth,
-    viewportWidth,
-  }: { contentWidth: number; viewportWidth: number }
-) {
-  const list = renderer.root.findByProps({ testID: "call-report-list" });
-
-  TestRenderer.act(() => {
-    list.props.onLayout({ nativeEvent: { layout: { width: viewportWidth } } });
-    list.props.onContentSizeChange(contentWidth);
-  });
-
+function callList(renderer: TestRenderer.ReactTestRenderer) {
   return renderer.root.findByProps({ testID: "call-report-list" });
 }
 
-function pagerScrollEnabled(renderer: TestRenderer.ReactTestRenderer) {
-  return renderer.root.findByProps({
-    testID: "care-receiver-report-pager",
-  }).props.scrollEnabled;
-}
-
-test("통화 리포트가 넘칠 때 목록을 만지면 피보호자 페이저를 멈춘다", () => {
+// 가로 ScrollView를 가로 페이저 안에 두면 Android가 제스처를 페이저에 넘겨
+// 목록이 스크롤되지 않는다. 가로 스크롤을 쓰지 않는다는 것을 고정한다.
+test("통화 목록은 가로 스크롤 대신 줄바꿈으로 쌓는다", () => {
   const renderer = renderReportScreen([createFourCallPage()]);
-  const list = layoutCallList(renderer, {
-    contentWidth: 470,
-    viewportWidth: 312,
-  });
+  const list = callList(renderer);
+  const style = StyleSheet.flatten(list.props.style);
 
-  expect(pagerScrollEnabled(renderer)).toBe(true);
-
-  TestRenderer.act(() => {
-    list.props.onTouchStart();
-  });
-
-  expect(pagerScrollEnabled(renderer)).toBe(false);
+  expect(list.props.horizontal).toBeUndefined();
+  expect(style.flexWrap).toBe("wrap");
+  expect(style.flexDirection).toBe("row");
 });
 
-test("통화 목록에서 손을 떼면 피보호자 페이저를 다시 켠다", () => {
+test("통화가 4건이어도 모든 건별 리포트를 그린다", () => {
   const renderer = renderReportScreen([createFourCallPage()]);
-  const list = layoutCallList(renderer, {
-    contentWidth: 470,
-    viewportWidth: 312,
-  });
 
-  TestRenderer.act(() => {
-    list.props.onTouchStart();
+  ["11:00", "12:00", "13:00", "14:00"].forEach((label) => {
+    expect(
+      renderer.root.findByProps({
+        accessibilityLabel: `${label} 통화 리포트 열기`,
+      })
+    ).toBeTruthy();
   });
-  expect(pagerScrollEnabled(renderer)).toBe(false);
-
-  TestRenderer.act(() => {
-    list.props.onTouchEnd();
-  });
-  expect(pagerScrollEnabled(renderer)).toBe(true);
 });
 
-test("통화 리포트가 화면에 다 들어오면 페이저를 멈추지 않는다", () => {
-  const renderer = renderReportScreen([DAILY_PENDING_REPORT_PAGE]);
-  const list = layoutCallList(renderer, {
-    contentWidth: 228,
-    viewportWidth: 312,
+// 4번째 카드가 첫 줄 아래로 내려가려면 한 줄이 3건으로 끊겨야 한다.
+test("건별 카드는 한 줄에 3건이 오도록 폭을 3분할한다", () => {
+  const renderer = renderReportScreen([createFourCallPage()]);
+  const card = renderer.root.findByProps({
+    accessibilityLabel: "11:00 통화 리포트 열기",
   });
+  const style = StyleSheet.flatten(card.props.style({ pressed: false }));
 
-  TestRenderer.act(() => {
-    list.props.onTouchStart();
-  });
-
-  expect(pagerScrollEnabled(renderer)).toBe(true);
+  expect(style.flexBasis).toBe("30%");
+  expect(style.maxWidth).toBe(100);
+  expect(style.width).toBeUndefined();
 });
 
 test("좌우 넘김 결과에 맞춰 현재 피보호자 인디케이터를 변경한다", () => {
