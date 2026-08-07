@@ -285,15 +285,30 @@ function renderForBack(
   return renderer!;
 }
 
-function renderedRoute(
+// 트리에 남아 있는 screen: 라벨을 트리 순서대로 전부 모은다. 첫 라벨만 집으면
+// 두 화면이 동시에 마운트된 상태에서 단언이 조용히 통과한다 — 하위 화면이 탭
+// 스택 안으로 들어가면(S15P11B104-367) 피드 목이 항상 마운트돼 있어 정확히
+// 그 위양성이 생긴다.
+function renderedRoutes(
   renderer: TestRenderer.ReactTestRenderer,
-): string | undefined {
-  const label = renderer.root
+): readonly string[] {
+  return renderer.root
     .findAllByType(Text)
     .map(node => node.props.children)
-    .find(child => typeof child === 'string' && child.startsWith('screen:'));
+    .filter(
+      (child): child is string =>
+        typeof child === 'string' && child.startsWith('screen:'),
+    )
+    .map(label => label.slice('screen:'.length));
+}
 
-  return typeof label === 'string' ? label.slice('screen:'.length) : undefined;
+// 탭 라우트 단언용. 탭 화면은 ShellRouteScreen의 useIsFocused 게이트 덕에 항상
+// 정확히 하나만 마운트된다 — 그 불변식을 단언에 함께 싣는다.
+function expectOnlyRoute(
+  renderer: TestRenderer.ReactTestRenderer,
+  route: string,
+) {
+  expect(renderedRoutes(renderer)).toEqual([route]);
 }
 
 // 알림·보관함은 어느 탭도 소유하지 않는 공유 하위 화면이다. 콜드 스타트로는
@@ -336,7 +351,7 @@ test.each<MainTabRoute>(['calendar', 'aiCall', 'groupInfo', 'profile'])(
 
     try {
       const renderer = renderForBack(route, CARE_RECEIVER_GROUP);
-      expect(renderedRoute(renderer)).toBe(route);
+      expectOnlyRoute(renderer, route);
 
       let handled = false;
       TestRenderer.act(() => {
@@ -344,7 +359,7 @@ test.each<MainTabRoute>(['calendar', 'aiCall', 'groupInfo', 'profile'])(
       });
 
       expect(handled).toBe(true);
-      expect(renderedRoute(renderer)).toBe('feed');
+      expectOnlyRoute(renderer, 'feed');
     } finally {
       back.restore();
     }
@@ -359,7 +374,7 @@ test.each(SUB_SCREEN_ROUTES)(
     try {
       const renderer = renderForBack('feed', CARE_RECEIVER_GROUP);
       openSubScreen(renderer, route);
-      expect(renderedRoute(renderer)).toBe(route);
+      expectOnlyRoute(renderer, route);
 
       let handled = false;
       TestRenderer.act(() => {
@@ -367,7 +382,7 @@ test.each(SUB_SCREEN_ROUTES)(
       });
 
       expect(handled).toBe(true);
-      expect(renderedRoute(renderer)).toBe('feed');
+      expectOnlyRoute(renderer, 'feed');
     } finally {
       back.restore();
     }
@@ -379,7 +394,7 @@ test('보호자 리포트 탭에서 시스템 Back은 앱을 종료하지 않고
 
   try {
     const renderer = renderForBack('report', GUARDIAN_GROUP);
-    expect(renderedRoute(renderer)).toBe('report');
+    expectOnlyRoute(renderer, 'report');
 
     let handled = false;
     TestRenderer.act(() => {
@@ -387,7 +402,7 @@ test('보호자 리포트 탭에서 시스템 Back은 앱을 종료하지 않고
     });
 
     expect(handled).toBe(true);
-    expect(renderedRoute(renderer)).toBe('feed');
+    expectOnlyRoute(renderer, 'feed');
   } finally {
     back.restore();
   }
@@ -406,7 +421,7 @@ test('피드 루트에서는 아무도 처리하지 않아 앱이 종료된다',
     });
 
     expect(handled).toBe(false);
-    expect(renderedRoute(renderer)).toBe('feed');
+    expectOnlyRoute(renderer, 'feed');
   } finally {
     back.restore();
   }
@@ -761,7 +776,7 @@ test('화면이 전체화면을 보고하면 셸은 뒤로가기를 처리하지
     });
 
     expect(handled).toBe(false);
-    expect(renderedRoute(renderer)).toBe('aiCall');
+    expectOnlyRoute(renderer, 'aiCall');
   } finally {
     back.restore();
   }
