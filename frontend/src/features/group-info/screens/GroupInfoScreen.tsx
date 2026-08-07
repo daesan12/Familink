@@ -248,8 +248,8 @@ export function GroupInfoScreen({
   const detailRequestVersion = useRef(0);
 
   // 이동 함수가 effect·핸들러에서도 스택을 조작할 수 있게 렌더 중 ref로
-  // 캡처한다(AppShell shellNavRef 관용구). 모든 화면에서 캡처 — 중첩 params로
-  // JoinApproval이 초기 포커스 화면이 될 수 있다.
+  // 캡처한다(AppShell shellNavRef 관용구). 어느 화면이 포커스여도 위 그룹 전환
+  // 정리가 스택을 되감을 수 있어야 하므로 모든 화면에서 캡처한다.
   const groupInfoNavRef = useRef<GroupInfoNavigation | null>(null);
   const previousGroupIdRef = useRef(currentGroup.id);
 
@@ -278,9 +278,9 @@ export function GroupInfoScreen({
   }, [focusedSubScreen, onFullscreenChange]);
 
   // 그룹을 전환하면 열려 있던 하위 화면을 홈으로 되돌린다(미러 정리는
-  // SubScreenRouteSync cleanup이 이어받는다). 그룹 전환이 동반된 가입 승인
-  // 딥링크는 params.groupId가 새 그룹과 일치하므로 지우지 않는다 — 같은
-  // 커밋에 push된 목적지를 죽이지 않기 위한 판별자다(FeedScreen 선례).
+  // SubScreenRouteSync cleanup이 이어받는다). 예외는 없다 — 그룹 전환이
+  // 동반된 가입 승인 딥링크는 피드 탭 스택으로 가므로 이 스택에 도달하지
+  // 않는다(S15P11B104-336, 369).
   useEffect(() => {
     if (previousGroupIdRef.current === currentGroup.id) {
       return;
@@ -288,15 +288,7 @@ export function GroupInfoScreen({
     previousGroupIdRef.current = currentGroup.id;
     const stackState = groupInfoNavRef.current?.getState();
     const topRoute = stackState?.routes[stackState.index];
-    if (
-      topRoute !== undefined &&
-      topRoute.name !== 'GroupInfoHome' &&
-      !(
-        topRoute.name === 'JoinApproval' &&
-        (topRoute.params as {groupId?: string} | undefined)?.groupId ===
-          currentGroup.id
-      )
-    ) {
+    if (topRoute !== undefined && topRoute.name !== 'GroupInfoHome') {
       groupInfoNavRef.current?.dispatch(StackActions.popToTop());
     }
   }, [currentGroup.id]);
@@ -843,9 +835,7 @@ export function GroupInfoScreen({
       label: '가입 승인 대기',
       onPress: () =>
         openManagerOnly(() =>
-          groupInfoNavRef.current?.navigate('JoinApproval', {
-            groupId: currentGroup.id,
-          }),
+          groupInfoNavRef.current?.navigate('JoinApproval'),
         ),
     },
   ];

@@ -296,12 +296,12 @@ export function AppShell({
     ) => navigateInTab('feed', { initial: false, params, screen }),
     [navigateInTab]
   );
+  // 그룹정보 탭의 딥링크 목적지는 홈뿐이다. 가입 승인 대기는 피드 탭 스택의
+  // 공유 하위 화면이므로 openSubScreen이 담당한다(S15P11B104-336).
   const navigateInGroupInfoTab = useCallback(
     (
-      screen: 'GroupInfoHome' | 'JoinApproval',
-      params:
-        | GroupInfoStackParamList['GroupInfoHome']
-        | GroupInfoStackParamList['JoinApproval'],
+      screen: 'GroupInfoHome',
+      params: GroupInfoStackParamList['GroupInfoHome'],
     ) => navigateInTab('groupInfo', { initial: false, params, screen }),
     [navigateInTab]
   );
