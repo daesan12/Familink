@@ -1099,3 +1099,90 @@ test('알림 화면이 보고한 미읽음 수를 피드로 돌아온 뒤에도 
     renderer!.root.findAllByProps({children: 5}).length,
   ).toBeGreaterThan(0);
 });
+
+test('역할 변경 시 공통으로 허용된 현재 탭을 유지한다', async () => {
+  const guardianGroup: FamilyGroup = {
+    ...GUARDIAN_GROUP,
+    id: 'role-change-preserve-group',
+  };
+  const careReceiverGroup: FamilyGroup = {
+    ...guardianGroup,
+    role: 'careReceiver',
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      withNav(
+        <AppShell
+          groups={[guardianGroup]}
+          initialGroupId={guardianGroup.id}
+          initialRoute="calendar"
+          screens={createBackTestScreens()}
+        />,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+  expectOnlyRoute(renderer!, 'calendar');
+
+  await TestRenderer.act(async () => {
+    renderer!.update(
+      withNav(
+        <AppShell
+          groups={[careReceiverGroup]}
+          initialGroupId={careReceiverGroup.id}
+          initialRoute="calendar"
+          screens={createBackTestScreens()}
+        />,
+      ),
+    );
+  });
+
+  expectOnlyRoute(renderer!, 'calendar');
+});
+
+test('역할 변경 시 허용되지 않는 리포트 탭에서 피드로 이동하고 AI 전화 탭을 노출한다', async () => {
+  const guardianGroup: FamilyGroup = {
+    ...GUARDIAN_GROUP,
+    id: 'role-change-replace-group',
+  };
+  const careReceiverGroup: FamilyGroup = {
+    ...guardianGroup,
+    role: 'careReceiver',
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      withNav(
+        <AppShell
+          groups={[guardianGroup]}
+          initialGroupId={guardianGroup.id}
+          initialRoute="report"
+          screens={createBackTestScreens()}
+        />,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+  expectOnlyRoute(renderer!, 'report');
+
+  await TestRenderer.act(async () => {
+    renderer!.update(
+      withNav(
+        <AppShell
+          groups={[careReceiverGroup]}
+          initialGroupId={careReceiverGroup.id}
+          initialRoute="report"
+          screens={createBackTestScreens()}
+        />,
+      ),
+    );
+  });
+
+  expectOnlyRoute(renderer!, 'feed');
+  selectTab(renderer!, 'aiCall');
+  expectOnlyRoute(renderer!, 'aiCall');
+  expect(renderedRoutes(renderer!)).not.toContain('report');
+});
