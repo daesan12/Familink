@@ -639,11 +639,6 @@ export function AppShell({
   };
   openNotificationTargetRef.current = handleOpenNotificationTarget;
 
-  const initialTabRouteName: MainTabRoute = resolveAllowedRoute(
-    currentGroup.role,
-    initialRoute
-  );
-
   const screenProps: AppScreenProps = {
     accessToken,
     apiBaseUrl,
@@ -804,7 +799,8 @@ export function AppShell({
       <View style={styles.content}>
         <Tab.Navigator
           backBehavior="none"
-          initialRouteName={initialTabRouteName}
+          key={`main-tabs:${currentGroup.role}`}
+          initialRouteName={resolvedTabRoute}
           screenOptions={{ headerShown: false }}
           tabBar={renderNullTabBar}
         >

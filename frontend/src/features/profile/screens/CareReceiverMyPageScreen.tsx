@@ -20,6 +20,7 @@ import {
 import {AppText} from '../../../shared/components/AppText';
 
 import type {AppScreenProps} from '../../../app-shell';
+import {AccountActionConfirmationModal} from '../../auth/components/LogoutConfirmationModal';
 import {COLORS, RADII} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
 import {RouteFocusReporter} from '../../../shared/navigation/RouteFocusReporter';
@@ -114,6 +115,8 @@ export function CareReceiverMyPageScreen({
   // 홈 포커스의 부정이 곧 풀스크린이다(하위 화면 전부 풀스크린).
   // 초기값 true — false로 시작하면 첫 커밋에서 탭바가 잠깐 숨는다.
   const [isHomeFocused, setIsHomeFocused] = useState(true);
+  const [isLogoutConfirmationVisible, setIsLogoutConfirmationVisible] =
+    useState(false);
   // 이동 함수가 effect·핸들러에서도 스택을 조작할 수 있게 렌더 중 ref로
   // 캡처한다(FeedScreen feedNavRef 관용구).
   const profileNavRef = useRef<ProfileNavigation | null>(null);
@@ -232,10 +235,15 @@ export function CareReceiverMyPageScreen({
 
   const handleLogout = () => {
     if (onRequestLogout) {
-      onRequestLogout();
+      setIsLogoutConfirmationVisible(true);
       return;
     }
     Alert.alert('로그아웃', '후속 작업에서 연결될 기능입니다.');
+  };
+
+  const confirmLogout = async () => {
+    onRequestLogout?.();
+    setIsLogoutConfirmationVisible(false);
   };
 
   // 기존 closeInterestSettings의 무효화 부분. 라우트 unmount cleanup으로
@@ -389,6 +397,13 @@ export function CareReceiverMyPageScreen({
 
         <MyPageFooter onLogout={handleLogout} />
       </ScrollView>
+
+      <AccountActionConfirmationModal
+        action="logout"
+        onCancel={() => setIsLogoutConfirmationVisible(false)}
+        onConfirm={confirmLogout}
+        visible={isLogoutConfirmationVisible}
+      />
     </View>
     );
 
