@@ -166,6 +166,8 @@ export function ReportScreen({
   const calendarRequests = useRef(new Map<string, number>());
   const callRequestId = useRef(0);
   const pagerRef = useRef<ScrollView>(null);
+  // 통화 목록을 가로로 넘기는 동안에는 피보호자 페이저를 멈춰 둔다.
+  const [isCallListDragging, setIsCallListDragging] = useState(false);
   // 알림 딥링크로 진입할 멤버·통화. 목적지 날짜의 페이지 로드가 끝난 뒤 적용한다.
   // state여야 새 딥링크 소비가 적용 effect를 다시 실행한다.
   const [pendingDeepLink, setPendingDeepLink] = useState<{
@@ -723,6 +725,7 @@ export function ReportScreen({
         onMomentumScrollEnd={handlePageChange}
         pagingEnabled
         ref={pagerRef}
+        scrollEnabled={!isCallListDragging}
         showsHorizontalScrollIndicator={false}
         testID="care-receiver-report-pager"
       >
@@ -732,6 +735,7 @@ export function ReportScreen({
               generationState={dailyGeneration.states[item.target.memberId]}
               isToday={selectedReportDate === reportDate}
               key={item.target.memberId}
+              onCallListDragChange={setIsCallListDragging}
               onGenerateDailyReport={
                 reportGateway ? dailyGeneration.request : undefined
               }
@@ -866,6 +870,7 @@ function getKoreaReportDate(now = new Date()): string {
 interface ReportPageProps {
   generationState?: DailyReportGenerationUiState;
   isToday: boolean;
+  onCallListDragChange: (isDragging: boolean) => void;
   onGenerateDailyReport?: (memberId: string) => void;
   onOpenCall: (call: CallReportView) => void;
   page: CareReceiverReportPage;
@@ -876,6 +881,7 @@ interface ReportPageProps {
 function ReportPage({
   generationState,
   isToday,
+  onCallListDragChange,
   onGenerateDailyReport,
   onOpenCall,
   page,
@@ -884,6 +890,11 @@ function ReportPage({
 }: ReportPageProps) {
   const pageState = getReportPageState(page);
   const sortedTodayCalls = sortCallsByStartedAt(page.todayCalls);
+  // 통화 목록이 화면 밖으로 넘칠 때만 페이저를 멈춘다. 넘치지 않으면
+  // 이 영역에서도 기존처럼 피보호자 페이지를 넘길 수 있어야 한다.
+  const [callListWidth, setCallListWidth] = useState(0);
+  const [callListContentWidth, setCallListContentWidth] = useState(0);
+  const isCallListScrollable = callListContentWidth > callListWidth;
   const generationStatus =
     generationState?.generationStatus ?? page.selectedDateGenerationStatus;
   const shouldShowReportContent =
@@ -924,7 +935,19 @@ function ReportPage({
               <ScrollView
                 contentContainerStyle={styles.callList}
                 horizontal
+                onContentSizeChange={setCallListContentWidth}
+                onLayout={(event) =>
+                  setCallListWidth(event.nativeEvent.layout.width)
+                }
+                // 바깥 피보호자 페이저도 가로 ScrollView라, 이 목록을 만지는
+                // 동안에는 페이저를 멈춰야 가로 스크롤 제스처를 뺏기지 않는다.
+                onTouchCancel={() => onCallListDragChange(false)}
+                onTouchEnd={() => onCallListDragChange(false)}
+                onTouchStart={() =>
+                  onCallListDragChange(isCallListScrollable)
+                }
                 showsHorizontalScrollIndicator={false}
+                testID="call-report-list"
               >
                 {sortedTodayCalls.map((call) => (
                   <CallReportRow

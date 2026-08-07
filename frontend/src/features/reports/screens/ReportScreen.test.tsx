@@ -209,6 +209,92 @@ test("건별 리포트를 누르면 텍스트 상세를 열고 null 메시지 �
   expect(tree).not.toContain("전달하신 말씀");
 });
 
+// 통화 4건은 화면 너비를 넘겨 가로 스크롤이 필요한 대표 상황이다.
+function createFourCallPage(): CareReceiverReportPage {
+  return {
+    ...createLatestOnlyPage(),
+    todayCalls: [1, 2, 3, 4].map((index) => ({
+      callSessionId: `call-${index}`,
+      guardianMessage: null,
+      reportAvailable: true,
+      reportDateLabel: "2026.07.18",
+      startedAtLabel: `1${index}:00`,
+      summary: `${index}번째 통화 요약`,
+    })),
+  };
+}
+
+function layoutCallList(
+  renderer: TestRenderer.ReactTestRenderer,
+  {
+    contentWidth,
+    viewportWidth,
+  }: { contentWidth: number; viewportWidth: number }
+) {
+  const list = renderer.root.findByProps({ testID: "call-report-list" });
+
+  TestRenderer.act(() => {
+    list.props.onLayout({ nativeEvent: { layout: { width: viewportWidth } } });
+    list.props.onContentSizeChange(contentWidth);
+  });
+
+  return renderer.root.findByProps({ testID: "call-report-list" });
+}
+
+function pagerScrollEnabled(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findByProps({
+    testID: "care-receiver-report-pager",
+  }).props.scrollEnabled;
+}
+
+test("통화 리포트가 넘칠 때 목록을 만지면 피보호자 페이저를 멈춘다", () => {
+  const renderer = renderReportScreen([createFourCallPage()]);
+  const list = layoutCallList(renderer, {
+    contentWidth: 470,
+    viewportWidth: 312,
+  });
+
+  expect(pagerScrollEnabled(renderer)).toBe(true);
+
+  TestRenderer.act(() => {
+    list.props.onTouchStart();
+  });
+
+  expect(pagerScrollEnabled(renderer)).toBe(false);
+});
+
+test("통화 목록에서 손을 떼면 피보호자 페이저를 다시 켠다", () => {
+  const renderer = renderReportScreen([createFourCallPage()]);
+  const list = layoutCallList(renderer, {
+    contentWidth: 470,
+    viewportWidth: 312,
+  });
+
+  TestRenderer.act(() => {
+    list.props.onTouchStart();
+  });
+  expect(pagerScrollEnabled(renderer)).toBe(false);
+
+  TestRenderer.act(() => {
+    list.props.onTouchEnd();
+  });
+  expect(pagerScrollEnabled(renderer)).toBe(true);
+});
+
+test("통화 리포트가 화면에 다 들어오면 페이저를 멈추지 않는다", () => {
+  const renderer = renderReportScreen([DAILY_PENDING_REPORT_PAGE]);
+  const list = layoutCallList(renderer, {
+    contentWidth: 228,
+    viewportWidth: 312,
+  });
+
+  TestRenderer.act(() => {
+    list.props.onTouchStart();
+  });
+
+  expect(pagerScrollEnabled(renderer)).toBe(true);
+});
+
 test("좌우 넘김 결과에 맞춰 현재 피보호자 인디케이터를 변경한다", () => {
   const firstPage = createLatestOnlyPage();
   const secondPage: CareReceiverReportPage = {
