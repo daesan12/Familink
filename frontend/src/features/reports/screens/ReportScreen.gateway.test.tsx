@@ -333,6 +333,40 @@ test("일간 조회 실패를 통화 없음과 구분하고 다시 시도할 수
   );
 }, 10_000);
 
+test("생성 완료되지 않은 통화는 건별 리포트 카드로 표시하지 않는다", async () => {
+  const gateway = createGateway();
+  gateway.getDailyReport.mockResolvedValue({
+    calls: [
+      {
+        callSessionId: "31",
+        reportAvailable: true,
+        startedAt: "2026-07-31T00:30:00Z",
+      },
+      {
+        callSessionId: "32",
+        reportAvailable: false,
+        startedAt: "2026-07-31T01:30:00Z",
+      },
+    ],
+    dailyReport: null,
+    date: "2026-07-31",
+    generationStatus: "available",
+  });
+
+  const renderer = await renderWithGateway(gateway);
+
+  expect(
+    renderer.root.findAllByProps({
+      accessibilityLabel: "09:30 통화 리포트 열기",
+    }).length
+  ).toBeGreaterThan(0);
+  expect(
+    renderer.root.findAllByProps({
+      accessibilityLabel: "10:30 통화 리포트 상태 확인",
+    })
+  ).toHaveLength(0);
+});
+
 test("이전 최신 리포트 아래에서 오늘 수동 생성 버튼을 누를 수 있다", async () => {
   const gateway = createGateway();
   gateway.getReportDates.mockResolvedValue({
@@ -1044,25 +1078,22 @@ test("생성 중 상태를 5초 뒤 다시 확인해 완료 리포트를 자동�
   );
 });
 
-test("리포트가 아직 없어도 행을 눌러 생성 상태를 확인할 수 있다", async () => {
+test("생성 완료되지 않은 통화만 있으면 기존 리포트 빈 상태를 표시한다", async () => {
   const gateway = createGateway();
   mockDailyReportWithCall(gateway, false);
-  gateway.getCallReportStatus.mockResolvedValue({
-    callSessionId: "31",
-    status: "generating",
-  });
   const renderer = await renderWithGateway(gateway);
 
-  await TestRenderer.act(async () => {
-    renderer.root
-      .findByProps({ accessibilityLabel: "09:30 통화 리포트 상태 확인" })
-      .props.onPress();
-  });
-
-  expect(gateway.getCallReportStatus).toHaveBeenCalledWith("31");
-  expect(JSON.stringify(renderer.toJSON())).toContain(
-    "리포트를 준비하고 있어요"
-  );
+  expect(
+    renderer.root.findAllByProps({
+      accessibilityLabel: "09:30 통화 리포트 상태 확인",
+    })
+  ).toHaveLength(0);
+  expect(
+    renderer.root.findAllByProps({
+      accessibilityLabel: "오늘 통화 리포트 없음",
+    }).length
+  ).toBeGreaterThan(0);
+  expect(gateway.getCallReportStatus).not.toHaveBeenCalled();
 });
 
 test("90초 동안 생성 중이면 자동 확인을 멈추고 수동 상태 확인으로 복구한다", async () => {

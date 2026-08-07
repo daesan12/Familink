@@ -63,14 +63,16 @@ export function toCareReceiverReportPage(
     memberId: target.memberId,
     reportCalendar,
     selectedDateGenerationStatus: callsResult.generationStatus,
-    todayCalls: callsResult.calls.map((call) => ({
-      callSessionId: call.callSessionId,
-      guardianMessage: null,
-      reportAvailable: call.reportAvailable,
-      reportDateLabel: formatReportDate(callsResult.date, "."),
-      startedAtLabel: formatStartedAt(call.startedAt),
-      summary: null,
-    })),
+    todayCalls: callsResult.calls
+      .filter((call) => call.reportAvailable)
+      .map((call) => ({
+        callSessionId: call.callSessionId,
+        guardianMessage: null,
+        reportAvailable: call.reportAvailable,
+        reportDateLabel: formatReportDate(callsResult.date, "."),
+        startedAtLabel: formatStartedAt(call.startedAt),
+        summary: null,
+      })),
   };
 }
 

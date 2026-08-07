@@ -4,9 +4,7 @@ import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -220,27 +218,23 @@ public class ReportQueryService {
 	}
 
 	/**
-	 * 기준일 구간에 정상 종료된 통화 목록을 리포트 열람 가능 여부와 함께 만든다.
+	 * 기준일 구간에 생성이 완료된 건별 리포트의 통화 목록을 만든다.
 	 *
-	 * <p>리포트가 생기는 통화만 보여주기 위해 정상 종료된 통화로 제한한다. 리포트 존재 여부는 통화마다
-	 * 묻지 않고 한 번에 조회해 판정한다.
+	 * <p>보호자 화면에는 저장된 건별 리포트만 노출하므로 생성 중이거나 생성에 실패한 통화는 목록에
+	 * 포함하지 않는다.
 	 */
 	private List<DailyCallItemResponse> findCalls(Long memberId, LocalDate reportDate) {
 		DailyReportWindow window = DailyReportWindow.forReportDate(reportDate);
-		List<CallSession> sessions = callSessionRepository.findByCareReceiverMemberAndStatusInEndedAtRange(
-			memberId, CallStatus.COMPLETED, window.startInclusive(), window.endExclusive());
-		if (sessions.isEmpty()) {
-			return List.of();
-		}
-
-		Set<Long> sessionIdsWithReport = new HashSet<>(callReportRepository.findCallSessionIdsIn(
-			sessions.stream().map(CallSession::getId).toList()));
-
-		return sessions.stream()
-			.map(session -> new DailyCallItemResponse(
-				session.getId(),
-				session.getStartedAt(),
-				sessionIdsWithReport.contains(session.getId())))
+		return callReportRepository.findCompletedForMemberInEndedAtRange(
+				memberId, CallStatus.COMPLETED, window.startInclusive(), window.endExclusive())
+			.stream()
+			.map(report -> {
+				CallSession session = report.getCallSession();
+				return new DailyCallItemResponse(
+					session.getId(),
+					session.getStartedAt(),
+					true);
+			})
 			.toList();
 	}
 
