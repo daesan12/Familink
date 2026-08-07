@@ -4,6 +4,12 @@ export {
   createReportGateway,
   ReportGatewayError,
 } from "./api/reportGateway";
+export { createReportCache, reportCache } from "./reportCache";
+export type {
+  ReadyCallReport,
+  ReportCache,
+  ReportCacheOptions,
+} from "./reportCache";
 export type {
   ReportGatewayOptions,
   ReportHttpClient,

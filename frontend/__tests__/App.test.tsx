@@ -32,7 +32,7 @@ import type {
   FamilyGroupGateway,
   GroupMemberGateway,
 } from "../src/features/group-info";
-import { ReportScreen } from "../src/features/reports";
+import { reportCache, ReportScreen } from "../src/features/reports";
 import type { ReportGateway } from "../src/features/reports";
 import type {
   DeviceTokenProvider,
@@ -87,6 +87,9 @@ jest.mock("../src/shared/media/imageDiskCache", () => ({
 
 beforeEach(() => {
   jest.mocked(imageDiskCache.clearAll).mockClear();
+  // 리포트 캐시는 로그인 세션 동안 유지되는 모듈 싱글턴이다. 비우지 않으면
+  // 같은 그룹·같은 기준일을 쓰는 앞 테스트의 스냅샷이 캐시 히트로 먼저 렌더된다.
+  reportCache.clear();
 });
 
 jest.mock("react-native-safe-area-context", () => {

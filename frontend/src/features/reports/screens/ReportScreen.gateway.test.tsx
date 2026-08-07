@@ -14,6 +14,7 @@ import type {
   DailyReportResult,
   ReportGateway,
 } from "../types";
+import { reportCache } from "../reportCache";
 import * as reportTargetHooks from "../hooks/useCareReceiverReportTargets";
 import { REPORT_PAGE_REQUEST_CONCURRENCY } from "../hooks/useReportPages";
 import * as reportPageHooks from "../hooks/useReportPages";
@@ -85,6 +86,12 @@ function withReportRoute(
   );
 }
 const renderedScreens = new Set<TestRenderer.ReactTestRenderer>();
+
+// 리포트 캐시는 로그인 세션 동안 유지되는 모듈 싱글턴이라, 각 테스트를 앱을
+// 새로 켠 상태에서 시작시키려면 비워야 한다.
+beforeEach(() => {
+  reportCache.clear();
+});
 
 afterEach(() => {
   TestRenderer.act(() => {
@@ -1232,6 +1239,97 @@ test("상세를 닫은 뒤 도착한 상태 응답은 화면을 다시 열지 �
 
   expect(isCallReportDetailVisible(renderer)).toBe(false);
   expect(gateway.getCallReport).not.toHaveBeenCalled();
+});
+
+test("한 번 조회한 건별 리포트를 다시 열면 로딩 없이 재조회 없이 표시한다", async () => {
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway);
+  gateway.getCallReportStatus.mockResolvedValue({
+    callSessionId: "31",
+    status: "ready",
+  });
+  gateway.getCallReport.mockResolvedValue(readyCallReport());
+  const renderer = await renderWithGateway(gateway);
+
+  await openCallReport(renderer);
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "통화 리포트 상세 닫기" })
+      .props.onPress();
+  });
+  await openCallReport(renderer);
+
+  expect(gateway.getCallReportStatus).toHaveBeenCalledTimes(1);
+  expect(gateway.getCallReport).toHaveBeenCalledTimes(1);
+  expect(isCallReportDetailVisible(renderer)).toBe(true);
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "아침 식사와 가족 이야기를 나누셨어요."
+  );
+});
+
+test("생성 중 상태는 캐시하지 않아 다시 열면 상태를 새로 확인한다", async () => {
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway);
+  gateway.getCallReportStatus.mockResolvedValue({
+    callSessionId: "31",
+    status: "generating",
+  });
+  const renderer = await renderWithGateway(gateway);
+
+  await openCallReport(renderer);
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "통화 리포트 상세 닫기" })
+      .props.onPress();
+  });
+  await openCallReport(renderer);
+
+  expect(gateway.getCallReportStatus).toHaveBeenCalledTimes(2);
+});
+
+test("캐시는 통화별로 분리되어 다른 통화는 그대로 조회한다", async () => {
+  const gateway = createGateway();
+  gateway.getDailyReport.mockResolvedValue({
+    calls: [
+      {
+        callSessionId: "31",
+        reportAvailable: true,
+        startedAt: "2026-07-31T00:30:00Z",
+      },
+      {
+        callSessionId: "32",
+        reportAvailable: true,
+        startedAt: "2026-07-31T02:10:00Z",
+      },
+    ],
+    dailyReport: null,
+    date: "2026-07-31",
+    generationStatus: "available",
+  });
+  gateway.getCallReportStatus.mockImplementation(async (callSessionId) => ({
+    callSessionId,
+    status: "ready",
+  }));
+  gateway.getCallReport.mockImplementation(async (callSessionId) => ({
+    ...readyCallReport(),
+    callSessionId,
+  }));
+  const renderer = await renderWithGateway(gateway);
+
+  await openCallReport(renderer);
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "통화 리포트 상세 닫기" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "11:10 통화 리포트 열기" })
+      .props.onPress();
+  });
+
+  expect(gateway.getCallReport).toHaveBeenCalledTimes(2);
+  expect(gateway.getCallReport).toHaveBeenLastCalledWith("32");
 });
 
 test("상세를 닫으면 예약된 상태 확인 타이머를 취소한다", async () => {
