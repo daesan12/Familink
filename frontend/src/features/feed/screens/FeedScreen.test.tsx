@@ -306,7 +306,7 @@ test('내비게이션으로 전달된 postId의 게시글 상세를 바로 연�
 
   expect(
     renderer!.root.findByProps({
-      accessibilityLabel: '피드로 돌아가기',
+      accessibilityLabel: '게시글 닫기',
     }),
   ).toBeTruthy();
 
@@ -344,7 +344,7 @@ test('상세에서 하드웨어 뒤로가기는 목록으로 돌아간다', asyn
       await Promise.resolve();
     });
     expect(
-      renderer!.root.findByProps({accessibilityLabel: '피드로 돌아가기'}),
+      renderer!.root.findByProps({accessibilityLabel: '게시글 닫기'}),
     ).toBeTruthy();
 
     let handled = false;
@@ -356,7 +356,7 @@ test('상세에서 하드웨어 뒤로가기는 목록으로 돌아간다', asyn
     // 컨테이너의 useBackButton이 FeedStack을 pop해 상세를 닫는다.
     expect(handled).toBe(true);
     expect(
-      renderer!.root.findAllByProps({accessibilityLabel: '피드로 돌아가기'}),
+      renderer!.root.findAllByProps({accessibilityLabel: '게시글 닫기'}),
     ).toHaveLength(0);
 
     await TestRenderer.act(() => {
@@ -423,3 +423,74 @@ test('작성자 아바타를 누르면 그룹정보와 동일한 프로필 팝�
     renderer!.unmount();
   });
 });
+
+// 셸이 주입하는 공유 하위 화면(알림·보관함)의 등록 계약 (S15P11B104-367).
+// FeedScreen은 라우트를 등록하고 닫기·닫힘 후처리만 바인딩한다.
+test('공유 하위 화면을 닫으면 목록으로 돌아오고 피드를 다시 조회한다', async () => {
+  // 하위 화면은 셸이 만든다. 여기서는 라우트가 실제로 등록되고 onClose·onClosed가
+  // 호출되는지만 본다.
+  const loader = jest.fn().mockResolvedValue([post]);
+  const navRef = createNavigationContainerRef<FeedStackParamList>();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NavigationContainer ref={navRef}>
+        <FeedScreen
+          currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+          currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+          loader={loader}
+          renderSharedSubRoute={(route, {onClose, onClosed}) => (
+            <SubRouteProbe onClose={onClose} onClosed={onClosed} route={route} />
+          )}
+          role="guardian"
+        />
+      </NavigationContainer>,
+    );
+    await Promise.resolve();
+  });
+
+  const loadsAfterMount = loader.mock.calls.length;
+
+  await TestRenderer.act(async () => {
+    navRef.navigate('notifications');
+  });
+  expect(navRef.getCurrentRoute()?.name).toBe('notifications');
+
+  // 화면 자신의 닫기 버튼 → 등록 지점이 바인딩한 navigation.goBack()
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({accessibilityLabel: '닫기'}).props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(navRef.getCurrentRoute()?.name).toBe('FeedHome');
+  // FeedHome이 스택 아래에 마운트 유지되어 재마운트 재조회가 사라지므로, 닫힘
+  // 후처리로 목록을 다시 조회한다(알림에서 새 게시글을 확인하고 닫는 경로).
+  expect(loader.mock.calls.length).toBeGreaterThan(loadsAfterMount);
+
+  await TestRenderer.act(() => {
+    renderer!.unmount();
+  });
+});
+
+function SubRouteProbe({
+  onClose,
+  onClosed,
+  route,
+}: {
+  onClose: () => void;
+  onClosed?: () => void;
+  route: string;
+}) {
+  const {Pressable, Text} = require('react-native');
+  React.useEffect(() => () => onClosed?.(), [onClosed]);
+
+  return (
+    <>
+      <Text>{`screen:${route}`}</Text>
+      <Pressable accessibilityLabel="닫기" onPress={onClose}>
+        <Text>닫기</Text>
+      </Pressable>
+    </>
+  );
+}
