@@ -91,12 +91,15 @@ function createSubScreenMock(route: SharedSubRoute) {
   };
 }
 
-function createScreens(overrides?: AppScreenRegistry): AppScreenRegistry {
+function createScreens(
+  overrides?: AppScreenRegistry,
+  onSubRouteClosed?: (route: SharedSubRoute) => void,
+): AppScreenRegistry {
   return {
     aiCall: () => <Text>screen:aiCall</Text>,
     archive: createSubScreenMock('archive'),
     calendar: () => <Text>screen:calendar</Text>,
-    feed: createFeedTabHostScreen(),
+    feed: createFeedTabHostScreen({onSubRouteClosed}),
     groupInfo: () => <Text>screen:groupInfo</Text>,
     notifications: createSubScreenMock('notifications'),
     profile: () => <Text>screen:profile</Text>,
@@ -107,6 +110,7 @@ function createScreens(overrides?: AppScreenRegistry): AppScreenRegistry {
 function renderShell(
   navRef: NavigationContainerRefWithCurrent<ParamListBase>,
   overrides?: AppScreenRegistry,
+  onSubRouteClosed?: (route: SharedSubRoute) => void,
 ) {
   let renderer: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
@@ -117,7 +121,7 @@ function renderShell(
             groups={[GROUP]}
             initialGroupId={GROUP.id}
             initialRoute="feed"
-            screens={createScreens(overrides)}
+            screens={createScreens(overrides, onSubRouteClosed)}
           />
         </SafeAreaProvider>
       </NavigationContainer>,
@@ -231,6 +235,26 @@ test.each(SUB_SCREEN_ROUTES)(
     press(renderer, CLOSE_LABEL[route]);
 
     expect(currentRouteName(navRef)).toBe('FeedHome');
+  },
+);
+
+test.each(SUB_SCREEN_ROUTES)(
+  '%s 화면이 닫히면 등록한 스택에 닫힘 후처리를 알린다',
+  route => {
+    // 셸 호스트가 options.onClosed를 호출하는 한 줄을 고정한다. 프로덕션에서
+    // 여기에 feed.refresh가 걸려 있어, 끊기면 알림을 닫아도 목록이 낡는다.
+    const onSubRouteClosed = jest.fn();
+    const navRef = createNavigationContainerRef();
+    const renderer = renderShell(navRef, undefined, onSubRouteClosed);
+
+    press(renderer, OPENER_LABEL[route]);
+    expect(onSubRouteClosed).not.toHaveBeenCalled();
+
+    TestRenderer.act(() => {
+      navRef.goBack();
+    });
+
+    expect(onSubRouteClosed).toHaveBeenCalledWith(route);
   },
 );
 

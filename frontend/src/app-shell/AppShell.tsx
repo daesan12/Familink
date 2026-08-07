@@ -203,13 +203,18 @@ export function AppShell({
 
   // 열려 있는 하위 화면을 걷어낸다. 신호는 낙관적으로 내리고(호스트 cleanup이
   // 확정한다) 중복 호출을 막기 위해 ref를 먼저 비운다.
+  //
+  // 신호를 조기 반환보다 먼저 내리는 것이 자기 치유 성질을 만든다. openSubScreen이
+  // 신호를 낙관적으로 세팅한 뒤 호스트가 끝내 마운트되지 않으면(dispatch 유실 등)
+  // 셸 헤더·FAB가 사라지고 뒤로가기도 셸이 처리하지 않는 상태에 갇히는데, 탭을
+  // 누르는 것만으로 벗어날 수 있어야 한다.
   const closeSubRoute = useCallback(() => {
+    setFocusedSubRoute(null);
     const open = openSubRouteRef.current;
     if (open === null) {
       return;
     }
     openSubRouteRef.current = null;
-    setFocusedSubRoute(null);
     open.close();
   }, []);
 

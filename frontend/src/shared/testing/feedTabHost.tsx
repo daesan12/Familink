@@ -37,6 +37,9 @@ export interface FeedTabHostHomeContext {
 
 interface FeedTabHostOptions {
   renderHome?: (context: FeedTabHostHomeContext) => React.ReactNode;
+  // 하위 화면이 닫힌 뒤 스택 소유자가 받는 후처리 훅. 프로덕션 FeedScreen은 이
+  // 자리에 feed.refresh를 바인딩한다.
+  onSubRouteClosed?: (route: SharedSubRoute) => void;
 }
 
 export function createFeedTabHostScreen(
@@ -71,6 +74,7 @@ export function createFeedTabHostScreen(
             {({navigation}) =>
               props.renderSharedSubRoute?.(route, {
                 onClose: () => navigation.goBack(),
+                onClosed: () => options?.onSubRouteClosed?.(route),
               }) ?? null
             }
           </HostStack.Screen>

@@ -1317,13 +1317,16 @@ export function FeedScreen({
             하위 화면의 navigation을 잡으면 엉뚱한 화면을 pop한다.
             onClosed로 목록을 다시 조회한다: 하위 화면이 스택 아래 FeedHome을
             마운트 유지하므로 재마운트 재조회가 사라지는데, 알림에서 새 게시글을
-            확인하고 닫았을 때 그 글이 보이는 기존 동작은 지켜야 한다. */}
+            확인하고 닫았을 때 그 글이 보이는 기존 동작은 지켜야 한다.
+            retry가 아니라 refresh다 — retry는 status를 loading으로 되돌려
+            FlatList를 스피너로 교체하므로, 마운트 유지로 얻은 스크롤 위치가
+            그대로 사라진다. */}
         {SHARED_SUB_ROUTES.map(route => (
           <FeedStack.Screen key={route} name={route}>
             {({navigation}) =>
               renderSharedSubRoute?.(route, {
                 onClose: () => navigation.goBack(),
-                onClosed: feed.retry,
+                onClosed: feed.refresh,
               }) ?? null
             }
           </FeedStack.Screen>
