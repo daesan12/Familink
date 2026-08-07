@@ -26,7 +26,8 @@ export type AppRoute =
   | 'groupInfo'
   | 'profile'
   | 'notifications'
-  | 'archive';
+  | 'archive'
+  | 'joinApproval';
 
 export interface FamilyGroup {
   id: string;
@@ -53,6 +54,7 @@ export interface AppScreenProps {
   currentUserId?: number;
   currentUserName?: string;
   onCloseArchive?: () => void;
+  onCloseJoinApproval?: () => void;
   onCloseNotifications?: () => void;
   onCloseProfile?: () => void;
   onFullscreenChange?: (isFullscreen: boolean) => void;
@@ -77,7 +79,7 @@ export interface AppScreenProps {
 
 // 셸 내부 내비게이션 화면 이름 집합 (S15P11B104-320).
 // 어느 탭도 소유하지 않고 현재 화면 위에 쌓이는 공유 하위 화면.
-export type SharedSubRoute = 'archive' | 'notifications';
+export type SharedSubRoute = 'archive' | 'joinApproval' | 'notifications';
 export type MainTabRoute = Exclude<AppRoute, SharedSubRoute>;
 
 // 공유 하위 화면 주입 계약 (S15P11B104-367).

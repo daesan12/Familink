@@ -226,6 +226,7 @@ const ALL_ROUTES: readonly AppRoute[] = [
   'profile',
   'notifications',
   'archive',
+  'joinApproval',
 ];
 
 const CARE_RECEIVER_GROUP: FamilyGroup = {
@@ -322,16 +323,21 @@ function expectOnlyRoute(
 // 알림·보관함은 어느 탭도 소유하지 않는 공유 하위 화면이다. 콜드 스타트로는
 // 진입할 수 없으므로(initialRoute는 탭 라우트만 받는다) 프로덕션과 같은 경로로
 // 피드 헤더의 종·폴더 아이콘을 눌러 연다.
-const SUB_SCREEN_ROUTES: readonly SharedSubRoute[] = ['notifications', 'archive'];
-
-const SUB_SCREEN_OPENER_LABEL: Record<SharedSubRoute, string> = {
+// 가입 승인(joinApproval)은 헤더 opener가 없어 아래 test.each의 전제가 성립하지
+// 않으므로 이 표에 넣지 않는다 — 전용 테스트로 덮는다.
+const SUB_SCREEN_OPENER_LABEL = {
   archive: '게시글 보관함',
   notifications: '알림',
-};
+} satisfies Partial<Record<SharedSubRoute, string>>;
+
+const SUB_SCREEN_ROUTES: readonly (keyof typeof SUB_SCREEN_OPENER_LABEL)[] = [
+  'notifications',
+  'archive',
+];
 
 function openSubScreen(
   renderer: TestRenderer.ReactTestRenderer,
-  route: SharedSubRoute,
+  route: keyof typeof SUB_SCREEN_OPENER_LABEL,
 ) {
   TestRenderer.act(() => {
     renderer.root

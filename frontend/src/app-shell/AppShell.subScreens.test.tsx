@@ -47,17 +47,25 @@ const GROUP: FamilyGroup = {
   role: 'careReceiver',
 };
 
-const SUB_SCREEN_ROUTES: readonly SharedSubRoute[] = ['notifications', 'archive'];
-
-// 피드 헤더의 종·폴더 아이콘. 프로덕션 진입 경로와 같다.
-const OPENER_LABEL: Record<SharedSubRoute, string> = {
+// 피드 헤더의 종·폴더 아이콘으로 여는 하위 화면. 가입 승인(joinApproval)은
+// 헤더 opener가 없고 진입 지점이 알림 화면이므로 이 표에 넣지 않는다 — 아래
+// test.each가 전제하는 "진입 지점 = 피드 목록"이 성립하지 않는다. 전용 테스트로 덮는다.
+const OPENER_LABEL = {
   archive: '게시글 보관함',
   notifications: '알림',
-};
+} satisfies Partial<Record<SharedSubRoute, string>>;
+
+const SUB_SCREEN_ROUTES: readonly (keyof typeof OPENER_LABEL)[] = [
+  'notifications',
+  'archive',
+];
 
 // 각 하위 화면이 자기 헤더에 가진 닫기 버튼.
 const CLOSE_LABEL: Record<SharedSubRoute, string> = {
   archive: '보관함 닫기',
+  // 가입 승인 대기는 SubScreenHeader → BackButton 기본 라벨을 그대로 쓴다. 같은
+  // 스택의 다른 화면(상세·작성·알림·보관함)은 전부 고유 라벨이라 겹치지 않는다.
+  joinApproval: '뒤로 가기',
   notifications: '알림 화면 닫기',
 };
 
@@ -72,17 +80,27 @@ afterEach(() => {
 
 // 하위 화면 목은 자기 닫기 버튼을 가진다. 등록 지점이 onClose를 navigation.goBack
 // 으로 바인딩하는지 확인하기 위해 프로덕션과 같은 라벨을 쓴다.
+// 셸이 라우트별로 다른 닫기 prop을 넘기므로 switch로 고른다 — 라우트가 늘면
+// 컴파일 에러가 나서 배선 누락을 잡는다.
+function closeHandler(route: SharedSubRoute, props: AppScreenProps) {
+  switch (route) {
+    case 'archive':
+      return props.onCloseArchive;
+    case 'joinApproval':
+      return props.onCloseJoinApproval;
+    case 'notifications':
+      return props.onCloseNotifications;
+  }
+}
+
 function createSubScreenMock(route: SharedSubRoute) {
-  return function SubScreenMock({
-    onCloseArchive,
-    onCloseNotifications,
-  }: AppScreenProps) {
+  return function SubScreenMock(props: AppScreenProps) {
     return (
       <>
         <Text>{`screen:${route}`}</Text>
         <Pressable
           accessibilityLabel={CLOSE_LABEL[route]}
-          onPress={route === 'archive' ? onCloseArchive : onCloseNotifications}
+          onPress={closeHandler(route, props)}
         >
           <Text>{`close:${route}`}</Text>
         </Pressable>
@@ -124,6 +142,7 @@ function createScreens(
     calendar: () => <Text>screen:calendar</Text>,
     feed: createFeedTabHostScreen({onSubRouteClosed}),
     groupInfo: () => <Text>screen:groupInfo</Text>,
+    joinApproval: createSubScreenMock('joinApproval'),
     notifications: createSubScreenMock('notifications'),
     profile: () => <Text>screen:profile</Text>,
     ...overrides,

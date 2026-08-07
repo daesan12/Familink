@@ -88,6 +88,7 @@ import {
   familyGroupManagementGateway,
   familyGroupGateway,
   GroupInfoScreen,
+  JoinApprovalScreen,
   createCarnationGateway,
   type FamilyGroupGateway,
   type FamilyGroupListSnapshot,
@@ -420,6 +421,36 @@ function ConnectedGroupInfoScreen(screenProps: AppScreenProps) {
   );
 }
 
+// 셸이 소유하는 공유 하위 화면(S15P11B104-336). 그룹정보 탭 등록분과 같은
+// 로더·커맨드를 쓰고, groupId도 같은 방식으로 currentGroup에서 받는다 —
+// 화면이 route params를 읽지 않기 때문이다.
+function ConnectedJoinApprovalScreen(screenProps: AppScreenProps) {
+  const integration = useContext(GroupInfoIntegrationContext);
+  const {onCloseJoinApproval, onFullscreenChange} = screenProps;
+
+  // 하단 탭바를 숨긴다. 알림·보관함과 달리 이 화면은 탭 루트가 아니라 결정
+  // 화면이므로 그룹정보 탭에서 열 때와 같은 모습을 유지한다(팀 결정).
+  useEffect(() => {
+    onFullscreenChange?.(true);
+
+    return () => onFullscreenChange?.(false);
+  }, [onFullscreenChange]);
+
+  return (
+    <JoinApprovalScreen
+      groupId={screenProps.currentGroup.id}
+      loader={integration?.membership.loadJoinRequests}
+      onBack={() => onCloseJoinApproval?.()}
+      onProcess={
+        integration === null
+          ? undefined
+          : (groupId, input) =>
+              integration.membership.processJoinRequest(groupId, input)
+      }
+    />
+  );
+}
+
 function ConnectedArchiveScreen(screenProps: AppScreenProps) {
   const integration = useContext(GroupInfoIntegrationContext);
   const usesDevelopmentFixture =
@@ -547,6 +578,7 @@ const DEFAULT_SCREENS: AppScreenRegistry = {
   calendar: CalendarScreen,
   feed: ConnectedFeedScreen,
   groupInfo: ConnectedGroupInfoScreen,
+  joinApproval: ConnectedJoinApprovalScreen,
   notifications: NotificationsScreen,
   report: ReportScreen,
   profile: ProfileTabScreen,

@@ -86,7 +86,7 @@ const EMPTY_POSTS: readonly FeedPost[] = [];
 const FeedStack = createNativeStackNavigator<FeedStackParamList>();
 
 // 셸이 주입하는 공유 하위 화면. 라우트 이름은 AppRoute와 동일하다.
-const SHARED_SUB_ROUTES = ['notifications', 'archive'] as const;
+const SHARED_SUB_ROUTES = ['notifications', 'archive', 'joinApproval'] as const;
 
 type FeedNavigation = NativeStackNavigationProp<FeedStackParamList>;
 

@@ -643,6 +643,7 @@ export function AppShell({
     currentUserName,
     onCallResult,
     onCloseArchive: closeSubRoute,
+    onCloseJoinApproval: closeSubRoute,
     onCloseNotifications: closeSubRoute,
     onCloseProfile: () => goToTab('feed'),
     onFullscreenChange: setIsScreenFullscreen,
@@ -1031,6 +1032,7 @@ function getPlaceholderTitle(route: AppRoute): string {
     report: '리포트',
     notifications: '알림',
     archive: '보관함',
+    joinApproval: '가입 승인 대기',
   };
 
   return titles[route];

@@ -1,4 +1,5 @@
 export {GroupInfoScreen} from './screens/GroupInfoScreen';
+export {JoinApprovalScreen} from './screens/JoinApprovalScreen';
 export type {GroupInfoScreenProps} from './screens/GroupInfoScreen';
 export type {GroupInfoStackParamList} from './navigationTypes';
 export {MemberProfilePopup} from './components/MemberProfilePopup';

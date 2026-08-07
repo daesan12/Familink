@@ -15,5 +15,6 @@ export type FeedStackParamList = {
   // 뒤로가기 pop이 진입 지점으로 돌아갈 수 있게 된다. 라우트 이름은 AppRoute와
   // 같은 소문자로 맞춰 이름 매핑 계층을 만들지 않는다.
   archive: undefined;
+  joinApproval: undefined;
   notifications: undefined;
 };

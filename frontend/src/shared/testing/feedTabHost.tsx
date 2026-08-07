@@ -22,7 +22,11 @@ import type {
 // 주입 API가 바뀌면 이 파일 한 곳만 고친다.
 const HostStack = createNativeStackNavigator();
 
-const SHARED_SUB_ROUTES: readonly SharedSubRoute[] = ['notifications', 'archive'];
+const SHARED_SUB_ROUTES: readonly SharedSubRoute[] = [
+  'notifications',
+  'archive',
+  'joinApproval',
+];
 
 // 프로덕션 FeedStack에 있는 나머지 화면. 딥링크가 중첩 params로 이 이름들을
 // 지목하므로 등록해 두지 않으면 "NAVIGATE가 처리되지 않았다" 경고가 난다.

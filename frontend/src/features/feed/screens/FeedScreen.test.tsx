@@ -494,3 +494,38 @@ function SubRouteProbe({
     </>
   );
 }
+
+// 셸이 주입하는 공유 하위 화면 3종이 모두 FeedStack에 등록됐는지 확인한다.
+// 빠뜨리면 딥링크 NAVIGATE가 "처리되지 않았다" 경고만 남기고 조용히 무동작이 된다.
+test.each(['notifications', 'archive', 'joinApproval'] as const)(
+  '공유 하위 화면 %s를 피드 스택 화면으로 등록한다',
+  async route => {
+    const navRef = createNavigationContainerRef<FeedStackParamList>();
+    let renderer: TestRenderer.ReactTestRenderer;
+
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        <NavigationContainer ref={navRef}>
+          <FeedScreen
+            currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+            currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+            loader={jest.fn().mockResolvedValue([post])}
+            renderSharedSubRoute={() => null}
+            role="guardian"
+          />
+        </NavigationContainer>,
+      );
+      await Promise.resolve();
+    });
+
+    await TestRenderer.act(async () => {
+      navRef.navigate(route);
+    });
+
+    expect(navRef.getCurrentRoute()?.name).toBe(route);
+
+    await TestRenderer.act(() => {
+      renderer!.unmount();
+    });
+  },
+);
