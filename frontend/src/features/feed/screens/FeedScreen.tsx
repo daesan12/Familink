@@ -85,6 +85,9 @@ const EMPTY_POSTS: readonly FeedPost[] = [];
 // 스코프에 유지할 수 있다.
 const FeedStack = createNativeStackNavigator<FeedStackParamList>();
 
+// 셸이 주입하는 공유 하위 화면. 라우트 이름은 AppRoute와 동일하다.
+const SHARED_SUB_ROUTES = ['notifications', 'archive'] as const;
+
 type FeedNavigation = NativeStackNavigationProp<FeedStackParamList>;
 
 // 라우트 포커스를 셸 신호·목록 게이트용 미러로 보고한다. 반드시 모듈 레벨
@@ -203,6 +206,7 @@ export function FeedScreen({
   memberProfileLoader,
   memberCarnationLoader,
   rankingLoader,
+  renderSharedSubRoute,
 }: FeedScreenProps) {
   const feed = useFeed(
     currentGroup.id,
@@ -1305,6 +1309,28 @@ export function FeedScreen({
             );
           }}
         </FeedStack.Screen>
+        {/* 셸이 소유하는 공유 하위 화면(알림·보관함). 이 파일은 라우트 등록과
+            닫기 바인딩만 담당하고 본문은 셸이 주입하므로, 피처끼리 직접
+            import하지 않는다(S15P11B104-367).
+            닫기를 goBack 한 번으로 수렴시켜 진입 지점으로 돌아간다.
+            feedNavRef는 여기서 캡처하지 않는다 — 상세·작성의 goBack·popToTop이
+            하위 화면의 navigation을 잡으면 엉뚱한 화면을 pop한다.
+            onClosed로 목록을 다시 조회한다: 하위 화면이 스택 아래 FeedHome을
+            마운트 유지하므로 재마운트 재조회가 사라지는데, 알림에서 새 게시글을
+            확인하고 닫았을 때 그 글이 보이는 기존 동작은 지켜야 한다.
+            retry가 아니라 refresh다 — retry는 status를 loading으로 되돌려
+            FlatList를 스피너로 교체하므로, 마운트 유지로 얻은 스크롤 위치가
+            그대로 사라진다. */}
+        {SHARED_SUB_ROUTES.map(route => (
+          <FeedStack.Screen key={route} name={route}>
+            {({navigation}) =>
+              renderSharedSubRoute?.(route, {
+                onClose: () => navigation.goBack(),
+                onClosed: feed.refresh,
+              }) ?? null
+            }
+          </FeedStack.Screen>
+        ))}
       </FeedStack.Navigator>
       {authorProfilePopup}
     </View>

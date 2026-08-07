@@ -27,6 +27,7 @@ import type { AuthGateway } from "../src/features/auth/types";
 import { ApiError } from "../src/shared/api";
 import { notifyGroupAccessDenied } from "../src/shared/api/groupAccessEvents";
 import { imageDiskCache } from "../src/shared/media/imageDiskCache";
+import { createFeedTabHostScreen } from "../src/shared/testing/feedTabHost";
 import type {
   FamilyGroupGateway,
   GroupMemberGateway,
@@ -3725,18 +3726,24 @@ test("피드에 진입하거나 피드를 다시 누르면 미읽음 배지를 �
 test("아카이브 화면에서 피드 탭을 누르면 재탭이 아니라 피드로 복귀한다", async () => {
   // 재탭이면 셸이 pop:true 중첩 params를 함께 dispatch해 스택 루트로 정규화한다.
   // 아카이브는 피드 탭 위에 쌓인 하위 화면이므로 재탭이 아닌 일반 이동이어야 한다.
-  function FeedProbe() {
-    const route = useRoute();
-    const nested = route.params as { pop?: boolean } | undefined;
-    return <Text>{`feed:${String(nested?.pop ?? "none")}`}</Text>;
-  }
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(() => {
     renderer = TestRenderer.create(
       <App
         initialRootRoute="appShell"
-        screens={{ archive: () => <Text>screen:archive</Text>, feed: FeedProbe }}
+        screens={{
+          archive: () => <Text>screen:archive</Text>,
+          // 보관함은 피드 탭 스택 화면이므로 호스트할 스택이 필요하다
+          // (S15P11B104-367). 재탭 판별자 pop은 탭 route params에 실린다.
+          feed: createFeedTabHostScreen({
+            renderHome: ({ tabParams }) => (
+              <Text>{`feed:${String(
+                (tabParams as { pop?: boolean } | undefined)?.pop ?? "none",
+              )}`}</Text>
+            ),
+          }),
+        }}
       />
     );
   });
@@ -4190,6 +4197,8 @@ test("푸시 탭의 알림을 첫 페이지에서 찾지 못하면 알림 목록
   const { renderer } = await renderAppWithPendingTap({
     notificationGateway,
     screens: {
+      // 알림은 피드 탭 스택 화면이다 — 호스트할 피드 탭 스택이 필요하다.
+      feed: createFeedTabHostScreen(),
       notifications: () => <Text>screen:notifications</Text>,
     },
     tap: { notificationId: "404", type: "NEW_POST" },
