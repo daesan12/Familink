@@ -2,6 +2,7 @@ import BellOff from 'lucide-react-native/icons/bell-off';
 import Trash2 from 'lucide-react-native/icons/trash-2';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {
+  Alert,
   FlatList,
   LayoutAnimation,
   Pressable,
@@ -342,6 +343,16 @@ export function NotificationsScreen({
     markAsRead(notification.id);
     const target = resolveNotificationTarget(notification);
     if (target === null) {
+      if (
+        notification.type === 'NEW_POST' ||
+        notification.type === 'POST_ACTIVITY'
+      ) {
+        Alert.alert(
+          '게시글을 볼 수 없어요',
+          '작성자가 게시글을 삭제했거나 더 이상 볼 수 없습니다.',
+          [{text: '확인'}],
+        );
+      }
       return;
     }
     // 게시글은 기존 콜백 경로를 유지하고, 나머지 목적지는 공용 라우팅에 위임한다.
