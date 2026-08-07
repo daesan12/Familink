@@ -1,12 +1,34 @@
+import {Alert} from 'react-native';
 import {act, create, type ReactTestRenderer} from 'react-test-renderer';
 import {launchImageLibrary} from 'react-native-image-picker';
 
 import {PostComposerScreen} from './PostComposerScreen';
+import type {ComposerMedia} from '../composer/postComposerModel';
 
 jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
 jest.mock('react-native-image-picker', () => ({
   launchImageLibrary: jest.fn(),
 }));
+
+const selectedVideo: ComposerMedia = {
+  contentType: 'video/mp4',
+  durationSeconds: 30,
+  fileName: 'video.mp4',
+  fileSizeBytes: 1024,
+  id: 'video-1',
+  kind: 'video',
+  source: {uri: 'file:///video.mp4'},
+  sourceType: 'local',
+};
+
+// 모듈 스코프 mock과 Alert 스파이가 테스트 사이로 새지 않게 한다.
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 test('업로드 중에는 본문과 미디어 선택·제거를 잠근다', () => {
   let renderer: ReactTestRenderer;
@@ -79,6 +101,63 @@ test('텍스트 게시글은 미디어 표현 없이 업로드 상태를 안내�
   expect(
     renderer!.root.findAllByProps({children: '미디어 업로드 중'}),
   ).toHaveLength(0);
+
+  act(() => renderer!.unmount());
+});
+
+test('영상이 선택된 상태에서 영상을 다시 고르면 영상 기준 교체 문구를 보여준다', () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  let renderer: ReactTestRenderer;
+
+  act(() => {
+    renderer = create(
+      <PostComposerScreen
+        initialValue={{body: '영상 게시글', media: [selectedVideo]}}
+        mode="create"
+        onCancel={jest.fn()}
+        onSubmit={jest.fn()}
+      />,
+    );
+  });
+
+  act(() => {
+    renderer!.root.findByProps({accessibilityLabel: '영상 선택'}).props.onPress();
+  });
+
+  expect(alertSpy).toHaveBeenCalledWith(
+    '선택한 영상을 교체할까요?',
+    '교체하면 현재 선택한 영상이 제거돼요.',
+    expect.any(Array),
+  );
+  expect(launchImageLibrary).not.toHaveBeenCalled();
+
+  act(() => renderer!.unmount());
+});
+
+test('영상이 선택된 상태에서 사진을 고르면 영상을 사진으로 바꾼다고 안내한다', () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  let renderer: ReactTestRenderer;
+
+  act(() => {
+    renderer = create(
+      <PostComposerScreen
+        initialValue={{body: '영상 게시글', media: [selectedVideo]}}
+        mode="create"
+        onCancel={jest.fn()}
+        onSubmit={jest.fn()}
+      />,
+    );
+  });
+
+  act(() => {
+    renderer!.root.findByProps({accessibilityLabel: '사진 선택'}).props.onPress();
+  });
+
+  expect(alertSpy).toHaveBeenCalledWith(
+    '영상을 사진으로 교체할까요?',
+    '교체하면 현재 선택한 영상이 제거돼요.',
+    expect.any(Array),
+  );
 
   act(() => renderer!.unmount());
 });

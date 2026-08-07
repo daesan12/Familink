@@ -30,6 +30,7 @@ import {
   MAX_POST_IMAGES,
   buildPostSubmitPayload,
   canAddMedia,
+  describeMediaReplace,
   hasComposerChanges,
   validatePickedMedia,
   type ComposerMedia,
@@ -212,22 +213,16 @@ export function PostComposerScreen({
     }
 
     if (availability === 'confirm-replace') {
-      const isReplacingWithVideo = kind === 'video';
-      Alert.alert(
-        isReplacingWithVideo
-          ? '사진을 영상으로 교체할까요?'
-          : '영상을 사진으로 교체할까요?',
-        '교체하면 현재 선택한 미디어가 제거돼요.',
-        [
-          {style: 'cancel', text: '취소'},
-          {
-            onPress: () => {
-              void openPicker(kind, true);
-            },
-            text: '교체',
+      const {message, title} = describeMediaReplace(media, kind);
+      Alert.alert(title, message, [
+        {style: 'cancel', text: '취소'},
+        {
+          onPress: () => {
+            void openPicker(kind, true);
           },
-        ],
-      );
+          text: '교체',
+        },
+      ]);
       return;
     }
 
