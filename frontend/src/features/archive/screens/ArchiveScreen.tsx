@@ -270,7 +270,7 @@ export function ArchiveScreen({
       <View style={styles.header}>
         {/* 목적지가 아니라 닫는 대상을 말한다. 보관함이 피드 탭 스택 화면이
             되면 뒤로가기는 진입 지점으로 돌아가므로 늘 피드가 아니고
-            (S15P11B104-367), 게시글 상세의 "피드로 돌아가기"와 같은 스택에
+            (S15P11B104-367), 게시글 상세와 같은 스택에
             공존해 접근성 라벨이 중복된다. 알림 화면의 "알림 화면 닫기"와 대칭. */}
         <BackButton accessibilityLabel="보관함 닫기" onPress={onCloseArchive} />
         <AppText style={styles.title}>보관함</AppText>

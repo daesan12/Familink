@@ -3727,6 +3727,17 @@ test("아카이브 화면에서 피드 탭을 누르면 재마운트 없이 피�
   // 아카이브는 피드 탭 위에 쌓인 하위 화면이라 탭 전환이 일어나지 않는다.
   // navigate만으로는 중첩 스택에 아무 액션도 가지 않으므로 셸이 스택 루트를
   // 명시해 걷어낸다(S15P11B104-368). 재탭이 아니므로 화면 재마운트는 없다.
+  const mountLog: number[] = [];
+  function FeedHomeProbe({ tabParams }: { tabParams: unknown }) {
+    React.useEffect(() => {
+      mountLog.push(1);
+    }, []);
+    return (
+      <Text>{`feed:${String(
+        (tabParams as { pop?: boolean } | undefined)?.pop ?? "none",
+      )}`}</Text>
+    );
+  }
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(() => {
@@ -3739,9 +3750,7 @@ test("아카이브 화면에서 피드 탭을 누르면 재마운트 없이 피�
           // (S15P11B104-367). 스택 루트 정규화의 pop은 탭 route params에 실린다.
           feed: createFeedTabHostScreen({
             renderHome: ({ tabParams }) => (
-              <Text>{`feed:${String(
-                (tabParams as { pop?: boolean } | undefined)?.pop ?? "none",
-              )}`}</Text>
+              <FeedHomeProbe tabParams={tabParams} />
             ),
           }),
         }}
@@ -3769,6 +3778,9 @@ test("아카이브 화면에서 피드 탭을 누르면 재마운트 없이 피�
   expect(
     renderer!.root.findAllByProps({ children: "feed:true" }).length,
   ).toBeGreaterThan(0);
+  // 재탭 분기로 흘러가면 screenRefreshNonce가 올라 화면이 다시 마운트된다.
+  // 이 카운트가 두 분기를 구분하는 유일한 관측 지점이다.
+  expect(mountLog).toHaveLength(1);
 });
 
 test("AI 전화 탭은 다시 눌러도 재마운트하지 않는다", async () => {
@@ -4244,6 +4256,9 @@ test("앱 밖 푸시로 연 게시글 상세의 뒤로가기는 알림이 아니
   const rendered = () => JSON.stringify(renderer.toJSON());
 
   expect(rendered()).toContain("screen:PostDetail");
+  // initial:false가 유실되면 피드 스택이 [PostDetail] 단독이 되어 뒤로가기가
+  // 앱 종료로 이어진다. FeedHome이 아래에 깔렸는지 직접 확인한다.
+  expect(rendered()).toContain("screen:feed");
   // 알림 화면이 스택에 끼면 그 목이 함께 마운트된다.
   expect(rendered()).not.toContain("screen:notifications");
 });

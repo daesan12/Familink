@@ -52,9 +52,9 @@ import type {
 const Tab = createBottomTabNavigator<MainTabsParamList>();
 const renderNullTabBar = () => null;
 
-// 내부 스택을 가진 탭의 루트 화면 이름. 재탭의 key 리마운트는 같은 커밋이라
-// 새 내비게이터가 구 스택 상태를 재수화하므로, pop:true로 루트 위 화면을
-// 함께 정리해 "재탭 = 초기화"를 보장한다(S15P11B104-321에서 검증된 방식).
+// 내부 스택을 가진 탭의 루트 화면 이름. goToTabRoot가 pop:true 중첩 params로
+// 여기까지 되감는다 — 재탭 초기화(S15P11B104-321)와, 하위 화면이 위에 있는
+// 자기 탭 누르기·그룹 교체 정리(S15P11B104-368)가 이 표를 공유한다.
 const STACK_ROOT_BY_TAB: Partial<Record<MainTabRoute, string>> = {
   calendar: 'CalendarHome',
   feed: 'FeedHome',
@@ -225,10 +225,11 @@ export function AppShell({
   // 컨테이너의 useBackButton이 뒤로가기를 가로채지 않는다(피드에서 앱 종료·
   // 풀스크린 중 미소비 계약의 전제).
   //
-  // 하위 화면(알림·보관함)은 탭 스택 안에 있어 중첩 params로 pop할 수 없으므로
-  // 먼저 닫는다. 이 한 줄이 "하위 화면은 다른 화면 밑에 깔리지 않는다"는 이
-  // 티켓의 불변식을 만든다 — 뒤로가기 목적지를 바꾸는 후속 티켓
-  // (S15P11B104-368)에서 제거할 이음새다.
+  // 하위 화면(알림·보관함)은 스택에 남긴다 — 게시글 상세가 그 위에 쌓여야
+  // 뒤로가기가 진입 지점으로 돌아간다(S15P11B104-368). 미러만 낙관적으로
+  // 갱신하고, 스택 정리가 필요한 곳은 goToTabRoot를 따로 호출한다.
+  // 신호를 여기서 즉시 내리는 이유: 호스트 blur 보고를 기다리면 그 사이 한
+  // 커밋 동안 "다른 탭인데 하위 화면 기준으로 판단"하는 상태가 낀다.
   const mirrorTabRoute = useCallback((route: MainTabRoute) => {
     setFocusedSubRoute(null);
     setVisibleTabRoute(route);
@@ -321,8 +322,8 @@ export function AppShell({
   //
   // 하위 화면(알림·보관함)은 피드 탭 스택 화면이므로 셸이 소비하면 안 된다.
   // 컨테이너의 useBackButton이 최심 포커스 스택을 pop해 진입 지점으로 돌아가고,
-  // 호스트의 언마운트 cleanup이 신호를 내린다. 셸이 가로채면 pop이 일어나지 않아
-  // 진입 지점 복귀(S15P11B104-368)가 구조적으로 막힌다.
+  // 호스트의 blur cleanup이 신호를 내린다. 셸이 가로채면 pop이 일어나지 않아
+  // 진입 지점 복귀가 구조적으로 막힌다.
   const canReturnToFeed =
     focusedSubRoute === null && resolvedTabRoute !== 'feed';
 

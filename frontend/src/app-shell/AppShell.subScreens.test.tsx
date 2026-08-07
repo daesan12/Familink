@@ -537,3 +537,43 @@ test('피드 목록에서 연 게시글 상세의 뒤로가기는 피드 목록�
 
   expect(currentRouteName(navRef)).toBe('FeedHome');
 });
+
+test('보관함이 열린 채 현재 그룹이 삭제되면 대체 그룹의 피드 목록에서 시작한다', async () => {
+  // 삭제된 그룹의 하위 화면을 다음 그룹에 그대로 보여주면 안 된다. goToTab이
+  // 더 이상 pop하지 않으므로(S15P11B104-368) 셸이 스택 루트를 명시해야 하는데,
+  // 그 호출을 지워도 잡히는 테스트가 없었다.
+  const otherGroup: FamilyGroup = {
+    id: 'group-2',
+    name: '남은 가족',
+    role: 'careReceiver',
+  };
+  const navRef = createNavigationContainerRef();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  const tree = (groups: readonly FamilyGroup[], initialGroupId: string) => (
+    <NavigationContainer ref={navRef}>
+      <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
+        <AppShell
+          groups={groups}
+          initialGroupId={initialGroupId}
+          initialRoute="feed"
+          screens={createScreens()}
+        />
+      </SafeAreaProvider>
+    </NavigationContainer>
+  );
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(tree([GROUP, otherGroup], GROUP.id));
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, OPENER_LABEL.archive);
+  expect(currentRouteName(navRef)).toBe('archive');
+
+  await TestRenderer.act(async () => {
+    renderer!.update(tree([otherGroup], otherGroup.id));
+  });
+
+  expect(currentRouteName(navRef)).toBe('FeedHome');
+});

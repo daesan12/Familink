@@ -306,7 +306,7 @@ test('내비게이션으로 전달된 postId의 게시글 상세를 바로 연�
 
   expect(
     renderer!.root.findByProps({
-      accessibilityLabel: '피드로 돌아가기',
+      accessibilityLabel: '게시글 닫기',
     }),
   ).toBeTruthy();
 
@@ -344,7 +344,7 @@ test('상세에서 하드웨어 뒤로가기는 목록으로 돌아간다', asyn
       await Promise.resolve();
     });
     expect(
-      renderer!.root.findByProps({accessibilityLabel: '피드로 돌아가기'}),
+      renderer!.root.findByProps({accessibilityLabel: '게시글 닫기'}),
     ).toBeTruthy();
 
     let handled = false;
@@ -356,7 +356,7 @@ test('상세에서 하드웨어 뒤로가기는 목록으로 돌아간다', asyn
     // 컨테이너의 useBackButton이 FeedStack을 pop해 상세를 닫는다.
     expect(handled).toBe(true);
     expect(
-      renderer!.root.findAllByProps({accessibilityLabel: '피드로 돌아가기'}),
+      renderer!.root.findAllByProps({accessibilityLabel: '게시글 닫기'}),
     ).toHaveLength(0);
 
     await TestRenderer.act(() => {
