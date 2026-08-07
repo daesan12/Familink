@@ -56,11 +56,12 @@ export function CurrentGroupSwitcher({
         backdropVisible={false}
         collapsedHeight={260}
         initialSnap="collapsed"
+        maxHeightRatio={0.58}
         onClose={onClose}
         sheetStyle={styles.sheet}
         visible={isOpen}
       >
-        <View>
+        <View style={styles.body}>
           <AppText style={styles.title}>그룹 선택</AppText>
           <ScrollView
             accessibilityRole="menu"
@@ -159,6 +160,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+  // flexShrink 기본값 0을 덮어써야 시트가 상한에 걸릴 때 이 래퍼가 줄어들고,
+  // 안쪽 목록만 스크롤되면서 하단 액션 버튼이 계속 보인다.
+  body: {
+    flexShrink: 1,
+  },
   option: {
     alignItems: 'center',
     borderBottomColor: COLORS.divider,
@@ -174,7 +180,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   options: {
-    maxHeight: 360,
     paddingHorizontal: 16,
   },
   pressedOption: {
@@ -196,8 +201,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: RADII.sheet,
     borderTopRightRadius: RADII.sheet,
     boxShadow: '0 -4px 16px rgba(18, 23, 41, 0.12)',
-    maxHeight: '58%',
-    minHeight: 270,
     overflow: 'hidden',
   },
   title: {

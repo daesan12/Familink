@@ -26,13 +26,16 @@ export function CalendarEventsSheet({
     <DraggableBottomSheet
       accessibilityLabel="선택한 날짜 일정"
       backdropVisible={false}
-      collapsedHeight={260}
-      initialSnap="collapsed"
+      // 접힘 상태로 열면 일정 두 건만 보인다. 처음부터 상한까지 펼쳐 두고
+      // 일정이 더 많으면 시트 안에서 스크롤한다.
+      maxHeightRatio={0.58}
       onClose={onClose}
       sheetStyle={styles.sheet}
       visible={visible}
     >
-      <View>
+      {/* 목록을 감싸는 View를 두면 그 View가 줄어들지 않아(RN flexShrink 기본값 0)
+          시트가 상한에 걸릴 때 아래쪽 일정이 잘리고 스크롤도 되지 않는다. */}
+      <>
         <View style={styles.header}>
           <View style={styles.headerText}>
             <AppText style={styles.eyebrow}>선택한 날짜</AppText>
@@ -100,7 +103,7 @@ export function CalendarEventsSheet({
             ))}
           </ScrollView>
         )}
-      </View>
+      </>
     </DraggableBottomSheet>
   );
 }
@@ -193,8 +196,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     borderTopLeftRadius: RADII.sheet,
     borderTopRightRadius: RADII.sheet,
-    maxHeight: '58%',
-    minHeight: 270,
     overflow: 'hidden',
   },
   title: {
