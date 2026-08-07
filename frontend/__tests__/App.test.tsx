@@ -4208,3 +4208,42 @@ test("푸시 탭의 알림을 첫 페이지에서 찾지 못하면 알림 목록
   expect(notificationGateway.markRead).not.toHaveBeenCalled();
   expect(JSON.stringify(renderer.toJSON())).toContain("screen:notifications");
 });
+
+test("앱 밖 푸시로 연 게시글 상세의 뒤로가기는 알림이 아니라 피드 목록으로 간다", async () => {
+  // 완료 기준 3 후반. 콜드 스타트에는 알림 화면이 스택에 없으므로 셸이
+  // initial:false로 피드 목록을 아래에 깔아 준다(안드로이드 인공 백스택 표준).
+  // 이 경로는 지금까지 테스트가 없었다.
+  const notificationGateway = createNotificationGateway();
+  notificationGateway.loadPage.mockResolvedValue({
+    hasNext: false,
+    notifications: [
+      {
+        avatarText: "알",
+        body: "새 게시글이 올라왔어요.",
+        createdAtLabel: "방금",
+        groupId: "101",
+        id: "77",
+        isRead: false,
+        postId: "42",
+        relatedJoinRequestStatus: null,
+        title: "새 게시글",
+        type: "NEW_POST",
+      },
+    ],
+  });
+
+  const { renderer } = await renderAppWithPendingTap({
+    notificationGateway,
+    screens: {
+      feed: createFeedTabHostScreen(),
+      notifications: () => <Text>screen:notifications</Text>,
+    },
+    tap: { notificationId: "77", type: "NEW_POST" },
+  });
+
+  const rendered = () => JSON.stringify(renderer.toJSON());
+
+  expect(rendered()).toContain("screen:PostDetail");
+  // 알림 화면이 스택에 끼면 그 목이 함께 마운트된다.
+  expect(rendered()).not.toContain("screen:notifications");
+});

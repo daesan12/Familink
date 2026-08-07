@@ -429,3 +429,111 @@ test('알림 화면을 열면 푸시 구독을 해제하고 닫으면 다시 구
 
   expect(listeners.size).toBe(1);
 });
+
+test('알림 위에 게시글 상세가 쌓이면 푸시 구독이 되살아난다', async () => {
+  // 신호를 blur가 아니라 언마운트로만 내리면, 상세를 보는 동안 구독이 해제된
+  // 채로 굳어 미읽음 배지가 갱신되지 않는다(S15P11B104-368).
+  const gateway = createNotificationGateway();
+  const listeners = new Set<() => void>();
+  const subscribe = jest.fn((listener: () => void) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  });
+  const navRef = createNavigationContainerRef();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NavigationContainer ref={navRef}>
+        <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
+          <NotificationGatewayProvider gateway={gateway}>
+            <AppShell
+              groups={[GROUP]}
+              initialGroupId={GROUP.id}
+              initialRoute="feed"
+              screens={createScreens({
+                notifications: createOpenPostMock('notifications'),
+              })}
+              subscribePushReceived={subscribe}
+            />
+          </NotificationGatewayProvider>
+        </SafeAreaProvider>
+      </NavigationContainer>,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(listeners.size).toBe(1);
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: OPENER_LABEL.notifications})
+      .props.onPress();
+  });
+  expect(listeners.size).toBe(0);
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: 'open-post:notifications'})
+      .props.onPress();
+  });
+  expect(listeners.size).toBe(1);
+
+  await TestRenderer.act(async () => {
+    navRef.goBack();
+  });
+  expect(listeners.size).toBe(0);
+});
+
+test('알림 위에 게시글 상세가 쌓이면 피드 탭이 다시 강조된다', () => {
+  // 하위 화면이 최상단일 때만 어떤 탭도 강조하지 않는다. 상세는 피드 탭의
+  // 화면이므로 피드에서 들어간 상세와 같게 보여야 한다.
+  const navRef = createNavigationContainerRef();
+  const renderer = renderShell(navRef, {
+    notifications: createOpenPostMock('notifications'),
+  });
+  const activeRoute = () =>
+    renderer.root.findByType(MockTabBar).props.activeRoute;
+
+  press(renderer, OPENER_LABEL.notifications);
+  expect(activeRoute()).toBeNull();
+
+  press(renderer, 'open-post:notifications');
+  expect(activeRoute()).toBe('feed');
+
+  TestRenderer.act(() => {
+    navRef.goBack();
+  });
+  expect(activeRoute()).toBeNull();
+});
+
+test('피드 목록에서 연 게시글 상세의 뒤로가기는 피드 목록으로 간다', () => {
+  // 완료 기준 3 전반. 하위 화면이 끼어들지 않는 경로의 회귀 방어.
+  const navRef = createNavigationContainerRef();
+  const renderer = renderShell(navRef, {
+    feed: createFeedTabHostScreen({
+      renderHome: ({props}) => (
+        <Pressable
+          accessibilityLabel="open-post:feed"
+          onPress={() => props.onOpenPost?.('42', GROUP.id)}
+        >
+          <Text>screen:feed</Text>
+        </Pressable>
+      ),
+    }),
+  });
+
+  press(renderer, 'open-post:feed');
+
+  expect(currentRouteName(navRef)).toBe('PostDetail');
+  // 알림이 스택에 있었다면 그 목이 마운트된다.
+  expect(
+    renderer.root.findAllByProps({children: 'screen:notifications'}),
+  ).toHaveLength(0);
+
+  TestRenderer.act(() => {
+    navRef.goBack();
+  });
+
+  expect(currentRouteName(navRef)).toBe('FeedHome');
+});
