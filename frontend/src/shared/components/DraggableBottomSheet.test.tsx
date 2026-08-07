@@ -1,10 +1,11 @@
 import React from 'react';
 import {
   AccessibilityInfo,
-  Animated,
+  Keyboard,
   KeyboardAvoidingView,
   StyleSheet,
   Text,
+  type EmitterSubscription,
 } from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
@@ -19,6 +20,30 @@ beforeAll(() => {
     .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
     .mockResolvedValue(true);
 });
+
+// Keyboard.emit은 이 RN 버전에 없으므로 등록된 리스너를 직접 붙잡아 호출한다.
+const keyboardListeners = new Map<string, () => void>();
+
+beforeEach(() => {
+  keyboardListeners.clear();
+  jest
+    .spyOn(Keyboard, 'addListener')
+    .mockImplementation((eventName, listener) => {
+      keyboardListeners.set(eventName, listener as () => void);
+      const subscription = {
+        remove: () => {
+          keyboardListeners.delete(eventName);
+        },
+      };
+      return subscription as unknown as EmitterSubscription;
+    });
+});
+
+async function emitKeyboard(eventName: string) {
+  await TestRenderer.act(async () => {
+    keyboardListeners.get(eventName)?.();
+  });
+}
 
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
 
@@ -48,6 +73,28 @@ async function renderSheet(
   return renderer!;
 }
 
+// 시트 본체는 transform 스타일을 가진 유일한 노드다.
+function findSheetNode(renderer: TestRenderer.ReactTestRenderer) {
+  const [sheetNode] = renderer.root.findAll(
+    node => StyleSheet.flatten(node.props.style)?.transform !== undefined,
+  );
+  if (sheetNode === undefined) {
+    throw new Error('시트 노드를 찾지 못했습니다.');
+  }
+  return sheetNode;
+}
+
+function findSheetStyle(renderer: TestRenderer.ReactTestRenderer) {
+  return StyleSheet.flatten(findSheetNode(renderer).props.style);
+}
+
+/** Animated.Value와 숫자를 함께 다루기 위한 값 추출. */
+function valueOf(candidate: unknown) {
+  return typeof candidate === 'number'
+    ? candidate
+    : (candidate as {__getValue: () => number}).__getValue();
+}
+
 test('시트 전체를 KeyboardAvoidingView(padding)로 감싸 키보드 위로 밀어 올린다', async () => {
   const renderer = await renderSheet();
 
@@ -58,45 +105,62 @@ test('시트 전체를 KeyboardAvoidingView(padding)로 감싸 키보드 위로 
   expect(avoidingViews[0].findAllByType(Text).length).toBeGreaterThan(0);
 });
 
-test('콘텐츠 하단에 시스템 내비게이션 바 인셋을 패딩으로 반영한다', async () => {
-  const renderer = await renderSheet();
-
-  // 인셋 패딩은 콘텐츠 컨테이너(flexGrow/flexShrink 1)에 있어야 한다.
-  const paddedNodes = renderer.root.findAll(node => {
+function findContentPaddingBottom(renderer: TestRenderer.ReactTestRenderer) {
+  const [contentNode] = renderer.root.findAll(node => {
     const style = StyleSheet.flatten(node.props.style);
     return (
-      style?.paddingBottom === 48 &&
       style?.flexGrow === 1 &&
-      style?.flexShrink === 1
+      style?.flexShrink === 1 &&
+      style?.paddingBottom !== undefined
     );
   });
-  expect(paddedNodes.length).toBeGreaterThan(0);
+  if (contentNode === undefined) {
+    throw new Error('콘텐츠 컨테이너를 찾지 못했습니다.');
+  }
+  return StyleSheet.flatten(contentNode.props.style)?.paddingBottom;
+}
+
+test('콘텐츠 하단에 내비게이션 바 인셋과 여백을 함께 반영한다', async () => {
+  const renderer = await renderSheet();
+
+  // 인셋(48)만 두면 콘텐츠가 내비게이션 바에 딱 붙는다. 여백 12를 더한다.
+  expect(findContentPaddingBottom(renderer)).toBe(48 + 12);
 });
 
-test('접힌 상태 오프셋은 내비게이션 바 인셋만큼 덜 내려간다', async () => {
+test('키보드가 올라오면 내비게이션 바 인셋 여백을 두지 않는다', async () => {
+  const renderer = await renderSheet();
+
+  await emitKeyboard('keyboardDidShow');
+  // 키보드가 내비게이션 바를 덮으므로 인셋만큼의 흰 띠를 남기면 안 된다.
+  expect(findContentPaddingBottom(renderer)).toBe(12);
+
+  await emitKeyboard('keyboardDidHide');
+  expect(findContentPaddingBottom(renderer)).toBe(48 + 12);
+});
+
+test('높이 상한은 화면 비율로 두어 콘텐츠만큼만 커지게 한다', async () => {
+  const renderer = await renderSheet();
+
+  expect(findSheetStyle(renderer)?.maxHeight).toBe('85%');
+});
+
+test('maxHeightRatio는 sheetStyle의 높이 지정을 덮어쓴다', async () => {
+  const renderer = await renderSheet({
+    maxHeightRatio: 0.58,
+    sheetStyle: {maxHeight: '30%'},
+  });
+
+  expect(findSheetStyle(renderer)?.maxHeight).toBe('58%');
+});
+
+test('접힌 시트는 화면 밖으로 밀려나지 않고 상한 높이만 줄어든다', async () => {
   const renderer = await renderSheet({
     collapsedHeight: 260,
     initialSnap: 'collapsed',
   });
 
-  // KAV도 onLayout을 가지므로 transform 스타일이 있는 시트 노드만 찾는다.
-  const findSheetNode = () =>
-    renderer.root.findAll(
-      node =>
-        typeof node.props.onLayout === 'function' &&
-        StyleSheet.flatten(node.props.style)?.transform !== undefined,
-    )[0];
-  await TestRenderer.act(async () => {
-    findSheetNode().props.onLayout({nativeEvent: {layout: {height: 600}}});
-  });
-
-  const transform = StyleSheet.flatten(findSheetNode().props.style)
-    ?.transform as Array<{translateY: Animated.Value | number}> | undefined;
-  const translateY = transform?.[0]?.translateY;
-  const offset =
-    typeof translateY === 'number'
-      ? translateY
-      : (translateY as unknown as {__getValue: () => number}).__getValue();
-  // 시트 높이 600에서 보이는 260과 인셋 48을 뺀 292만 아래로 내린다.
-  expect(offset).toBe(600 - 260 - 48);
+  // 접힘 상한 = 보여줄 높이 260 + 내비게이션 바 인셋 48.
+  // 시트를 아래로 밀어내면 하단 여백이 화면 밖으로 나가 콘텐츠가 내비게이션
+  // 바를 침범하므로, 접힘은 이동이 아니라 높이로만 표현한다.
+  expect(valueOf(findSheetStyle(renderer)?.maxHeight)).toBe(260 + 48);
 });

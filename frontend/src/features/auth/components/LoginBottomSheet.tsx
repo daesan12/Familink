@@ -14,6 +14,7 @@ import {COLORS} from '../../../design/tokens';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
 import {AnimatedPressable} from './AnimatedPressable';
 import {DraggableBottomSheet} from '../../../shared/components/DraggableBottomSheet';
+import {useKeyboardVisible} from '../../../shared/hooks/useKeyboardVisible';
 import {FormField} from './FormField';
 import {PrimaryButton} from './PrimaryButton';
 import {ValidationMessage} from './ValidationMessage';
@@ -48,6 +49,7 @@ export function LoginBottomSheet({
   const [loginError, setLoginError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
+  const keyboardVisible = useKeyboardVisible();
 
   useEffect(() => {
     if (!visible) {
@@ -131,7 +133,10 @@ export function LoginBottomSheet({
       sheetStyle={styles.sheet}
       visible={visible}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          keyboardVisible && styles.contentWithKeyboard,
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         <AnimatedPressable
@@ -257,14 +262,21 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     boxShadow: '0px -10px 28px rgba(15, 23, 42, 0.12)',
-    maxHeight: '78%',
-    minHeight: 360,
     overflow: 'hidden',
   },
+  // 하한은 시트가 아닌 콘텐츠에 둔다. 작은 화면이나 키보드 표시 중에는
+  // 시트가 넘치는 대신 콘텐츠가 스크롤된다.
+  // 270 = 기존 시트 하한 360 - 핸들 42 - 내비게이션 바 인셋 48.
   content: {
     flexGrow: 1,
+    minHeight: 270,
     paddingHorizontal: AUTH_LAYOUT.horizontalPadding,
     paddingTop: 22,
+  },
+  // 키보드가 올라오면 하한을 놓아준다. 그대로 두면 콘텐츠가 시트보다 길어져
+  // 로그인 버튼이 접힌 아래로 밀린다.
+  contentWithKeyboard: {
+    minHeight: 0,
   },
   backButtonContainer: {
     alignSelf: 'flex-start',
