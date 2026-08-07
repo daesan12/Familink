@@ -435,6 +435,12 @@ const DEEP_LINK_GROUP_B: FamilyGroup = {
   name: '가족B',
   role: 'guardian',
 };
+const DEEP_LINK_GROUP_C: FamilyGroup = {
+  id: 'group-c',
+  isManager: true,
+  name: '가족C',
+  role: 'guardian',
+};
 
 // 중첩 params는 탭 route에 실린다. 이 프로브는 피드 탭 스택 안(FeedHome)에서
 // 렌더되므로 useRoute로는 FeedHome의 params가 나온다 — 호스트가 넘겨준 탭
@@ -569,6 +575,16 @@ function createDeepLinkScreens(): AppScreenRegistry {
         <Pressable
           onPress={() =>
             props.onOpenNotificationTarget?.({
+              groupId: DEEP_LINK_GROUP_C.id,
+              kind: 'joinApproval',
+            })
+          }
+        >
+          <Text>open-join-approval-other-group</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            props.onOpenNotificationTarget?.({
               groupId: 'group-b',
               kind: 'post',
               postId: '42',
@@ -596,7 +612,7 @@ function renderForDeepLink() {
     renderer = TestRenderer.create(
       withNav(
         <AppShell
-          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B, DEEP_LINK_GROUP_C]}
           initialGroupId={DEEP_LINK_GROUP_A.id}
           initialRoute="feed"
           screens={createDeepLinkScreens()}
@@ -642,11 +658,22 @@ test('가입 승인 목적지는 피드 탭 스택의 하위 화면을 열고 �
 
   pressText(renderer, 'open-join-approval');
 
-  // 그룹 전환과 하위 화면 열기가 한 커밋에 일어나므로 첫 렌더가 목표 그룹이다.
-  // params 채널 없이 currentGroup으로 전달한다는 전제를 여기서 고정한다.
+  // groupId가 없는 목적지는 현재 그룹으로 폴백한다.
   expect(hasText(renderer, 'screen:joinApproval:group-a')).toBe(true);
   // 알림 화면이 아래에 남아 있어야 뒤로가기가 진입 지점으로 돌아간다.
   expect(hasText(renderer, 'screen:notifications')).toBe(true);
+});
+
+test('다른 관리자 그룹의 가입 승인 목적지는 그 그룹으로 하위 화면을 연다', () => {
+  // 승인 화면에 groupId params 채널을 두지 않은 근거를 고정한다: 그룹 전환과
+  // 하위 화면 열기가 한 커밋에 배치되므로 첫 렌더의 currentGroup이 이미 목표
+  // 그룹이다. 어긋나면 관리자가 다른 그룹의 요청 목록을 보게 된다.
+  const renderer = renderForDeepLink();
+
+  pressText(renderer, 'open-join-approval-other-group');
+
+  expect(hasText(renderer, 'screen:joinApproval:group-c')).toBe(true);
+  expect(hasText(renderer, 'screen:joinApproval:group-a')).toBe(false);
 });
 
 test('관리자가 아닌 그룹의 가입 승인 목적지는 그룹정보 홈으로 보낸다', () => {
@@ -670,7 +697,7 @@ test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다',
         <AppShell
           deepLinkRequestId={1}
           deepLinkTarget={{eventId: '9', kind: 'calendarEvent'}}
-          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B, DEEP_LINK_GROUP_C]}
           initialGroupId={DEEP_LINK_GROUP_A.id}
           initialRoute="feed"
           screens={createDeepLinkScreens()}
@@ -691,7 +718,7 @@ test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다',
         <AppShell
           deepLinkRequestId={2}
           deepLinkTarget={{kind: 'notifications'}}
-          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B, DEEP_LINK_GROUP_C]}
           initialGroupId={DEEP_LINK_GROUP_A.id}
           initialRoute="feed"
           screens={createDeepLinkScreens()}

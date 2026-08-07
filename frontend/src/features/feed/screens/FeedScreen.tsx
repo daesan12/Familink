@@ -1320,13 +1320,15 @@ export function FeedScreen({
             확인하고 닫았을 때 그 글이 보이는 기존 동작은 지켜야 한다.
             retry가 아니라 refresh다 — retry는 status를 loading으로 되돌려
             FlatList를 스피너로 교체하므로, 마운트 유지로 얻은 스크롤 위치가
-            그대로 사라진다. */}
+            그대로 사라진다.
+            가입 승인 대기는 게시글을 바꾸지 않으므로 재조회하지 않는다. */}
         {SHARED_SUB_ROUTES.map(route => (
           <FeedStack.Screen key={route} name={route}>
             {({navigation}) =>
               renderSharedSubRoute?.(route, {
                 onClose: () => navigation.goBack(),
-                onClosed: feed.refresh,
+                onClosed:
+                  route === 'joinApproval' ? undefined : feed.refresh,
               }) ?? null
             }
           </FeedStack.Screen>

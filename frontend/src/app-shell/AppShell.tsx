@@ -176,6 +176,14 @@ export function AppShell({
     ? resolveAllowedRoute(currentRole, visibleTabRoute)
     : 'feed';
   const resolvedRoute: AppRoute = focusedSubRoute ?? resolvedTabRoute;
+  // 가입 승인 대기만 탭바를 숨긴다. 탭 루트가 아니라 결정 화면이므로 그룹정보
+  // 탭에서 열 때와 같은 모습을 유지한다(팀 결정). 알림·보관함은 유지한다.
+  //
+  // 화면이 onFullscreenChange로 보고하지 않고 셸이 판정한다: 그 boolean은 모든
+  // 화면이 공유하는 last-writer-wins 신호인데, 하위 화면 호스트는 위에 게시글
+  // 상세가 쌓여도 언마운트되지 않으므로 상세까지 탭바를 잃는다. 반대로 아래
+  // FeedScreen이 작성 화면 포커스 변화를 나중에 보고하면 승인 화면 위에 탭바가
+  // 되살아난다. focusedSubRoute는 호스트의 blur 보고로 최상단만 가리킨다.
 
   // 열려 있는 공유 하위 화면과 그 닫기 함수. 하위 화면은 스택 화면이므로 셸이
   // 라우트 이름으로 판정하지 않고 호스트가 포커스 시 올려준 사실만 신뢰한다.
@@ -843,7 +851,7 @@ export function AppShell({
         ) : null}
       </View>
 
-      {!isScreenFullscreen ? (
+      {!isScreenFullscreen && focusedSubRoute !== 'joinApproval' ? (
         <BottomTabBar
           // 알림·보관함은 어느 탭에도 속하지 않으므로 아무 탭도 강조하지 않는다.
           activeRoute={focusedSubRoute === null ? resolvedTabRoute : null}

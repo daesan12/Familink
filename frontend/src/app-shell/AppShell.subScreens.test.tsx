@@ -625,19 +625,20 @@ function NotificationsDeepLinkMock({
   );
 }
 
-// 프로덕션의 ConnectedJoinApprovalScreen은 탭바를 숨기려고 전체화면을 보고한다
-// (팀 결정). 자매 하위 화면 중 유일하므로 셸이 그 조합을 어떻게 다루는지 별도로
-// 확인한다.
-function FullscreenJoinApprovalMock(props: AppScreenProps) {
-  const {onFullscreenChange} = props;
-
-  React.useEffect(() => {
-    onFullscreenChange?.(true);
-
-    return () => onFullscreenChange?.(false);
-  }, [onFullscreenChange]);
-
-  return createSubScreenMock('joinApproval')(props);
+// 승인 대기에서 게시글 상세를 여는 목. 탭바 숨김이 최상단만 따르는지 보려면
+// 이 화면 위에 다른 화면을 쌓아야 한다.
+function JoinApprovalWithPostMock(props: AppScreenProps) {
+  return (
+    <>
+      {createSubScreenMock('joinApproval')(props)}
+      <Pressable
+        accessibilityLabel="open-post:joinApproval"
+        onPress={() => props.onOpenPost?.('42', MANAGER_GROUP.id)}
+      >
+        <Text>open-post:joinApproval</Text>
+      </Pressable>
+    </>
+  );
 }
 
 function renderShellAsManager(
@@ -668,10 +669,10 @@ test('알림에서 연 가입 승인 대기는 알림 위에 쌓이고 그룹정
   expect(
     renderer.root.findAllByProps({children: 'screen:groupInfo'}),
   ).toHaveLength(0);
-  // 셸 크롬은 자매 하위 화면과 같이 물러난다.
+  // 셸 헤더·FAB는 자매 하위 화면과 같이 물러난다. 탭바는 이 화면만 다르므로
+  // 아래 전용 테스트에서 다룬다.
   expect(hasHeader(renderer)).toBe(false);
   expect(hasFab(renderer)).toBe(false);
-  expect(renderer.root.findByType(MockTabBar).props.activeRoute).toBeNull();
 });
 
 test('알림에서 연 가입 승인 대기의 시스템 Back은 알림 화면으로 돌아온다', () => {
@@ -721,12 +722,16 @@ test('알림에서 연 가입 승인 대기의 헤더 뒤로가기도 알림 화
   expect(currentRouteName(navRef)).toBe('notifications');
 });
 
-test('전체화면을 보고하는 가입 승인 대기는 탭바를 숨기고 닫으면 되돌린다', () => {
-  // 프로덕션 연결 화면의 전체화면 보고를 재현한다. 언마운트 정리가 끊기면
-  // 알림으로 돌아온 뒤에도 탭바가 영구히 사라진다.
+test('가입 승인 대기만 탭바를 숨기고 위에 쌓인 게시글 상세는 탭바를 되돌린다', () => {
+  // 팀 결정: 이 화면은 탭 루트가 아니라 결정 화면이므로 그룹정보 탭에서 열 때와
+  // 같은 모습을 유지한다. 알림·보관함은 반대로 탭바를 유지한다.
+  //
+  // 숨김 판정을 화면의 onFullscreenChange 보고로 하면 안 되는 이유를 함께
+  // 고정한다: 그 boolean은 모든 화면이 공유하는 last-writer-wins 신호이고, 이
+  // 화면은 위에 상세가 쌓여도 언마운트되지 않으므로 상세까지 탭바를 잃는다.
   const navRef = createNavigationContainerRef();
   const renderer = renderShellAsManager(navRef, {
-    joinApproval: FullscreenJoinApprovalMock,
+    joinApproval: JoinApprovalWithPostMock,
   });
 
   press(renderer, OPENER_LABEL.notifications);
@@ -734,6 +739,18 @@ test('전체화면을 보고하는 가입 승인 대기는 탭바를 숨기고 �
 
   press(renderer, 'open-join-approval');
 
+  expect(renderer.root.findAllByType(MockTabBar)).toHaveLength(0);
+
+  press(renderer, 'open-post:joinApproval');
+
+  expect(currentRouteName(navRef)).toBe('PostDetail');
+  expect(renderer.root.findAllByType(MockTabBar)).not.toHaveLength(0);
+
+  TestRenderer.act(() => {
+    navRef.goBack();
+  });
+
+  expect(currentRouteName(navRef)).toBe('joinApproval');
   expect(renderer.root.findAllByType(MockTabBar)).toHaveLength(0);
 
   press(renderer, CLOSE_LABEL.joinApproval);
