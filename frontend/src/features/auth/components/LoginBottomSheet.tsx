@@ -2,12 +2,10 @@ import MaterialDesignIcons from '@react-native-vector-icons/material-design-icon
 import {useEffect, useRef, useState} from 'react';
 import {
   Keyboard,
-  KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {ApiError} from '../../../shared/api';
 import type {LoginCredentials} from '../types';
@@ -49,7 +47,6 @@ export function LoginBottomSheet({
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const insets = useSafeAreaInsets();
   const submittingRef = useRef(false);
 
   useEffect(() => {
@@ -133,147 +130,128 @@ export function LoginBottomSheet({
       onClose={handleRequestClose}
       sheetStyle={styles.sheet}
       visible={visible}>
-        <KeyboardAvoidingView
-          behavior="padding"
-          pointerEvents="box-none"
-          style={styles.keyboardArea}>
-            <ScrollView
-              contentContainerStyle={[
-                styles.content,
-                {paddingBottom: Math.max(insets.bottom, 24)},
-              ]}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
+        <AnimatedPressable
+          accessibilityLabel="로그인 닫기"
+          accessibilityRole="button"
+          containerStyle={styles.backButtonContainer}
+          disabled={submitting}
+          hitSlop={8}
+          onPress={handleDismiss}>
+          <View style={styles.backButton}>
+            <MaterialDesignIcons
+              color={COLORS.purpleDeep}
+              name="chevron-left"
+              size={28}
+            />
+          </View>
+        </AnimatedPressable>
+
+        <View style={styles.fields}>
+          <FormField
+            accessibilityLabel="로그인 아이디"
+            autoCapitalize="none"
+            autoComplete="username"
+            autoCorrect={false}
+            autoFocus={!hasPrefilledLoginId}
+            editable={!submitting}
+            invalid={loginIdInvalid}
+            maxLength={SIGNUP_LIMITS.loginIdMax}
+            onBlur={() => setLoginIdTouched(true)}
+            onChangeText={value => {
+              setCredentials(current => ({
+                ...current,
+                loginId: value,
+              }));
+              setLoginError(null);
+            }}
+            placeholder="아이디"
+            returnKeyType="next"
+            value={credentials.loginId}
+          />
+          {loginIdInvalid && (
+            <ValidationMessage
+              message={
+                credentials.loginId.trim().length === 0
+                  ? '아이디를 입력해주세요.'
+                  : `아이디는 ${SIGNUP_LIMITS.loginIdMax}자 이내로 입력해주세요.`
+              }
+              variant="error"
+            />
+          )}
+          <FormField
+            accessibilityLabel="로그인 비밀번호"
+            autoCapitalize="none"
+            autoComplete="current-password"
+            autoCorrect={false}
+            autoFocus={hasPrefilledLoginId}
+            editable={!submitting}
+            invalid={passwordInvalid}
+            maxLength={SIGNUP_LIMITS.passwordMax}
+            onBlur={() => setPasswordTouched(true)}
+            onChangeText={value => {
+              setCredentials(current => ({
+                ...current,
+                password: value,
+              }));
+              setLoginError(null);
+            }}
+            onSubmitEditing={handleSubmit}
+            placeholder="비밀번호"
+            returnKeyType="done"
+            secureTextEntry={!passwordVisible}
+            trailing={
               <AnimatedPressable
-                accessibilityLabel="로그인 닫기"
+                accessibilityLabel={
+                  passwordVisible ? '비밀번호 숨기기' : '비밀번호 표시'
+                }
                 accessibilityRole="button"
-                containerStyle={styles.backButtonContainer}
+                containerStyle={styles.visibilityButton}
                 disabled={submitting}
                 hitSlop={8}
-                onPress={handleDismiss}>
-                <View style={styles.backButton}>
-                  <MaterialDesignIcons
-                    color={COLORS.purpleDeep}
-                    name="chevron-left"
-                    size={28}
-                  />
-                </View>
+                onPress={() => setPasswordVisible(current => !current)}>
+                <MaterialDesignIcons
+                  color={AUTH_COLORS.muted}
+                  name={passwordVisible ? 'eye-off' : 'eye'}
+                  size={22}
+                />
               </AnimatedPressable>
+            }
+            value={credentials.password}
+          />
+          {passwordInvalid && (
+            <ValidationMessage
+              message={
+                credentials.password.trim().length === 0
+                  ? '비밀번호를 입력해주세요.'
+                  : `비밀번호는 ${SIGNUP_LIMITS.passwordMax}자 이내로 입력해주세요.`
+              }
+              variant="error"
+            />
+          )}
+          {loginError !== null && (
+            <ValidationMessage message={loginError} variant="error" />
+          )}
+        </View>
 
-              <View style={styles.fields}>
-                <FormField
-                  accessibilityLabel="로그인 아이디"
-                  autoCapitalize="none"
-                  autoComplete="username"
-                  autoCorrect={false}
-                  autoFocus={!hasPrefilledLoginId}
-                  editable={!submitting}
-                  invalid={loginIdInvalid}
-                  maxLength={SIGNUP_LIMITS.loginIdMax}
-                  onBlur={() => setLoginIdTouched(true)}
-                  onChangeText={value => {
-                    setCredentials(current => ({
-                      ...current,
-                      loginId: value,
-                    }));
-                    setLoginError(null);
-                  }}
-                  placeholder="아이디"
-                  returnKeyType="next"
-                  value={credentials.loginId}
-                />
-                {loginIdInvalid && (
-                  <ValidationMessage
-                    message={
-                      credentials.loginId.trim().length === 0
-                        ? '아이디를 입력해주세요.'
-                        : `아이디는 ${SIGNUP_LIMITS.loginIdMax}자 이내로 입력해주세요.`
-                    }
-                    variant="error"
-                  />
-                )}
-                <FormField
-                  accessibilityLabel="로그인 비밀번호"
-                  autoCapitalize="none"
-                  autoComplete="current-password"
-                  autoCorrect={false}
-                  autoFocus={hasPrefilledLoginId}
-                  editable={!submitting}
-                  invalid={passwordInvalid}
-                  maxLength={SIGNUP_LIMITS.passwordMax}
-                  onBlur={() => setPasswordTouched(true)}
-                  onChangeText={value => {
-                    setCredentials(current => ({
-                      ...current,
-                      password: value,
-                    }));
-                    setLoginError(null);
-                  }}
-                  onSubmitEditing={handleSubmit}
-                  placeholder="비밀번호"
-                  returnKeyType="done"
-                  secureTextEntry={!passwordVisible}
-                  trailing={
-                    <AnimatedPressable
-                      accessibilityLabel={
-                        passwordVisible
-                          ? '비밀번호 숨기기'
-                          : '비밀번호 표시'
-                      }
-                      accessibilityRole="button"
-                      containerStyle={styles.visibilityButton}
-                      disabled={submitting}
-                      hitSlop={8}
-                      onPress={() =>
-                        setPasswordVisible(current => !current)
-                      }>
-                      <MaterialDesignIcons
-                        color={AUTH_COLORS.muted}
-                        name={passwordVisible ? 'eye-off' : 'eye'}
-                        size={22}
-                      />
-                    </AnimatedPressable>
-                  }
-                  value={credentials.password}
-                />
-                {passwordInvalid && (
-                  <ValidationMessage
-                    message={
-                      credentials.password.trim().length === 0
-                        ? '비밀번호를 입력해주세요.'
-                        : `비밀번호는 ${SIGNUP_LIMITS.passwordMax}자 이내로 입력해주세요.`
-                    }
-                    variant="error"
-                  />
-                )}
-                {loginError !== null && (
-                  <ValidationMessage
-                    message={loginError}
-                    variant="error"
-                  />
-                )}
-              </View>
-
-              <View style={styles.submit}>
-                <PrimaryButton
-                  disabled={!canLogin}
-                  label="로그인"
-                  loading={submitting}
-                  onPress={handleSubmit}
-                  tone="lavender"
-                />
-              </View>
-            </ScrollView>
-        </KeyboardAvoidingView>
+        <View style={styles.submit}>
+          <PrimaryButton
+            disabled={!canLogin}
+            label="로그인"
+            loading={submitting}
+            onPress={handleSubmit}
+            tone="lavender"
+          />
+        </View>
+      </ScrollView>
     </DraggableBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  keyboardArea: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
   sheet: {
     backgroundColor: AUTH_COLORS.background,
     borderTopLeftRadius: 32,

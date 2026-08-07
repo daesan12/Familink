@@ -1,5 +1,10 @@
 import React from 'react';
-import {AccessibilityInfo, Keyboard, Modal} from 'react-native';
+import {
+  AccessibilityInfo,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import {LoginBottomSheet} from './LoginBottomSheet';
@@ -69,6 +74,13 @@ test('미리 채울 값이 없으면 빈 입력으로 시작한다', () => {
   expect(
     renderer.root.findByType(DraggableBottomSheet).props.backdropVisible,
   ).toBe(false);
+});
+
+test('키보드 회피는 공용 시트의 KAV 하나만 담당한다', () => {
+  const renderer = render();
+
+  // KAV가 중첩되면 시트 내부에서 이중 보정돼 입력칸이 다시 가려진다.
+  expect(renderer.root.findAllByType(KeyboardAvoidingView)).toHaveLength(1);
 });
 
 test('키보드가 열려 있으면 시스템 Back 1회는 시트를 닫지 않고 키보드만 닫는다', () => {
