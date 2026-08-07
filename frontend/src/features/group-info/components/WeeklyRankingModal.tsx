@@ -27,8 +27,9 @@ interface WeeklyRankingModalProps {
 }
 
 // H-3 주간 효자 랭킹. 그룹정보의 "효자 랭킹 조회하기" 카드를 누르면 열린다.
-// 카네이션은 보호자만 적립하므로 보호자만 순위에 오르며,
+// 순위 기준은 이번 주에 올린 게시글 수이며 보호자만 순위에 오른다.
 // 공동 순위를 허용하고 지난주 1위에게 왕관을 표시한다.
+// 행 오른쪽의 건수는 잔디 칸 수와 다르다. 잔디는 하루 1칸이지만 랭킹은 건수를 센다.
 export function WeeklyRankingModal({
   visible,
   state,
@@ -124,9 +125,9 @@ function WeeklyRankingBody({
         >
           {ranked.map((entry, index) => (
             <View
-              accessibilityLabel={`${entry.rank}위 ${entry.displayName}${
-                entry.previousWeekWinner ? ', 지난주 1위' : ''
-              }`}
+              accessibilityLabel={`${entry.rank}위 ${entry.displayName} ${
+                entry.postCount
+              }개${entry.previousWeekWinner ? ', 지난주 1위' : ''}`}
               accessible
               key={entry.memberId}
               style={[styles.row, index > 0 && styles.rowDivider]}
@@ -155,6 +156,7 @@ function WeeklyRankingBody({
                 ) : null}
               </View>
               <AppText style={styles.name}>{entry.displayName}</AppText>
+              <AppText style={styles.count}>{`${entry.postCount}개`}</AppText>
             </View>
           ))}
         </ScrollView>
@@ -191,6 +193,12 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
   },
+  count: {
+    color: COLORS.textSubtle,
+    fontSize: 14,
+    minWidth: 40,
+    textAlign: 'right',
+  },
   crown: {
     left: 11,
     position: 'absolute',
@@ -219,6 +227,8 @@ const styles = StyleSheet.create({
   },
   name: {
     color: COLORS.textStrong,
+    // 남는 가로 공간을 차지해 게시글 수를 행 오른쪽 끝으로 민다.
+    flex: 1,
     fontSize: 16,
     fontWeight: '600',
   },

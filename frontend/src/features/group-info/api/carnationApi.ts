@@ -155,12 +155,9 @@ function parseCarnationCalendar(value: unknown): CarnationCalendar {
 function readRankingEntry(value: unknown): WeeklyRankingSnapshot['rankings'][number] {
   const data = readObject(value, 'ranking');
   return {
-    carnationCount: readNonNegativeInteger(
-      data.carnationCount,
-      'carnationCount',
-    ),
     displayName: readNonEmptyString(data.displayName, 'displayName'),
     memberId: readId(data.memberId, 'memberId'),
+    postCount: readNonNegativeInteger(data.postCount, 'postCount'),
     previousWeekWinner: readBoolean(
       data.previousWeekWinner,
       'previousWeekWinner',

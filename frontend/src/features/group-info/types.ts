@@ -42,20 +42,22 @@ export interface GroupMember {
 
 // H-3 주간 효자 랭킹의 한 줄. 필드명은 API-CARNATION-001
 // (GET /groups/{groupId}/grass) 응답의 rankings[] 항목과 맞춘다.
-// 카네이션은 보호자만 적립하므로 서버도 보호자만 내려준다.
+// 랭킹은 보호자만 오르므로 서버도 보호자만 내려준다.
 export interface WeeklyRankingEntry {
   memberId: string;
   // 표시 이름. 아바타 이니셜은 이 값에서 파생한다(avatarInitial).
   displayName: string;
-  // 이번 주에 적립한 카네이션 수. 순위 산정 기준이다.
-  carnationCount: number;
-  // 지난주 카네이션 1위 여부. 이번 주에 왕관을 단다.
+  // 이번 주에 올린 게시글 수. 순위 산정 기준이다.
+  // 같은 날 여러 건도 각각 세므로 잔디 칸 수(하루 1칸)와는 다른 값이다.
+  postCount: number;
+  // 지난주 1위 여부. 이번 주에 왕관을 단다.
   // 이번 주 순위와 무관하며, 지난주 공동 1위면 여러 명이 true일 수 있다.
   previousWeekWinner: boolean;
 }
 
 // 공동 순위를 반영한 표준 경쟁 순위(1,1,3 …)를 매긴 한 줄.
-// rank는 서버가 내려주지 않고 조회 시점에 carnationCount로 계산한다(rankEntries).
+// 서버도 rank를 내려주지만 파서가 버리고 rankEntries가 postCount로 다시 계산한다.
+// 값은 같고, 동점자의 표시 순서를 이름 오름차순으로 고정하기 위해서다.
 export interface RankedEntry extends WeeklyRankingEntry {
   rank: number;
 }
