@@ -193,7 +193,7 @@ test('뒤로가기 버튼을 누르면 피드로 돌아가는 콜백을 호출�
   });
   mountedRenderers.push(renderer!);
 
-  press(renderer!, '피드로 돌아가기');
+  press(renderer!, '보관함 닫기');
 
   expect(onCloseArchive).toHaveBeenCalledTimes(1);
 });
