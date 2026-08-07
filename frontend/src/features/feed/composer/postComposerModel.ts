@@ -180,3 +180,31 @@ export function canAddMedia(
 
   return current.length === 0 ? 'allowed' : 'confirm-replace';
 }
+
+/**
+ * 교체 확인 문구는 요청한 종류가 아니라 현재 선택된 종류를 기준으로 만든다.
+ * 영상이 선택된 상태에서 영상을 다시 고르는 경우도 확인 대상이므로,
+ * 요청 종류만 보면 선택한 적 없는 사진을 지운다고 안내하게 된다.
+ */
+export function describeMediaReplace(
+  current: readonly ComposerMedia[],
+  requestedKind: ComposerMedia['kind'],
+): {message: string; title: string} {
+  // 확인이 필요한 상태에서는 사진과 영상이 섞여 있을 수 없다.
+  const hasVideo = current.some(item => item.kind === 'video');
+
+  if (hasVideo) {
+    return {
+      message: '교체하면 현재 선택한 영상이 제거돼요.',
+      title:
+        requestedKind === 'video'
+          ? '선택한 영상을 교체할까요?'
+          : '영상을 사진으로 교체할까요?',
+    };
+  }
+
+  return {
+    message: '교체하면 현재 선택한 사진이 제거돼요.',
+    title: '사진을 영상으로 교체할까요?',
+  };
+}
