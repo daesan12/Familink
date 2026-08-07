@@ -342,11 +342,10 @@ test('알림 화면에서 다른 탭으로 이동하면 셸이 다시 뒤로가�
 });
 
 test.each(SUB_SCREEN_ROUTES)(
-  '%s에서 연 게시글 상세의 뒤로가기는 피드 목록으로 간다',
+  '%s에서 연 게시글 상세의 뒤로가기는 진입 지점으로 돌아온다',
   route => {
-    // S15P11B104-367 시점의 목적지를 고정한다. navigateInTab이 이동 전에
-    // 하위 화면을 닫기 때문에 상세 아래에 아무것도 남지 않는다.
-    // S15P11B104-368이 그 이음새를 제거하면 이 단언은 진입 지점으로 뒤집힌다.
+    // 이 티켓의 본체(완료 기준 1·2). 하위 화면이 상세 밑에 남는 것이 유일한
+    // 근거다 — mirrorTabRoute가 다시 pop하기 시작하면 여기서 FeedHome이 나온다.
     const navRef = createNavigationContainerRef();
     const renderer = renderShell(navRef, {[route]: createOpenPostMock(route)});
 
@@ -355,6 +354,13 @@ test.each(SUB_SCREEN_ROUTES)(
 
     expect(currentRouteName(navRef)).toBe('PostDetail');
 
+    TestRenderer.act(() => {
+      navRef.goBack();
+    });
+
+    expect(currentRouteName(navRef)).toBe(route);
+
+    // 하위 화면 자신의 뒤로가기는 그대로 피드 목록으로 간다.
     TestRenderer.act(() => {
       navRef.goBack();
     });

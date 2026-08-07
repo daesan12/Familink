@@ -3723,9 +3723,10 @@ test("피드에 진입하거나 피드를 다시 누르면 미읽음 배지를 �
   expect(notificationGateway.getUnreadCount).toHaveBeenCalledTimes(3);
 });
 
-test("아카이브 화면에서 피드 탭을 누르면 재탭이 아니라 피드로 복귀한다", async () => {
-  // 재탭이면 셸이 pop:true 중첩 params를 함께 dispatch해 스택 루트로 정규화한다.
-  // 아카이브는 피드 탭 위에 쌓인 하위 화면이므로 재탭이 아닌 일반 이동이어야 한다.
+test("아카이브 화면에서 피드 탭을 누르면 재마운트 없이 피드 목록으로 복귀한다", async () => {
+  // 아카이브는 피드 탭 위에 쌓인 하위 화면이라 탭 전환이 일어나지 않는다.
+  // navigate만으로는 중첩 스택에 아무 액션도 가지 않으므로 셸이 스택 루트를
+  // 명시해 걷어낸다(S15P11B104-368). 재탭이 아니므로 화면 재마운트는 없다.
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(() => {
@@ -3735,7 +3736,7 @@ test("아카이브 화면에서 피드 탭을 누르면 재탭이 아니라 피�
         screens={{
           archive: () => <Text>screen:archive</Text>,
           // 보관함은 피드 탭 스택 화면이므로 호스트할 스택이 필요하다
-          // (S15P11B104-367). 재탭 판별자 pop은 탭 route params에 실린다.
+          // (S15P11B104-367). 스택 루트 정규화의 pop은 탭 route params에 실린다.
           feed: createFeedTabHostScreen({
             renderHome: ({ tabParams }) => (
               <Text>{`feed:${String(
@@ -3766,7 +3767,7 @@ test("아카이브 화면에서 피드 탭을 누르면 재탭이 아니라 피�
     renderer!.root.findAllByProps({ children: "screen:archive" }),
   ).toHaveLength(0);
   expect(
-    renderer!.root.findAllByProps({ children: "feed:none" }).length,
+    renderer!.root.findAllByProps({ children: "feed:true" }).length,
   ).toBeGreaterThan(0);
 });
 

@@ -229,13 +229,22 @@ export function AppShell({
   // 먼저 닫는다. 이 한 줄이 "하위 화면은 다른 화면 밑에 깔리지 않는다"는 이
   // 티켓의 불변식을 만든다 — 뒤로가기 목적지를 바꾸는 후속 티켓
   // (S15P11B104-368)에서 제거할 이음새다.
-  const mirrorTabRoute = useCallback(
-    (route: MainTabRoute) => {
-      closeSubRoute();
-      setVisibleTabRoute(route);
-    },
-    [closeSubRoute]
-  );
+  const mirrorTabRoute = useCallback((route: MainTabRoute) => {
+    setFocusedSubRoute(null);
+    setVisibleTabRoute(route);
+  }, []);
+  // 탭 스택을 루트 화면으로 되감는다. 내부 스택이 없는 탭(리포트·AI 전화)에는
+  // dispatch하지 않는다 — 리포트 재탭이 openReport params를 유지해 통화 상세
+  // 팝업을 다시 여는 현재 계약을 깨지 않기 위해서다.
+  const goToTabRoot = useCallback((route: MainTabRoute) => {
+    const stackRoot = STACK_ROOT_BY_TAB[route];
+    if (stackRoot === undefined) {
+      return;
+    }
+    tabNavRef.current?.dispatch(
+      CommonActions.navigate(route, { pop: true, screen: stackRoot })
+    );
+  }, []);
   const goToTab = useCallback(
     (route: MainTabRoute) => {
       mirrorTabRoute(route);
@@ -472,14 +481,16 @@ export function AppShell({
       initialGroupStillExists
     ) {
       setCurrentGroupId(initialGroupId);
-      // 삭제·탈퇴한 그룹의 하위 화면을 다음 그룹에 그대로 보여주면 삭제된
-      // 그룹 정보가 남은 것처럼 보인다. 대체 그룹은 피드에서 새로 시작한다.
+      // 삭제·탈퇴한 그룹의 하위 화면(보관함·알림)을 다음 그룹에 그대로 보여주면
+      // 삭제된 그룹 정보가 남은 것처럼 보인다. 대체 그룹은 피드 목록에서 새로
+      // 시작한다 — goToTab은 더 이상 pop하지 않으므로 루트를 명시한다.
       goToTab('feed');
+      goToTabRoot('feed');
       setIsScreenFullscreen(false);
       setIsScreenHeaderVisible(true);
       setIsGroupMenuOpen(false);
     }
-  }, [currentGroupId, goToTab, groups, initialGroupId]);
+  }, [currentGroupId, goToTab, goToTabRoot, groups, initialGroupId]);
 
   if (isRestoringGroup) {
     return (
@@ -843,16 +854,17 @@ export function AppShell({
               // AI 전화는 재마운트하면 네이티브 통화 선택 상태를 잃으므로 제외한다.
               if (route !== 'aiCall') {
                 setScreenRefreshNonce(nonce => nonce + 1);
-                const stackRoot = STACK_ROOT_BY_TAB[route];
-                if (stackRoot !== undefined) {
-                  tabNavRef.current?.dispatch(
-                    CommonActions.navigate(route, {
-                      pop: true,
-                      screen: stackRoot,
-                    })
-                  );
-                }
+                goToTabRoot(route);
               }
+              return;
+            }
+            // 하위 화면(알림·보관함)이 위에 있는 자기 탭을 누른 경우. 아무 탭도
+            // 강조돼 있지 않으니 재탭은 아니지만, 누른 탭에 도착하지 못하면
+            // 탭바가 거짓말이 된다. 탭 전환이 없어 navigate만으로는 중첩 스택에
+            // 아무 액션도 가지 않으므로 루트를 명시한다. 재마운트는 하지 않는다.
+            if (route === resolvedTabRoute) {
+              mirrorTabRoute(route);
+              goToTabRoot(route);
               return;
             }
             goToTab(route);
