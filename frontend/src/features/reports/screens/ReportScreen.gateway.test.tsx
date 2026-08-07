@@ -1,14 +1,27 @@
 import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  useNavigation,
+  type NavigationProp,
+} from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import {Pressable} from "react-native";
 import TestRenderer from "react-test-renderer";
 
 import type { MainTabsParamList } from "../../../app-shell";
-import type { ReportGateway } from "../types";
+import type {
+  CareReceiverReportTarget,
+  DailyReportResult,
+  ReportGateway,
+} from "../types";
+import { reportCache } from "../reportCache";
+import * as reportTargetHooks from "../hooks/useCareReceiverReportTargets";
 import { REPORT_PAGE_REQUEST_CONCURRENCY } from "../hooks/useReportPages";
+import * as reportPageHooks from "../hooks/useReportPages";
 import { ReportScreen } from "./ReportScreen";
 
 jest.mock("@react-native-vector-icons/material-design-icons", () => "Icon");
+jest.mock("lucide-react-native", () => ({Phone: "PhoneIcon"}));
 jest.mock("react-native-safe-area-context", () => {
   const mockReact = jest.requireActual("react");
   const { View } = jest.requireActual("react-native");
@@ -37,7 +50,21 @@ const target = {
 
 // ReportScreen이 useRoute로 리포트 탭 route params를 읽으므로, 단독 렌더도
 // 셸과 같은 'report' route 이름의 화면으로 감싼다.
-const RouteStack = createNativeStackNavigator();
+type ReportTestParamList = Pick<MainTabsParamList, "report">;
+
+const RouteStack = createNativeStackNavigator<ReportTestParamList>();
+
+function ReportCalendarTrigger() {
+  const navigation =
+    useNavigation<NavigationProp<ReportTestParamList, "report">>();
+
+  return (
+    <Pressable
+      accessibilityLabel="리포트 캘린더"
+      onPress={() => navigation.setParams({openCalendar: true})}
+    />
+  );
+}
 
 function withReportRoute(
   element: React.ReactElement,
@@ -47,13 +74,24 @@ function withReportRoute(
     <NavigationContainer>
       <RouteStack.Navigator screenOptions={{ headerShown: false }}>
         <RouteStack.Screen initialParams={params} name="report">
-          {() => element}
+          {() => (
+            <>
+              <ReportCalendarTrigger />
+              {element}
+            </>
+          )}
         </RouteStack.Screen>
       </RouteStack.Navigator>
     </NavigationContainer>
   );
 }
 const renderedScreens = new Set<TestRenderer.ReactTestRenderer>();
+
+// 리포트 캐시는 로그인 세션 동안 유지되는 모듈 싱글턴이라, 각 테스트를 앱을
+// 새로 켠 상태에서 시작시키려면 비워야 한다.
+beforeEach(() => {
+  reportCache.clear();
+});
 
 afterEach(() => {
   TestRenderer.act(() => {
@@ -75,6 +113,14 @@ function createGateway(): jest.Mocked<ReportGateway> {
     }),
     requestDailyReportGeneration: jest.fn(),
   };
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }
 
 async function renderWithGateway(gateway: ReportGateway, targets = [target]) {
@@ -134,6 +180,126 @@ function readyCallReport() {
   };
 }
 
+test("원격 리포트 초기 조회가 끝날 때까지 잘못된 빈 화면을 노출하지 않는다", async () => {
+  const gateway = createGateway();
+  const targetRequest =
+    createDeferred<readonly CareReceiverReportTarget[]>();
+  const dailyReportRequest = createDeferred<DailyReportResult>();
+  const loadTargets = jest.fn(() => targetRequest.promise);
+  gateway.getDailyReport.mockReturnValue(dailyReportRequest.promise);
+  let renderer!: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      withReportRoute(
+        <ReportScreen
+          careReceiverTargetsLoader={loadTargets}
+          currentGroup={currentGroup}
+          reportDate="2026-07-31"
+          reportGateway={gateway}
+          role="guardian"
+        />
+      )
+    );
+  });
+  renderedScreens.add(renderer);
+
+  const initialTree = JSON.stringify(renderer.toJSON());
+  expect(initialTree).toContain("피보호자 목록을 불러오고 있어요");
+  expect(initialTree).not.toContain("리포트를 확인할 피보호자가 없어요");
+
+  await TestRenderer.act(async () => {
+    targetRequest.resolve([target]);
+    await targetRequest.promise;
+  });
+
+  const reportLoadingTree = JSON.stringify(renderer.toJSON());
+  expect(reportLoadingTree).toContain("리포트를 불러오고 있어요");
+  expect(reportLoadingTree).not.toContain("리포트를 확인할 피보호자가 없어요");
+
+  await TestRenderer.act(async () => {
+    dailyReportRequest.resolve({
+      calls: [],
+      dailyReport: {
+        emotionCategory: "JOY",
+        emotionSubcategory: "즐거움",
+        guardianMessageSummary: null,
+        id: "daily-31",
+        summary: "오늘의 안정적인 리포트입니다.",
+      },
+      date: "2026-07-31",
+      generationStatus: "ready",
+    });
+    await dailyReportRequest.promise;
+  });
+
+  const readyTree = JSON.stringify(renderer.toJSON());
+  expect(readyTree).toContain("오늘의 안정적인 리포트입니다.");
+  expect(readyTree).not.toContain("리포트를 불러오고 있어요");
+});
+
+test("피보호자 조회가 idle인 첫 렌더를 로딩 화면으로 표시한다", async () => {
+  const targetStateSpy = jest
+    .spyOn(reportTargetHooks, "useCareReceiverReportTargets")
+    .mockReturnValue({ retry: jest.fn(), status: "idle" });
+  const gateway = createGateway();
+  let renderer!: TestRenderer.ReactTestRenderer;
+
+  try {
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        withReportRoute(
+          <ReportScreen
+            careReceiverTargetsLoader={jest.fn()}
+            currentGroup={currentGroup}
+            reportDate="2026-07-31"
+            reportGateway={gateway}
+            role="guardian"
+          />
+        )
+      );
+    });
+    renderedScreens.add(renderer);
+
+    const tree = JSON.stringify(renderer.toJSON());
+    expect(tree).toContain("피보호자 목록을 불러오고 있어요");
+    expect(tree).not.toContain("리포트를 확인할 피보호자가 없어요");
+  } finally {
+    targetStateSpy.mockRestore();
+  }
+});
+
+test("리포트 조회가 idle인 첫 렌더를 로딩 화면으로 표시한다", async () => {
+  const reportPagesSpy = jest
+    .spyOn(reportPageHooks, "useReportPages")
+    .mockReturnValue({ retry: jest.fn(), status: "idle" });
+  const gateway = createGateway();
+  let renderer!: TestRenderer.ReactTestRenderer;
+
+  try {
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        withReportRoute(
+          <ReportScreen
+            careReceiverTargets={[target]}
+            currentGroup={currentGroup}
+            reportDate="2026-07-31"
+            reportGateway={gateway}
+            role="guardian"
+          />
+        )
+      );
+    });
+    renderedScreens.add(renderer);
+
+    const tree = JSON.stringify(renderer.toJSON());
+    expect(tree).toContain("리포트를 불러오고 있어요");
+    expect(tree).not.toContain("리포트를 확인할 피보호자가 없어요");
+  } finally {
+    reportPagesSpy.mockRestore();
+  }
+});
+
 function isCallReportDetailVisible(renderer: TestRenderer.ReactTestRenderer) {
   const detailModal = renderer.root
     .findAllByProps({ statusBarTranslucent: true })
@@ -170,9 +336,43 @@ test("일간 조회 실패를 통화 없음과 구분하고 다시 시도할 수
 
   expect(gateway.getDailyReport).toHaveBeenCalledTimes(2);
   expect(JSON.stringify(renderer.toJSON())).toContain(
-    "건별 리포트 준비 중"
+    "아직 일간 리포트가 생성되지 않았어요"
   );
 }, 10_000);
+
+test("생성 완료되지 않은 통화는 건별 리포트 카드로 표시하지 않는다", async () => {
+  const gateway = createGateway();
+  gateway.getDailyReport.mockResolvedValue({
+    calls: [
+      {
+        callSessionId: "31",
+        reportAvailable: true,
+        startedAt: "2026-07-31T00:30:00Z",
+      },
+      {
+        callSessionId: "32",
+        reportAvailable: false,
+        startedAt: "2026-07-31T01:30:00Z",
+      },
+    ],
+    dailyReport: null,
+    date: "2026-07-31",
+    generationStatus: "available",
+  });
+
+  const renderer = await renderWithGateway(gateway);
+
+  expect(
+    renderer.root.findAllByProps({
+      accessibilityLabel: "09:30 통화 리포트 열기",
+    }).length
+  ).toBeGreaterThan(0);
+  expect(
+    renderer.root.findAllByProps({
+      accessibilityLabel: "10:30 통화 리포트 상태 확인",
+    })
+  ).toHaveLength(0);
+});
 
 test("이전 최신 리포트 아래에서 오늘 수동 생성 버튼을 누를 수 있다", async () => {
   const gateway = createGateway();
@@ -627,12 +827,16 @@ test("어르신별 캘린더 날짜를 분리하고 화면 로딩 때 받은 현
     ).length;
 
   expect(currentMonthRequestCount()).toBe(2);
-  const calendarButtons = renderer.root
+  const calendarButton = renderer.root
     .findAllByProps({ accessibilityLabel: "리포트 캘린더" })
-    .filter((button) => typeof button.props.onPress === "function");
+    .find((button) => typeof button.props.onPress === "function");
+
+  if (!calendarButton) {
+    throw new Error("리포트 캘린더 버튼을 찾지 못했습니다.");
+  }
 
   await TestRenderer.act(async () => {
-    calendarButtons[0].props.onPress();
+    calendarButton.props.onPress();
   });
   expect(
     renderer.root.findByProps({
@@ -649,7 +853,14 @@ test("어르신별 캘린더 날짜를 분리하고 화면 로딩 때 받은 현
     renderer.root
       .findByProps({ accessibilityLabel: "리포트 캘린더 닫기" })
       .props.onPress();
-    calendarButtons[1].props.onPress();
+    renderer.root
+      .findByProps({testID: "care-receiver-report-pager"})
+      .props.onMomentumScrollEnd({
+        nativeEvent: {contentOffset: {x: 750, y: 0}},
+      });
+  });
+  await TestRenderer.act(async () => {
+    calendarButton.props.onPress();
   });
   expect(
     renderer.root.findByProps({
@@ -874,25 +1085,22 @@ test("생성 중 상태를 5초 뒤 다시 확인해 완료 리포트를 자동�
   );
 });
 
-test("리포트가 아직 없어도 행을 눌러 생성 상태를 확인할 수 있다", async () => {
+test("생성 완료되지 않은 통화만 있으면 기존 리포트 빈 상태를 표시한다", async () => {
   const gateway = createGateway();
   mockDailyReportWithCall(gateway, false);
-  gateway.getCallReportStatus.mockResolvedValue({
-    callSessionId: "31",
-    status: "generating",
-  });
   const renderer = await renderWithGateway(gateway);
 
-  await TestRenderer.act(async () => {
-    renderer.root
-      .findByProps({ accessibilityLabel: "09:30 통화 리포트 상태 확인" })
-      .props.onPress();
-  });
-
-  expect(gateway.getCallReportStatus).toHaveBeenCalledWith("31");
-  expect(JSON.stringify(renderer.toJSON())).toContain(
-    "리포트를 준비하고 있어요"
-  );
+  expect(
+    renderer.root.findAllByProps({
+      accessibilityLabel: "09:30 통화 리포트 상태 확인",
+    })
+  ).toHaveLength(0);
+  expect(
+    renderer.root.findAllByProps({
+      accessibilityLabel: "오늘 통화 리포트 없음",
+    }).length
+  ).toBeGreaterThan(0);
+  expect(gateway.getCallReportStatus).not.toHaveBeenCalled();
 });
 
 test("90초 동안 생성 중이면 자동 확인을 멈추고 수동 상태 확인으로 복구한다", async () => {
@@ -1031,6 +1239,97 @@ test("상세를 닫은 뒤 도착한 상태 응답은 화면을 다시 열지 �
 
   expect(isCallReportDetailVisible(renderer)).toBe(false);
   expect(gateway.getCallReport).not.toHaveBeenCalled();
+});
+
+test("한 번 조회한 건별 리포트를 다시 열면 로딩 없이 재조회 없이 표시한다", async () => {
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway);
+  gateway.getCallReportStatus.mockResolvedValue({
+    callSessionId: "31",
+    status: "ready",
+  });
+  gateway.getCallReport.mockResolvedValue(readyCallReport());
+  const renderer = await renderWithGateway(gateway);
+
+  await openCallReport(renderer);
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "통화 리포트 상세 닫기" })
+      .props.onPress();
+  });
+  await openCallReport(renderer);
+
+  expect(gateway.getCallReportStatus).toHaveBeenCalledTimes(1);
+  expect(gateway.getCallReport).toHaveBeenCalledTimes(1);
+  expect(isCallReportDetailVisible(renderer)).toBe(true);
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "아침 식사와 가족 이야기를 나누셨어요."
+  );
+});
+
+test("생성 중 상태는 캐시하지 않아 다시 열면 상태를 새로 확인한다", async () => {
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway);
+  gateway.getCallReportStatus.mockResolvedValue({
+    callSessionId: "31",
+    status: "generating",
+  });
+  const renderer = await renderWithGateway(gateway);
+
+  await openCallReport(renderer);
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "통화 리포트 상세 닫기" })
+      .props.onPress();
+  });
+  await openCallReport(renderer);
+
+  expect(gateway.getCallReportStatus).toHaveBeenCalledTimes(2);
+});
+
+test("캐시는 통화별로 분리되어 다른 통화는 그대로 조회한다", async () => {
+  const gateway = createGateway();
+  gateway.getDailyReport.mockResolvedValue({
+    calls: [
+      {
+        callSessionId: "31",
+        reportAvailable: true,
+        startedAt: "2026-07-31T00:30:00Z",
+      },
+      {
+        callSessionId: "32",
+        reportAvailable: true,
+        startedAt: "2026-07-31T02:10:00Z",
+      },
+    ],
+    dailyReport: null,
+    date: "2026-07-31",
+    generationStatus: "available",
+  });
+  gateway.getCallReportStatus.mockImplementation(async (callSessionId) => ({
+    callSessionId,
+    status: "ready",
+  }));
+  gateway.getCallReport.mockImplementation(async (callSessionId) => ({
+    ...readyCallReport(),
+    callSessionId,
+  }));
+  const renderer = await renderWithGateway(gateway);
+
+  await openCallReport(renderer);
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "통화 리포트 상세 닫기" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "11:10 통화 리포트 열기" })
+      .props.onPress();
+  });
+
+  expect(gateway.getCallReport).toHaveBeenCalledTimes(2);
+  expect(gateway.getCallReport).toHaveBeenLastCalledWith("32");
 });
 
 test("상세를 닫으면 예약된 상태 확인 타이머를 취소한다", async () => {

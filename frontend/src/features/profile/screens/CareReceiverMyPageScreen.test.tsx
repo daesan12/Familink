@@ -192,6 +192,12 @@ test('로그아웃을 누르면 onRequestLogout을 호출한다', () => {
   TestRenderer.act(() => {
     renderer.root.findByProps({accessibilityLabel: '로그아웃'}).props.onPress();
   });
+  expect(onRequestLogout).not.toHaveBeenCalled();
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '로그아웃 확인하기'})
+      .props.onPress();
+  });
   expect(onRequestLogout).toHaveBeenCalledTimes(1);
 });
 

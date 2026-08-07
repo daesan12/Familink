@@ -1,4 +1,5 @@
-import {StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS} from '../../../design/tokens';
 import type {ArchiveDateGroup, ArchivePost} from '../types';
@@ -15,7 +16,7 @@ export function ArchiveDateSection({
 }: ArchiveDateSectionProps) {
   return (
     <View style={styles.section}>
-      <Text style={styles.dateLabel}>{group.dateLabel}</Text>
+      <AppText style={styles.dateLabel}>{group.dateLabel}</AppText>
       <View style={styles.grid}>
         {group.posts.map(post => (
           <View key={post.id} style={styles.cell}>

@@ -39,6 +39,12 @@ internal interface AiCallMediaSession {
 
   suspend fun awaitConnected(timeoutMillis: Long = 20_000L)
 
+  /**
+   * 사용자의 음소거 의도를 전달한다.
+   *
+   * 실제 마이크 전송 여부는 세션이 이 의도와 AI 발화 게이팅을 함께 계산해 결정하므로,
+   * `true`를 넣어도 AI가 말하는 동안에는 전송이 재개되지 않는다.
+   */
   fun setMicrophoneEnabled(enabled: Boolean)
 
   fun setSpeakerEnabled(enabled: Boolean)
@@ -150,6 +156,156 @@ internal class AiCallConnectionStateController(
   }
 }
 
+/** AI 발화 음성의 재생 구간 경계를 나타내는 신호다. */
+internal enum class AiCallGateSignal {
+  PlaybackStarted,
+  PlaybackEnded,
+}
+
+/**
+ * Realtime 이벤트 타입을 마이크 게이트 신호로 변환한다.
+ *
+ * 재생 경계 이벤트만 신호로 쓴다. `response.done`이나
+ * `response.output_audio_transcript.done`은 생성 완료 시점이고 재생은 그보다 수 초 더
+ * 이어지므로, 해제 신호로 쓰면 정작 끼어들기가 발생하는 구간에서 마이크가 열린다.
+ * 반대로 `response.created`처럼 이른 이벤트를 차단 신호로 쓰면 재생 시작 전부터
+ * 마이크가 불필요하게 죽는다.
+ *
+ * `output_audio_buffer.cleared`도 해제로 취급한다. 서버가 남은 재생 오디오를 버렸다는
+ * 뜻이라 뒤따를 오디오가 없고, 이 경로에서는 `stopped`가 오지 않을 수 있다.
+ */
+internal fun aiCallGateSignalOf(eventType: String): AiCallGateSignal? =
+    when (eventType) {
+      "output_audio_buffer.started" -> AiCallGateSignal.PlaybackStarted
+      "output_audio_buffer.stopped",
+      "output_audio_buffer.cleared", -> AiCallGateSignal.PlaybackEnded
+      else -> null
+    }
+
+/**
+ * AI 발화가 재생되는 동안 마이크 전송을 막고, 사용자 음소거 의도와 합성해 실효 상태를
+ * 계산한다.
+ *
+ * OpenAI Realtime WebRTC 통화는 사용자 발화가 감지되면 서버가 재생 대기 오디오를
+ * 잘라내 AI 음성을 끊는다. 세션 설정의 `interrupt_response`는 응답 생성 취소만 막고 이
+ * 재생 버퍼 클리어는 막지 못하므로, 단말이 마이크를 닫아 서버 VAD가 사용자 발화를
+ * 감지하지 못하게 하는 것이 유일한 대응이다.
+ *
+ * 모든 공개 메서드는 어느 스레드에서 호출해도 되며 내부적으로 [handler] 루퍼로 넘긴다.
+ * 상태를 메인 루퍼 한 스레드에 가두므로 별도 락이 없다. WebRTC 콜백 스레드에서 네이티브
+ * 트랙을 직접 만지면 `close()`가 잡은 락과 교착할 수 있어 이 우회가 필요하다.
+ *
+ * 불확실한 상황은 모두 마이크가 열리는 쪽으로 수렴시킨다. AI 음성이 한 번 끊기는 것은
+ * 품질 문제지만, 마이크가 계속 닫혀 있으면 사용자가 말을 걸 수 없어 통화가 사실상
+ * 끝나기 때문이다.
+ */
+internal class AiCallMicrophoneGateController(
+    private val handler: Handler,
+    private val tailReleaseDelayMillis: Long = TAIL_RELEASE_DELAY_MILLIS,
+    private val maxGateDurationMillis: Long = MAX_GATE_DURATION_MILLIS,
+    private val applyMicrophoneEnabled: (Boolean) -> Unit,
+) {
+
+  // 세션 생성 시 audioTrack.setEnabled(true)로 시작하므로 초기 실효 상태도 켜짐이다.
+  private var userEnabled = true
+  private var gateClosed = false
+  private var lastApplied = true
+  private var isClosed = false
+  private var pendingRelease: Runnable? = null
+
+  private val watchdog =
+      Runnable {
+        if (!isClosed) {
+          openGate()
+        }
+      }
+
+  /** 사용자의 음소거 의도를 기록한다. 실효 상태는 게이트와 함께 계산한다. */
+  fun setUserMicrophoneEnabled(enabled: Boolean) = post {
+    userEnabled = enabled
+    applyEffectiveState()
+  }
+
+  fun onPlaybackStarted() = post {
+    cancelPendingRelease()
+    handler.removeCallbacks(watchdog)
+    handler.postDelayed(watchdog, maxGateDurationMillis)
+    gateClosed = true
+    applyEffectiveState()
+  }
+
+  fun onPlaybackEnded() = post {
+    if (gateClosed && pendingRelease == null) {
+      scheduleRelease()
+    }
+  }
+
+  /** 연결이 끊기면 재생될 오디오가 없으므로 지연 없이 즉시 해제한다. */
+  fun onConnectionInterrupted() = post { openGate() }
+
+  fun close() = post {
+    isClosed = true
+    cancelPendingRelease()
+    handler.removeCallbacks(watchdog)
+  }
+
+  /**
+   * 서버 버퍼가 비어도 단말 지터 버퍼에 남은 오디오가 잠시 더 재생된다. 그 소리가
+   * 마이크로 돌아가 서버 VAD를 잘못 깨우지 않도록 해제를 조금 늦춘다.
+   */
+  private fun scheduleRelease() {
+    val release =
+        object : Runnable {
+          override fun run() {
+            if (pendingRelease === this) {
+              pendingRelease = null
+              openGate()
+            }
+          }
+        }
+    pendingRelease = release
+    handler.postDelayed(release, tailReleaseDelayMillis)
+  }
+
+  private fun openGate() {
+    cancelPendingRelease()
+    handler.removeCallbacks(watchdog)
+    gateClosed = false
+    applyEffectiveState()
+  }
+
+  private fun cancelPendingRelease() {
+    pendingRelease?.let(handler::removeCallbacks)
+    pendingRelease = null
+  }
+
+  private fun applyEffectiveState() {
+    val effective = userEnabled && !gateClosed
+    if (effective == lastApplied) {
+      return
+    }
+    lastApplied = effective
+    applyMicrophoneEnabled(effective)
+  }
+
+  private inline fun post(crossinline block: () -> Unit) {
+    handler.post {
+      if (!isClosed) {
+        block()
+      }
+    }
+  }
+
+  companion object {
+    internal const val TAIL_RELEASE_DELAY_MILLIS = 200L
+
+    // 프롬프트가 한 턴을 "낭독 약 10초"로 지정하므로 정상 재생 최댓값의 설계 목표는
+    // 10초다. 여기에 여유를 둔 값이며, 오발동해도 게이팅 전 동작으로 돌아갈 뿐이고
+    // 다음 재생 시작에서 다시 무장된다.
+    internal const val MAX_GATE_DURATION_MILLIS = 15_000L
+  }
+}
+
 internal class AiCallWebRtcSession(
     context: Context,
     private val onCaptionUpdate: (AiCallCaptionUpdate) -> Unit,
@@ -170,6 +326,11 @@ internal class AiCallWebRtcSession(
       AiCallConnectionStateController(
           handler = mainHandler,
           onConnectionLost = onConnectionLost,
+      )
+  private val microphoneGate =
+      AiCallMicrophoneGateController(
+          handler = mainHandler,
+          applyMicrophoneEnabled = ::applyMicrophoneEnabled,
       )
   private var audioManager: AudioManager? = null
   private var previousAudioMode: Int? = null
@@ -263,6 +424,16 @@ internal class AiCallWebRtcSession(
   }
 
   override fun setMicrophoneEnabled(enabled: Boolean) {
+    microphoneGate.setUserMicrophoneEnabled(enabled)
+  }
+
+  private fun applyMicrophoneEnabled(enabled: Boolean) {
+    // 게이트 적용은 이제 발화 경계마다 메인 스레드에서 일어난다. teardown이 [nativeLock]을
+    // 쥔 채 네이티브 스레드 조인을 기다리는 동안 여기서 락을 기다리면 메인 스레드가 그만큼
+    // 멈추므로, 이미 닫힌 세션은 락에 접근하기 전에 걸러낸다.
+    if (closed.get()) {
+      return
+    }
     synchronized(nativeLock) {
       if (!closed.get()) {
         audioTrack?.setEnabled(enabled)
@@ -283,6 +454,7 @@ internal class AiCallWebRtcSession(
       return
     }
     connectionStateController.close()
+    microphoneGate.close()
     if (!connectionReady.isCompleted) {
       connectionReady.completeExceptionally(AiCallConnectionException("WebRTC call closed."))
     }
@@ -331,11 +503,17 @@ internal class AiCallWebRtcSession(
             -> markConnected()
 
             PeerConnection.IceConnectionState.DISCONNECTED,
-            -> connectionStateController.onDisconnected()
+            -> {
+              microphoneGate.onConnectionInterrupted()
+              connectionStateController.onDisconnected()
+            }
 
             PeerConnection.IceConnectionState.FAILED,
             PeerConnection.IceConnectionState.CLOSED,
-            -> connectionStateController.onTerminalFailure()
+            -> {
+              microphoneGate.onConnectionInterrupted()
+              connectionStateController.onTerminalFailure()
+            }
 
             else -> Unit
           }
@@ -380,11 +558,17 @@ internal class AiCallWebRtcSession(
             PeerConnection.PeerConnectionState.CONNECTED -> markConnected()
 
             PeerConnection.PeerConnectionState.DISCONNECTED,
-            -> connectionStateController.onDisconnected()
+            -> {
+              microphoneGate.onConnectionInterrupted()
+              connectionStateController.onDisconnected()
+            }
 
             PeerConnection.PeerConnectionState.FAILED,
             PeerConnection.PeerConnectionState.CLOSED,
-            -> connectionStateController.onTerminalFailure()
+            -> {
+              microphoneGate.onConnectionInterrupted()
+              connectionStateController.onTerminalFailure()
+            }
 
             else -> Unit
           }
@@ -404,7 +588,14 @@ internal class AiCallWebRtcSession(
           val bytes = ByteArray(buffer.data.remaining())
           buffer.data.get(bytes)
           val message = bytes.toString(Charsets.UTF_8)
-          val update = parseCaptionUpdate(message) ?: return
+          val payload = runCatching { JSONObject(message) }.getOrNull() ?: return
+          val eventType = payload.optString("type")
+          when (aiCallGateSignalOf(eventType)) {
+            AiCallGateSignal.PlaybackStarted -> microphoneGate.onPlaybackStarted()
+            AiCallGateSignal.PlaybackEnded -> microphoneGate.onPlaybackEnded()
+            null -> Unit
+          }
+          val update = parseCaptionUpdate(payload, eventType) ?: return
           mainHandler.post {
             if (!closed.get()) {
               onCaptionUpdate(update)
@@ -413,22 +604,20 @@ internal class AiCallWebRtcSession(
         }
       }
 
-  private fun parseCaptionUpdate(message: String): AiCallCaptionUpdate? {
-    val payload = runCatching { JSONObject(message) }.getOrNull() ?: return null
-    return when (payload.optString("type")) {
-      "response.output_audio_transcript.delta" ->
-          payload.optString("delta").takeIf { it.isNotEmpty() }?.let {
-            AiCallCaptionUpdate(text = it, completed = false)
-          }
+  private fun parseCaptionUpdate(payload: JSONObject, eventType: String): AiCallCaptionUpdate? =
+      when (eventType) {
+        "response.output_audio_transcript.delta" ->
+            payload.optString("delta").takeIf { it.isNotEmpty() }?.let {
+              AiCallCaptionUpdate(text = it, completed = false)
+            }
 
-      "response.output_audio_transcript.done" ->
-          payload.optString("transcript").takeIf { it.isNotBlank() }?.let {
-            AiCallCaptionUpdate(text = it.trim(), completed = true)
-          }
+        "response.output_audio_transcript.done" ->
+            payload.optString("transcript").takeIf { it.isNotBlank() }?.let {
+              AiCallCaptionUpdate(text = it.trim(), completed = true)
+            }
 
-      else -> null
-    }
-  }
+        else -> null
+      }
 
   private fun markConnected() {
     if (closed.get()) {

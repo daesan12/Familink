@@ -1,11 +1,16 @@
 import React from 'react';
-import {NavigationContainer, useRoute} from '@react-navigation/native';
+import {
+  NavigationContainer,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import {Pressable, Text} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import TestRenderer from 'react-test-renderer';
 
 import {NotificationGatewayProvider} from '../features/notifications/NotificationGatewayContext';
 import type {NotificationGateway} from '../features/notifications/types';
+import {createFeedTabHostScreen} from '../shared/testing/feedTabHost';
 import {mockHardwareBack} from '../shared/testing/hardwareBack';
 import {AppShell} from './AppShell';
 import type {
@@ -13,6 +18,7 @@ import type {
   AppScreenProps,
   AppScreenRegistry,
   FamilyGroup,
+  MainTabsParamList,
   MainTabRoute,
   SharedSubRoute,
 } from './types';
@@ -71,10 +77,25 @@ function CalendarScreen({currentGroup}: AppScreenProps) {
   return <Text>{`캘린더:${currentGroup.name}`}</Text>;
 }
 
-const screens = {
+function ReportScreen() {
+  const route = useRoute<RouteProp<MainTabsParamList, 'report'>>();
+
+  return (
+    <Text>
+      {route.params?.openCalendar ? '리포트 캘린더 요청됨' : '리포트 화면'}
+    </Text>
+  );
+}
+
+// 알림·보관함은 피드 탭 스택 화면이므로(S15P11B104-367) 피드 목이 그것들을
+// 호스트해야 한다. 프로덕션 위상을 재현하는 목을 쓴다.
+const screens: AppScreenRegistry = {
   calendar: CalendarScreen,
-  feed: FeedScreen,
+  feed: createFeedTabHostScreen({
+    renderHome: ({props}) => <FeedScreen {...props} />,
+  }),
   groupInfo: GroupInfoScreen,
+  report: ReportScreen,
 };
 
 function hasText(renderer: TestRenderer.ReactTestRenderer, value: string) {
@@ -105,6 +126,31 @@ function pressText(renderer: TestRenderer.ReactTestRenderer, value: string) {
     target.props.onPress();
   });
 }
+
+test('리포트 헤더의 캘린더 버튼이 리포트 화면에 열기 요청을 전달한다', () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      withNav(
+        <AppShell
+          groups={[GROUP_A]}
+          initialGroupId={GROUP_A.id}
+          initialRoute="report"
+          screens={screens}
+        />,
+      ),
+    );
+  });
+
+  TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '리포트 캘린더'})
+      .props.onPress();
+  });
+
+  expect(hasText(renderer!, '리포트 캘린더 요청됨')).toBe(true);
+  TestRenderer.act(() => renderer!.unmount());
+});
 
 test('현재 그룹이 삭제되고 대체 그룹이 지정되면 대체 그룹의 피드로 이동한다', async () => {
   let renderer: TestRenderer.ReactTestRenderer;
@@ -180,6 +226,7 @@ const ALL_ROUTES: readonly AppRoute[] = [
   'profile',
   'notifications',
   'archive',
+  'joinApproval',
 ];
 
 const CARE_RECEIVER_GROUP: FamilyGroup = {
@@ -205,10 +252,13 @@ afterEach(() => {
 
 // 실제 화면 대신 라우트 이름만 렌더한다. 뒤로가기 뒤에 어떤 라우트가 남았는지만 확인하면 된다.
 function createBackTestScreens(): AppScreenRegistry {
-  return ALL_ROUTES.reduce<AppScreenRegistry>((registry, route) => {
-    registry[route] = () => <Text>{`screen:${route}`}</Text>;
-    return registry;
+  const registry = ALL_ROUTES.reduce<AppScreenRegistry>((entries, route) => {
+    entries[route] = () => <Text>{`screen:${route}`}</Text>;
+    return entries;
   }, {});
+  // 피드는 하위 화면을 호스트해야 하므로 스택 위상 목으로 덮어쓴다.
+  registry.feed = createFeedTabHostScreen();
+  return registry;
 }
 
 // AI 전화 통화 중처럼 화면이 전체화면을 차지하는 상태를 재현한다.
@@ -244,30 +294,50 @@ function renderForBack(
   return renderer!;
 }
 
-function renderedRoute(
+// 트리에 남아 있는 screen: 라벨을 트리 순서대로 전부 모은다. 첫 라벨만 집으면
+// 두 화면이 동시에 마운트된 상태에서 단언이 조용히 통과한다 — 하위 화면이 탭
+// 스택 안으로 들어가면(S15P11B104-367) 피드 목이 항상 마운트돼 있어 정확히
+// 그 위양성이 생긴다.
+function renderedRoutes(
   renderer: TestRenderer.ReactTestRenderer,
-): string | undefined {
-  const label = renderer.root
+): readonly string[] {
+  return renderer.root
     .findAllByType(Text)
     .map(node => node.props.children)
-    .find(child => typeof child === 'string' && child.startsWith('screen:'));
+    .filter(
+      (child): child is string =>
+        typeof child === 'string' && child.startsWith('screen:'),
+    )
+    .map(label => label.slice('screen:'.length));
+}
 
-  return typeof label === 'string' ? label.slice('screen:'.length) : undefined;
+// 탭 라우트 단언용. 탭 화면은 ShellRouteScreen의 useIsFocused 게이트 덕에 항상
+// 정확히 하나만 마운트된다 — 그 불변식을 단언에 함께 싣는다.
+function expectOnlyRoute(
+  renderer: TestRenderer.ReactTestRenderer,
+  route: string,
+) {
+  expect(renderedRoutes(renderer)).toEqual([route]);
 }
 
 // 알림·보관함은 어느 탭도 소유하지 않는 공유 하위 화면이다. 콜드 스타트로는
 // 진입할 수 없으므로(initialRoute는 탭 라우트만 받는다) 프로덕션과 같은 경로로
 // 피드 헤더의 종·폴더 아이콘을 눌러 연다.
-const SUB_SCREEN_ROUTES: readonly SharedSubRoute[] = ['notifications', 'archive'];
-
-const SUB_SCREEN_OPENER_LABEL: Record<SharedSubRoute, string> = {
+// 가입 승인(joinApproval)은 헤더 opener가 없어 아래 test.each의 전제가 성립하지
+// 않으므로 이 표에 넣지 않는다 — 전용 테스트로 덮는다.
+const SUB_SCREEN_OPENER_LABEL = {
   archive: '게시글 보관함',
   notifications: '알림',
-};
+} satisfies Partial<Record<SharedSubRoute, string>>;
+
+const SUB_SCREEN_ROUTES: readonly (keyof typeof SUB_SCREEN_OPENER_LABEL)[] = [
+  'notifications',
+  'archive',
+];
 
 function openSubScreen(
   renderer: TestRenderer.ReactTestRenderer,
-  route: SharedSubRoute,
+  route: keyof typeof SUB_SCREEN_OPENER_LABEL,
 ) {
   TestRenderer.act(() => {
     renderer.root
@@ -295,7 +365,7 @@ test.each<MainTabRoute>(['calendar', 'aiCall', 'groupInfo', 'profile'])(
 
     try {
       const renderer = renderForBack(route, CARE_RECEIVER_GROUP);
-      expect(renderedRoute(renderer)).toBe(route);
+      expectOnlyRoute(renderer, route);
 
       let handled = false;
       TestRenderer.act(() => {
@@ -303,42 +373,23 @@ test.each<MainTabRoute>(['calendar', 'aiCall', 'groupInfo', 'profile'])(
       });
 
       expect(handled).toBe(true);
-      expect(renderedRoute(renderer)).toBe('feed');
+      expectOnlyRoute(renderer, 'feed');
     } finally {
       back.restore();
     }
   },
 );
 
-test.each(SUB_SCREEN_ROUTES)(
-  '%s 화면에서 시스템 Back은 앱을 종료하지 않고 피드로 돌아간다',
-  route => {
-    const back = mockHardwareBack();
-
-    try {
-      const renderer = renderForBack('feed', CARE_RECEIVER_GROUP);
-      openSubScreen(renderer, route);
-      expect(renderedRoute(renderer)).toBe(route);
-
-      let handled = false;
-      TestRenderer.act(() => {
-        handled = back.press();
-      });
-
-      expect(handled).toBe(true);
-      expect(renderedRoute(renderer)).toBe('feed');
-    } finally {
-      back.restore();
-    }
-  },
-);
+// 하위 화면 위에서의 뒤로가기는 셸이 아니라 컨테이너가 FeedStack을 pop해
+// 처리한다. 화면이 동시에 마운트되어 라벨 단언으로는 위상을 볼 수 없으므로
+// AppShell.subScreens.test.tsx에서 라우트 이름으로 검증한다(S15P11B104-367).
 
 test('보호자 리포트 탭에서 시스템 Back은 앱을 종료하지 않고 피드로 돌아간다', () => {
   const back = mockHardwareBack();
 
   try {
     const renderer = renderForBack('report', GUARDIAN_GROUP);
-    expect(renderedRoute(renderer)).toBe('report');
+    expectOnlyRoute(renderer, 'report');
 
     let handled = false;
     TestRenderer.act(() => {
@@ -346,7 +397,7 @@ test('보호자 리포트 탭에서 시스템 Back은 앱을 종료하지 않고
     });
 
     expect(handled).toBe(true);
-    expect(renderedRoute(renderer)).toBe('feed');
+    expectOnlyRoute(renderer, 'feed');
   } finally {
     back.restore();
   }
@@ -365,7 +416,7 @@ test('피드 루트에서는 아무도 처리하지 않아 앱이 종료된다',
     });
 
     expect(handled).toBe(false);
-    expect(renderedRoute(renderer)).toBe('feed');
+    expectOnlyRoute(renderer, 'feed');
   } finally {
     back.restore();
   }
@@ -384,10 +435,21 @@ const DEEP_LINK_GROUP_B: FamilyGroup = {
   name: '가족B',
   role: 'guardian',
 };
+const DEEP_LINK_GROUP_C: FamilyGroup = {
+  id: 'group-c',
+  isManager: true,
+  name: '가족C',
+  role: 'guardian',
+};
 
-function FeedParamsProbe(props: AppScreenProps) {
-  const route = useRoute();
-  const nested = route.params as
+// 중첩 params는 탭 route에 실린다. 이 프로브는 피드 탭 스택 안(FeedHome)에서
+// 렌더되므로 useRoute로는 FeedHome의 params가 나온다 — 호스트가 넘겨준 탭
+// params를 쓴다.
+function FeedParamsProbe({
+  tabParams,
+  ...props
+}: AppScreenProps & {tabParams: unknown}) {
+  const nested = tabParams as
     | {
         initial?: boolean;
         params?: {entrySource?: string; postId?: string};
@@ -461,7 +523,11 @@ function createDeepLinkScreens(): AppScreenRegistry {
     calendar: (props: AppScreenProps) => <CalendarParamsProbe {...props} />,
     // 게시글 딥링크는 피드 탭 route의 중첩 params(FeedStack PostDetail)로
     // 전달된다. 목 화면이 params를 렌더해 전달 계약을 단언할 수 있게 한다.
-    feed: (props: AppScreenProps) => <FeedParamsProbe {...props} />,
+    feed: createFeedTabHostScreen({
+      renderHome: ({props, tabParams}) => (
+        <FeedParamsProbe {...props} tabParams={tabParams} />
+      ),
+    }),
     groupInfo: (props: AppScreenProps) => <GroupInfoParamsProbe {...props} />,
     notifications: (props: AppScreenProps) => (
       <>
@@ -499,6 +565,26 @@ function createDeepLinkScreens(): AppScreenRegistry {
         <Pressable
           onPress={() =>
             props.onOpenNotificationTarget?.({
+              groupId: DEEP_LINK_GROUP_B.id,
+              kind: 'joinApproval',
+            })
+          }
+        >
+          <Text>open-join-approval-non-manager</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            props.onOpenNotificationTarget?.({
+              groupId: DEEP_LINK_GROUP_C.id,
+              kind: 'joinApproval',
+            })
+          }
+        >
+          <Text>open-join-approval-other-group</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            props.onOpenNotificationTarget?.({
               groupId: 'group-b',
               kind: 'post',
               postId: '42',
@@ -508,6 +594,12 @@ function createDeepLinkScreens(): AppScreenRegistry {
           <Text>open-post</Text>
         </Pressable>
       </>
+    ),
+    // 가입 승인은 피드 탭 스택의 공유 하위 화면이라 중첩 params 계약이 없다.
+    // 대신 화면이 처음 렌더될 때 받은 currentGroup으로 목적지 그룹을 단언한다 —
+    // 화면이 groupId를 params가 아니라 screenProps에서 받기 때문이다.
+    joinApproval: (props: AppScreenProps) => (
+      <Text>{`screen:joinApproval:${props.currentGroup.id}`}</Text>
     ),
     report: () => <ReportParamsProbe />,
   };
@@ -520,7 +612,7 @@ function renderForDeepLink() {
     renderer = TestRenderer.create(
       withNav(
         <AppShell
-          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B, DEEP_LINK_GROUP_C]}
           initialGroupId={DEEP_LINK_GROUP_A.id}
           initialRoute="feed"
           screens={createDeepLinkScreens()}
@@ -561,16 +653,40 @@ test('리포트 목적지는 리포트 화면으로 이동하며 통화·날짜�
   expect(hasText(renderer, 'report:11:21:2026-08-03')).toBe(true);
 });
 
-test('가입 승인 목적지는 그룹정보 탭에 중첩 JoinApproval params를 전달한다', () => {
+test('가입 승인 목적지는 피드 탭 스택의 하위 화면을 열고 그룹정보 탭으로 가지 않는다', () => {
   const renderer = renderForDeepLink();
 
   pressText(renderer, 'open-join-approval');
 
-  // groupId가 없는 목적지는 현재 그룹으로 폴백하고, initial:false가 함께
-  // 전달되어야 콜드 마운트에서 GroupInfoHome이 스택 밑에 깔린다.
-  expect(hasText(renderer, 'groupInfo:group-a:JoinApproval:group-a:false')).toBe(
+  // groupId가 없는 목적지는 현재 그룹으로 폴백한다.
+  expect(hasText(renderer, 'screen:joinApproval:group-a')).toBe(true);
+  // 알림 화면이 아래에 남아 있어야 뒤로가기가 진입 지점으로 돌아간다.
+  expect(hasText(renderer, 'screen:notifications')).toBe(true);
+});
+
+test('다른 관리자 그룹의 가입 승인 목적지는 그 그룹으로 하위 화면을 연다', () => {
+  // 승인 화면에 groupId params 채널을 두지 않은 근거를 고정한다: 그룹 전환과
+  // 하위 화면 열기가 한 커밋에 배치되므로 첫 렌더의 currentGroup이 이미 목표
+  // 그룹이다. 어긋나면 관리자가 다른 그룹의 요청 목록을 보게 된다.
+  const renderer = renderForDeepLink();
+
+  pressText(renderer, 'open-join-approval-other-group');
+
+  expect(hasText(renderer, 'screen:joinApproval:group-c')).toBe(true);
+  expect(hasText(renderer, 'screen:joinApproval:group-a')).toBe(false);
+});
+
+test('관리자가 아닌 그룹의 가입 승인 목적지는 그룹정보 홈으로 보낸다', () => {
+  // isManager가 true가 아니면(미확인 포함) 승인 화면을 열지 않는다.
+  // groupInfo 목적지와 같은 문장을 공유하게 됐으므로 회귀 방어가 필요하다.
+  const renderer = renderForDeepLink();
+
+  pressText(renderer, 'open-join-approval-non-manager');
+
+  expect(hasText(renderer, 'groupInfo:group-b:GroupInfoHome:none:false')).toBe(
     true,
   );
+  expect(hasText(renderer, 'screen:joinApproval:group-b')).toBe(false);
 });
 
 test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다', () => {
@@ -581,7 +697,7 @@ test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다',
         <AppShell
           deepLinkRequestId={1}
           deepLinkTarget={{eventId: '9', kind: 'calendarEvent'}}
-          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B, DEEP_LINK_GROUP_C]}
           initialGroupId={DEEP_LINK_GROUP_A.id}
           initialRoute="feed"
           screens={createDeepLinkScreens()}
@@ -602,7 +718,7 @@ test('deepLinkTarget prop은 requestId가 바뀔 때 목적지로 이동한다',
         <AppShell
           deepLinkRequestId={2}
           deepLinkTarget={{kind: 'notifications'}}
-          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B]}
+          groups={[DEEP_LINK_GROUP_A, DEEP_LINK_GROUP_B, DEEP_LINK_GROUP_C]}
           initialGroupId={DEEP_LINK_GROUP_A.id}
           initialRoute="feed"
           screens={createDeepLinkScreens()}
@@ -720,7 +836,7 @@ test('화면이 전체화면을 보고하면 셸은 뒤로가기를 처리하지
     });
 
     expect(handled).toBe(false);
-    expect(renderedRoute(renderer)).toBe('aiCall');
+    expectOnlyRoute(renderer, 'aiCall');
   } finally {
     back.restore();
   }
@@ -1044,4 +1160,91 @@ test('알림 화면이 보고한 미읽음 수를 피드로 돌아온 뒤에도 
   expect(
     renderer!.root.findAllByProps({children: 5}).length,
   ).toBeGreaterThan(0);
+});
+
+test('역할 변경 시 공통으로 허용된 현재 탭을 유지한다', async () => {
+  const guardianGroup: FamilyGroup = {
+    ...GUARDIAN_GROUP,
+    id: 'role-change-preserve-group',
+  };
+  const careReceiverGroup: FamilyGroup = {
+    ...guardianGroup,
+    role: 'careReceiver',
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      withNav(
+        <AppShell
+          groups={[guardianGroup]}
+          initialGroupId={guardianGroup.id}
+          initialRoute="calendar"
+          screens={createBackTestScreens()}
+        />,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+  expectOnlyRoute(renderer!, 'calendar');
+
+  await TestRenderer.act(async () => {
+    renderer!.update(
+      withNav(
+        <AppShell
+          groups={[careReceiverGroup]}
+          initialGroupId={careReceiverGroup.id}
+          initialRoute="calendar"
+          screens={createBackTestScreens()}
+        />,
+      ),
+    );
+  });
+
+  expectOnlyRoute(renderer!, 'calendar');
+});
+
+test('역할 변경 시 허용되지 않는 리포트 탭에서 피드로 이동하고 AI 전화 탭을 노출한다', async () => {
+  const guardianGroup: FamilyGroup = {
+    ...GUARDIAN_GROUP,
+    id: 'role-change-replace-group',
+  };
+  const careReceiverGroup: FamilyGroup = {
+    ...guardianGroup,
+    role: 'careReceiver',
+  };
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      withNav(
+        <AppShell
+          groups={[guardianGroup]}
+          initialGroupId={guardianGroup.id}
+          initialRoute="report"
+          screens={createBackTestScreens()}
+        />,
+      ),
+    );
+  });
+  mountedRenderers.push(renderer!);
+  expectOnlyRoute(renderer!, 'report');
+
+  await TestRenderer.act(async () => {
+    renderer!.update(
+      withNav(
+        <AppShell
+          groups={[careReceiverGroup]}
+          initialGroupId={careReceiverGroup.id}
+          initialRoute="report"
+          screens={createBackTestScreens()}
+        />,
+      ),
+    );
+  });
+
+  expectOnlyRoute(renderer!, 'feed');
+  selectTab(renderer!, 'aiCall');
+  expectOnlyRoute(renderer!, 'aiCall');
+  expect(renderedRoutes(renderer!)).not.toContain('report');
 });

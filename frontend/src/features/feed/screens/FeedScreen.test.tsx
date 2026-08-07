@@ -5,6 +5,7 @@ import {
 } from '@react-navigation/native';
 import TestRenderer from 'react-test-renderer';
 
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import {mockHardwareBack} from '../../../shared/testing/hardwareBack';
 import type {FeedStackParamList} from '../navigationTypes';
 import type {FeedPost, ReactionId} from '../types';
@@ -112,6 +113,75 @@ const post: FeedPost = {
   isOwnedByCurrentUser: false,
   reactions: [],
 };
+
+test('댓글 작성 직후 서버가 준 작성자 프로필 사진을 보여준다', async () => {
+  // 화면이 들고 있는 currentUser에는 프로필 URL이 없다. 서버 서명 URL이라
+  // 클라이언트가 만들 수 없으므로 생성 응답의 author로 교체해야 한다.
+  const navRef = createNavigationContainerRef<FeedStackParamList>();
+  const onCreateComment = jest.fn().mockResolvedValue({
+    author: {
+      avatarText: '다',
+      id: 'current-user',
+      name: '다영',
+      profileImageUrl: 'https://signed.example/me.jpg',
+    },
+    content: '새 댓글',
+    createdAt: '2026-07-30T13:00:00Z',
+    id: 'comment-1',
+    postId: 'post-1',
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NavigationContainer ref={navRef}>
+        <FeedScreen
+          currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+          currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+          initialCommentsByPostId={{'post-1': []}}
+          loader={jest.fn().mockResolvedValue([post])}
+          onCreateComment={onCreateComment}
+          role="guardian"
+        />
+      </NavigationContainer>,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  await TestRenderer.act(async () => {
+    navRef.navigate('PostDetail', {groupId: 'group-1', postId: 'post-1'});
+    await Promise.resolve();
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '댓글 입력'})
+      .props.onChangeText('새 댓글');
+    await Promise.resolve();
+  });
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '댓글 등록'})
+      .props.onPress();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(onCreateComment).toHaveBeenCalledWith({
+    body: '새 댓글',
+    postId: 'post-1',
+  });
+  expect(
+    renderer!.root
+      .findAllByType(CachedRemoteImage)
+      .map(node => node.props.source.uri),
+  ).toContain('https://signed.example/me.jpg');
+
+  await TestRenderer.act(() => {
+    renderer!.unmount();
+  });
+});
 
 test('D-2와 D-3가 같은 postId의 반응 상태를 공유한다', async () => {
   const onChangeReaction = jest.fn();
@@ -236,7 +306,7 @@ test('내비게이션으로 전달된 postId의 게시글 상세를 바로 연�
 
   expect(
     renderer!.root.findByProps({
-      accessibilityLabel: '피드로 돌아가기',
+      accessibilityLabel: '게시글 닫기',
     }),
   ).toBeTruthy();
 
@@ -274,7 +344,7 @@ test('상세에서 하드웨어 뒤로가기는 목록으로 돌아간다', asyn
       await Promise.resolve();
     });
     expect(
-      renderer!.root.findByProps({accessibilityLabel: '피드로 돌아가기'}),
+      renderer!.root.findByProps({accessibilityLabel: '게시글 닫기'}),
     ).toBeTruthy();
 
     let handled = false;
@@ -286,7 +356,7 @@ test('상세에서 하드웨어 뒤로가기는 목록으로 돌아간다', asyn
     // 컨테이너의 useBackButton이 FeedStack을 pop해 상세를 닫는다.
     expect(handled).toBe(true);
     expect(
-      renderer!.root.findAllByProps({accessibilityLabel: '피드로 돌아가기'}),
+      renderer!.root.findAllByProps({accessibilityLabel: '게시글 닫기'}),
     ).toHaveLength(0);
 
     await TestRenderer.act(() => {
@@ -353,3 +423,150 @@ test('작성자 아바타를 누르면 그룹정보와 동일한 프로필 팝�
     renderer!.unmount();
   });
 });
+
+// 셸이 주입하는 공유 하위 화면(알림·보관함)의 등록 계약 (S15P11B104-367).
+// FeedScreen은 라우트를 등록하고 닫기·닫힘 후처리만 바인딩한다.
+test('공유 하위 화면을 닫으면 목록으로 돌아오고 피드를 다시 조회한다', async () => {
+  // 하위 화면은 셸이 만든다. 여기서는 라우트가 실제로 등록되고 onClose·onClosed가
+  // 호출되는지만 본다.
+  const loader = jest.fn().mockResolvedValue([post]);
+  const navRef = createNavigationContainerRef<FeedStackParamList>();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NavigationContainer ref={navRef}>
+        <FeedScreen
+          currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+          currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+          loader={loader}
+          renderSharedSubRoute={(route, {onClose, onClosed}) => (
+            <SubRouteProbe onClose={onClose} onClosed={onClosed} route={route} />
+          )}
+          role="guardian"
+        />
+      </NavigationContainer>,
+    );
+    await Promise.resolve();
+  });
+
+  const loadsAfterMount = loader.mock.calls.length;
+
+  await TestRenderer.act(async () => {
+    navRef.navigate('notifications');
+  });
+  expect(navRef.getCurrentRoute()?.name).toBe('notifications');
+
+  // 화면 자신의 닫기 버튼 → 등록 지점이 바인딩한 navigation.goBack()
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({accessibilityLabel: '닫기'}).props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(navRef.getCurrentRoute()?.name).toBe('FeedHome');
+  // FeedHome이 스택 아래에 마운트 유지되어 재마운트 재조회가 사라지므로, 닫힘
+  // 후처리로 목록을 다시 조회한다(알림에서 새 게시글을 확인하고 닫는 경로).
+  expect(loader.mock.calls.length).toBeGreaterThan(loadsAfterMount);
+
+  await TestRenderer.act(() => {
+    renderer!.unmount();
+  });
+});
+
+test('가입 승인 대기를 닫을 때는 피드를 다시 조회하지 않는다', async () => {
+  // 승인 처리는 게시글을 바꾸지 않으므로 자매 화면과 달리 후처리를 걸지 않는다.
+  const loader = jest.fn().mockResolvedValue([post]);
+  const navRef = createNavigationContainerRef<FeedStackParamList>();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NavigationContainer ref={navRef}>
+        <FeedScreen
+          currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+          currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+          loader={loader}
+          renderSharedSubRoute={(route, {onClose, onClosed}) => (
+            <SubRouteProbe onClose={onClose} onClosed={onClosed} route={route} />
+          )}
+          role="guardian"
+        />
+      </NavigationContainer>,
+    );
+    await Promise.resolve();
+  });
+
+  const loadsAfterMount = loader.mock.calls.length;
+
+  await TestRenderer.act(async () => {
+    navRef.navigate('joinApproval');
+  });
+  await TestRenderer.act(async () => {
+    renderer!.root.findByProps({accessibilityLabel: '닫기'}).props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(navRef.getCurrentRoute()?.name).toBe('FeedHome');
+  expect(loader.mock.calls.length).toBe(loadsAfterMount);
+
+  await TestRenderer.act(() => {
+    renderer!.unmount();
+  });
+});
+
+function SubRouteProbe({
+  onClose,
+  onClosed,
+  route,
+}: {
+  onClose: () => void;
+  onClosed?: () => void;
+  route: string;
+}) {
+  const {Pressable, Text} = require('react-native');
+  React.useEffect(() => () => onClosed?.(), [onClosed]);
+
+  return (
+    <>
+      <Text>{`screen:${route}`}</Text>
+      <Pressable accessibilityLabel="닫기" onPress={onClose}>
+        <Text>닫기</Text>
+      </Pressable>
+    </>
+  );
+}
+
+// 셸이 주입하는 공유 하위 화면 3종이 모두 FeedStack에 등록됐는지 확인한다.
+// 빠뜨리면 딥링크 NAVIGATE가 "처리되지 않았다" 경고만 남기고 조용히 무동작이 된다.
+test.each(['notifications', 'archive', 'joinApproval'] as const)(
+  '공유 하위 화면 %s를 피드 스택 화면으로 등록한다',
+  async route => {
+    const navRef = createNavigationContainerRef<FeedStackParamList>();
+    let renderer: TestRenderer.ReactTestRenderer;
+
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        <NavigationContainer ref={navRef}>
+          <FeedScreen
+            currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+            currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+            loader={jest.fn().mockResolvedValue([post])}
+            renderSharedSubRoute={() => null}
+            role="guardian"
+          />
+        </NavigationContainer>,
+      );
+      await Promise.resolve();
+    });
+
+    await TestRenderer.act(async () => {
+      navRef.navigate(route);
+    });
+
+    expect(navRef.getCurrentRoute()?.name).toBe(route);
+
+    await TestRenderer.act(() => {
+      renderer!.unmount();
+    });
+  },
+);

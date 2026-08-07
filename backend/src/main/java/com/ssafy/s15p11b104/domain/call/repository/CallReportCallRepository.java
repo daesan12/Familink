@@ -1,7 +1,6 @@
 package com.ssafy.s15p11b104.domain.call.repository;
 
 import java.time.Instant;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -68,16 +67,4 @@ public interface CallReportCallRepository extends JpaRepository<CallReport, Long
 		Pageable pageable
 	);
 
-	/**
-	 * 주어진 통화들 중 건별 리포트가 저장된 통화의 ID만 조회한다.
-	 *
-	 * <p>일일 리포트 화면이 통화별로 리포트 열람 가능 여부를 표시하는 데 쓴다. 통화마다 존재 여부를
-	 * 묻지 않고 한 번에 조회한다.
-	 */
-	@Query("""
-		select report.callSession.id
-		from CallReport report
-		where report.callSession.id in :callSessionIds
-		""")
-	List<Long> findCallSessionIdsIn(@Param("callSessionIds") Collection<Long> callSessionIds);
 }

@@ -1,10 +1,16 @@
 package com.s15p11b104app.aicall
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import com.s15p11b104app.R
 
 internal object AiCallColors {
   val Background = Color(0xFFFFFFFF)
@@ -36,11 +42,44 @@ private val aiCallColorScheme =
         error = AiCallColors.CoralRed,
     )
 
+private val wantedSansFontFamily =
+    FontFamily(
+        Font(R.font.wanted_sans_regular, FontWeight.Normal),
+        Font(R.font.wanted_sans_medium, FontWeight.Medium),
+        Font(R.font.wanted_sans_semibold, FontWeight.SemiBold),
+        Font(R.font.wanted_sans_bold, FontWeight.Bold),
+        Font(R.font.wanted_sans_extrabold, FontWeight.ExtraBold),
+    )
+
+private val defaultTypography = Typography()
+private val aiCallTypography =
+    Typography(
+        displayLarge = defaultTypography.displayLarge.copy(fontFamily = wantedSansFontFamily),
+        displayMedium = defaultTypography.displayMedium.copy(fontFamily = wantedSansFontFamily),
+        displaySmall = defaultTypography.displaySmall.copy(fontFamily = wantedSansFontFamily),
+        headlineLarge = defaultTypography.headlineLarge.copy(fontFamily = wantedSansFontFamily),
+        headlineMedium = defaultTypography.headlineMedium.copy(fontFamily = wantedSansFontFamily),
+        headlineSmall = defaultTypography.headlineSmall.copy(fontFamily = wantedSansFontFamily),
+        titleLarge = defaultTypography.titleLarge.copy(fontFamily = wantedSansFontFamily),
+        titleMedium = defaultTypography.titleMedium.copy(fontFamily = wantedSansFontFamily),
+        titleSmall = defaultTypography.titleSmall.copy(fontFamily = wantedSansFontFamily),
+        bodyLarge = defaultTypography.bodyLarge.copy(fontFamily = wantedSansFontFamily),
+        bodyMedium = defaultTypography.bodyMedium.copy(fontFamily = wantedSansFontFamily),
+        bodySmall = defaultTypography.bodySmall.copy(fontFamily = wantedSansFontFamily),
+        labelLarge = defaultTypography.labelLarge.copy(fontFamily = wantedSansFontFamily),
+        labelMedium = defaultTypography.labelMedium.copy(fontFamily = wantedSansFontFamily),
+        labelSmall = defaultTypography.labelSmall.copy(fontFamily = wantedSansFontFamily),
+    )
+
 @Composable
 internal fun AiCallTheme(content: @Composable () -> Unit) {
   MaterialTheme(
       colorScheme = aiCallColorScheme,
-      typography = Typography(),
-      content = content,
-  )
+      typography = aiCallTypography,
+  ) {
+    CompositionLocalProvider(
+        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = wantedSansFontFamily),
+        content = content,
+    )
+  }
 }

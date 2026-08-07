@@ -88,6 +88,7 @@ import {
   familyGroupManagementGateway,
   familyGroupGateway,
   GroupInfoScreen,
+  JoinApprovalScreen,
   createCarnationGateway,
   type FamilyGroupGateway,
   type FamilyGroupListSnapshot,
@@ -110,7 +111,11 @@ import {
   type NotificationTap,
   type NotificationTapProvider,
 } from "./src/features/notifications";
-import { createReportGateway, ReportScreen } from "./src/features/reports";
+import {
+  createReportGateway,
+  reportCache,
+  ReportScreen,
+} from "./src/features/reports";
 import type {
   CareReceiverReportTarget,
   ReportGateway,
@@ -349,6 +354,7 @@ interface GroupInfoIntegration {
   deleteGroup(groupId: string, confirmationName: string): Promise<void>;
   leaveGroup(groupId: string): Promise<void>;
   renameGroup(groupId: string, name: string): Promise<void>;
+  syncGroupName(groupId: string, name: string): void;
   updateMemberRole(
     groupId: string,
     memberId: string,
@@ -411,8 +417,31 @@ function ConnectedGroupInfoScreen(screenProps: AppScreenProps) {
       onRenameGroup={(name) =>
         integration.renameGroup(screenProps.currentGroup.id, name)
       }
+      onGroupNameLoaded={integration.syncGroupName}
       onProcessJoinRequest={(groupId, input) =>
         integration.membership.processJoinRequest(groupId, input)
+      }
+    />
+  );
+}
+
+// 셸이 소유하는 공유 하위 화면(S15P11B104-336). 그룹정보 탭 등록분과 같은
+// 로더·커맨드를 쓰고, groupId도 같은 방식으로 currentGroup에서 받는다 —
+// 화면이 route params를 읽지 않기 때문이다.
+function ConnectedJoinApprovalScreen(screenProps: AppScreenProps) {
+  const integration = useContext(GroupInfoIntegrationContext);
+  const {onCloseJoinApproval} = screenProps;
+
+  return (
+    <JoinApprovalScreen
+      groupId={screenProps.currentGroup.id}
+      loader={integration?.membership.loadJoinRequests}
+      onBack={() => onCloseJoinApproval?.()}
+      onProcess={
+        integration === null
+          ? undefined
+          : (groupId, input) =>
+              integration.membership.processJoinRequest(groupId, input)
       }
     />
   );
@@ -545,6 +574,7 @@ const DEFAULT_SCREENS: AppScreenRegistry = {
   calendar: CalendarScreen,
   feed: ConnectedFeedScreen,
   groupInfo: ConnectedGroupInfoScreen,
+  joinApproval: ConnectedJoinApprovalScreen,
   notifications: NotificationsScreen,
   report: ReportScreen,
   profile: ProfileTabScreen,
@@ -879,6 +909,9 @@ export default function App({
 
   const clearAuthenticationState = useCallback(() => {
     cancelLoginAttempt();
+    // 로그아웃·탈퇴·토큰 만료·세션 복원 실패가 모두 이 경로를 지난다. 여기서
+    // 비워야 같은 기기에 다른 계정이 로그인해도 이전 세션 리포트가 남지 않는다.
+    reportCache.clear();
     setUser(null);
     setActiveGroupId(null);
     setAvailableGroups([]);
@@ -1356,6 +1389,8 @@ export default function App({
 
     return subscribeGroupAccessDenied(groupId => {
       deniedGroupIdsRef.current.add(groupId);
+      // 건별 리포트 캐시 키에는 그룹이 없으므로, 그룹 접근이 막히면 전체를 비운다.
+      reportCache.clear();
       refreshGroupSnapshot().catch(() => undefined);
     });
   }, [groups, refreshGroupSnapshot, user]);
@@ -1994,6 +2029,20 @@ export default function App({
     [groupGateway]
   );
 
+  // 그룹 상세 조회가 확인해 준 이름을 그룹 목록에 반영한다. 표시용 그룹명의
+  // 단일 출처를 이 목록으로 유지해, 다른 구성원이 바꾼 이름도 상세를 불러온
+  // 시점부터 셸 헤더·전환 시트·게시글 상세가 함께 같은 값을 보이게 한다.
+  // 새 네트워크 호출을 만들지 않는다.
+  const handleGroupNameLoaded = useCallback((groupId: string, name: string) => {
+    setAvailableGroups((current) =>
+      current.some((group) => group.id === groupId && group.name !== name)
+        ? current.map((group) =>
+            group.id === groupId ? { ...group, name } : group
+          )
+        : current
+    );
+  }, []);
+
   const handleUpdateMemberRole = useCallback(
     async (groupId: string, memberId: string, role: FamilyGroup["role"]) => {
       const result = await groupMemberGateway.updateMemberRole(
@@ -2063,6 +2112,7 @@ export default function App({
       deleteGroup: handleDeleteGroup,
       leaveGroup: handleLeaveGroup,
       renameGroup: handleRenameGroup,
+      syncGroupName: handleGroupNameLoaded,
       updateMemberRole: handleUpdateMemberRole,
     }),
     [
@@ -2071,6 +2121,7 @@ export default function App({
       groupMemberGateway,
       groupMembershipGateway,
       handleDeleteGroup,
+      handleGroupNameLoaded,
       handleLeaveGroup,
       handleRenameGroup,
       handleUpdateMemberRole,

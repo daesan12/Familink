@@ -1,21 +1,26 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState} from 'react';
 import {StackActions} from '@react-navigation/native';
 import {
   createNativeStackNavigator,
   type NativeStackNavigationProp,
-} from '@react-navigation/native-stack';
+  } from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {AppScreenProps} from '../../../app-shell';
+import {AccountActionConfirmationModal} from '../../auth/components/LogoutConfirmationModal';
 import {COLORS, RADII} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
 import {RouteFocusReporter} from '../../../shared/navigation/RouteFocusReporter';
@@ -110,6 +115,8 @@ export function CareReceiverMyPageScreen({
   // 홈 포커스의 부정이 곧 풀스크린이다(하위 화면 전부 풀스크린).
   // 초기값 true — false로 시작하면 첫 커밋에서 탭바가 잠깐 숨는다.
   const [isHomeFocused, setIsHomeFocused] = useState(true);
+  const [isLogoutConfirmationVisible, setIsLogoutConfirmationVisible] =
+    useState(false);
   // 이동 함수가 effect·핸들러에서도 스택을 조작할 수 있게 렌더 중 ref로
   // 캡처한다(FeedScreen feedNavRef 관용구).
   const profileNavRef = useRef<ProfileNavigation | null>(null);
@@ -228,10 +235,15 @@ export function CareReceiverMyPageScreen({
 
   const handleLogout = () => {
     if (onRequestLogout) {
-      onRequestLogout();
+      setIsLogoutConfirmationVisible(true);
       return;
     }
     Alert.alert('로그아웃', '후속 작업에서 연결될 기능입니다.');
+  };
+
+  const confirmLogout = async () => {
+    onRequestLogout?.();
+    setIsLogoutConfirmationVisible(false);
   };
 
   // 기존 closeInterestSettings의 무효화 부분. 라우트 unmount cleanup으로
@@ -366,7 +378,7 @@ export function CareReceiverMyPageScreen({
     ) : (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>마이페이지</Text>
+        <AppText style={styles.headerTitle}>마이페이지</AppText>
       </View>
 
       <ScrollView
@@ -385,6 +397,13 @@ export function CareReceiverMyPageScreen({
 
         <MyPageFooter onLogout={handleLogout} />
       </ScrollView>
+
+      <AccountActionConfirmationModal
+        action="logout"
+        onCancel={() => setIsLogoutConfirmationVisible(false)}
+        onConfirm={confirmLogout}
+        visible={isLogoutConfirmationVisible}
+      />
     </View>
     );
 
@@ -497,7 +516,7 @@ function InterestRequestStateScreen({
           accessibilityLabel="관심사 조회에서 뒤로 가기"
           onPress={onBack}
         />
-        <Text style={styles.requestStateHeaderTitle}>관심사 설정</Text>
+        <AppText style={styles.requestStateHeaderTitle}>관심사 설정</AppText>
       </View>
 
       <View
@@ -506,9 +525,9 @@ function InterestRequestStateScreen({
         {isLoading ? (
           <>
             <ActivityIndicator color={COLORS.purpleDeep} size="large" />
-            <Text style={styles.requestStateTitle}>
+            <AppText style={styles.requestStateTitle}>
               관심사를 불러오는 중이에요.
-            </Text>
+            </AppText>
           </>
         ) : (
           <>
@@ -517,10 +536,10 @@ function InterestRequestStateScreen({
               name="alert-circle-outline"
               size={46}
             />
-            <Text style={styles.requestStateTitle}>
+            <AppText style={styles.requestStateTitle}>
               관심사를 불러오지 못했어요
-            </Text>
-            <Text style={styles.requestStateMessage}>{errorMessage}</Text>
+            </AppText>
+            <AppText style={styles.requestStateMessage}>{errorMessage}</AppText>
             <Pressable
               accessibilityLabel="관심사 다시 시도"
               accessibilityRole="button"
@@ -529,7 +548,7 @@ function InterestRequestStateScreen({
                 styles.requestStateRetryButton,
                 pressed && styles.requestStateRetryButtonPressed,
               ]}>
-              <Text style={styles.requestStateRetryLabel}>다시 시도</Text>
+              <AppText style={styles.requestStateRetryLabel}>다시 시도</AppText>
             </Pressable>
           </>
         )}

@@ -1,5 +1,6 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 
@@ -21,7 +22,7 @@ interface GroupMenuSectionProps {
 export function GroupMenuSection({items, title}: GroupMenuSectionProps) {
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>{title}</Text>
+      <AppText style={styles.title}>{title}</AppText>
       {items.map((item, index) => (
         <Pressable
           accessibilityHint="후속 작업에서 연결될 화면입니다"
@@ -32,8 +33,8 @@ export function GroupMenuSection({items, title}: GroupMenuSectionProps) {
           style={[styles.row, index === 0 && styles.firstRow]}
         >
           <View style={styles.rowText}>
-            <Text style={styles.rowLabel}>{item.label}</Text>
-            <Text style={styles.rowDescription}>{item.description}</Text>
+            <AppText style={styles.rowLabel}>{item.label}</AppText>
+            <AppText style={styles.rowDescription}>{item.description}</AppText>
           </View>
           <MaterialDesignIcons
             color={COLORS.textSubtle}

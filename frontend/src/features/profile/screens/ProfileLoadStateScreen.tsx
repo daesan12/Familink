@@ -1,11 +1,10 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {
   ActivityIndicator,
-
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
@@ -33,14 +32,14 @@ export function ProfileLoadStateScreen({
             onPress={onBack}
           />
         ) : null}
-        <Text style={styles.headerTitle}>마이페이지</Text>
+        <AppText style={styles.headerTitle}>마이페이지</AppText>
       </View>
 
       <View accessibilityLiveRegion="polite" style={styles.content}>
         {isLoading ? (
           <>
             <ActivityIndicator color={COLORS.purpleDeep} size="large" />
-            <Text style={styles.title}>프로필을 불러오는 중이에요.</Text>
+            <AppText style={styles.title}>프로필을 불러오는 중이에요.</AppText>
           </>
         ) : (
           <>
@@ -49,8 +48,8 @@ export function ProfileLoadStateScreen({
               name="alert-circle-outline"
               size={34}
             />
-            <Text style={styles.title}>프로필을 불러오지 못했어요</Text>
-            <Text style={styles.message}>{errorMessage}</Text>
+            <AppText style={styles.title}>프로필을 불러오지 못했어요</AppText>
+            <AppText style={styles.message}>{errorMessage}</AppText>
             <View style={styles.retryWrap}>
               <RetryButton
                 accessibilityLabel="프로필 다시 시도"

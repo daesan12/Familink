@@ -1,4 +1,9 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState} from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -7,9 +12,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {AUTH_COLORS} from '../theme';
@@ -84,9 +89,9 @@ function Wheel({
         const selected = value === selectedValue;
         return (
           <View key={value} style={styles.wheelItem}>
-            <Text style={[styles.wheelText, selected && styles.selectedText]}>
+            <AppText style={[styles.wheelText, selected && styles.selectedText]}>
               {format(value)}
-            </Text>
+            </AppText>
           </View>
         );
       })}
@@ -290,10 +295,10 @@ export function DatePickerSheet({
           <View style={styles.handle} />
           <View style={styles.actions}>
             <Pressable hitSlop={12} onPress={() => dismiss(onCancel)}>
-              <Text style={styles.cancel}>취소</Text>
+              <AppText style={styles.cancel}>취소</AppText>
             </Pressable>
             <Pressable hitSlop={12} onPress={handleConfirm}>
-              <Text style={styles.confirm}>완료</Text>
+              <AppText style={styles.confirm}>완료</AppText>
             </Pressable>
           </View>
           <View pointerEvents="none" style={styles.selectionHighlight} />

@@ -1,12 +1,13 @@
-import { useState } from "react";
+import {
+  useState } from "react";
 import {
   Animated,
   Image,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
+import {AppText} from "../../../shared/components/AppText";
 import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -45,10 +46,10 @@ export function SignedInWelcomeScreen({
           showsVerticalScrollIndicator={false}
         >
           <View>
-            <Text style={styles.title}>{`${userName} 님,\n안녕하세요`}</Text>
-            <Text style={styles.description}>
+            <AppText style={styles.title}>{`${userName} 님,\n안녕하세요`}</AppText>
+            <AppText style={styles.description}>
               {"Familink에서 가족과의\n첫 연결을 시작해볼까요?"}
-            </Text>
+            </AppText>
           </View>
 
           <View style={styles.artworkStage}>
@@ -67,7 +68,7 @@ export function SignedInWelcomeScreen({
             onPress={onStartGroupOnboarding}
           >
             <View style={styles.startAction}>
-              <Text style={styles.startActionText}>가족과의 연결 시작하기</Text>
+              <AppText style={styles.startActionText}>가족과의 연결 시작하기</AppText>
               <View style={styles.startActionIcon}>
                 <MaterialDesignIcons
                   color={AUTH_COLORS.primary}
@@ -94,18 +95,18 @@ export function SignedInWelcomeScreen({
                 hitSlop={10}
                 onPress={() => setAccountAction("logout")}
               >
-                <Text style={styles.accountActionText}>로그아웃</Text>
+                <AppText style={styles.accountActionText}>로그아웃</AppText>
               </AnimatedPressable>
-              <Text accessibilityElementsHidden style={styles.separator}>
+              <AppText accessibilityElementsHidden style={styles.separator}>
                 |
-              </Text>
+              </AppText>
               <AnimatedPressable
                 accessibilityLabel="회원탈퇴"
                 accessibilityRole="button"
                 hitSlop={10}
                 onPress={() => setAccountAction("withdrawal")}
               >
-                <Text style={styles.accountActionText}>회원탈퇴</Text>
+                <AppText style={styles.accountActionText}>회원탈퇴</AppText>
               </AnimatedPressable>
             </View>
           </View>

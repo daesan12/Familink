@@ -27,11 +27,12 @@ import type { AuthGateway } from "../src/features/auth/types";
 import { ApiError } from "../src/shared/api";
 import { notifyGroupAccessDenied } from "../src/shared/api/groupAccessEvents";
 import { imageDiskCache } from "../src/shared/media/imageDiskCache";
+import { createFeedTabHostScreen } from "../src/shared/testing/feedTabHost";
 import type {
   FamilyGroupGateway,
   GroupMemberGateway,
 } from "../src/features/group-info";
-import { ReportScreen } from "../src/features/reports";
+import { reportCache, ReportScreen } from "../src/features/reports";
 import type { ReportGateway } from "../src/features/reports";
 import type {
   DeviceTokenProvider,
@@ -86,6 +87,9 @@ jest.mock("../src/shared/media/imageDiskCache", () => ({
 
 beforeEach(() => {
   jest.mocked(imageDiskCache.clearAll).mockClear();
+  // 리포트 캐시는 로그인 세션 동안 유지되는 모듈 싱글턴이다. 비우지 않으면
+  // 같은 그룹·같은 기준일을 쓰는 앞 테스트의 스냅샷이 캐시 히트로 먼저 렌더된다.
+  reportCache.clear();
 });
 
 jest.mock("react-native-safe-area-context", () => {
@@ -672,7 +676,7 @@ test("로그인 후 A-10을 거쳐 B-3으로 이동하고 다시 돌아온다", 
   });
 
   expect(
-    renderer.root.findByProps({ children: "가족과\n연결해볼까요?" })
+    renderer.root.findByProps({ children: "우리 가족을\n연결해볼까요?" })
   ).toBeTruthy();
   expect(JSON.stringify(renderer.toJSON())).toContain(
     "아직 참가한 그룹이 없어요"
@@ -1150,7 +1154,7 @@ test("새 그룹을 만들면 입력한 그룹으로 앱 셸에 진입한다", a
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1457,7 +1461,7 @@ test("초대 코드 참여 요청을 보내면 승인 대기 카드를 표시한
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1474,9 +1478,11 @@ test("초대 코드 참여 요청을 보내면 승인 대기 카드를 표시한
 
   expect(onJoinGroup).toHaveBeenCalledWith("FA12BC", expect.any(Object));
   expect(renderer!.root.findByProps({ children: "가족 소모임" })).toBeTruthy();
-  expect(JSON.stringify(renderer!.toJSON())).toContain(
-    "관리자 승인을 기다리고 있어요"
-  );
+  expect(
+    renderer!.root.findByProps({
+      accessibilityLabel: "가족 소모임, 대기 중",
+    }),
+  ).toBeTruthy();
 });
 
 test("기본 그룹 게이트웨이로 초대 코드 가입 요청과 상태 재조회를 연결한다", async () => {
@@ -1512,7 +1518,7 @@ test("기본 그룹 게이트웨이로 초대 코드 가입 요청과 상태 재
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1577,7 +1583,7 @@ test("가입 대기 화면을 열어 둔 채 승인되면 승인 카드로 전�
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1596,7 +1602,7 @@ test("가입 대기 화면을 열어 둔 채 승인되면 승인 카드로 전�
   expect(
     renderer!.root.findByProps({accessibilityLabel: "승인 가족 열기"}),
   ).toBeTruthy();
-  expect(JSON.stringify(renderer!.toJSON())).toContain("가입이 승인되었어요");
+  expect(JSON.stringify(renderer!.toJSON())).toContain("환영해요!");
 });
 
 test("저장된 가입 요청은 재실행 후 승인 카드로 복원하고 입장 뒤 제거한다", async () => {
@@ -1794,7 +1800,7 @@ test("실제 3초 폴링은 그룹 요약이 함께 보일 때 승인 카드로 
     expect(
       renderer!.root.findAllByProps({accessibilityLabel: "폴링 가족 열기"}),
     ).toHaveLength(0);
-    expect(JSON.stringify(renderer!.toJSON())).toContain("승인 요청 대기");
+    expect(JSON.stringify(renderer!.toJSON())).toContain("폴링 가족, 대기 중");
 
     await TestRenderer.act(async () => {
       jest.advanceTimersByTime(3_000);
@@ -1831,7 +1837,7 @@ test("가입 요청 뒤 그룹 재조회 중 화면이 종료되면 늦은 결�
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1888,7 +1894,7 @@ test("초대 코드 참여 요청이 실패하면 입력창을 유지하고 대�
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1936,7 +1942,7 @@ test("가입 게이트웨이가 없으면 코드 오류 대신 후속 연동을 
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: "받은 코드로 기존 그룹에 들어가요",
+        accessibilityHint: "받은 코드로 기존 그룹에 참여해요",
       })
       .props.onPress();
   });
@@ -1982,7 +1988,7 @@ test("피드의 생성·참여 버튼은 시트를 바로 열고 취소하면 �
     renderer!.root.findByType(AppShell).props.onJoinGroup();
   });
   expect(
-    renderer!.root.findByProps({ children: "가족과\n연결해볼까요?" })
+    renderer!.root.findByProps({ children: "우리 가족을\n연결해볼까요?" })
   ).toBeTruthy();
   expect(
     renderer!.root.findByProps({ accessibilityLabel: "6자리 초대 코드" })
@@ -2036,8 +2042,7 @@ test("승인된 피보호자는 지정된 역할로 그룹에 진입한다", asy
   });
   mountedRenderers.push(renderer!);
 
-  expect(JSON.stringify(renderer!.toJSON())).toContain("가입이 승인되었어요");
-  expect(JSON.stringify(renderer!.toJSON())).toContain("눌러서 입장하기");
+  expect(JSON.stringify(renderer!.toJSON())).toContain("환영해요!");
 
   await TestRenderer.act(() => {
     renderer!.root
@@ -2238,6 +2243,152 @@ test("그룹 이름 변경 API가 성공하면 현재 그룹 이름도 갱신한
   });
   expect(renderer!.root.findByProps({ children: "새 가족" })).toBeTruthy();
 });
+
+test("그룹명 변경은 입력값이 아니라 서버가 돌려준 이름을 반영한다", async () => {
+  const groupGateway = createGroupGateway();
+  // 서버가 보낸 값과 클라이언트가 입력한 값이 반드시 달라지도록 목을 만든다.
+  // 화면이 입력값을 그대로 쓰면 이 테스트가 깨진다.
+  let storedName = "기존 가족";
+  let detailCalls = 0;
+  groupGateway.getGroupDetail.mockImplementation(async (groupId) => {
+    detailCalls += 1;
+    // 변경 후 재조회는 끝내지 않는다. 재조회가 덮어 주기 전에도 화면이
+    // 서버 값을 보여야 한다는 것이 이 테스트의 요지다.
+    if (detailCalls > 1) {
+      return new Promise(() => {});
+    }
+    return {
+      careReceiverCount: 0,
+      guardianCount: 1,
+      id: groupId,
+      isManager: true,
+      managerMemberId: "member-manager",
+      memberCount: 1,
+      name: storedName,
+    };
+  });
+  groupGateway.renameGroup.mockImplementation(async (groupId, name) => {
+    storedName = `${name.trim()}(서버)`;
+    return {
+      id: groupId,
+      name: storedName,
+      updatedAt: "2026-08-07T02:03:04Z",
+    };
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <App
+        groupGateway={groupGateway}
+        groups={[{ id: "101", name: "기존 가족", role: "guardian" }]}
+        initialGroupId="101"
+        initialRootRoute="appShell"
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹정보 탭" })
+      .props.onPress();
+    await Promise.resolve();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹명 변경" })
+      .props.onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹 이름 입력" })
+      .props.onChangeText("  새 가족  ");
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({ accessibilityLabel: "변경하기" })
+      .props.onPress();
+  });
+
+  expect(groupGateway.renameGroup).toHaveBeenCalledWith("101", "새 가족");
+
+  // 그룹정보에 머문 채 다시 열어도 서버가 확정한 이름이 초기값이어야 한다.
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹명 변경" })
+      .props.onPress();
+  });
+  expect(
+    renderer!.root.findByProps({ accessibilityLabel: "그룹 이름 입력" }).props
+      .value
+  ).toBe("새 가족(서버)");
+
+  await TestRenderer.act(() => {
+    renderer!.root.findByProps({ accessibilityLabel: "뒤로 가기" }).props
+      .onPress();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "피드 탭" })
+      .props.onPress();
+  });
+  // 셸 헤더도 같은 값을 보인다.
+  expect(
+    renderer!.root.findAllByProps({ children: "새 가족(서버)" }).length
+  ).toBeGreaterThan(0);
+  expect(renderer!.root.findAllByProps({ children: "새 가족" })).toHaveLength(0);
+});
+
+test("다른 구성원이 바꾼 그룹명은 그룹정보 진입 뒤 셸 헤더와 전환 시트에도 반영된다", async () => {
+  // "다른 구성원" 시나리오의 관찰 가능한 정의: 목록은 옛 이름인데 상세는 새 이름을
+  // 주고, 이 기기는 변경을 호출한 적이 없다.
+  const groupGateway = createGroupGateway();
+  groupGateway.getGroupDetail.mockResolvedValue({
+    careReceiverCount: 0,
+    guardianCount: 1,
+    id: "101",
+    isManager: true,
+    managerMemberId: "member-manager",
+    memberCount: 1,
+    name: "새 가족",
+  });
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <App
+        groupGateway={groupGateway}
+        groups={[{ id: "101", name: "옛 가족", role: "guardian" }]}
+        initialGroupId="101"
+        initialRootRoute="appShell"
+      />
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  // 그룹정보 탭 진입이 이 티켓이 규정하는 갱신 시점이다.
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "그룹정보 탭" })
+      .props.onPress();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  await TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "피드 탭" })
+      .props.onPress();
+  });
+
+  // 셸 헤더와 전환 시트가 모두 새 이름을 보여야 한다.
+  expect(renderer!.root.findAllByProps({ children: "새 가족" }).length)
+    .toBeGreaterThan(0);
+  expect(renderer!.root.findAllByProps({ children: "옛 가족" })).toHaveLength(0);
+  // 본인 변경 경로와 구분한다.
+  expect(groupGateway.renameGroup).not.toHaveBeenCalled();
+});
+
 
 test("현재 사용자의 역할 변경 성공은 하단 탭 권한을 즉시 갱신한다", async () => {
   const groupGateway = createGroupGateway();
@@ -3575,13 +3726,20 @@ test("피드에 진입하거나 피드를 다시 누르면 미읽음 배지를 �
   expect(notificationGateway.getUnreadCount).toHaveBeenCalledTimes(3);
 });
 
-test("아카이브 화면에서 피드 탭을 누르면 재탭이 아니라 피드로 복귀한다", async () => {
-  // 재탭이면 셸이 pop:true 중첩 params를 함께 dispatch해 스택 루트로 정규화한다.
-  // 아카이브는 피드 탭 위에 쌓인 하위 화면이므로 재탭이 아닌 일반 이동이어야 한다.
-  function FeedProbe() {
-    const route = useRoute();
-    const nested = route.params as { pop?: boolean } | undefined;
-    return <Text>{`feed:${String(nested?.pop ?? "none")}`}</Text>;
+test("아카이브 화면에서 피드 탭을 누르면 재마운트 없이 피드 목록으로 복귀한다", async () => {
+  // 아카이브는 피드 탭 위에 쌓인 하위 화면이라 탭 전환이 일어나지 않는다.
+  // navigate만으로는 중첩 스택에 아무 액션도 가지 않으므로 셸이 스택 루트를
+  // 명시해 걷어낸다(S15P11B104-368). 재탭이 아니므로 화면 재마운트는 없다.
+  const mountLog: number[] = [];
+  function FeedHomeProbe({ tabParams }: { tabParams: unknown }) {
+    React.useEffect(() => {
+      mountLog.push(1);
+    }, []);
+    return (
+      <Text>{`feed:${String(
+        (tabParams as { pop?: boolean } | undefined)?.pop ?? "none",
+      )}`}</Text>
+    );
   }
   let renderer: TestRenderer.ReactTestRenderer;
 
@@ -3589,7 +3747,16 @@ test("아카이브 화면에서 피드 탭을 누르면 재탭이 아니라 피�
     renderer = TestRenderer.create(
       <App
         initialRootRoute="appShell"
-        screens={{ archive: () => <Text>screen:archive</Text>, feed: FeedProbe }}
+        screens={{
+          archive: () => <Text>screen:archive</Text>,
+          // 보관함은 피드 탭 스택 화면이므로 호스트할 스택이 필요하다
+          // (S15P11B104-367). 스택 루트 정규화의 pop은 탭 route params에 실린다.
+          feed: createFeedTabHostScreen({
+            renderHome: ({ tabParams }) => (
+              <FeedHomeProbe tabParams={tabParams} />
+            ),
+          }),
+        }}
       />
     );
   });
@@ -3612,8 +3779,11 @@ test("아카이브 화면에서 피드 탭을 누르면 재탭이 아니라 피�
     renderer!.root.findAllByProps({ children: "screen:archive" }),
   ).toHaveLength(0);
   expect(
-    renderer!.root.findAllByProps({ children: "feed:none" }).length,
+    renderer!.root.findAllByProps({ children: "feed:true" }).length,
   ).toBeGreaterThan(0);
+  // 재탭 분기로 흘러가면 screenRefreshNonce가 올라 화면이 다시 마운트된다.
+  // 이 카운트가 두 분기를 구분하는 유일한 관측 지점이다.
+  expect(mountLog).toHaveLength(1);
 });
 
 test("AI 전화 탭은 다시 눌러도 재마운트하지 않는다", async () => {
@@ -4043,6 +4213,8 @@ test("푸시 탭의 알림을 첫 페이지에서 찾지 못하면 알림 목록
   const { renderer } = await renderAppWithPendingTap({
     notificationGateway,
     screens: {
+      // 알림은 피드 탭 스택 화면이다 — 호스트할 피드 탭 스택이 필요하다.
+      feed: createFeedTabHostScreen(),
       notifications: () => <Text>screen:notifications</Text>,
     },
     tap: { notificationId: "404", type: "NEW_POST" },
@@ -4050,4 +4222,46 @@ test("푸시 탭의 알림을 첫 페이지에서 찾지 못하면 알림 목록
 
   expect(notificationGateway.markRead).not.toHaveBeenCalled();
   expect(JSON.stringify(renderer.toJSON())).toContain("screen:notifications");
+});
+
+test("앱 밖 푸시로 연 게시글 상세의 뒤로가기는 알림이 아니라 피드 목록으로 간다", async () => {
+  // 완료 기준 3 후반. 콜드 스타트에는 알림 화면이 스택에 없으므로 셸이
+  // initial:false로 피드 목록을 아래에 깔아 준다(안드로이드 인공 백스택 표준).
+  // 이 경로는 지금까지 테스트가 없었다.
+  const notificationGateway = createNotificationGateway();
+  notificationGateway.loadPage.mockResolvedValue({
+    hasNext: false,
+    notifications: [
+      {
+        avatarText: "알",
+        body: "새 게시글이 올라왔어요.",
+        createdAtLabel: "방금",
+        groupId: "101",
+        id: "77",
+        isRead: false,
+        postId: "42",
+        relatedJoinRequestStatus: null,
+        title: "새 게시글",
+        type: "NEW_POST",
+      },
+    ],
+  });
+
+  const { renderer } = await renderAppWithPendingTap({
+    notificationGateway,
+    screens: {
+      feed: createFeedTabHostScreen(),
+      notifications: () => <Text>screen:notifications</Text>,
+    },
+    tap: { notificationId: "77", type: "NEW_POST" },
+  });
+
+  const rendered = () => JSON.stringify(renderer.toJSON());
+
+  expect(rendered()).toContain("screen:PostDetail");
+  // initial:false가 유실되면 피드 스택이 [PostDetail] 단독이 되어 뒤로가기가
+  // 앱 종료로 이어진다. FeedHome이 아래에 깔렸는지 직접 확인한다.
+  expect(rendered()).toContain("screen:feed");
+  // 알림 화면이 스택에 끼면 그 목이 함께 마운트된다.
+  expect(rendered()).not.toContain("screen:notifications");
 });

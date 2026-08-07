@@ -2,16 +2,17 @@ import BellOff from 'lucide-react-native/icons/bell-off';
 import Trash2 from 'lucide-react-native/icons/trash-2';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {
+  Alert,
   FlatList,
   LayoutAnimation,
   Pressable,
   StyleSheet,
-  Text,
   UIManager,
   View,
 } from 'react-native';
 import type {AppScreenProps, GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
+import {AppText} from '../../../shared/components/AppText';
 import {BackButton} from '../../../shared/components/BackButton';
 import {NoticeBanner} from '../../../shared/components/NoticeBanner';
 import {
@@ -342,6 +343,16 @@ export function NotificationsScreen({
     markAsRead(notification.id);
     const target = resolveNotificationTarget(notification);
     if (target === null) {
+      if (
+        notification.type === 'NEW_POST' ||
+        notification.type === 'POST_ACTIVITY'
+      ) {
+        Alert.alert(
+          '게시글을 볼 수 없어요',
+          '작성자가 게시글을 삭제했거나 더 이상 볼 수 없습니다.',
+          [{text: '확인'}],
+        );
+      }
       return;
     }
     // 게시글은 기존 콜백 경로를 유지하고, 나머지 목적지는 공용 라우팅에 위임한다.
@@ -593,10 +604,10 @@ export function NotificationsScreen({
       />
       <View style={styles.summary}>
         <View>
-          <Text style={styles.sectionTitle}>최근 알림</Text>
-          <Text style={styles.unreadCount}>
+          <AppText style={styles.sectionTitle}>최근 알림</AppText>
+          <AppText style={styles.unreadCount}>
             읽지 않은 알림 {displayedUnreadCount}개
-          </Text>
+          </AppText>
         </View>
         <View />
       </View>
@@ -693,7 +704,7 @@ function ScreenHeader({
       <View style={styles.headerSide}>
         <BackButton accessibilityLabel="알림 화면 닫기" onPress={onBack} />
       </View>
-      <Text style={styles.headerTitle}>{title}</Text>
+      <AppText style={styles.headerTitle}>{title}</AppText>
       <Pressable
         accessibilityLabel={deleteAllArmed ? '전체 지우기' : '알림 삭제'}
         accessibilityRole="button"
@@ -702,7 +713,7 @@ function ScreenHeader({
         style={styles.headerButton}
       >
         {deleteAllArmed ? (
-          <Text style={styles.deleteAllText}>전체 지우기</Text>
+          <AppText style={styles.deleteAllText}>전체 지우기</AppText>
         ) : (
           <Trash2
             color={canDelete ? COLORS.purpleDeep : COLORS.textDisabled}
@@ -719,17 +730,17 @@ function EmptyNotificationState() {
       <View style={styles.emptyIcon}>
         <BellOff color={COLORS.purpleDeep} size={31} strokeWidth={1.8} />
       </View>
-      <Text style={styles.emptyTitle}>새로운 알림이 없어요</Text>
-      <Text style={styles.emptyDescription}>
+      <AppText style={styles.emptyTitle}>새로운 알림이 없어요</AppText>
+      <AppText style={styles.emptyDescription}>
         가족의 새로운 소식이 생기면{'\n'}여기에서 알려드릴게요.
-      </Text>
+      </AppText>
     </View>
   );
 }
 function LoadingNotificationState() {
   return (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyTitle}>알림을 불러오는 중이에요</Text>
+      <AppText style={styles.emptyTitle}>알림을 불러오는 중이에요</AppText>
     </View>
   );
 }

@@ -1,13 +1,14 @@
 import Clipboard from '@react-native-clipboard/clipboard';
-import {useState} from 'react';
+import {
+  useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {RetryButton} from '../../../shared/components/RetryButton';
@@ -60,7 +61,7 @@ export function GroupCodeScreen({
         </View>
       ) : invite.status === 'error' ? (
         <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
-          <Text style={styles.errorText}>{invite.message}</Text>
+          <AppText style={styles.errorText}>{invite.message}</AppText>
           <RetryButton onPress={invite.retry} />
         </View>
       ) : (
@@ -68,44 +69,44 @@ export function GroupCodeScreen({
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.heading}>가족을 초대해 보세요</Text>
-          <Text style={styles.subtitle}>
+          <AppText style={styles.heading}>가족을 초대해 보세요</AppText>
+          <AppText style={styles.subtitle}>
             아래 코드를 공유하면 같은 그룹에 참여할 수 있어요.
-          </Text>
+          </AppText>
 
           <View style={styles.codeCard}>
-            <Text style={styles.codeLabel}>우리 가족 그룹 코드</Text>
-            <Text
+            <AppText style={styles.codeLabel}>우리 가족 그룹 코드</AppText>
+            <AppText
               accessibilityLabel={`그룹 코드 ${invite.inviteCode}`}
               style={styles.code}
             >
               {invite.inviteCode}
-            </Text>
-            <Text style={styles.expiry}>유효 기간 · 제한 없음</Text>
+            </AppText>
+            <AppText style={styles.expiry}>유효 기간 · 제한 없음</AppText>
             <Pressable
               accessibilityLabel="그룹 코드 복사"
               accessibilityRole="button"
               onPress={() => handleCopy(invite.inviteCode)}
               style={styles.copyButton}
             >
-              <Text style={styles.copyButtonText}>
+              <AppText style={styles.copyButtonText}>
                 {copied ? '복사했어요' : '코드 복사'}
-              </Text>
+              </AppText>
             </Pressable>
           </View>
 
           <View style={styles.guideCard}>
-            <Text style={styles.guideTitle}>초대 방법</Text>
+            <AppText style={styles.guideTitle}>초대 방법</AppText>
             {INVITE_STEPS.map((step, index) => (
-              <Text key={step} style={styles.guideStep}>
+              <AppText key={step} style={styles.guideStep}>
                 {index + 1}. {step}
-              </Text>
+              </AppText>
             ))}
           </View>
 
-          <Text style={styles.securityNote}>
+          <AppText style={styles.securityNote}>
             보안을 위해 모르는 사람에게 코드를 공유하지 마세요.
-          </Text>
+          </AppText>
         </ScrollView>
       )}
     </View>

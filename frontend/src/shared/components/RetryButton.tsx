@@ -1,5 +1,6 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, StyleSheet, Text} from 'react-native';
+import {Pressable, StyleSheet} from 'react-native';
+import {AppText} from './AppText';
 
 import {COLORS, RADII} from '../../design/tokens';
 
@@ -29,7 +30,7 @@ export function RetryButton({
         name="refresh"
         size={18}
       />
-      <Text style={styles.label}>{label}</Text>
+      <AppText style={styles.label}>{label}</AppText>
     </Pressable>
   );
 }

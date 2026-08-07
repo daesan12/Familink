@@ -20,6 +20,7 @@ import com.ssafy.s15p11b104.domain.carnation.repository.CarnationRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
 import com.ssafy.s15p11b104.global.exception.ErrorCode;
 
@@ -30,12 +31,15 @@ public class CarnationService {
 
 	private final CarnationRepository carnationRepository;
 	private final GroupMemberRepository groupMemberRepository;
+	private final MemberAliasRepository memberAliasRepository;
 
 	public CarnationService(
 		CarnationRepository carnationRepository,
-		GroupMemberRepository groupMemberRepository) {
+		GroupMemberRepository groupMemberRepository,
+		MemberAliasRepository memberAliasRepository) {
 		this.carnationRepository = carnationRepository;
 		this.groupMemberRepository = groupMemberRepository;
+		this.memberAliasRepository = memberAliasRepository;
 	}
 
 	@Transactional
@@ -74,7 +78,7 @@ public class CarnationService {
 		LocalDate requestedStartDate,
 		LocalDate requestedEndDate,
 		Long authenticatedUserId) {
-		getActiveMemberByUser(groupId, authenticatedUserId);
+		GroupMember viewer = getActiveMemberByUser(groupId, authenticatedUserId);
 		DateRange currentRange = resolveRange(requestedStartDate, requestedEndDate);
 		DateRange previousRange = currentRange.previous();
 
@@ -88,6 +92,15 @@ public class CarnationService {
 		List<GroupMember> guardians = groupMemberRepository.findAllActiveByGroupId(groupId).stream()
 			.filter(member -> member.getRole() == GroupRole.GUARDIAN)
 			.toList();
+		Map<Long, String> aliasesByTarget = memberAliasRepository
+			.findAllByGroupIdAndOwnerMemberIdAndTargetMemberIdIn(
+				groupId,
+				viewer.getId(),
+				guardians.stream().map(GroupMember::getId).toList())
+			.stream()
+			.collect(Collectors.toMap(
+				alias -> alias.getTargetMember().getId(),
+				alias -> alias.getAlias()));
 		long previousWinnerCount = guardians.stream()
 			.mapToLong(member -> previousCounts.getOrDefault(member.getId(), 0L))
 			.max()
@@ -96,7 +109,7 @@ public class CarnationService {
 		List<RankingRow> rows = guardians.stream()
 			.map(member -> new RankingRow(
 				member.getId(),
-				member.getUser().getName(),
+				aliasesByTarget.getOrDefault(member.getId(), member.getUser().getName()),
 				currentCounts.getOrDefault(member.getId(), 0L),
 				previousWinnerCount > 0
 					&& previousCounts.getOrDefault(member.getId(), 0L) == previousWinnerCount))

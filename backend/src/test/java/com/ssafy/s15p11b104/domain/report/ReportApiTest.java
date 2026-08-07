@@ -227,7 +227,7 @@ class ReportApiTest extends IntegrationTest {
 		persistDailyReport(REPORT_DATE);
 		Long withReport = persistCompletedCall(businessTime(REPORT_DATE, 10, 0));
 		persistCallReport(withReport);
-		Long withoutReport = persistCompletedCall(businessTime(REPORT_DATE, 12, 0));
+		persistCompletedCall(businessTime(REPORT_DATE, 12, 0));
 
 		mockMvc.perform(get("/groups/{groupId}/members/{memberId}/reports/daily/{reportDate}",
 				group.getId(), careReceiverMember.getId(), REPORT_DATE)
@@ -240,12 +240,47 @@ class ReportApiTest extends IntegrationTest {
 			.andExpect(jsonPath("$.data.dailyReport.emotionCategory").value("JOY"))
 			.andExpect(jsonPath("$.data.dailyReport.emotionSubcategory").value("뿌듯함"))
 			.andExpect(jsonPath("$.data.dailyReport.guardianMessageSummary").value("오늘은 기분이 좋으셨어요."))
-			.andExpect(jsonPath("$.data.calls.length()").value(2))
+			.andExpect(jsonPath("$.data.calls.length()").value(1))
 			.andExpect(jsonPath("$.data.calls[0].callSessionId").value(withReport))
 			.andExpect(jsonPath("$.data.calls[0].reportAvailable").value(true))
-			.andExpect(jsonPath("$.data.calls[0].startedAt").isNotEmpty())
-			.andExpect(jsonPath("$.data.calls[1].callSessionId").value(withoutReport))
-			.andExpect(jsonPath("$.data.calls[1].reportAvailable").value(false));
+			.andExpect(jsonPath("$.data.calls[0].startedAt").isNotEmpty());
+	}
+
+	@Test
+	void dailyReportOnlyReturnsCallsWithStoredReports() throws Exception {
+		Long readyCallSessionId = persistCompletedCall(businessTime(REPORT_DATE, 9, 0));
+		persistCallReport(readyCallSessionId);
+
+		Long pendingCallSessionId = persistCompletedCall(businessTime(REPORT_DATE, 10, 0));
+		persistGenerationRequest(pendingCallSessionId);
+
+		Long claimedCallSessionId = persistCompletedCall(businessTime(REPORT_DATE, 11, 0));
+		CallReportGenerationRequest claimedRequest = persistGenerationRequest(claimedCallSessionId);
+		claimedRequest.claim(UUID.randomUUID(), 0L, Instant.now().plusSeconds(90));
+		callReportRequestRepository.save(claimedRequest);
+
+		Long failedCallSessionId = persistCompletedCall(businessTime(REPORT_DATE, 12, 0));
+		CallReportGenerationRequest failedRequest = persistGenerationRequest(failedCallSessionId);
+		failedRequest.markGeminiFailed("GEMINI_REQUEST_FAILED", Instant.now());
+		callReportRequestRepository.save(failedRequest);
+
+		Long doneCallSessionId = persistCompletedCall(businessTime(REPORT_DATE, 13, 0));
+		CallReportGenerationRequest doneRequest = persistGenerationRequest(doneCallSessionId);
+		doneRequest.markDone();
+		callReportRequestRepository.save(doneRequest);
+
+		persistCompletedCall(businessTime(REPORT_DATE, 14, 0));
+		entityManager.flush();
+		entityManager.clear();
+
+		mockMvc.perform(get("/groups/{groupId}/members/{memberId}/reports/daily/{reportDate}",
+				group.getId(), careReceiverMember.getId(), REPORT_DATE)
+				.with(authenticatedAs(guardianUser.getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.generationStatus").value("AVAILABLE"))
+			.andExpect(jsonPath("$.data.calls.length()").value(1))
+			.andExpect(jsonPath("$.data.calls[0].callSessionId").value(readyCallSessionId))
+			.andExpect(jsonPath("$.data.calls[0].reportAvailable").value(true));
 	}
 
 	@Test
@@ -288,6 +323,7 @@ class ReportApiTest extends IntegrationTest {
 		persistFailedCall(businessTime(REPORT_DATE, 10, 0));
 		persistIncompleteCall(businessTime(REPORT_DATE, 11, 0));
 		Long completed = persistCompletedCall(businessTime(REPORT_DATE, 12, 0));
+		persistCallReport(completed);
 
 		mockMvc.perform(get("/groups/{groupId}/members/{memberId}/reports/daily/{reportDate}",
 				group.getId(), careReceiverMember.getId(), REPORT_DATE)
@@ -303,8 +339,11 @@ class ReportApiTest extends IntegrationTest {
 	@Test
 	void dailyReportUsesBusinessDayWindowBoundaries() throws Exception {
 		Long includedAtWindowStart = persistCompletedCall(businessTime(REPORT_DATE.minusDays(1), 22, 0));
-		persistCompletedCall(businessTime(REPORT_DATE.minusDays(1), 21, 59));
-		persistCompletedCall(businessTime(REPORT_DATE, 22, 0));
+		persistCallReport(includedAtWindowStart);
+		Long beforeWindow = persistCompletedCall(businessTime(REPORT_DATE.minusDays(1), 21, 59));
+		persistCallReport(beforeWindow);
+		Long atWindowEnd = persistCompletedCall(businessTime(REPORT_DATE, 22, 0));
+		persistCallReport(atWindowEnd);
 
 		mockMvc.perform(get("/groups/{groupId}/members/{memberId}/reports/daily/{reportDate}",
 				group.getId(), careReceiverMember.getId(), REPORT_DATE)
@@ -411,7 +450,10 @@ class ReportApiTest extends IntegrationTest {
 	void dailyReportCallsAreScopedToRequestedCareReceiver() throws Exception {
 		Long ownCall = persistCompletedCallFor(
 			careReceiverMember.getId(), businessTime(REPORT_DATE, 10, 0));
-		persistCompletedCallFor(otherCareReceiverMember.getId(), businessTime(REPORT_DATE, 11, 0));
+		persistCallReport(ownCall);
+		Long otherCall = persistCompletedCallFor(
+			otherCareReceiverMember.getId(), businessTime(REPORT_DATE, 11, 0));
+		persistCallReport(otherCall);
 
 		mockMvc.perform(get("/groups/{groupId}/members/{memberId}/reports/daily/{reportDate}",
 				group.getId(), careReceiverMember.getId(), REPORT_DATE)

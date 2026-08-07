@@ -82,3 +82,14 @@ test('그룹 전환 뒤 모든 화면이 선택한 그룹을 다시 해석할 �
   assert.equal(after?.role, 'careReceiver');
   assert.equal(resolveAllowedRoute(after.role, 'report'), 'feed');
 });
+
+test('공유 하위 화면은 역할과 무관하게 허용된다', () => {
+  // isRouteAllowed의 하위 화면 목록을 빠뜨리면 resolveAllowedRoute가 조용히
+  // 'feed'로 폴백해 화면이 열리지 않는다. Record 게이트가 컴파일로도 막지만
+  // 런타임 계약을 함께 고정한다.
+  for (const route of ['archive', 'joinApproval', 'notifications']) {
+    assert.equal(isRouteAllowed('guardian', route), true);
+    assert.equal(isRouteAllowed('careReceiver', route), true);
+    assert.equal(resolveAllowedRoute('guardian', route), route);
+  }
+});

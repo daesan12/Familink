@@ -1,13 +1,17 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
@@ -264,11 +268,12 @@ export function ArchiveScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <BackButton
-          accessibilityLabel="피드로 돌아가기"
-          onPress={onCloseArchive}
-        />
-        <Text style={styles.title}>보관함</Text>
+        {/* 목적지가 아니라 닫는 대상을 말한다. 보관함이 피드 탭 스택 화면이
+            되면 뒤로가기는 진입 지점으로 돌아가므로 늘 피드가 아니고
+            (S15P11B104-367), 게시글 상세와 같은 스택에
+            공존해 접근성 라벨이 중복된다. 알림 화면의 "알림 화면 닫기"와 대칭. */}
+        <BackButton accessibilityLabel="보관함 닫기" onPress={onCloseArchive} />
+        <AppText style={styles.title}>보관함</AppText>
         <Pressable
           accessibilityHint="날짜별로 게시글을 찾습니다"
           accessibilityLabel="날짜로 찾기"
@@ -303,9 +308,9 @@ export function ArchiveScreen({
             onPress={() => setSelectedDateKey(null)}
             style={styles.dateFilterChip}
           >
-            <Text style={styles.dateFilterText}>
+            <AppText style={styles.dateFilterText}>
               {formatDateLabel(selectedDateKey)}
-            </Text>
+            </AppText>
             <MaterialDesignIcons
               color={COLORS.purpleDeep}
               name="close"
@@ -400,7 +405,7 @@ function ArchiveErrorState({
 }) {
   return (
     <View style={styles.errorState}>
-      <Text style={styles.errorText}>{message}</Text>
+      <AppText style={styles.errorText}>{message}</AppText>
       <RetryButton accessibilityLabel="보관함 다시 시도" onPress={onRetry} />
     </View>
   );
@@ -416,14 +421,14 @@ function ArchiveEmptyState({memberName}: {memberName: string | null}) {
           size={30}
         />
       </View>
-      <Text style={styles.emptyTitle}>
+      <AppText style={styles.emptyTitle}>
         {memberName
           ? `${memberName}님이 작성한 게시글이 없어요`
           : '아직 보관된 게시글이 없어요'}
-      </Text>
-      <Text style={styles.emptyDescription}>
+      </AppText>
+      <AppText style={styles.emptyDescription}>
         가족이 새로운 이야기를 올리면{'\n'}여기에서 모아 볼 수 있어요.
-      </Text>
+      </AppText>
     </View>
   );
 }

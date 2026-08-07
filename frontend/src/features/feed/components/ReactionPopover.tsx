@@ -1,4 +1,5 @@
-import {Modal, Pressable, StyleSheet, Text, useWindowDimensions, View} from 'react-native';
+import {Modal, Pressable, StyleSheet, useWindowDimensions, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {REACTION_OPTIONS} from '../interactions/postInteractions';
@@ -93,7 +94,7 @@ export function ReactionPopover({
                   styles.selectedReactionButton,
               ]}
             >
-              <Text style={styles.emoji}>{reaction.emoji}</Text>
+              <AppText style={styles.emoji}>{reaction.emoji}</AppText>
             </Pressable>
           ))}
         </View>

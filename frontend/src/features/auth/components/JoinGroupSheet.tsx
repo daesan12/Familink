@@ -1,10 +1,14 @@
-import {useEffect, useRef, useState} from 'react';
+import {
+  useEffect,
+  useRef,
+  useState} from 'react';
 import {
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
+import {FONT_FAMILY} from '../../../design/tokens';
 
 import {ApiError} from '../../../shared/api';
 import {AUTH_COLORS} from '../theme';
@@ -136,10 +140,10 @@ export function JoinGroupSheet({
       dismissDisabled={isSubmitting}
       onDismiss={handleDismiss}
       visible={visible}>
-      <Text style={styles.title}>초대 코드로 참여</Text>
-      <Text style={styles.description}>
+      <AppText style={styles.title}>초대 코드로 참여</AppText>
+      <AppText style={styles.description}>
         가족에게 받은 6자리 코드를 입력해주세요
-      </Text>
+      </AppText>
 
       <View style={styles.codeInputArea}>
         <View pointerEvents="none" style={styles.codeRow}>
@@ -161,7 +165,7 @@ export function JoinGroupSheet({
                   submitError !== null && styles.errorCodeCell,
                 ]}
                 testID={`invite-code-cell-${index}`}>
-                <Text style={styles.codeCharacter}>{character}</Text>
+                <AppText style={styles.codeCharacter}>{character}</AppText>
               </View>
             );
           })}
@@ -186,11 +190,11 @@ export function JoinGroupSheet({
 
       <View style={styles.feedback}>
         {submitError !== null && (
-          <Text
+          <AppText
             accessibilityLiveRegion="polite"
             style={styles.errorText}>
             {submitError}
-          </Text>
+          </AppText>
         )}
       </View>
 
@@ -265,6 +269,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     bottom: 0,
     color: 'transparent',
+    fontFamily: FONT_FAMILY,
     fontSize: 1,
     left: 0,
     opacity: 0.01,

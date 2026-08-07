@@ -1,13 +1,14 @@
-import {useState} from 'react';
+import {
+  useState} from 'react';
 import {
   ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {GroupRole} from '../../../app-shell';
 import {COLORS, RADII} from '../../../design/tokens';
@@ -21,12 +22,14 @@ import {
   joinRequestDecisionErrorMessage,
   roleLabel,
 } from '../joinRequestModel';
-import {avatarInitial} from '../rankingModel';
 import type {
   JoinRequestProcessor,
   JoinRequestsLoader,
 } from '../api/groupMembershipApi';
 import type {JoinRequest} from '../types';
+
+// 회원가입 때 프로필 사진을 등록하지 않은 신청자에게 쓰는 기본 이미지.
+const PROFILE_PLACEHOLDER = require('../../../assets/images/profile-placeholder.png');
 
 interface JoinApprovalScreenProps {
   groupId: string;
@@ -136,7 +139,7 @@ export function JoinApprovalScreen({
         </View>
       ) : joinRequests.status === 'error' ? (
         <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
-          <Text style={styles.errorText}>{joinRequests.message}</Text>
+          <AppText style={styles.errorText}>{joinRequests.message}</AppText>
           <RetryButton onPress={joinRequests.retry} />
         </View>
       ) : (
@@ -145,45 +148,36 @@ export function JoinApprovalScreen({
           showsVerticalScrollIndicator={false}
         >
           {processError ? (
-            <Text accessibilityLiveRegion="polite" style={styles.errorText}>
+            <AppText accessibilityLiveRegion="polite" style={styles.errorText}>
               {processError}
-            </Text>
+            </AppText>
           ) : null}
-          <Text style={styles.heading}>
-            승인 요청 {joinRequests.requests.length}건
-          </Text>
-          <Text style={styles.subtitle}>가족인지 확인한 뒤 승인해 주세요.</Text>
+          <View style={styles.headingBlock}>
+            <AppText style={styles.heading}>
+              승인 요청 {joinRequests.requests.length}건
+            </AppText>
+            <AppText style={styles.subtitle}>
+              가족인지 확인한 뒤 승인해 주세요.
+            </AppText>
+          </View>
 
           {joinRequests.requests.length > 0 ? (
             joinRequests.requests.map((request) => (
               <View key={request.joinRequestId} style={styles.requestCard}>
                 <View style={styles.applicantRow}>
-                  {request.profileImageUrl ? (
-                    <CachedRemoteImage
-                      source={{uri: request.profileImageUrl}}
-                      style={styles.avatar}
-                    />
-                  ) : (
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>
-                        {avatarInitial(request.applicantName)}
-                      </Text>
-                    </View>
-                  )}
-                  <Text style={styles.applicantName}>
+                  <CachedRemoteImage
+                    source={
+                      request.profileImageUrl
+                        ? {uri: request.profileImageUrl}
+                        : PROFILE_PLACEHOLDER
+                    }
+                    style={styles.avatar}
+                  />
+                  <AppText style={styles.applicantName}>
                     {request.applicantName}
-                  </Text>
+                  </AppText>
                 </View>
                 <View style={styles.actionRow}>
-                  <Pressable
-                    accessibilityLabel={`${request.applicantName} 거절`}
-                    accessibilityRole="button"
-                    disabled={processingId !== null}
-                    onPress={() => handleReject(request)}
-                    style={[styles.actionButton, styles.rejectButton]}
-                  >
-                    <Text style={styles.rejectText}>거절</Text>
-                  </Pressable>
                   <Pressable
                     accessibilityLabel={`${request.applicantName} 승인`}
                     accessibilityRole="button"
@@ -191,22 +185,31 @@ export function JoinApprovalScreen({
                     onPress={() => setApproving(request)}
                     style={[styles.actionButton, styles.approveButton]}
                   >
-                    <Text style={styles.approveText}>승인</Text>
+                    <AppText style={styles.approveText}>승인</AppText>
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel={`${request.applicantName} 거절`}
+                    accessibilityRole="button"
+                    disabled={processingId !== null}
+                    onPress={() => handleReject(request)}
+                    style={[styles.actionButton, styles.rejectButton]}
+                  >
+                    <AppText style={styles.rejectText}>거절</AppText>
                   </Pressable>
                 </View>
               </View>
             ))
           ) : (
-            <Text style={styles.emptyText}>
+            <AppText style={styles.emptyText}>
               대기 중인 가입 요청이 없어요.
-            </Text>
+            </AppText>
           )}
 
           <View style={styles.noticeCard}>
-            <Text style={styles.noticeTitle}>확인해 주세요</Text>
-            <Text style={styles.noticeBody}>
+            <AppText style={styles.noticeTitle}>확인해 주세요</AppText>
+            <AppText style={styles.noticeBody}>
               승인된 구성원은 가족 기록과 그룹 정보를 볼 수 있어요.
-            </Text>
+            </AppText>
           </View>
         </ScrollView>
       )}
@@ -249,9 +252,9 @@ function DecisionErrorModal({
           accessibilityViewIsModal
           style={styles.alertCard}
         >
-          <Text style={styles.alertTitle}>{alert.title}</Text>
+          <AppText style={styles.alertTitle}>{alert.title}</AppText>
           {alert.message ? (
-            <Text style={styles.alertMessage}>{alert.message}</Text>
+            <AppText style={styles.alertMessage}>{alert.message}</AppText>
           ) : null}
           <Pressable
             accessibilityLabel={alert.confirmAccessibilityLabel}
@@ -259,7 +262,7 @@ function DecisionErrorModal({
             onPress={onClose}
             style={styles.alertButton}
           >
-            <Text style={styles.alertButtonText}>확인</Text>
+            <AppText style={styles.alertButtonText}>확인</AppText>
           </Pressable>
         </View>
       </View>
@@ -301,13 +304,13 @@ function RoleSelectModal({
             onPress={() => {}}
             style={styles.roleCard}
           >
-            <Text style={styles.roleText}>
+            <AppText style={styles.roleText}>
               {request.applicantName}님이 우리 가족에 참여했습니다.
-            </Text>
-            <Text style={styles.roleText}>가족의 역할을 정해주세요</Text>
-            <Text style={styles.roleSubject}>
+            </AppText>
+            <AppText style={styles.roleText}>가족의 역할을 정해주세요</AppText>
+            <AppText style={styles.roleSubject}>
               [{request.applicantName}]님의 역할
-            </Text>
+            </AppText>
             <View style={styles.roleButtonRow}>
               {roles.map((role) => (
                 <Pressable
@@ -318,7 +321,7 @@ function RoleSelectModal({
                   onPress={() => onSelect(role)}
                   style={[styles.roleButton, processing && styles.roleButtonDisabled]}
                 >
-                  <Text style={styles.roleButtonText}>{roleLabel(role)}</Text>
+                  <AppText style={styles.roleButtonText}>{roleLabel(role)}</AppText>
                 </Pressable>
               ))}
             </View>
@@ -376,7 +379,7 @@ const styles = StyleSheet.create({
   actionButton: {
     alignItems: 'center',
     borderCurve: 'continuous',
-    borderRadius: RADII.small,
+    borderRadius: RADII.pill,
     flex: 1,
     justifyContent: 'center',
     minHeight: 46,
@@ -388,7 +391,7 @@ const styles = StyleSheet.create({
   },
   applicantName: {
     color: COLORS.textStrong,
-    fontSize: 16,
+    fontSize: 22,
     fontWeight: '700',
   },
   applicantRow: {
@@ -397,10 +400,10 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   approveButton: {
-    backgroundColor: COLORS.textMuted,
+    backgroundColor: COLORS.lavenderSurface,
   },
   approveText: {
-    color: COLORS.background,
+    color: COLORS.textStrong,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -411,11 +414,6 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     width: 48,
-  },
-  avatarText: {
-    color: COLORS.textMuted,
-    fontSize: 16,
-    fontWeight: '700',
   },
   backdrop: {
     alignItems: 'center',
@@ -446,7 +444,11 @@ const styles = StyleSheet.create({
     color: COLORS.textStrong,
     fontSize: 22,
     fontWeight: '700',
-    marginTop: 8,
+  },
+  // 제목과 안내 문구는 한 덩어리로 묶어 목록보다 좁은 간격을 쓴다.
+  headingBlock: {
+    gap: 6,
+    marginTop: 24,
   },
   noticeBody: {
     color: COLORS.textMuted,
@@ -454,7 +456,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   noticeCard: {
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: COLORS.lavenderSurface,
     borderCurve: 'continuous',
     borderRadius: RADII.medium,
     gap: 8,
@@ -467,10 +469,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   rejectButton: {
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: COLORS.lemon,
   },
   rejectText: {
-    color: COLORS.error,
+    color: COLORS.textStrong,
     fontSize: 15,
     fontWeight: '700',
   },

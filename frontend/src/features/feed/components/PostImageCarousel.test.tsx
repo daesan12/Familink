@@ -3,6 +3,8 @@ import {act, create, type ReactTestRenderer} from 'react-test-renderer';
 import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 import {PostImageCarousel} from './PostImageCarousel';
 
+const mockDismissFullscreenPlayer = jest.fn();
+
 jest.mock('@react-native-vector-icons/material-design-icons', () => {
   const React = require('react');
   const {Text} = require('react-native');
@@ -16,12 +18,19 @@ jest.mock('react-native-video', () => {
   const React = require('react');
   const {View} = require('react-native');
 
-  return function MockVideo(props: object) {
+  return React.forwardRef(function MockVideo(props: object, ref: object) {
+    React.useImperativeHandle(ref, () => ({
+      dismissFullscreenPlayer: mockDismissFullscreenPlayer,
+    }));
     return React.createElement(View, props);
-  };
+  });
 });
 
 describe('PostImageCarousel', () => {
+  beforeEach(() => {
+    mockDismissFullscreenPlayer.mockClear();
+  });
+
   it('영상 재생 버튼을 누르면 원본 fileUrl을 플레이어에 전달한다', () => {
     let renderer: ReactTestRenderer;
 
@@ -50,6 +59,104 @@ describe('PostImageCarousel', () => {
     expect(
       renderer!.root.findByProps({testID: 'post-video-player'}).props.source,
     ).toEqual({uri: 'https://cdn.example.com/video.mp4?signature=valid'});
+
+    act(() => renderer!.unmount());
+  });
+
+  it('restarts a video from the beginning after playback ends', () => {
+    const image = {
+      fileUrl: 'https://cdn.example.com/video.mp4?signature=valid',
+      hasPoster: true,
+      id: 'video-replay',
+      mediaType: 'VIDEO' as const,
+      source: {uri: 'https://cdn.example.com/thumbnail.jpg'},
+    };
+    let renderer: ReactTestRenderer;
+
+    act(() => {
+      renderer = create(<PostImageCarousel images={[image]} />);
+    });
+
+    act(() => {
+      renderer!.root.findByProps({accessibilityLabel: '동영상 재생'}).props.onPress();
+    });
+    const firstPlayer = renderer!.root.findByProps({testID: 'post-video-player'});
+
+    act(() => firstPlayer.props.onEnd());
+    expect(renderer!.root.findByProps({testID: 'post-video-player'})).toBeTruthy();
+    expect(
+      renderer!.root.findByProps({testID: 'post-video-replay-button'}),
+    ).toBeTruthy();
+
+    act(() => {
+      renderer!.root
+        .findByProps({testID: 'post-video-replay-button'})
+        .props.onPress();
+    });
+    const replayedPlayer = renderer!.root.findByProps({testID: 'post-video-player'});
+    expect(replayedPlayer).not.toBe(firstPlayer);
+
+    act(() => renderer!.unmount());
+  });
+
+  it('closes native fullscreen when a video ends so replay is available', () => {
+    const image = {
+      fileUrl: 'https://cdn.example.com/video.mp4?signature=valid',
+      hasPoster: true,
+      id: 'video-fullscreen',
+      mediaType: 'VIDEO' as const,
+      source: {uri: 'https://cdn.example.com/thumbnail.jpg'},
+    };
+    let renderer: ReactTestRenderer;
+
+    act(() => {
+      renderer = create(<PostImageCarousel images={[image]} />);
+    });
+    act(() => {
+      renderer!.root.findByProps({testID: 'post-video-poster'}).props.onPress();
+    });
+
+    const player = renderer!.root.findByProps({testID: 'post-video-player'});
+    act(() => player.props.onFullscreenPlayerWillPresent());
+    act(() => player.props.onEnd());
+
+    expect(mockDismissFullscreenPlayer).toHaveBeenCalledTimes(1);
+    expect(
+      renderer!.root.findByProps({testID: 'post-video-replay-button'}),
+    ).toBeTruthy();
+
+    act(() => renderer!.unmount());
+  });
+
+  it('closes native fullscreen before an invisible video is removed', () => {
+    const image = {
+      fileUrl: 'https://cdn.example.com/video.mp4?signature=valid',
+      hasPoster: true,
+      id: 'video-fullscreen-unmount',
+      mediaType: 'VIDEO' as const,
+      source: {uri: 'https://cdn.example.com/thumbnail.jpg'},
+    };
+    let renderer: ReactTestRenderer;
+
+    act(() => {
+      renderer = create(<PostImageCarousel images={[image]} />);
+    });
+    act(() => {
+      renderer!.root.findByProps({testID: 'post-video-poster'}).props.onPress();
+    });
+
+    const player = renderer!.root.findByProps({testID: 'post-video-player'});
+    act(() => player.props.onFullscreenPlayerWillPresent());
+    act(() => {
+      renderer!.update(
+        <PostImageCarousel images={[image]} isVisible={false} />,
+      );
+    });
+
+    expect(mockDismissFullscreenPlayer).toHaveBeenCalledTimes(1);
+    expect(() =>
+      renderer!.root.findByProps({testID: 'post-video-player'}),
+    ).toThrow();
 
     act(() => renderer!.unmount());
   });

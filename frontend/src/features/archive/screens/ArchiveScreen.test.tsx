@@ -49,6 +49,10 @@ const POSTS: readonly ArchivePost[] = [
   },
 ];
 
+// NavigationContainer로 감싸지 않는 것이 계약이다. 이 화면은 내비게이션 훅을
+// 갖지 않고 onCloseArchive·onOpenPost prop만 받으며, 렌더 위치(셸 스택 / 피드 탭
+// 스택)를 모른다(S15P11B104-367). 누군가 useNavigation·useIsFocused를 추가하면
+// 컨텍스트 부재로 이 파일 전체가 즉시 실패해 위상 결합이 들어오는 것을 막는다.
 const mountedRenderers: TestRenderer.ReactTestRenderer[] = [];
 
 afterEach(() => {
@@ -189,7 +193,7 @@ test('뒤로가기 버튼을 누르면 피드로 돌아가는 콜백을 호출�
   });
   mountedRenderers.push(renderer!);
 
-  press(renderer!, '피드로 돌아가기');
+  press(renderer!, '보관함 닫기');
 
   expect(onCloseArchive).toHaveBeenCalledTimes(1);
 });

@@ -655,7 +655,7 @@ test("상단 추가 요청은 선택 날짜의 시간 설정이 꺼진 새 폼�
   ).toBeTruthy();
 });
 
-test("작성자나 관리자가 아니면 상세의 수정·삭제 동작을 숨긴다", async () => {
+test("일반 활성 구성원은 상세에서 수정할 수 있지만 삭제할 수 없다", async () => {
   const { renderer } = await renderCalendar(createGateway(), {
     currentUserId: 80,
   });
@@ -663,8 +663,8 @@ test("작성자나 관리자가 아니면 상세의 수정·삭제 동작을 숨
   await openEventDetail(renderer);
 
   expect(
-    renderer.root.findAllByProps({ accessibilityLabel: "일정 수정" })
-  ).toHaveLength(0);
+    renderer.root.findByProps({ accessibilityLabel: "일정 수정" })
+  ).toBeTruthy();
   expect(
     renderer.root.findAllByProps({ accessibilityLabel: "일정 삭제" })
   ).toHaveLength(0);

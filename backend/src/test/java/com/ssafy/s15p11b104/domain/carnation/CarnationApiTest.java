@@ -29,6 +29,8 @@ import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.group.entity.MemberAlias;
+import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
 import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
@@ -51,6 +53,9 @@ class CarnationApiTest extends IntegrationTest {
 
 	@Autowired
 	private GroupMemberRepository groupMemberRepository;
+
+	@Autowired
+	private MemberAliasRepository memberAliasRepository;
 
 	@Autowired
 	private CarnationRepository carnationRepository;
@@ -126,6 +131,22 @@ class CarnationApiTest extends IntegrationTest {
 			.andExpect(jsonPath("$.data.rankings[1].carnationCount").value(2))
 			.andExpect(jsonPath("$.data.rankings[0].previousWeekWinner").value(true))
 			.andExpect(jsonPath("$.data.rankings[1].previousWeekWinner").value(false))
+			.andExpect(jsonPath("$.data.rankings[0].displayName").value("첫 보호자"));
+	}
+
+	@Test
+	void grassUsesViewerSpecificAliasAndFallsBackToRealNameForOtherViewer() throws Exception {
+		memberAliasRepository.save(new MemberAlias(group, careReceiver, firstGuardian, "우리 아빠"));
+		entityManager.flush();
+
+		mockMvc.perform(get("/groups/{groupId}/grass", group.getId())
+				.with(authenticatedAs(careReceiver.getUser().getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.rankings[0].displayName").value("우리 아빠"));
+
+		mockMvc.perform(get("/groups/{groupId}/grass", group.getId())
+				.with(authenticatedAs(firstGuardian.getUser().getId())))
+			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.rankings[0].displayName").value("첫 보호자"));
 	}
 

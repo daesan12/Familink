@@ -1,4 +1,5 @@
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS} from '../../../design/tokens';
 import {APP_VERSION} from '../fixtures/profileFixtures';
@@ -11,15 +12,15 @@ interface MyPageFooterProps {
 export function MyPageFooter({onLogout}: MyPageFooterProps) {
   return (
     <View style={styles.footer}>
-      <Text style={styles.text}>앱 버전 {APP_VERSION}</Text>
-      <Text style={styles.divider}>|</Text>
+      <AppText style={styles.text}>앱 버전 {APP_VERSION}</AppText>
+      <AppText style={styles.divider}>|</AppText>
       <Pressable
         accessibilityLabel="로그아웃"
         accessibilityRole="button"
         hitSlop={8}
         onPress={onLogout}
       >
-        <Text style={styles.text}>로그아웃</Text>
+        <AppText style={styles.text}>로그아웃</AppText>
       </Pressable>
     </View>
   );

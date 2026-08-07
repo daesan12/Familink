@@ -5,9 +5,9 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {RetryButton} from '../../../shared/components/RetryButton';
@@ -78,7 +78,7 @@ export function MemberProfileModal({
               </View>
             ) : errorMessage ? (
               <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
+                <AppText style={styles.errorText}>{errorMessage}</AppText>
                 {onRetry ? (
                   <RetryButton
                     accessibilityLabel="프로필 정보 다시 시도"
@@ -113,22 +113,22 @@ export function MemberProfileModal({
                       accessible
                       style={styles.rankBadge}
                     >
-                      <Text style={styles.rankBadgeText}>
+                      <AppText style={styles.rankBadgeText}>
                         {member.weeklyRank}
-                      </Text>
+                      </AppText>
                     </View>
                   ) : null}
-                  <Text style={styles.name}>{member.name} 님</Text>
+                  <AppText style={styles.name}>{member.name} 님</AppText>
                 </View>
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>나이</Text>
-                  <Text style={styles.metaValue}>{formatAge(member.age)}</Text>
+                  <AppText style={styles.metaLabel}>나이</AppText>
+                  <AppText style={styles.metaValue}>{formatAge(member.age)}</AppText>
                 </View>
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>성별</Text>
-                  <Text style={styles.metaValue}>
+                  <AppText style={styles.metaLabel}>성별</AppText>
+                  <AppText style={styles.metaValue}>
                     {formatGender(member.gender)}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
             </View>

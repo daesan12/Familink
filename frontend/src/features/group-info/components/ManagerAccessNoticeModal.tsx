@@ -1,5 +1,6 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Modal, Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 
@@ -41,10 +42,10 @@ export function ManagerAccessNoticeModal({
             />
           </View>
 
-          <Text style={styles.title}>그룹 관리 권한이 필요해요</Text>
-          <Text style={styles.message}>
+          <AppText style={styles.title}>그룹 관리 권한이 필요해요</AppText>
+          <AppText style={styles.message}>
             그룹관리자만 접근할 수 있습니다
-          </Text>
+          </AppText>
 
           <Pressable
             accessibilityLabel="그룹관리자 접근 안내 확인"
@@ -54,7 +55,7 @@ export function ManagerAccessNoticeModal({
               styles.confirmButton,
               pressed && styles.confirmButtonPressed,
             ]}>
-            <Text style={styles.confirmButtonText}>확인</Text>
+            <AppText style={styles.confirmButtonText}>확인</AppText>
           </Pressable>
         </View>
       </View>

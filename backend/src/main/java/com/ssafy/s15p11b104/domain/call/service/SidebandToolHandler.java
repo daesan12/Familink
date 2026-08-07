@@ -22,7 +22,10 @@ final class SidebandToolHandler {
 	private static final String FUNCTION_CALL = "function_call";
 	private static final String COMPLETED = "completed";
 	private static final String RECENT_POST_TOOL = "get_person_recent_post_summaries";
-	private static final String CALENDAR_TOOL = "get_calendar_events_by_date";
+	private static final String CALENDAR_TOOL = "get_calendar_events_by_date_range";
+	private static final String START_DATE = "start_date";
+	private static final String END_DATE = "end_date";
+	private static final String PERSON_KEY = "person_key";
 
 	private final Long callSessionId;
 	private final ObjectMapper objectMapper;
@@ -152,13 +155,14 @@ final class SidebandToolHandler {
 			return AiCallToolResult.error(AiCallToolResult.Reason.UNKNOWN_TOOL);
 		}
 
-		String personKey = parsePersonKey(textValue(item, "arguments"));
-		if (!StringUtils.hasText(personKey)) {
+		Map<String, String> arguments = parseArguments(textValue(item, "arguments"), List.of(PERSON_KEY));
+		if (arguments == null) {
 			return AiCallToolResult.needsClarification(
 				AiCallToolResult.Reason.INVALID_ARGUMENTS,
 				candidates()
 			);
 		}
+		String personKey = arguments.get(PERSON_KEY);
 
 		AiCallPersonReference reference = personReferences.get(personKey);
 		if (reference == null) {
@@ -182,8 +186,11 @@ final class SidebandToolHandler {
 	}
 
 	private AiCallToolResult executeCalendarTool(JsonNode item, String callId) {
-		String dateExpression = parseArgument(textValue(item, "arguments"), "date_expression");
-		if (!StringUtils.hasText(dateExpression)) {
+		Map<String, String> arguments = parseArguments(
+			textValue(item, "arguments"),
+			List.of(START_DATE, END_DATE)
+		);
+		if (arguments == null) {
 			return AiCallToolResult.needsClarification(AiCallToolResult.Reason.INVALID_ARGUMENTS);
 		}
 		if (calendarToolService == null) {
@@ -191,7 +198,11 @@ final class SidebandToolHandler {
 		}
 
 		try {
-			return calendarToolService.getEventsByDate(callSessionId, dateExpression);
+			return calendarToolService.getEventsByDateRange(
+				callSessionId,
+				arguments.get(START_DATE),
+				arguments.get(END_DATE)
+			);
 		} catch (RuntimeException exception) {
 			LOGGER.error(
 				"일정 Tool 조회에 실패했습니다. callSessionId={}, callId={}, errorType={}",
@@ -203,23 +214,36 @@ final class SidebandToolHandler {
 		}
 	}
 
-	private String parsePersonKey(String argumentsJson) {
-		return parseArgument(argumentsJson, "person_key");
-	}
-
-	private String parseArgument(String argumentsJson, String fieldName) {
+	/**
+	 * 허용 필드 집합과 정확히 일치하는 문자열 인자만 통과시킨다. 초과 키, 누락 키,
+	 * 문자열이 아닌 값은 모두 거부한다. 툴 스키마에 {@code strict}가 없어 모델이
+	 * 스키마를 벗어난 인자를 보낼 수 있으므로 이 경계에서 다시 확인한다.
+	 *
+	 * @return 필드별 문자열 값. 형태가 어긋나면 {@code null}
+	 */
+	private Map<String, String> parseArguments(String argumentsJson, List<String> allowedFields) {
 		if (!StringUtils.hasText(argumentsJson)) {
 			return null;
 		}
+		JsonNode arguments;
 		try {
-			JsonNode arguments = objectMapper.readTree(argumentsJson);
-			if (arguments == null || !arguments.isObject() || arguments.size() != 1) {
-				return null;
-			}
-			return textValue(arguments, fieldName);
+			arguments = objectMapper.readTree(argumentsJson);
 		} catch (JsonProcessingException exception) {
 			return null;
 		}
+		if (arguments == null || !arguments.isObject() || arguments.size() != allowedFields.size()) {
+			return null;
+		}
+
+		Map<String, String> parsed = new LinkedHashMap<>();
+		for (String field : allowedFields) {
+			String value = textValue(arguments, field);
+			if (!StringUtils.hasText(value)) {
+				return null;
+			}
+			parsed.put(field, value);
+		}
+		return parsed;
 	}
 
 	private List<AiCallToolResult.PersonCandidate> candidates() {

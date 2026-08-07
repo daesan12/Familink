@@ -1,5 +1,5 @@
 import React from 'react';
-import {FlatList, Text} from 'react-native';
+import {Alert, FlatList, Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import {ApiError} from '../../../shared/api';
@@ -24,6 +24,10 @@ afterEach(() => {
   });
 });
 
+// NavigationContainer로 감싸지 않는 것이 계약이다. 이 화면은 내비게이션 훅을
+// 갖지 않고 onClose*·onOpen* prop만 받으며, 렌더 위치(셸 스택 / 피드 탭 스택)를
+// 모른다(S15P11B104-367). 누군가 useNavigation·useIsFocused를 추가하면 컨텍스트
+// 부재로 이 파일 전체가 즉시 실패해 위상 결합이 들어오는 것을 막는다.
 const baseProps = {
   currentGroup: {id: 'group-1', name: '우리 가족', role: 'guardian'} as const,
   role: 'guardian' as const,
@@ -32,6 +36,32 @@ const baseProps = {
 function joinedChildren(children: unknown): string {
   return Array.isArray(children) ? children.join('') : String(children);
 }
+
+test('뒤로가기 버튼을 누르면 알림 화면을 닫는 콜백을 호출한다', () => {
+  // 이 계약을 단언하는 테스트가 없어, 화면을 다른 스택으로 옮기는 리팩터가
+  // 닫기 배선을 끊어도 조용히 통과했다(S15P11B104-367 기준선).
+  const onCloseNotifications = jest.fn();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        initialNotifications={DEVELOPMENT_NOTIFICATIONS}
+        onCloseNotifications={onCloseNotifications}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '알림 화면 닫기'})
+      .props.onPress();
+  });
+
+  expect(onCloseNotifications).toHaveBeenCalledTimes(1);
+});
 
 test('알림을 읽음 처리하고 연결된 게시글을 연다', () => {
   const onOpenPost = jest.fn();
@@ -927,6 +957,54 @@ test('푸시가 도착하면 새 알림만 목록 맨 위에 끼워 넣고 미�
     }),
   ).toBeTruthy();
   expect(unreadLabelShown(renderer!, 2)).toBe(true);
+});
+
+test('deleted post notifications stay on the list and show an unavailable-post alert', () => {
+  const alertSpy = jest
+    .spyOn(Alert, 'alert')
+    .mockImplementation(() => undefined);
+  const onOpenPost = jest.fn();
+  const notifications: readonly AppNotification[] = [
+    {
+      avatarText: 'A',
+      body: 'A new post was created.',
+      createdAtLabel: 'a moment ago',
+      groupId: 'group-1',
+      id: 'post-deleted-1',
+      isRead: false,
+      relatedJoinRequestStatus: null,
+      title: '새 게시글이 올라왔어요',
+      type: 'NEW_POST',
+    },
+  ];
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen
+        {...baseProps}
+        initialNotifications={notifications}
+        onOpenPost={onOpenPost}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  TestRenderer.act(() => {
+    renderer!.root
+      .findByProps({
+        accessibilityLabel: '새 게시글이 올라왔어요, a moment ago',
+      })
+      .props.onPress();
+  });
+
+  expect(onOpenPost).not.toHaveBeenCalled();
+  expect(alertSpy).toHaveBeenCalledWith(
+    '게시글을 볼 수 없어요',
+    '작성자가 게시글을 삭제했거나 더 이상 볼 수 없습니다.',
+    [{text: '확인'}],
+  );
+  alertSpy.mockRestore();
 });
 
 test('푸시 도착 병합은 읽음 커밋 전 서버 값으로 기존 읽음 상태를 되돌리지 않는다', async () => {

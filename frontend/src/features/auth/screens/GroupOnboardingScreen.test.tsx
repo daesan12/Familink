@@ -2,6 +2,7 @@ import React from 'react';
 import {AccessibilityInfo, Alert, StyleSheet, Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
+import {COLORS} from '../../../design/tokens';
 import {AUTH_COLORS} from '../theme';
 import {GroupOnboardingScreen} from './GroupOnboardingScreen';
 
@@ -47,9 +48,108 @@ test('가입 승인 대기 요청이 있으면 대기 카드를 표시한다', a
   });
 
   expect(renderer!.root.findByProps({children: '우리 가족'})).toBeTruthy();
-  expect(JSON.stringify(renderer!.toJSON())).toContain(
-    '관리자 승인을 기다리고 있어요',
-  );
+  expect(renderer!.root.findByProps({children: '대기 중'})).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({children: '나의 그룹 모음'}),
+  ).toBeTruthy();
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({children: '나의 그룹 모음'}).props.style,
+    ).fontWeight,
+  ).toBe('600');
+  expect(
+    renderer!.root.findByProps({children: '우리 가족을\n연결해볼까요?'}),
+  ).toBeTruthy();
+  expect(
+    renderer!.root.findByProps({children: '코드로 참여하기'}),
+  ).toBeTruthy();
+  expect(
+    renderer!.root.findAllByProps({children: '그룹 참여 방법'}),
+  ).toHaveLength(0);
+  expect(
+    renderer!.root.findByProps({testID: 'join-request-carousel'}).props
+      .horizontal,
+  ).toBe(true);
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({testID: 'join-request-carousel'}).props.style,
+    ).marginTop,
+  ).toBe(18);
+  expect(
+    StyleSheet.flatten(renderer!.root.findByProps({children: '대기 중'}).props.style)
+      .marginTop,
+  ).toBe(8);
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({testID: 'join-request-card-request-1'})
+        .props.style,
+    ).backgroundColor,
+  ).toBe(COLORS.background);
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({testID: 'join-request-card-request-1'})
+        .props.style,
+    ),
+  ).toMatchObject({
+    borderColor: COLORS.inactive,
+    borderWidth: StyleSheet.hairlineWidth,
+    boxShadow: '0px 3px 14px rgba(18, 23, 41, 0.055)',
+    height: 128,
+    width: 100,
+  });
+  expect(
+    renderer!.root.findByProps({children: '우리 가족'}).props.numberOfLines,
+  ).toBe(2);
+  expect(
+    renderer!.root.findAllByProps({name: 'clock-outline'}),
+  ).toHaveLength(1);
+  expect(
+    renderer!.root.findAllByProps({name: 'chevron-right'}),
+  ).toHaveLength(0);
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({testID: 'group-action-card-lavender'})
+        .props.style,
+    ).backgroundColor,
+  ).toBe(COLORS.lavenderSurface);
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({testID: 'group-action-card-lemon'}).props
+        .style,
+    ).backgroundColor,
+  ).toBe(COLORS.lemon);
+});
+
+test('최대 10자 그룹명은 두 줄 표시 영역을 사용한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupOnboardingScreen
+        onBack={jest.fn()}
+        onCreateGroup={jest.fn()}
+        onJoinByCode={jest.fn()}
+        pendingRequests={[
+          {
+            groupName: 'QQQQQQQQQQ',
+            id: 'request-10-characters',
+            status: 'PENDING_ADMIN',
+          },
+        ]}
+      />,
+    );
+  });
+
+  expect(
+    renderer!.root.findByProps({children: 'QQQQQQQQQQ'}).props.numberOfLines,
+  ).toBe(2);
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({
+        testID: 'request-name-request-10-characters',
+      }).props.style,
+    ).width,
+  ).toBe(92);
 });
 
 test('그룹이 없는 사용자의 빈 상태는 참가 안내 문구를 표시한다', async () => {
@@ -280,7 +380,7 @@ test('초대 코드를 입력하면 칸을 채우고 영문 대문자와 숫자 
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: '받은 코드로 기존 그룹에 들어가요',
+        accessibilityHint: '받은 코드로 기존 그룹에 참여해요',
       })
       .props.onPress();
   });
@@ -336,7 +436,7 @@ test('참여 요청 중에는 로딩을 표시하고 실패하면 입력을 유�
   await TestRenderer.act(() => {
     renderer!.root
       .findByProps({
-        accessibilityHint: '받은 코드로 기존 그룹에 들어가요',
+        accessibilityHint: '받은 코드로 기존 그룹에 참여해요',
       })
       .props.onPress();
   });
@@ -412,7 +512,51 @@ test('승인된 그룹 카드를 누르면 해당 그룹 진입을 요청한다'
       .props.onPress();
   });
 
-  expect(JSON.stringify(renderer!.toJSON())).toContain('가입이 승인되었어요');
-  expect(JSON.stringify(renderer!.toJSON())).toContain('눌러서 입장하기');
+  expect(JSON.stringify(renderer!.toJSON())).toContain('환영해요!');
+  expect(
+    renderer!.root.findByProps({children: '나의 그룹 모음'}),
+  ).toBeTruthy();
+  expect(
+    renderer!.root.findAllByProps({name: 'check-circle-outline'}),
+  ).toHaveLength(1);
+  expect(
+    renderer!.root.findByProps({name: 'check-circle-outline'}).props.color,
+  ).toBe(COLORS.purpleDeep);
+  expect(
+    StyleSheet.flatten(
+      renderer!.root.findByProps({testID: 'join-request-card-request-1'})
+        .props.style,
+    ).backgroundColor,
+  ).toBe(COLORS.background);
   expect(onOpenApprovedGroup).toHaveBeenCalledWith(request);
+});
+
+test('진입 콜백이 없는 승인 카드도 승인 상태로 안내한다', async () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <GroupOnboardingScreen
+        onBack={jest.fn()}
+        onCreateGroup={jest.fn()}
+        onJoinByCode={jest.fn()}
+        pendingRequests={[
+          {
+            groupId: 'group-1',
+            groupName: '우리 가족',
+            id: 'request-1',
+            myMemberId: 'member-1',
+            role: 'careReceiver',
+            status: 'APPROVED',
+          },
+        ]}
+      />,
+    );
+  });
+
+  expect(
+    renderer!.root.findByProps({
+      accessibilityLabel: '우리 가족, 환영해요!',
+    }),
+  ).toBeTruthy();
 });

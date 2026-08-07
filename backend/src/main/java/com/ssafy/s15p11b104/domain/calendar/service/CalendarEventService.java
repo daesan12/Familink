@@ -163,7 +163,7 @@ public class CalendarEventService {
 	public CalendarEventUpdateResponse update(
 		Long eventId, CalendarEventUpdateRequest request, Long authenticatedUserId) {
 		CalendarEvent event = getEventForUpdate(eventId);
-		GroupMember editor = requireEditor(event, authenticatedUserId);
+		GroupMember editor = getActiveMember(event.getGroup().getId(), authenticatedUserId);
 		List<Long> beforeParticipantMemberIds = eventParticipantRepository.findMemberIdsByEventId(eventId);
 		EventSchedule schedule = resolveSchedule(
 			request.eventDate(), request.endDate(), request.startAt(), request.endAt());
@@ -202,7 +202,7 @@ public class CalendarEventService {
 	@Transactional
 	public void delete(Long eventId, Long authenticatedUserId) {
 		CalendarEvent event = getEventForUpdate(eventId);
-		GroupMember editor = requireEditor(event, authenticatedUserId);
+		GroupMember editor = requireDeleter(event, authenticatedUserId);
 		List<Long> beforeParticipantMemberIds = eventParticipantRepository.findMemberIdsByEventId(eventId);
 
 		eventParticipantRepository.deleteAllByEventId(event.getId());
@@ -243,12 +243,12 @@ public class CalendarEventService {
 	}
 
 	/**
-	 * 일정을 수정·삭제할 수 있는 요청자인지 확인하고 최종 수정자로 기록할 구성원을 반환한다.
+	 * 일정을 삭제할 수 있는 요청자인지 확인하고 삭제 알림의 행위자로 기록할 구성원을 반환한다.
 	 *
 	 * <p>계약이 작성자 또는 그룹 관리자만 허용한다. 그룹의 활성 구성원이 아니면 두 조건을 보기 전에
 	 * 거부한다.
 	 */
-	private GroupMember requireEditor(CalendarEvent event, Long authenticatedUserId) {
+	private GroupMember requireDeleter(CalendarEvent event, Long authenticatedUserId) {
 		GroupMember requester = getActiveMember(event.getGroup().getId(), authenticatedUserId);
 		if (!requester.getId().equals(event.getCreatorMember().getId()) && !requester.isManager()) {
 			throw new BusinessException(ErrorCode.FORBIDDEN);

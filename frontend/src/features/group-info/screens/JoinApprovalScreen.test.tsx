@@ -84,6 +84,17 @@ test('대기 중 가입 요청 목록과 건수를 보여준다', async () => {
   expect(hasText(renderer, '이종철')).toBe(true);
 });
 
+test('각 가입 요청의 승인 버튼을 왼쪽, 거절 버튼을 오른쪽에 표시한다', async () => {
+  const renderer = await renderScreen([REQUESTS[0]]);
+  const actionLabels = renderer.root
+    .findAll(node => node.props.accessibilityRole === 'button')
+    .map(node => node.props.accessibilityLabel)
+    .filter(label => label === '손수호 승인' || label === '손수호 거절')
+    .filter((label, index, labels) => index === 0 || label !== labels[index - 1]);
+
+  expect(actionLabels).toEqual(['손수호 승인', '손수호 거절']);
+});
+
 test('거절하면 해당 카드가 사라지고 건수가 줄어든다', async () => {
   const decisions: JoinRequestDecisionInput[] = [];
   const renderer = await renderScreen(REQUESTS, (_groupId, input) => {

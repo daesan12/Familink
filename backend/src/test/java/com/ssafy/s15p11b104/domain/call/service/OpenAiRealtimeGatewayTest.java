@@ -54,8 +54,10 @@ class OpenAiRealtimeGatewayTest {
 			.andExpect(content().string(containsString(
 				"\"required\":[\"person_key\"],\"additionalProperties\":false"
 			)))
-			.andExpect(content().string(containsString("\"name\":\"get_calendar_events_by_date\"")))
-			.andExpect(content().string(containsString("\"required\":[\"date_expression\"],\"additionalProperties\":false")))
+			.andExpect(content().string(containsString("\"name\":\"get_calendar_events_by_date_range\"")))
+			.andExpect(content().string(containsString(
+				"\"required\":[\"start_date\",\"end_date\"],\"additionalProperties\":false"
+			)))
 			.andExpect(content().string(containsString("\"tool_choice\":\"auto\"")))
 			.andRespond(withSuccess("v=0\r\ns=openai\r\n", MediaType.parseMediaType("application/sdp"))
 				.header("Location", "/v1/realtime/calls/rtc_test_123"));

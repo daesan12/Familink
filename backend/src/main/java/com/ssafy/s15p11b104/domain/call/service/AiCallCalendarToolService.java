@@ -1,14 +1,16 @@
 package com.ssafy.s15p11b104.domain.call.service;
 
-import java.time.Clock;
-import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.temporal.TemporalAdjusters;
-import java.util.Locale;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,45 +21,48 @@ import com.ssafy.s15p11b104.domain.calendar.dto.CalendarEventListResponse;
 import com.ssafy.s15p11b104.domain.calendar.service.CalendarEventService;
 import com.ssafy.s15p11b104.domain.call.entity.CallSession;
 import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
+import com.ssafy.s15p11b104.domain.call.repository.CalendarEventCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.global.exception.BusinessException;
 import com.ssafy.s15p11b104.global.exception.ErrorCode;
 
 /**
- * AI 통화에서 현재 그룹의 하루 일정만 조회하는 Tool 구현이다.
+ * AI 통화에서 현재 그룹의 기간 일정을 조회하는 Tool 구현이다.
  *
- * <p>날짜 표현은 이 경계에서 해석하며, 해석할 수 없는 표현은 임의의 날짜로
- * 바꾸지 않고 명확화 결과를 반환한다. 실제 일정 조회와 현재 그룹 구성원 권한은
- * 일반 {@link CalendarEventService}에 위임한다.
+ * <p>날짜 표현은 모델이 프롬프트의 `Asia/Seoul` 기준 오늘 날짜로 직접 계산하며,
+ * 이 경계는 계산된 절대 날짜의 형식과 기간만 검증한다. 검증에 실패하면 임의의
+ * 기간으로 바꾸지 않고 명확화 결과를 반환한다. 실제 일정 조회와 현재 그룹 구성원
+ * 권한은 일반 {@link CalendarEventService}에 위임한다.
  */
 @Service
 public class AiCallCalendarToolService {
 
+	static final int MAX_RANGE_DAYS = 7;
+
+	/** 모델은 음성 안내의 표시 계층이므로 시각을 UTC가 아닌 이 시간대로 넘긴다. */
 	private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
+	private static final int ISO_DATE_LENGTH = "yyyy-MM-dd".length();
 	private static final Set<CallStatus> ACTIVE_STATUSES = Set.of(
 		CallStatus.CONNECTING,
 		CallStatus.IN_PROGRESS
 	);
-	private static final Pattern ISO_DATE = Pattern.compile("^(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})$");
-	private static final Pattern KOREAN_DATE = Pattern.compile("^(\\d{4})년\\s*(\\d{1,2})월\\s*(\\d{1,2})일$");
-	private static final Pattern WEEKDAY = Pattern.compile("^(이번|다음|지난)\\s*주?\\s*(월|화|수|목|금|토|일)(?:요일)?$");
 
 	private final CallSessionRepository callSessionRepository;
 	private final CalendarEventService calendarEventService;
-	private final Clock clock;
+	private final CalendarEventCallRepository calendarEventCallRepository;
 
 	public AiCallCalendarToolService(
 		CallSessionRepository callSessionRepository,
 		CalendarEventService calendarEventService,
-		Clock clock
+		CalendarEventCallRepository calendarEventCallRepository
 	) {
 		this.callSessionRepository = callSessionRepository;
 		this.calendarEventService = calendarEventService;
-		this.clock = clock;
+		this.calendarEventCallRepository = calendarEventCallRepository;
 	}
 
 	@Transactional(readOnly = true)
-	public AiCallToolResult getEventsByDate(Long callSessionId, String dateExpression) {
+	public AiCallToolResult getEventsByDateRange(Long callSessionId, String startDate, String endDate) {
 		CallSession callSession = callSessionRepository.findById(callSessionId).orElse(null);
 		if (callSession == null
 			|| !ACTIVE_STATUSES.contains(callSession.getStatus())
@@ -65,9 +70,14 @@ public class AiCallCalendarToolService {
 			return AiCallToolResult.unavailable(AiCallToolResult.Reason.CALL_NOT_ACTIVE);
 		}
 
-		LocalDate date = resolveDate(dateExpression, LocalDate.now(clock.withZone(BUSINESS_ZONE)));
-		if (date == null) {
-			return AiCallToolResult.needsClarification(AiCallToolResult.Reason.AMBIGUOUS_DATE);
+		LocalDate start = parseIsoDate(startDate);
+		LocalDate end = parseIsoDate(endDate);
+		if (start == null || end == null || start.isAfter(end)) {
+			return AiCallToolResult.needsClarification(AiCallToolResult.Reason.INVALID_ARGUMENTS);
+		}
+		long inclusiveDays = ChronoUnit.DAYS.between(start, end) + 1;
+		if (inclusiveDays > MAX_RANGE_DAYS) {
+			return AiCallToolResult.needsClarification(AiCallToolResult.Reason.DATE_RANGE_TOO_LONG);
 		}
 
 		Long groupId = callSession.getGroup().getId();
@@ -75,12 +85,13 @@ public class AiCallCalendarToolService {
 		try {
 			CalendarEventListResponse response = calendarEventService.getEvents(
 				groupId,
-				date,
-				date,
+				start,
+				end,
 				authenticatedUserId);
 			return AiCallToolResult.calendarSuccess(
-				date.toString(),
-				response.events().stream().map(this::toToolEvent).toList());
+				start.toString(),
+				end.toString(),
+				toToolEvents(response.events()));
 		} catch (BusinessException exception) {
 			if (exception.getErrorCode() != ErrorCode.FORBIDDEN) {
 				throw exception;
@@ -90,69 +101,69 @@ public class AiCallCalendarToolService {
 		}
 	}
 
-	private AiCallToolResult.CalendarEventItem toToolEvent(CalendarEventListItem event) {
-		return new AiCallToolResult.CalendarEventItem(
-			event.id(),
-			event.title(),
-			event.eventDate().toString(),
-			event.endDate().toString(),
-			event.startAt() == null ? null : event.startAt().toString(),
-			event.endAt() == null ? null : event.endAt().toString());
+	/**
+	 * 일반 목록 응답에 없는 설명과 참여자를 보충해 모델용 항목으로 바꾼다.
+	 *
+	 * <p>보충 조회는 일정 수와 무관하게 두 번만 수행한다.
+	 */
+	private List<AiCallToolResult.CalendarEventItem> toToolEvents(List<CalendarEventListItem> events) {
+		if (events.isEmpty()) {
+			return List.of();
+		}
+
+		List<Long> eventIds = events.stream().map(CalendarEventListItem::id).toList();
+		Map<Long, String> descriptions = loadDescriptions(eventIds);
+		Map<Long, List<String>> participants = loadParticipantNames(eventIds);
+
+		return events.stream()
+			.map(event -> new AiCallToolResult.CalendarEventItem(
+				event.id(),
+				event.title(),
+				descriptions.get(event.id()),
+				event.eventDate().toString(),
+				event.endDate().toString(),
+				toBusinessZoneTime(event.startAt()),
+				toBusinessZoneTime(event.endAt()),
+				participants.getOrDefault(event.id(), List.of())))
+			.toList();
 	}
 
-	static LocalDate resolveDate(String dateExpression, LocalDate today) {
-		if (!StringUtils.hasText(dateExpression)) {
+	private Map<Long, String> loadDescriptions(List<Long> eventIds) {
+		Map<Long, String> descriptions = new HashMap<>();
+		for (Object[] row : calendarEventCallRepository.findDescriptionsByEventIds(eventIds)) {
+			descriptions.put((Long)row[0], (String)row[1]);
+		}
+		return descriptions;
+	}
+
+	private Map<Long, List<String>> loadParticipantNames(List<Long> eventIds) {
+		Map<Long, List<String>> participants = new LinkedHashMap<>();
+		for (Object[] row : calendarEventCallRepository.findParticipantNamesByEventIds(eventIds)) {
+			participants.computeIfAbsent((Long)row[0], key -> new ArrayList<>()).add((String)row[1]);
+		}
+		return participants;
+	}
+
+	/** 날짜 일정은 시각이 없으므로 {@code null}을 유지해 직렬화에서 제외한다. */
+	private String toBusinessZoneTime(Instant instant) {
+		if (instant == null) {
 			return null;
 		}
-		String expression = dateExpression.trim().toLowerCase(Locale.ROOT);
-		return switch (expression) {
-			case "오늘", "금일", "today" -> today;
-			case "내일", "tomorrow" -> today.plusDays(1);
-			case "어제", "yesterday" -> today.minusDays(1);
-			default -> resolveExplicitDate(expression, today);
-		};
+		return instant.atZone(BUSINESS_ZONE).toOffsetDateTime().toString();
 	}
 
-	private static LocalDate resolveExplicitDate(String expression, LocalDate today) {
-		Matcher dateMatcher = ISO_DATE.matcher(expression);
-		if (!dateMatcher.matches()) {
-			dateMatcher = KOREAN_DATE.matcher(expression);
-		}
-		if (dateMatcher.matches()) {
-			try {
-				return LocalDate.of(
-					Integer.parseInt(dateMatcher.group(1)),
-					Integer.parseInt(dateMatcher.group(2)),
-					Integer.parseInt(dateMatcher.group(3)));
-			} catch (RuntimeException ignored) {
-				return null;
-			}
-		}
-
-		Matcher weekdayMatcher = WEEKDAY.matcher(expression);
-		if (!weekdayMatcher.matches()) {
+	/**
+	 * `yyyy-MM-dd` 절대 날짜만 허용한다. 길이를 먼저 확인하는 이유는
+	 * {@link LocalDate#parse}가 `+12026-01-01` 같은 확장 연도 표기도 받아들이기 때문이다.
+	 */
+	static LocalDate parseIsoDate(String value) {
+		if (!StringUtils.hasText(value) || value.length() != ISO_DATE_LENGTH) {
 			return null;
 		}
-		DayOfWeek dayOfWeek = toDayOfWeek(weekdayMatcher.group(2));
-		LocalDate weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-		int weekOffset = switch (weekdayMatcher.group(1)) {
-			case "다음" -> 1;
-			case "지난" -> -1;
-			default -> 0;
-		};
-		return weekStart.plusWeeks(weekOffset).with(TemporalAdjusters.nextOrSame(dayOfWeek));
-	}
-
-	private static DayOfWeek toDayOfWeek(String koreanDay) {
-		return switch (koreanDay) {
-			case "월" -> DayOfWeek.MONDAY;
-			case "화" -> DayOfWeek.TUESDAY;
-			case "수" -> DayOfWeek.WEDNESDAY;
-			case "목" -> DayOfWeek.THURSDAY;
-			case "금" -> DayOfWeek.FRIDAY;
-			case "토" -> DayOfWeek.SATURDAY;
-			case "일" -> DayOfWeek.SUNDAY;
-			default -> throw new IllegalArgumentException("지원하지 않는 요일입니다.");
-		};
+		try {
+			return LocalDate.parse(value);
+		} catch (DateTimeParseException ignored) {
+			return null;
+		}
 	}
 }

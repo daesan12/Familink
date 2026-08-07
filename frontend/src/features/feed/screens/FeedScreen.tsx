@@ -1,19 +1,24 @@
-import {useCallback, useEffect, useRef, useState} from 'react';
-import {StackActions, useIsFocused} from '@react-navigation/native';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState} from 'react';
+import {StackActions,
+  useIsFocused} from '@react-navigation/native';
 import {
   createNativeStackNavigator,
   type NativeStackNavigationProp,
-} from '@react-navigation/native-stack';
+  } from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   StyleSheet,
-  Text,
   Vibration,
   View,
   type ViewToken,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {AppScreenProps} from '../../../app-shell';
 import {COLORS} from '../../../design/tokens';
@@ -79,6 +84,9 @@ const EMPTY_POSTS: readonly FeedPost[] = [];
 // 담당하므로(셸 레벨 탭바) 승격 이점이 없고, 업로드 상태 머신을 FeedScreen
 // 스코프에 유지할 수 있다.
 const FeedStack = createNativeStackNavigator<FeedStackParamList>();
+
+// 셸이 주입하는 공유 하위 화면. 라우트 이름은 AppRoute와 동일하다.
+const SHARED_SUB_ROUTES = ['notifications', 'archive', 'joinApproval'] as const;
 
 type FeedNavigation = NativeStackNavigationProp<FeedStackParamList>;
 
@@ -198,6 +206,7 @@ export function FeedScreen({
   memberProfileLoader,
   memberCarnationLoader,
   rankingLoader,
+  renderSharedSubRoute,
 }: FeedScreenProps) {
   const feed = useFeed(
     currentGroup.id,
@@ -779,7 +788,10 @@ export function FeedScreen({
       interactionsRef.current.replaceComment(
         input.postId,
         {
-          author: resolvedCurrentUser,
+          // 서버가 준 작성자로 교체한다. 낙관적 항목의 resolvedCurrentUser에는
+          // 서버 서명 프로필 URL이 없어 기본 이미지로 보인다.
+          // author를 아직 내려주지 않는 서버에서는 기존처럼 화면 값을 유지한다.
+          author: result.author ?? resolvedCurrentUser,
           body: result.content,
           createdAt: result.createdAt,
           id: result.id,
@@ -1053,7 +1065,7 @@ export function FeedScreen({
                   </View>
                 ) : feed.status === 'error' ? (
                   <View accessibilityLiveRegion="polite" style={styles.centered}>
-                    <Text style={styles.errorText}>{feed.message}</Text>
+                    <AppText style={styles.errorText}>{feed.message}</AppText>
                     <RetryButton onPress={feed.retry} />
                   </View>
                 ) : (
@@ -1297,6 +1309,30 @@ export function FeedScreen({
             );
           }}
         </FeedStack.Screen>
+        {/* 셸이 소유하는 공유 하위 화면(알림·보관함). 이 파일은 라우트 등록과
+            닫기 바인딩만 담당하고 본문은 셸이 주입하므로, 피처끼리 직접
+            import하지 않는다(S15P11B104-367).
+            닫기를 goBack 한 번으로 수렴시켜 진입 지점으로 돌아간다.
+            feedNavRef는 여기서 캡처하지 않는다 — 상세·작성의 goBack·popToTop이
+            하위 화면의 navigation을 잡으면 엉뚱한 화면을 pop한다.
+            onClosed로 목록을 다시 조회한다: 하위 화면이 스택 아래 FeedHome을
+            마운트 유지하므로 재마운트 재조회가 사라지는데, 알림에서 새 게시글을
+            확인하고 닫았을 때 그 글이 보이는 기존 동작은 지켜야 한다.
+            retry가 아니라 refresh다 — retry는 status를 loading으로 되돌려
+            FlatList를 스피너로 교체하므로, 마운트 유지로 얻은 스크롤 위치가
+            그대로 사라진다.
+            가입 승인 대기는 게시글을 바꾸지 않으므로 재조회하지 않는다. */}
+        {SHARED_SUB_ROUTES.map(route => (
+          <FeedStack.Screen key={route} name={route}>
+            {({navigation}) =>
+              renderSharedSubRoute?.(route, {
+                onClose: () => navigation.goBack(),
+                onClosed:
+                  route === 'joinApproval' ? undefined : feed.refresh,
+              }) ?? null
+            }
+          </FeedStack.Screen>
+        ))}
       </FeedStack.Navigator>
       {authorProfilePopup}
     </View>
@@ -1315,11 +1351,11 @@ function isUploadCancelled(error: unknown): boolean {
 function EmptyFeedState() {
   return (
     <View accessibilityLabel="게시물이 없는 피드" style={styles.emptyState}>
-      <Text style={styles.emptyText}>
+      <AppText style={styles.emptyText}>
         아직 공유된 일상이 없어요.{'\n'}
         사랑하는 가족에게 오늘의{'\n'}
         이야기를 전해보세요.
-      </Text>
+      </AppText>
     </View>
   );
 }

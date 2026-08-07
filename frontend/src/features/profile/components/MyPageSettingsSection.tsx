@@ -1,5 +1,6 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 
@@ -17,7 +18,7 @@ interface MyPageSettingsSectionProps {
 export function MyPageSettingsSection({items}: MyPageSettingsSectionProps) {
   return (
     <View style={styles.card}>
-      <Text style={styles.sectionTitle}>설정</Text>
+      <AppText style={styles.sectionTitle}>설정</AppText>
       {items.map((item, index) => (
         <Pressable
           accessibilityLabel={item.label}
@@ -26,7 +27,7 @@ export function MyPageSettingsSection({items}: MyPageSettingsSectionProps) {
           onPress={item.onPress}
           style={[styles.row, index < items.length - 1 && styles.divider]}
         >
-          <Text style={styles.label}>{item.label}</Text>
+          <AppText style={styles.label}>{item.label}</AppText>
           <MaterialDesignIcons
             color={COLORS.textSubtle}
             name="chevron-right"

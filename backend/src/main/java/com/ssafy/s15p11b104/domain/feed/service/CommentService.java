@@ -85,8 +85,17 @@ public class CommentService {
 		GroupMember author = getActiveMemberForWrite(post.getGroup().getId(), authenticatedUserId);
 		Comment comment = commentRepository.save(new Comment(post, author, request.content()));
 		eventPublisher.publishEvent(new DomainNotificationEvent.CommentCreated(comment.getId()));
+		// 프로필 이미지는 서버만 발급할 수 있는 서명 URL이라 생성 응답에 함께 담는다.
+		// 작성자가 곧 조회자이고 자기 자신에게는 호칭을 등록할 수 없어 호칭은 조회하지 않는다.
 		return new CommentCreateResponse(
-			comment.getId(), postId, comment.getContent(), comment.getCreatedAt());
+			comment.getId(),
+			postId,
+			PostAuthorResponse.from(
+				author,
+				author.getUser().resolveDisplayName(null),
+				mediaDownloadUrlProvider.issueProfileImageDownloadUrl(author.getUser().getProfileImageUrl())),
+			comment.getContent(),
+			comment.getCreatedAt());
 	}
 
 	@Transactional

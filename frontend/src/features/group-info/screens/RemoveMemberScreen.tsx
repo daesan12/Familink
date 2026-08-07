@@ -1,13 +1,14 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useState} from 'react';
+import {
+  useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {NoticeBanner} from '../../../shared/components/NoticeBanner';
@@ -132,7 +133,7 @@ function SelectStep({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.heading}>내보낼 구성원을 선택하세요</Text>
+      <AppText style={styles.heading}>내보낼 구성원을 선택하세요</AppText>
 
       {candidates.length > 0 ? (
         <View style={styles.list}>
@@ -146,9 +147,9 @@ function SelectStep({
             >
               <GroupMemberAvatar member={member} />
               <View style={styles.rowText}>
-                <Text style={styles.name}>{member.name}</Text>
+                <AppText style={styles.name}>{member.name}</AppText>
                 {member.alias ? (
-                  <Text style={styles.relation}>{member.alias}</Text>
+                  <AppText style={styles.relation}>{member.alias}</AppText>
                 ) : null}
               </View>
               <MaterialDesignIcons
@@ -160,7 +161,7 @@ function SelectStep({
           ))}
         </View>
       ) : (
-        <Text style={styles.emptyText}>내보낼 수 있는 구성원이 없어요.</Text>
+        <AppText style={styles.emptyText}>내보낼 수 있는 구성원이 없어요.</AppText>
       )}
     </ScrollView>
   );
@@ -191,24 +192,24 @@ function ConfirmStep({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.heading}>내보낼 구성원</Text>
+        <AppText style={styles.heading}>내보낼 구성원</AppText>
 
         <View style={styles.memberCard}>
           <GroupMemberAvatar member={member} />
           <View style={styles.rowText}>
-            <Text style={styles.name}>{member.name}</Text>
+            <AppText style={styles.name}>{member.name}</AppText>
             {cardSubtitle ? (
-              <Text style={styles.relation}>{cardSubtitle}</Text>
+              <AppText style={styles.relation}>{cardSubtitle}</AppText>
             ) : null}
           </View>
         </View>
 
         <View style={styles.noticeCard}>
-          <Text style={styles.noticeTitle}>내보내면 이렇게 달라져요</Text>
+          <AppText style={styles.noticeTitle}>내보내면 이렇게 달라져요</AppText>
           {REMOVE_NOTES.map((note) => (
-            <Text key={note} style={styles.noticeBody}>
+            <AppText key={note} style={styles.noticeBody}>
               • {note}
-            </Text>
+            </AppText>
           ))}
         </View>
 
@@ -224,9 +225,9 @@ function ConfirmStep({
             name={confirmed ? 'checkbox-marked' : 'checkbox-blank-outline'}
             size={22}
           />
-          <Text style={styles.checkboxLabel}>
+          <AppText style={styles.checkboxLabel}>
             위 내용을 확인했으며 구성원을 내보냅니다.
-          </Text>
+          </AppText>
         </Pressable>
         {errorMessage ? <NoticeBanner message={errorMessage} /> : null}
       </ScrollView>
@@ -246,7 +247,7 @@ function ConfirmStep({
           {isSubmitting ? (
             <ActivityIndicator color={COLORS.background} />
           ) : (
-            <Text style={styles.submitButtonText}>구성원 내보내기</Text>
+            <AppText style={styles.submitButtonText}>구성원 내보내기</AppText>
           )}
         </Pressable>
       </View>

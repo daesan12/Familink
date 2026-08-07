@@ -1,5 +1,6 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {AUTH_COLORS} from '../theme';
 
@@ -22,7 +23,7 @@ export function ValidationMessage({
         size={20}
         color={color}
       />
-      <Text style={[styles.message, {color}]}>{message}</Text>
+      <AppText style={[styles.message, {color}]}>{message}</AppText>
     </View>
   );
 }

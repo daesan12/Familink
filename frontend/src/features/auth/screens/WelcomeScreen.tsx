@@ -1,4 +1,5 @@
-import {Image, StyleSheet, Text, View} from 'react-native';
+import {Image, StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
 import {AnimatedPressable} from '../components/AnimatedPressable';
@@ -33,7 +34,7 @@ export function WelcomeScreen({
             containerStyle={styles.loginButtonContainer}
             onPress={onStartLogin}>
             <View style={styles.loginButton}>
-              <Text style={styles.loginText}>로그인</Text>
+              <AppText style={styles.loginText}>로그인</AppText>
             </View>
           </AnimatedPressable>
           <AnimatedPressable
@@ -41,7 +42,7 @@ export function WelcomeScreen({
             accessibilityRole="button"
             hitSlop={8}
             onPress={onStartSignup}>
-            <Text style={styles.signupText}>회원가입</Text>
+            <AppText style={styles.signupText}>회원가입</AppText>
           </AnimatedPressable>
         </View>
       </View>

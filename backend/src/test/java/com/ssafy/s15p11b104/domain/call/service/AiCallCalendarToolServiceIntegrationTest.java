@@ -4,37 +4,31 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.Date;
 import java.sql.Timestamp;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneId;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.s15p11b104.support.IntegrationTest;
 
 /**
- * "오늘" 같은 상대 날짜 표현을 다루므로 애플리케이션 시계를 고정한다. 고정하지 않으면 픽스처가
- * 어느 날짜를 "오늘"로 볼지 정할 수 없어, 실행한 날에 따라 결과가 달라진다.
+ * 모델이 계산한 절대 날짜를 그대로 받으므로 애플리케이션 시계를 고정하지 않아도 실행일과
+ * 무관하게 같은 결과가 나온다. 여기서 확인하는 것은 기간 겹침 판정과 그룹 범위다.
  */
 @Transactional
-@Import(AiCallCalendarToolServiceIntegrationTest.FixedClockConfiguration.class)
 class AiCallCalendarToolServiceIntegrationTest extends IntegrationTest {
 
-	private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
-
-	/** 한국 시간 2026-08-02 09:00. 날짜 경계에서 멀어 시간대 변환 실수가 결과를 바꾸지 않는다. */
+	/** 픽스처 감사 컬럼용 고정 시각. 조회 결과에는 영향을 주지 않는다. */
 	private static final Instant FIXED_NOW = Instant.parse("2026-08-02T00:00:00Z");
-	private static final String TODAY = "2026-08-02";
-	private static final String YESTERDAY = "2026-08-01";
-	private static final String TOMORROW = "2026-08-03";
-	private static final String DAY_AFTER_TOMORROW = "2026-08-04";
+
+	private static final String RANGE_START = "2026-08-02";
+	private static final String RANGE_END = "2026-08-04";
+	private static final String BEFORE_RANGE = "2026-07-30";
+	private static final String RANGE_START_EVE = "2026-07-31";
+	private static final String INSIDE_RANGE = "2026-08-03";
+	private static final String AFTER_RANGE = "2026-08-05";
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
@@ -43,7 +37,7 @@ class AiCallCalendarToolServiceIntegrationTest extends IntegrationTest {
 	private AiCallCalendarToolService calendarToolService;
 
 	@Test
-	void returnsOnlyCurrentGroupEventsOverlappingResolvedDate() {
+	void returnsOnlyCurrentGroupEventsOverlappingRequestedRange() {
 		Long groupId = insertGroup("캘린더그룹", "CAL01");
 		Long careReceiverId = insertMember(
 			groupId,
@@ -63,33 +57,115 @@ class AiCallCalendarToolServiceIntegrationTest extends IntegrationTest {
 		);
 		Long callSessionId = insertCallSession(groupId, careReceiverId, "IN_PROGRESS");
 
-		insertCalendarEvent(groupId, creatorId, "당일 일정", TODAY, TODAY);
-		insertCalendarEvent(groupId, creatorId, "여러 날 일정", YESTERDAY, TOMORROW);
-		insertCalendarEvent(groupId, creatorId, "다른 날짜", DAY_AFTER_TOMORROW, DAY_AFTER_TOMORROW);
-		insertCalendarEvent(otherGroupId, otherCreatorId, "외부 그룹", TODAY, TODAY);
+		insertCalendarEvent(groupId, creatorId, "기간 안 하루 일정", INSIDE_RANGE, INSIDE_RANGE);
+		insertCalendarEvent(groupId, creatorId, "시작 경계만 겹치는 일정", RANGE_START_EVE, RANGE_START);
+		insertCalendarEvent(groupId, creatorId, "기간 뒤 일정", AFTER_RANGE, AFTER_RANGE);
+		insertCalendarEvent(groupId, creatorId, "기간 앞 일정", BEFORE_RANGE, RANGE_START_EVE);
+		insertCalendarEvent(otherGroupId, otherCreatorId, "외부 그룹", INSIDE_RANGE, INSIDE_RANGE);
 
-		AiCallToolResult result = calendarToolService.getEventsByDate(callSessionId, "오늘");
+		AiCallToolResult result = calendarToolService.getEventsByDateRange(
+			callSessionId, RANGE_START, RANGE_END);
 
 		assertThat(result.status()).isEqualTo(AiCallToolResult.Status.SUCCESS);
-		assertThat(result.date()).isEqualTo(TODAY);
+		assertThat(result.startDate()).isEqualTo(RANGE_START);
+		assertThat(result.endDate()).isEqualTo(RANGE_END);
 		assertThat(result.events()).extracting(AiCallToolResult.CalendarEventItem::title)
-			.containsExactlyInAnyOrder("당일 일정", "여러 날 일정");
+			.containsExactlyInAnyOrder("기간 안 하루 일정", "시작 경계만 겹치는 일정");
 	}
 
+	/** 하루 조회는 시작일과 종료일이 같은 기간 조회로 표현한다. */
 	@Test
-	void returnsClarificationWithoutQueryForAmbiguousDate() {
-		Long groupId = insertGroup("모호한 날짜", "CAL03");
+	void returnsEventsForSingleDayWhenStartEqualsEnd() {
+		Long groupId = insertGroup("하루 조회", "CAL03");
 		Long careReceiverId = insertMember(
 			groupId,
-			insertUser("cal_ambig", "피보호자"),
+			insertUser("cal_single", "피보호자"),
 			"CARE_RECEIVER"
+		);
+		Long creatorId = insertMember(
+			groupId,
+			insertUser("cal_sgl_make", "보호자"),
+			"GUARDIAN"
 		);
 		Long callSessionId = insertCallSession(groupId, careReceiverId, "IN_PROGRESS");
 
-		AiCallToolResult result = calendarToolService.getEventsByDate(callSessionId, "8월 2일");
+		insertCalendarEvent(groupId, creatorId, "그날 일정", RANGE_START, RANGE_START);
+		insertCalendarEvent(groupId, creatorId, "그날 걸친 일정", RANGE_START_EVE, INSIDE_RANGE);
+		insertCalendarEvent(groupId, creatorId, "다음 날 일정", INSIDE_RANGE, INSIDE_RANGE);
 
-		assertThat(result.status()).isEqualTo(AiCallToolResult.Status.NEEDS_CLARIFICATION);
-		assertThat(result.reason()).isEqualTo(AiCallToolResult.Reason.AMBIGUOUS_DATE);
+		AiCallToolResult result = calendarToolService.getEventsByDateRange(
+			callSessionId, RANGE_START, RANGE_START);
+
+		assertThat(result.status()).isEqualTo(AiCallToolResult.Status.SUCCESS);
+		assertThat(result.startDate()).isEqualTo(RANGE_START);
+		assertThat(result.endDate()).isEqualTo(RANGE_START);
+		assertThat(result.events()).extracting(AiCallToolResult.CalendarEventItem::title)
+			.containsExactlyInAnyOrder("그날 일정", "그날 걸친 일정");
+	}
+
+	/**
+	 * 모델이 음성 안내의 표시 계층이므로 시각은 UTC가 아니라 `Asia/Seoul` 기준으로 넘겨야 한다.
+	 * 설명과 참여자는 일반 목록 응답에 없어 보충 조회로 채운다.
+	 */
+	@Test
+	void returnsDescriptionParticipantsAndBusinessZoneTimes() {
+		Long groupId = insertGroup("상세 정보", "CAL05");
+		Long careReceiverId = insertMember(
+			groupId,
+			insertUser("cal_detail", "피보호자"),
+			"CARE_RECEIVER"
+		);
+		Long participantId = insertMember(
+			groupId,
+			insertUser("cal_part", "김민지"),
+			"GUARDIAN"
+		);
+		Long leftMemberId = insertMember(
+			groupId,
+			insertUser("cal_left", "떠난사람"),
+			"GUARDIAN"
+		);
+		jdbcTemplate.update("update group_members set left_at = current_timestamp where id = ?", leftMemberId);
+		Long callSessionId = insertCallSession(groupId, careReceiverId, "IN_PROGRESS");
+
+		// 한국 시간 2026-08-02 14:00~15:00
+		Long timedEventId = insertTimedCalendarEvent(
+			groupId,
+			participantId,
+			"병원 진료",
+			"3층 정형외과",
+			RANGE_START,
+			Instant.parse("2026-08-02T05:00:00Z"),
+			Instant.parse("2026-08-02T06:00:00Z"));
+		insertParticipant(timedEventId, participantId);
+		insertParticipant(timedEventId, leftMemberId);
+
+		Long allDayEventId = insertCalendarEvent(groupId, participantId, "하루종일 일정", RANGE_START, RANGE_START);
+
+		AiCallToolResult result = calendarToolService.getEventsByDateRange(
+			callSessionId, RANGE_START, RANGE_START);
+
+		assertThat(result.status()).isEqualTo(AiCallToolResult.Status.SUCCESS);
+
+		AiCallToolResult.CalendarEventItem timedEvent = findEvent(result, timedEventId);
+		assertThat(timedEvent.description()).isEqualTo("3층 정형외과");
+		assertThat(timedEvent.startAt()).isEqualTo("2026-08-02T14:00+09:00");
+		assertThat(timedEvent.endAt()).isEqualTo("2026-08-02T15:00+09:00");
+		// 그룹을 떠난 구성원은 참여자에서 제외한다.
+		assertThat(timedEvent.participants()).containsExactly("김민지");
+
+		AiCallToolResult.CalendarEventItem allDayEvent = findEvent(result, allDayEventId);
+		assertThat(allDayEvent.description()).isNull();
+		assertThat(allDayEvent.startAt()).isNull();
+		assertThat(allDayEvent.endAt()).isNull();
+		assertThat(allDayEvent.participants()).isEmpty();
+	}
+
+	private AiCallToolResult.CalendarEventItem findEvent(AiCallToolResult result, Long eventId) {
+		return result.events().stream()
+			.filter(event -> event.id().equals(eventId))
+			.findFirst()
+			.orElseThrow(() -> new AssertionError("일정 " + eventId + "이 결과에 없습니다."));
 	}
 
 	@Test
@@ -102,7 +178,8 @@ class AiCallCalendarToolServiceIntegrationTest extends IntegrationTest {
 		);
 		Long callSessionId = insertCallSession(groupId, careReceiverId, "COMPLETED");
 
-		AiCallToolResult result = calendarToolService.getEventsByDate(callSessionId, "오늘");
+		AiCallToolResult result = calendarToolService.getEventsByDateRange(
+			callSessionId, RANGE_START, RANGE_START);
 
 		assertThat(result.status()).isEqualTo(AiCallToolResult.Status.UNAVAILABLE);
 		assertThat(result.reason()).isEqualTo(AiCallToolResult.Reason.CALL_NOT_ACTIVE);
@@ -145,14 +222,14 @@ class AiCallCalendarToolServiceIntegrationTest extends IntegrationTest {
 			""", Long.class, groupId, careReceiverId, status);
 	}
 
-	private void insertCalendarEvent(
+	private Long insertCalendarEvent(
 		Long groupId,
 		Long creatorMemberId,
 		String title,
 		String eventDate,
 		String endDate
 	) {
-		jdbcTemplate.update("""
+		return jdbcTemplate.queryForObject("""
 			insert into calendar_events (
 				group_id,
 				creator_member_id,
@@ -165,7 +242,9 @@ class AiCallCalendarToolServiceIntegrationTest extends IntegrationTest {
 				reminder_schedule_updated_at
 			)
 			values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			returning id
 			""",
+			Long.class,
 			groupId,
 			creatorMemberId,
 			creatorMemberId,
@@ -177,13 +256,53 @@ class AiCallCalendarToolServiceIntegrationTest extends IntegrationTest {
 			Timestamp.from(FIXED_NOW));
 	}
 
-	@TestConfiguration(proxyBeanMethods = false)
-	static class FixedClockConfiguration {
+	private Long insertTimedCalendarEvent(
+		Long groupId,
+		Long creatorMemberId,
+		String title,
+		String description,
+		String eventDate,
+		Instant startAt,
+		Instant endAt
+	) {
+		return jdbcTemplate.queryForObject("""
+			insert into calendar_events (
+				group_id,
+				creator_member_id,
+				last_editor_member_id,
+				title,
+				description,
+				event_date,
+				end_date,
+				start_at,
+				end_at,
+				participants_specified,
+				created_at,
+				updated_at,
+				reminder_schedule_updated_at
+			)
+			values (?, ?, ?, ?, ?, ?, ?, ?, ?, true, ?, ?, ?)
+			returning id
+			""",
+			Long.class,
+			groupId,
+			creatorMemberId,
+			creatorMemberId,
+			title,
+			description,
+			Date.valueOf(eventDate),
+			Date.valueOf(eventDate),
+			Timestamp.from(startAt),
+			Timestamp.from(endAt),
+			Timestamp.from(FIXED_NOW),
+			Timestamp.from(FIXED_NOW),
+			Timestamp.from(FIXED_NOW));
+	}
 
-		@Bean
-		@Primary
-		Clock fixedClock() {
-			return Clock.fixed(FIXED_NOW, BUSINESS_ZONE);
-		}
+	private void insertParticipant(Long eventId, Long groupMemberId) {
+		jdbcTemplate.update("""
+			insert into event_participants (event_id, group_member_id)
+			values (?, ?)
+			""", eventId, groupMemberId);
 	}
 }

@@ -1,19 +1,9 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useRef, useState} from 'react';
-import {
-  AccessibilityInfo,
-  Animated,
-  Easing,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {Pressable, ScrollView, StyleSheet, View} from 'react-native';
 
 import {COLORS, RADII} from '../design/tokens';
+import {AppText} from '../shared/components/AppText';
+import {DraggableBottomSheet} from '../shared/components/DraggableBottomSheet';
 import type {FamilyGroup} from './types';
 
 interface CurrentGroupSwitcherProps {
@@ -37,76 +27,10 @@ export function CurrentGroupSwitcher({
   onSelect,
   onToggle,
 }: CurrentGroupSwitcherProps) {
-  const {height: windowHeight} = useWindowDimensions();
-  const insets = useSafeAreaInsets();
   const orderedGroups = [
     currentGroup,
     ...groups.filter(group => group.id !== currentGroup.id),
   ];
-  const [isModalVisible, setIsModalVisible] = useState(isOpen);
-  const [reduceMotion, setReduceMotion] = useState(false);
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const sheetTranslateY = useRef(new Animated.Value(windowHeight)).current;
-  const isOpenRef = useRef(isOpen);
-  isOpenRef.current = isOpen;
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReduceMotion,
-    );
-
-    return () => subscription.remove();
-  }, []);
-
-  useEffect(() => {
-    if (isOpen) {
-      setIsModalVisible(true);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isModalVisible) {
-      sheetTranslateY.setValue(windowHeight);
-    }
-  }, [isModalVisible, sheetTranslateY, windowHeight]);
-
-  useEffect(() => {
-    if (!isModalVisible) {
-      return;
-    }
-
-    const animation = Animated.parallel([
-      Animated.timing(backdropOpacity, {
-        duration: reduceMotion ? 0 : isOpen ? 180 : 140,
-        easing: isOpen ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
-        toValue: isOpen ? 1 : 0,
-        useNativeDriver: true,
-      }),
-      Animated.timing(sheetTranslateY, {
-        duration: reduceMotion ? 0 : isOpen ? 280 : 220,
-        easing: isOpen ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
-        toValue: isOpen ? 0 : windowHeight,
-        useNativeDriver: true,
-      }),
-    ]);
-
-    animation.start(({finished}) => {
-      if (finished && !isOpenRef.current) {
-        setIsModalVisible(false);
-      }
-    });
-
-    return () => animation.stop();
-  }, [
-    backdropOpacity,
-    isModalVisible,
-    isOpen,
-    reduceMotion,
-    sheetTranslateY,
-    windowHeight,
-  ]);
 
   return (
     <>
@@ -116,9 +40,9 @@ export function CurrentGroupSwitcher({
         onPress={onToggle}
         style={styles.trigger}
       >
-        <Text numberOfLines={1} style={styles.triggerText}>
+        <AppText numberOfLines={1} style={styles.triggerText}>
           {currentGroup.name}
-        </Text>
+        </AppText>
         <MaterialDesignIcons
           accessibilityElementsHidden
           color={COLORS.textStrong}
@@ -127,78 +51,56 @@ export function CurrentGroupSwitcher({
         />
       </Pressable>
 
-      <Modal
-        animationType="none"
-        onRequestClose={onClose}
-        transparent
-        visible={isModalVisible}
+      <DraggableBottomSheet
+        accessibilityLabel="그룹 선택"
+        backdropVisible={false}
+        collapsedHeight={260}
+        initialSnap="collapsed"
+        maxHeightRatio={0.58}
+        onClose={onClose}
+        sheetStyle={styles.sheet}
+        visible={isOpen}
       >
-        <View style={styles.modalRoot}>
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.dim,
-              {
-                opacity: backdropOpacity,
-              },
-            ]}
-          />
-          <Pressable
-            accessibilityLabel="그룹 전환 닫기"
-            accessibilityRole="button"
-            onPress={onClose}
-            style={styles.dismissArea}
-          />
-          <Animated.View
-            onStartShouldSetResponder={() => true}
-            style={[
-              styles.sheet,
-              {
-                paddingBottom: 24 + insets.bottom,
-                transform: [{translateY: sheetTranslateY}],
-              },
-            ]}
+        <View style={styles.body}>
+          <AppText style={styles.title}>그룹 선택</AppText>
+          <ScrollView
+            accessibilityRole="menu"
+            contentContainerStyle={styles.options}
+            showsVerticalScrollIndicator={false}
           >
-            <View accessibilityElementsHidden style={styles.handle} />
-            <Text style={styles.title}>그룹 선택</Text>
-            <View accessibilityRole="menu" style={styles.options}>
-              {orderedGroups.map(group => {
-                const isSelected = group.id === currentGroup.id;
+            {orderedGroups.map(group => {
+              const isSelected = group.id === currentGroup.id;
 
-                return (
-                  <Pressable
-                    accessibilityRole="menuitem"
-                    accessibilityState={{selected: isSelected}}
-                    key={group.id}
-                    onPress={() => onSelect(group.id)}
-                    style={({pressed}) => [
-                      styles.option,
-                      isSelected && styles.selectedOption,
-                      pressed && !isSelected && styles.pressedOption,
+              return (
+                <Pressable
+                  accessibilityRole="menuitem"
+                  accessibilityState={{selected: isSelected}}
+                  key={group.id}
+                  onPress={() => onSelect(group.id)}
+                  style={({pressed}) => [
+                    styles.option,
+                    isSelected && styles.selectedOption,
+                    pressed && !isSelected && styles.pressedOption,
+                  ]}
+                >
+                  <AppText
+                    style={[
+                      styles.optionText,
+                      isSelected && styles.selectedOptionText,
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.optionText,
-                        isSelected && styles.selectedOptionText,
-                      ]}
-                    >
-                      {group.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <View style={styles.actions}>
-              <GroupAction
-                label="새 그룹 만들기"
-                onPress={onCreateGroup}
-              />
-              <GroupAction label="그룹 참가하기" onPress={onJoinGroup} />
-            </View>
-          </Animated.View>
+                    {group.name}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          <View style={styles.actions}>
+            <GroupAction label="새 그룹 만들기" onPress={onCreateGroup} />
+            <GroupAction label="그룹 참가하기" onPress={onJoinGroup} />
+          </View>
         </View>
-      </Modal>
+      </DraggableBottomSheet>
     </>
   );
 }
@@ -225,7 +127,7 @@ function GroupAction({label, onPress}: GroupActionProps) {
         name="plus"
         size={18}
       />
-      <Text style={styles.actionText}>{label}</Text>
+      <AppText style={styles.actionText}>{label}</AppText>
     </Pressable>
   );
 }
@@ -258,28 +160,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  dim: {
-    backgroundColor: COLORS.overlay,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-  },
-  dismissArea: {
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-  },
-  handle: {
-    alignSelf: 'center',
-    backgroundColor: '#BDBDBD',
-    borderCurve: 'continuous',
-    borderRadius: RADII.pill,
-    height: 5,
-    width: 70,
+  // flexShrink 기본값 0을 덮어써야 시트가 상한에 걸릴 때 이 래퍼가 줄어들고,
+  // 안쪽 목록만 스크롤되면서 하단 액션 버튼이 계속 보인다.
+  body: {
+    flexShrink: 1,
   },
   option: {
     alignItems: 'center',
@@ -298,10 +182,6 @@ const styles = StyleSheet.create({
   options: {
     paddingHorizontal: 16,
   },
-  modalRoot: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
   pressedOption: {
     backgroundColor: COLORS.surface,
   },
@@ -317,13 +197,11 @@ const styles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: COLORS.background,
-    borderColor: 'rgba(120, 113, 108, 0.7)',
     borderCurve: 'continuous',
     borderTopLeftRadius: RADII.sheet,
     borderTopRightRadius: RADII.sheet,
-    borderWidth: 1,
     boxShadow: '0 -4px 16px rgba(18, 23, 41, 0.12)',
-    paddingTop: 10,
+    overflow: 'hidden',
   },
   title: {
     color: COLORS.textStrong,

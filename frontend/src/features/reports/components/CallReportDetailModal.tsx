@@ -5,13 +5,14 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
+import {AppText} from "../../../shared/components/AppText";
 
 import { COLORS, RADII } from "../../../design/tokens";
 import { RetryButton } from "../../../shared/components/RetryButton";
 import type { CallReportDetailState } from "../types";
+import {ReportMessageBubble} from "./ReportMessageBubble";
 
 interface CallReportDetailModalProps {
   detail: CallReportDetailState | null;
@@ -47,12 +48,9 @@ export function CallReportDetailModal({
         {detail && call ? (
           <View style={styles.modalCard}>
             <View style={styles.header}>
-              <View style={styles.titleCopy}>
-                <Text style={styles.date}>{call.reportDateLabel}</Text>
-                <Text style={styles.title}>
-                  {call.startedAtLabel} 통화 리포트
-                </Text>
-              </View>
+              <AppText style={styles.title}>
+                {formatCallReportTitle(call.startedAtLabel)}
+              </AppText>
               <Pressable
                 accessibilityLabel="닫기"
                 accessibilityRole="button"
@@ -125,17 +123,15 @@ export function CallReportDetailModal({
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
               >
-                <View style={styles.summaryCard}>
-                  <Text style={styles.sectionTitle}>통화 내용</Text>
-                  <Text style={styles.body}>{call.summary}</Text>
-                </View>
+                <View style={styles.reportContent}>
+                  <AppText style={styles.body}>{call.summary}</AppText>
 
-                {call.guardianMessage ? (
-                  <View style={styles.messageCard}>
-                    <Text style={styles.sectionTitle}>전달하신 말씀</Text>
-                    <Text style={styles.body}>{call.guardianMessage}</Text>
-                  </View>
-                ) : null}
+                  {call.guardianMessage ? (
+                    <View style={styles.messageBubbleWrap}>
+                      <ReportMessageBubble message={call.guardianMessage} />
+                    </View>
+                  ) : null}
+                </View>
               </ScrollView>
             ) : null}
           </View>
@@ -143,6 +139,15 @@ export function CallReportDetailModal({
       </View>
     </Modal>
   );
+}
+
+function formatCallReportTitle(startedAtLabel: string): string {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(startedAtLabel);
+  if (!match) {
+    return `${startedAtLabel} 통화리포트`;
+  }
+
+  return `${Number(match[1])}시 ${match[2]}분 통화리포트`;
 }
 
 interface DetailStatusProps {
@@ -163,8 +168,8 @@ function DetailStatus({
   return (
     <View style={styles.status}>
       <MaterialDesignIcons color={COLORS.purpleDeep} name={icon} size={30} />
-      <Text style={styles.statusTitle}>{title}</Text>
-      <Text style={styles.statusDescription}>{description}</Text>
+      <AppText style={styles.statusTitle}>{title}</AppText>
+      <AppText style={styles.statusDescription}>{description}</AppText>
       {actionLabel && onAction ? (
         <RetryButton label={actionLabel} onPress={onAction} />
       ) : null}
@@ -177,7 +182,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 15,
     lineHeight: 24,
-    marginTop: 8,
   },
   closeButton: {
     alignItems: "center",
@@ -186,51 +190,38 @@ const styles = StyleSheet.create({
     width: 44,
   },
   content: {
-    gap: 14,
-    paddingTop: 20,
-  },
-  date: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
+    paddingTop: 18,
   },
   header: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  messageCard: {
-    backgroundColor: COLORS.lemon,
-    borderCurve: "continuous",
-    borderRadius: RADII.medium,
-    padding: 18,
+  messageBubbleWrap: {
+    marginTop: 24,
   },
   modalCard: {
     backgroundColor: COLORS.background,
     borderCurve: "continuous",
     borderRadius: RADII.sheet,
     maxHeight: "78%",
-    padding: 22,
-    width: "88%",
+    paddingHorizontal: 22,
+    paddingVertical: 24,
+    width: "90%",
   },
   overlay: {
     alignItems: "center",
-    backgroundColor: COLORS.imageOverlay,
+    backgroundColor: COLORS.overlay,
     flex: 1,
     justifyContent: "center",
     paddingHorizontal: 18,
   },
-  sectionTitle: {
-    color: COLORS.textStrong,
-    fontSize: 14,
-    fontWeight: "800",
-    lineHeight: 20,
-  },
-  summaryCard: {
+  reportContent: {
     backgroundColor: COLORS.lavenderSurface,
     borderCurve: "continuous",
-    borderRadius: RADII.medium,
-    padding: 18,
+    borderRadius: 20,
+    paddingHorizontal: 22,
+    paddingVertical: 26,
   },
   status: {
     alignItems: "center",
@@ -253,13 +244,10 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   title: {
-    color: COLORS.textStrong,
-    fontSize: 21,
-    fontWeight: "800",
-    lineHeight: 28,
-    marginTop: 3,
-  },
-  titleCopy: {
+    color: COLORS.text,
     flex: 1,
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 28,
   },
 });

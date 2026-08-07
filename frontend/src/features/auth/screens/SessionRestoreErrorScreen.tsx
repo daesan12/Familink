@@ -1,4 +1,5 @@
-import {StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, View} from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import {PrimaryButton} from '../components/PrimaryButton';
 import {AUTH_COLORS, AUTH_LAYOUT} from '../theme';
@@ -18,10 +19,10 @@ export function SessionRestoreErrorScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.copy}>
-        <Text style={styles.title}>연결에 문제가 있어요</Text>
-        <Text style={styles.description}>
+        <AppText style={styles.title}>연결에 문제가 있어요</AppText>
+        <AppText style={styles.description}>
           네트워크 상태를 확인한 뒤{'\n'}다시 시도해 주세요.
-        </Text>
+        </AppText>
       </View>
       <View style={styles.action}>
         <PrimaryButton label="다시 시도" loading={retrying} onPress={onRetry} />

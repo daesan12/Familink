@@ -1,21 +1,26 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState} from 'react';
 import {StackActions} from '@react-navigation/native';
 import {
   createNativeStackNavigator,
   type NativeStackNavigationProp,
-} from '@react-navigation/native-stack';
+  } from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import {AppText} from '../../../shared/components/AppText';
 
 import type {AppScreenProps} from '../../../app-shell';
+import {AccountActionConfirmationModal} from '../../auth/components/LogoutConfirmationModal';
 import {COLORS, RADII} from '../../../design/tokens';
 import {RetryButton} from '../../../shared/components/RetryButton';
 import {RouteFocusReporter} from '../../../shared/navigation/RouteFocusReporter';
@@ -134,6 +139,8 @@ export function MyPageScreen({
   // 초기값 true — false로 시작하면 첫 커밋에서 탭바가 잠깐 숨는다.
   const [isHomeFocused, setIsHomeFocused] = useState(true);
   const [isMonthlyOpen, setIsMonthlyOpen] = useState(false);
+  const [isLogoutConfirmationVisible, setIsLogoutConfirmationVisible] =
+    useState(false);
   // 이동 함수가 effect·핸들러에서도 스택을 조작할 수 있게 렌더 중 ref로
   // 캡처한다(FeedScreen feedNavRef 관용구).
   const profileNavRef = useRef<ProfileNavigation | null>(null);
@@ -415,10 +422,23 @@ export function MyPageScreen({
 
   const handleLogout = () => {
     if (onRequestLogout) {
-      onRequestLogout();
+      setIsLogoutConfirmationVisible(true);
       return;
     }
     Alert.alert('로그아웃', '후속 작업에서 연결될 기능입니다.');
+  };
+
+  const confirmLogout = async () => {
+    onRequestLogout?.();
+    setIsLogoutConfirmationVisible(false);
+  };
+
+  const handleMonthlyOpen = () => {
+    setSelectedMonth({
+      month: currentMonth.month,
+      year: currentMonth.year,
+    });
+    setIsMonthlyOpen(true);
   };
 
   const menuItems: readonly MyPageMenuItem[] = [
@@ -449,7 +469,7 @@ export function MyPageScreen({
     ) : (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>마이페이지</Text>
+        <AppText style={styles.headerTitle}>마이페이지</AppText>
       </View>
 
       <ScrollView
@@ -473,16 +493,16 @@ export function MyPageScreen({
         <View style={styles.stampCard}>
           <View style={styles.stampHeader}>
             <View style={styles.stampHeading}>
-              <Text style={styles.stampTitle}>효자 도장 현황</Text>
-              <Text style={styles.weekRange}>
+              <AppText style={styles.stampTitle}>효자 도장 현황</AppText>
+              <AppText style={styles.weekRange}>
                 {formatWeekRange(weekRange.weekStart, weekRange.weekEnd)}
-              </Text>
+              </AppText>
             </View>
             <Pressable
               accessibilityLabel="월간 효자 도장 보기"
               accessibilityRole="button"
               hitSlop={8}
-              onPress={() => setIsMonthlyOpen(true)}
+              onPress={handleMonthlyOpen}
               style={styles.calendarButton}
             >
               <MaterialDesignIcons
@@ -513,6 +533,12 @@ export function MyPageScreen({
         state={monthlyState}
         visible={isMonthlyOpen}
         year={selectedMonth.year}
+      />
+      <AccountActionConfirmationModal
+        action="logout"
+        onCancel={() => setIsLogoutConfirmationVisible(false)}
+        onConfirm={confirmLogout}
+        visible={isLogoutConfirmationVisible}
       />
     </View>
     );
@@ -583,7 +609,7 @@ function WeeklyStampBoard({
   if (state.status === 'error') {
     return (
       <View accessibilityLiveRegion="polite" style={styles.statusBlock}>
-        <Text style={styles.errorText}>{state.message}</Text>
+        <AppText style={styles.errorText}>{state.message}</AppText>
         <RetryButton
           accessibilityLabel="주간 카네이션 다시 시도"
           onPress={onRetry}
@@ -593,7 +619,7 @@ function WeeklyStampBoard({
   }
 
   if (state.status === 'empty') {
-    return <Text style={styles.emptyText}>이번 주에는 기록이 없어요.</Text>;
+    return <AppText style={styles.emptyText}>이번 주에는 기록이 없어요.</AppText>;
   }
 
   return (

@@ -191,7 +191,10 @@ test('제목과 구성원 수, 호칭·실제 이름을 함께 보여준다', ()
   expect(hasText(renderer, '그룹관리자')).toBe(true);
 });
 
-test('그룹 상세 API 응답의 이름과 구성원 수를 화면에 반영한다', async () => {
+test('그룹 상세 응답의 인원 수는 화면에 쓰고 이름은 상위 목록으로 올린다', async () => {
+  // 표시용 그룹명의 단일 출처는 상위 그룹 목록이다. 이 화면은 상세의 이름을
+  // 직접 표시하지 않고 onGroupNameLoaded로 올리기만 한다. 부모가 없는 단독
+  // 렌더에서 이름이 그대로인 것이 의도된 동작이다.
   const groupDetailLoader = jest.fn().mockResolvedValue({
     careReceiverCount: 2,
     guardianCount: 3,
@@ -201,6 +204,7 @@ test('그룹 상세 API 응답의 이름과 구성원 수를 화면에 반영한
     memberCount: 5,
     name: '서버 가족',
   });
+  const onGroupNameLoaded = jest.fn();
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(async () => {
@@ -210,6 +214,7 @@ test('그룹 상세 API 응답의 이름과 구성원 수를 화면에 반영한
         currentMemberId="m-manager"
         groupDetailLoader={groupDetailLoader}
         initialMembers={MEMBERS}
+        onGroupNameLoaded={onGroupNameLoaded}
         pendingJoinCount={2}
         rankingLoader={PENDING_RANKING_LOADER}
       />,
@@ -219,12 +224,13 @@ test('그룹 상세 API 응답의 이름과 구성원 수를 화면에 반영한
 
   expect(groupDetailLoader).toHaveBeenCalledWith('group-1');
   expect(hasText(renderer!, '피보호자 2명, 보호자 3명')).toBe(true);
+  expect(onGroupNameLoaded).toHaveBeenCalledWith('group-1', '서버 가족');
 
   press(renderer!, '그룹명 변경');
   expect(
     renderer!.root.findByProps({accessibilityLabel: '그룹 이름 입력'}).props
       .value,
-  ).toBe('서버 가족');
+  ).toBe(baseProps.currentGroup.name);
 });
 
 test('그룹 전환 뒤 늦게 도착한 이전 상세 응답을 무시한다', async () => {
@@ -256,6 +262,7 @@ test('그룹 전환 뒤 늦게 도착한 이전 상세 응답을 무시한다', 
         }
       }),
   );
+  const onGroupNameLoaded = jest.fn();
   let renderer: TestRenderer.ReactTestRenderer;
 
   await TestRenderer.act(async () => {
@@ -265,6 +272,7 @@ test('그룹 전환 뒤 늦게 도착한 이전 상세 응답을 무시한다', 
         currentMemberId="m-manager"
         groupDetailLoader={groupDetailLoader}
         initialMembers={MEMBERS}
+        onGroupNameLoaded={onGroupNameLoaded}
         pendingJoinCount={2}
         rankingLoader={PENDING_RANKING_LOADER}
       />,
@@ -280,6 +288,7 @@ test('그룹 전환 뒤 늦게 도착한 이전 상세 응답을 무시한다', 
         currentMemberId="m-manager"
         groupDetailLoader={groupDetailLoader}
         initialMembers={MEMBERS}
+        onGroupNameLoaded={onGroupNameLoaded}
         pendingJoinCount={2}
         rankingLoader={PENDING_RANKING_LOADER}
       />,
@@ -312,6 +321,114 @@ test('그룹 전환 뒤 늦게 도착한 이전 상세 응답을 무시한다', 
 
   expect(hasText(renderer!, '피보호자 4명, 보호자 1명')).toBe(true);
   expect(hasText(renderer!, '피보호자 1명, 보호자 8명')).toBe(false);
+  // 무시된 응답의 이름이 상위 목록으로 새어 나가면 셸 헤더가 옛 이름으로 되돌아간다.
+  expect(onGroupNameLoaded).toHaveBeenCalledWith('group-2', '두 번째 서버 가족');
+  expect(onGroupNameLoaded).not.toHaveBeenCalledWith(
+    'group-1',
+    '늦은 첫 번째 가족',
+  );
+});
+
+test('그룹명 변경 뒤 늦게 도착한 옛 이름은 상위 목록으로 올리지 않는다', async () => {
+  type Detail = {
+    careReceiverCount: number;
+    guardianCount: number;
+    id: string;
+    isManager: boolean;
+    managerMemberId: string | null;
+    memberCount: number;
+    name: string;
+  };
+  // 변경 후 재조회가 새 요청을 만들므로 요청별 resolve를 따로 보관한다.
+  const resolvers: ((detail: Detail) => void)[] = [];
+  const groupDetailLoader = jest.fn(
+    () =>
+      new Promise<Detail>(resolve => {
+        resolvers.push(resolve);
+      }),
+  );
+  const onGroupNameLoaded = jest.fn();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        groupDetailLoader={groupDetailLoader}
+        initialMembers={MEMBERS}
+        onGroupNameLoaded={onGroupNameLoaded}
+        onRenameGroup={() => {}}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '그룹명 변경');
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({accessibilityLabel: '그룹 이름 입력'})
+      .props.onChangeText('새 가족');
+  });
+  await TestRenderer.act(async () => {
+    await renderer!.root
+      .findByProps({accessibilityLabel: '변경하기'})
+      .props.onPress();
+  });
+
+  // 변경 전에 출발한 첫 요청이 뒤늦게 도착한다.
+  await TestRenderer.act(async () => {
+    resolvers[0]({
+      careReceiverCount: 2,
+      guardianCount: 3,
+      id: 'group-1',
+      isManager: true,
+      managerMemberId: 'm-manager',
+      memberCount: 5,
+      name: '옛 가족',
+    });
+    await Promise.resolve();
+  });
+
+  expect(onGroupNameLoaded).not.toHaveBeenCalled();
+  // 변경 후 재조회가 걸려 있다.
+  expect(groupDetailLoader).toHaveBeenCalledTimes(2);
+});
+
+test('그룹 삭제 확인은 상위 목록의 그룹명을 그대로 보낸다', async () => {
+  const groupDetailLoader = jest.fn().mockResolvedValue({
+    careReceiverCount: 2,
+    guardianCount: 3,
+    id: 'group-1',
+    isManager: true,
+    managerMemberId: 'm-manager',
+    memberCount: 5,
+    name: '서버 가족',
+  });
+  const deleted: string[] = [];
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <GroupInfoScreen
+        {...baseProps}
+        currentMemberId="m-manager"
+        groupDetailLoader={groupDetailLoader}
+        initialMembers={MEMBERS}
+        onDeleteGroup={name => deleted.push(name)}
+        pendingJoinCount={2}
+        rankingLoader={PENDING_RANKING_LOADER}
+      />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '그룹 삭제');
+  press(renderer!, '그룹 삭제 확정');
+
+  expect(deleted).toEqual([baseProps.currentGroup.name]);
 });
 
 test('호칭이 없는 구성원은 이름을 한 번만 표시한다', () => {
@@ -902,14 +1019,29 @@ test('그룹 나가기 화면의 관리자 변경 링크는 H-6으로 이동한�
   expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(true);
 });
 
-test('비관리자는 그룹 나가기 화면에서 관리자 변경 화면을 우회할 수 없다', () => {
+test('비관리자의 그룹 나가기 화면에는 관리자 전용 안내와 링크가 없다', () => {
   const renderer = renderScreen('m-dad');
 
   press(renderer, '그룹 나가기');
-  press(renderer, '그룹관리자 변경하기');
 
-  expect(hasText(renderer, '그룹관리자만 접근할 수 있습니다')).toBe(true);
-  expect(hasText(renderer, '새 그룹관리자를 선택하세요')).toBe(false);
+  // 관리자에게만 해당하는 위임 안내이므로 일반 구성원에게는 표시하지 않는다.
+  expect(hasText(renderer, '그룹관리자는 바로 나갈 수 없어요')).toBe(false);
+  // 링크 자체가 없어 H-6 우회 경로도 생기지 않는다.
+  expect(
+    renderer.root.findAllByProps({accessibilityLabel: '그룹관리자 변경하기'}),
+  ).toHaveLength(0);
+});
+
+test('혼자인 관리자의 그룹 나가기는 H-8 대신 그룹 삭제 확인으로 연결한다', () => {
+  // spec 규칙 11: 위임할 상대가 없으므로 나가기 화면이 아니라 삭제 확인으로 보낸다.
+  const renderer = renderScreen('m-manager', {
+    initialMembers: [MEMBERS[0]],
+  });
+
+  press(renderer, '그룹 나가기');
+
+  expect(hasText(renderer, '정말 그룹을 삭제하시겠어요?')).toBe(true);
+  expect(hasText(renderer, '정말 그룹을 나가시겠어요?')).toBe(false);
 });
 
 test('그룹 삭제 메뉴는 확인 팝업을 띄우고 삭제 콜백을 부른다', () => {

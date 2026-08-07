@@ -1,4 +1,5 @@
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, View} from 'react-native';
+import {AppText} from './AppText';
 
 import {COLORS, RADII} from '../../design/tokens';
 
@@ -18,12 +19,12 @@ export function NoticeBanner({
 }: NoticeBannerProps) {
   return (
     <View accessibilityLiveRegion="polite" style={styles.banner}>
-      <Text accessibilityRole="alert" style={styles.message}>
+      <AppText accessibilityRole="alert" style={styles.message}>
         {message}
-      </Text>
+      </AppText>
       {onRetry ? (
         <Pressable accessibilityRole="button" onPress={onRetry}>
-          <Text style={styles.retryText}>{retryLabel}</Text>
+          <AppText style={styles.retryText}>{retryLabel}</AppText>
         </Pressable>
       ) : null}
     </View>

@@ -1,7 +1,8 @@
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {Pressable, ScrollView, StyleSheet, View} from 'react-native';
 
 import {COLORS, RADII} from '../../../design/tokens';
+import {AppText} from '../../../shared/components/AppText';
 import {DraggableBottomSheet} from '../../../shared/components/DraggableBottomSheet';
 import {formatEventTime, formatSelectedDateLabel} from '../calendarModel';
 import type {CalendarEventSummary, DateKey} from '../types';
@@ -25,17 +26,20 @@ export function CalendarEventsSheet({
     <DraggableBottomSheet
       accessibilityLabel="선택한 날짜 일정"
       backdropVisible={false}
-      collapsedHeight={260}
-      initialSnap="collapsed"
+      // 접힘 상태로 열면 일정 두 건만 보인다. 처음부터 상한까지 펼쳐 두고
+      // 일정이 더 많으면 시트 안에서 스크롤한다.
+      maxHeightRatio={0.58}
       onClose={onClose}
       sheetStyle={styles.sheet}
       visible={visible}
     >
-      <View>
+      {/* 목록을 감싸는 View를 두면 그 View가 줄어들지 않아(RN flexShrink 기본값 0)
+          시트가 상한에 걸릴 때 아래쪽 일정이 잘리고 스크롤도 되지 않는다. */}
+      <>
         <View style={styles.header}>
           <View style={styles.headerText}>
-            <Text style={styles.eyebrow}>선택한 날짜</Text>
-            <Text style={styles.title}>{formatSelectedDateLabel(dateKey)}</Text>
+            <AppText style={styles.eyebrow}>선택한 날짜</AppText>
+            <AppText style={styles.title}>{formatSelectedDateLabel(dateKey)}</AppText>
           </View>
           <Pressable
             accessibilityLabel="선택 날짜 일정 닫기"
@@ -60,10 +64,10 @@ export function CalendarEventsSheet({
                 size={28}
               />
             </View>
-            <Text style={styles.emptyTitle}>등록된 일정이 없어요</Text>
-            <Text style={styles.emptyDescription}>
+            <AppText style={styles.emptyTitle}>등록된 일정이 없어요</AppText>
+            <AppText style={styles.emptyDescription}>
               이 날짜에 새 일정을 추가할 수 있어요.
-            </Text>
+            </AppText>
           </View>
         ) : (
           <ScrollView
@@ -84,10 +88,10 @@ export function CalendarEventsSheet({
               >
                 <View accessibilityElementsHidden style={styles.eventDot} />
                 <View style={styles.eventContent}>
-                  <Text numberOfLines={1} style={styles.eventTitle}>
+                  <AppText numberOfLines={1} style={styles.eventTitle}>
                     {event.title}
-                  </Text>
-                  <Text style={styles.eventTime}>{formatEventTime(event)}</Text>
+                  </AppText>
+                  <AppText style={styles.eventTime}>{formatEventTime(event)}</AppText>
                 </View>
                 <MaterialDesignIcons
                   accessibilityElementsHidden
@@ -99,7 +103,7 @@ export function CalendarEventsSheet({
             ))}
           </ScrollView>
         )}
-      </View>
+      </>
     </DraggableBottomSheet>
   );
 }
@@ -192,8 +196,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     borderTopLeftRadius: RADII.sheet,
     borderTopRightRadius: RADII.sheet,
-    maxHeight: '58%',
-    minHeight: 270,
     overflow: 'hidden',
   },
   title: {

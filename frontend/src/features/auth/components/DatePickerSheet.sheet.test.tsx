@@ -1,5 +1,5 @@
 import React from 'react';
-import {AccessibilityInfo, Text} from 'react-native';
+import {AccessibilityInfo, StyleSheet, Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import {DatePickerSheet} from './DatePickerSheet';
@@ -29,13 +29,13 @@ afterEach(() => {
 });
 
 function selectedYear(renderer: TestRenderer.ReactTestRenderer): string {
-  // 휠의 선택 항목은 selectedText 스타일(스타일 배열 두 번째 요소)이 켜진다.
+  // 공통 글꼴 스타일이 앞에 합쳐져도 선택 색상과 크기로 선택 항목을 찾는다.
   const selectedTexts = renderer.root
     .findAllByType(Text)
-    .filter(
-      node =>
-        Array.isArray(node.props.style) && Boolean(node.props.style[1]),
-    );
+    .filter(node => {
+      const style = StyleSheet.flatten(node.props.style);
+      return style.color === '#6E5CE8' && style.fontSize === 20;
+    });
   return String(selectedTexts[0]?.props.children ?? '');
 }
 
