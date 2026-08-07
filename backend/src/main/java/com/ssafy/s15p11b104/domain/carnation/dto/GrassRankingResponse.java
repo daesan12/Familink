@@ -4,6 +4,6 @@ public record GrassRankingResponse(
 	int rank,
 	Long memberId,
 	String displayName,
-	long carnationCount,
+	long postCount,
 	boolean previousWeekWinner) {
 }
