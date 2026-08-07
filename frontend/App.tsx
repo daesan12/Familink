@@ -110,7 +110,11 @@ import {
   type NotificationTap,
   type NotificationTapProvider,
 } from "./src/features/notifications";
-import { createReportGateway, ReportScreen } from "./src/features/reports";
+import {
+  createReportGateway,
+  reportCache,
+  ReportScreen,
+} from "./src/features/reports";
 import type {
   CareReceiverReportTarget,
   ReportGateway,
@@ -881,6 +885,9 @@ export default function App({
 
   const clearAuthenticationState = useCallback(() => {
     cancelLoginAttempt();
+    // 로그아웃·탈퇴·토큰 만료·세션 복원 실패가 모두 이 경로를 지난다. 여기서
+    // 비워야 같은 기기에 다른 계정이 로그인해도 이전 세션 리포트가 남지 않는다.
+    reportCache.clear();
     setUser(null);
     setActiveGroupId(null);
     setAvailableGroups([]);
@@ -1358,6 +1365,8 @@ export default function App({
 
     return subscribeGroupAccessDenied(groupId => {
       deniedGroupIdsRef.current.add(groupId);
+      // 건별 리포트 캐시 키에는 그룹이 없으므로, 그룹 접근이 막히면 전체를 비운다.
+      reportCache.clear();
       refreshGroupSnapshot().catch(() => undefined);
     });
   }, [groups, refreshGroupSnapshot, user]);
