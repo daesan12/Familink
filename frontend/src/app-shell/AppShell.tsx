@@ -53,9 +53,6 @@ const ShellStack = createNativeStackNavigator<ShellStackParamList>();
 const Tab = createBottomTabNavigator<MainTabsParamList>();
 const renderNullTabBar = () => null;
 
-// 어느 탭도 소유하지 않는 공유 하위 화면. 셸이 소유하고 스택이 호스트한다.
-const SHARED_SUB_ROUTES: readonly SharedSubRoute[] = ['notifications', 'archive'];
-
 // 내부 스택을 가진 탭의 루트 화면 이름. 재탭의 key 리마운트는 같은 커밋이라
 // 새 내비게이터가 구 스택 상태를 재수화하므로, pop:true로 루트 위 화면을
 // 함께 정리해 "재탭 = 초기화"를 보장한다(S15P11B104-321에서 검증된 방식).
@@ -181,18 +178,59 @@ export function AppShell({
     : 'feed';
   const resolvedRoute: AppRoute = focusedSubRoute ?? resolvedTabRoute;
 
-  // 모든 탭 이동은 popTo 하나로 정규화한다. MainTabs는 항상 셸 스택의 루트고
-  // 그 위에 하위 화면(알림·보관함)만 쌓이므로, popTo가 열려 있던 하위 화면을
-  // pop해 어떤 상태에서도 스택 깊이 1이 보장된다. 이 불변식 덕에 피드에서
-  // canGoBack()이 항상 false가 되어, 컨테이너의 useBackButton이 뒤로가기를
-  // 가로채지 않는다(피드에서 앱 종료·풀스크린 중 미소비 계약의 전제).
-  // v7의 navigate는 pop 없이 push하므로 탭 복귀에 쓰면 스택이 오염된다.
-  // 탭 미러를 낙관적으로 갱신한다. popTo가 열려 있던 하위 화면을 스택에서
-  // pop하므로 신호도 같은 커밋에 함께 내린다.
-  const mirrorTabRoute = useCallback((route: MainTabRoute) => {
-    setVisibleTabRoute(route);
-    setFocusedSubRoute(null);
+  // 열려 있는 공유 하위 화면과 그 닫기 함수. 하위 화면은 스택 화면이므로 셸이
+  // 라우트 이름으로 판정하지 않고 호스트가 포커스 시 올려준 사실만 신뢰한다.
+  const openSubRouteRef = useRef<{
+    close: () => void;
+    route: SharedSubRoute;
+  } | null>(null);
+
+  const handleSubRouteOpened = useCallback(
+    (route: SharedSubRoute, close: () => void) => {
+      openSubRouteRef.current = { close, route };
+      setFocusedSubRoute(route);
+    },
+    []
+  );
+
+  // 호스트 언마운트(= pop) 보고. 헤더 뒤로가기·하드웨어 뒤로가기·탭 이동이 모두
+  // 여기로 수렴하므로 신호를 내리는 지점이 하나로 유지된다.
+  const handleSubRouteClosed = useCallback((route: SharedSubRoute) => {
+    if (openSubRouteRef.current?.route === route) {
+      openSubRouteRef.current = null;
+    }
+    setFocusedSubRoute(current => (current === route ? null : current));
   }, []);
+
+  // 열려 있는 하위 화면을 걷어낸다. 신호는 낙관적으로 내리고(호스트 cleanup이
+  // 확정한다) 중복 호출을 막기 위해 ref를 먼저 비운다.
+  const closeSubRoute = useCallback(() => {
+    const open = openSubRouteRef.current;
+    if (open === null) {
+      return;
+    }
+    openSubRouteRef.current = null;
+    setFocusedSubRoute(null);
+    open.close();
+  }, []);
+
+  // 모든 탭 이동은 popTo 하나로 정규화한다. MainTabs는 항상 셸 스택의 루트이자
+  // 유일한 화면이므로 popTo는 탭 전환만 수행한다. 이 덕에 셸 스택 깊이가 항상
+  // 1이고 피드에서 canGoBack()이 false가 되어, 컨테이너의 useBackButton이
+  // 뒤로가기를 가로채지 않는다(피드에서 앱 종료·풀스크린 중 미소비 계약의 전제).
+  // v7의 navigate는 pop 없이 push하므로 탭 복귀에 쓰면 스택이 오염된다.
+  //
+  // 하위 화면(알림·보관함)은 탭 스택 안에 있어 중첩 params로 pop할 수 없으므로
+  // 먼저 닫는다. 이 한 줄이 "하위 화면은 다른 화면 밑에 깔리지 않는다"는 이
+  // 티켓의 불변식을 만든다 — 뒤로가기 목적지를 바꾸는 후속 티켓
+  // (S15P11B104-368)에서 제거할 이음새다.
+  const mirrorTabRoute = useCallback(
+    (route: MainTabRoute) => {
+      closeSubRoute();
+      setVisibleTabRoute(route);
+    },
+    [closeSubRoute]
+  );
   const goToTab = useCallback(
     (route: MainTabRoute) => {
       mirrorTabRoute(route);
@@ -202,9 +240,21 @@ export function AppShell({
     },
     [mirrorTabRoute]
   );
+  // 알림·보관함은 피드 탭 스택의 화면이므로 진입은 항상 피드 탭 전환을 동반한다.
+  // initial:false — 피드 탭 콜드 마운트(딥링크)에서 FeedHome을 아래에 깔아
+  //   뒤로가기가 앱 종료로 이어지지 않게 한다.
+  // pop:true — 이미 스택에 있으면 중복 push 대신 그 화면으로 되감는다(singleTop).
+  //   v7의 NAVIGATE는 대상이 최상단이 아니면 push하므로 없으면 무한히 쌓인다.
+  // 신호는 낙관적으로 세팅하고 호스트의 포커스 보고가 확정한다.
   const openSubScreen = useCallback((route: SharedSubRoute) => {
+    setVisibleTabRoute('feed');
     setFocusedSubRoute(route);
-    shellNavRef.current?.navigate(route);
+    shellNavRef.current?.dispatch(
+      StackActions.popTo('MainTabs', {
+        params: { initial: false, pop: true, screen: route },
+        screen: 'feed',
+      })
+    );
   }, []);
   // 피드 탭 내부 FeedStack의 화면까지 한 번의 dispatch로 도달한다(하위 화면
   // pop + 탭 전환 + 중첩 화면 push). initial:false가 없으면 피드 탭 콜드
@@ -272,41 +322,7 @@ export function AppShell({
     },
     [mirrorTabRoute]
   );
-  // 열려 있는 공유 하위 화면과 그 닫기 함수. 하위 화면은 스택 화면이므로 셸이
-  // 라우트 이름으로 판정하지 않고 호스트가 포커스 시 올려준 사실만 신뢰한다.
-  const openSubRouteRef = useRef<{
-    close: () => void;
-    route: SharedSubRoute;
-  } | null>(null);
 
-  const handleSubRouteOpened = useCallback(
-    (route: SharedSubRoute, close: () => void) => {
-      openSubRouteRef.current = { close, route };
-      setFocusedSubRoute(route);
-    },
-    []
-  );
-
-  // 호스트 언마운트(= pop) 보고. 헤더 뒤로가기·하드웨어 뒤로가기·탭 이동이 모두
-  // 여기로 수렴하므로 신호를 내리는 지점이 하나로 유지된다.
-  const handleSubRouteClosed = useCallback((route: SharedSubRoute) => {
-    if (openSubRouteRef.current?.route === route) {
-      openSubRouteRef.current = null;
-    }
-    setFocusedSubRoute(current => (current === route ? null : current));
-  }, []);
-
-  // 열려 있는 하위 화면을 걷어낸다. 신호는 낙관적으로 내리고(호스트 cleanup이
-  // 확정한다) 중복 호출을 막기 위해 ref를 먼저 비운다.
-  const closeSubRoute = useCallback(() => {
-    const open = openSubRouteRef.current;
-    if (open === null) {
-      return;
-    }
-    openSubRouteRef.current = null;
-    setFocusedSubRoute(null);
-    open.close();
-  }, []);
 
   // 피드는 홈이므로 뒤로가기를 처리하지 않는다(처리하는 리스너가 없으면 앱이 종료된다).
   // 나머지 라우트는 모두 피드로 복귀한다. 라우트를 열거하지 않아야 화면이 늘어도
@@ -315,12 +331,12 @@ export function AppShell({
   // 유지한다. 위임하면 풀스크린(AI 통화) 중에도 컨테이너가 back을 소비해
   // 피드로 이동하고, 상태 리셋(아래 3종)을 실을 곳도 없다.
   //
-  // 하위 화면이 열려 있어도(focusedSubRoute !== null) 지금은 이 핸들러가
-  // 뒤로가기를 소비해 피드로 보낸다. 하위 화면이 탭 스택 안으로 들어가면
-  // 스택 pop이 진입 지점으로 돌아가야 하므로 그때 focusedSubRoute === null
-  // 게이트를 추가한다(S15P11B104-367). 위상 변경 전에 미리 끄면 알림·보관함에서
-  // 뒤로가기를 처리하는 리스너가 사라져 앱이 종료된다.
-  const canReturnToFeed = resolvedRoute !== 'feed';
+  // 하위 화면(알림·보관함)은 피드 탭 스택 화면이므로 셸이 소비하면 안 된다.
+  // 컨테이너의 useBackButton이 최심 포커스 스택을 pop해 진입 지점으로 돌아가고,
+  // 호스트의 언마운트 cleanup이 신호를 내린다. 셸이 가로채면 pop이 일어나지 않아
+  // 진입 지점 복귀(S15P11B104-368)가 구조적으로 막힌다.
+  const canReturnToFeed =
+    focusedSubRoute === null && resolvedTabRoute !== 'feed';
 
   useHardwareBack(() => {
     setIsScreenHeaderVisible(true);
@@ -577,7 +593,8 @@ export function AppShell({
         return;
       }
     if (target.kind === 'notifications') {
-      setIsScreenHeaderVisible(true);
+      // 피드 탭을 벗어나지 않으므로 탭 화면이 보고한 헤더 표시 값을 건드리지
+      // 않는다. 셸 헤더는 focusedSubRoute 게이트로 이미 숨는다.
       openSubScreen('notifications');
       return;
     }
@@ -649,6 +666,23 @@ export function AppShell({
     readNotificationIds,
     role: currentGroup.role,
   };
+  // 하위 화면 본문 주입. 스택 소유자(FeedScreen)가 라우트를 등록하고 셸이 본문만
+  // 채우므로 배선이 셸에 남고 피처끼리 직접 import하지 않는다. 본문에 screenProps를
+  // 그대로 다시 넘기므로(자기 참조) 객체 생성 뒤에 배선한다 —
+  // openNotificationTargetRef와 같은 "렌더 중 배선" 관용구.
+  // 매 렌더 새 함수를 만들지만 SharedSubRouteScreen이 콜백 신원에 의존하지 않도록
+  // ref로 방어하고 있다.
+  screenProps.renderSharedSubRoute = (route, options) => (
+    <SharedSubRouteScreen
+      onClose={options.onClose}
+      onClosed={handleSubRouteClosed}
+      onHostClosed={options.onClosed}
+      onOpened={handleSubRouteOpened}
+      route={route}
+      screenProps={screenProps}
+      screens={screens}
+    />
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -801,23 +835,6 @@ export function AppShell({
               );
             }}
           </ShellStack.Screen>
-          {SHARED_SUB_ROUTES.map(route => (
-            <ShellStack.Screen key={route} name={route}>
-              {({ navigation }) => {
-                shellNavRef.current = navigation;
-                return (
-                  <SharedSubRouteScreen
-                    onClose={() => goToTab('feed')}
-                    onClosed={handleSubRouteClosed}
-                    onOpened={handleSubRouteOpened}
-                    route={route}
-                    screenProps={screenProps}
-                    screens={screens}
-                  />
-                );
-              }}
-            </ShellStack.Screen>
-          ))}
         </ShellStack.Navigator>
         {focusedSubRoute === null &&
         resolvedTabRoute === 'feed' &&
@@ -960,6 +977,8 @@ function ShellRouteScreen({
 interface SharedSubRouteScreenProps {
   onClose: () => void;
   onClosed: (route: SharedSubRoute) => void;
+  // 등록한 스택이 닫힘 뒤에 하고 싶은 일(예: 목록 재조회).
+  onHostClosed?: () => void;
   onOpened: (route: SharedSubRoute, close: () => void) => void;
   route: SharedSubRoute;
   screenProps: AppScreenProps;
@@ -976,25 +995,38 @@ interface SharedSubRouteScreenProps {
 function SharedSubRouteScreen({
   onClose,
   onClosed,
+  onHostClosed,
   onOpened,
   route,
   screenProps,
   screens,
 }: SharedSubRouteScreenProps) {
   const isFocused = useIsFocused();
-  // 등록 지점의 최신 닫기 동작을 유지하되 셸에 올리는 함수 신원은 고정한다.
-  // 신원이 매 렌더 바뀌면 열림 보고 effect가 계속 재실행된다.
+  // 콜백 신원에 의존하지 않는다. 셸이 렌더마다 새 렌더러를 만들기 때문에, deps에
+  // 콜백을 넣으면 닫힘 cleanup이 매 렌더 실행되어 신호가 조용히 내려간다.
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const close = useRef(() => closeRef.current()).current;
+  const onOpenedRef = useRef(onOpened);
+  onOpenedRef.current = onOpened;
+  const onClosedRef = useRef(onClosed);
+  onClosedRef.current = onClosed;
+  const onHostClosedRef = useRef(onHostClosed);
+  onHostClosedRef.current = onHostClosed;
 
   useEffect(() => {
     if (isFocused) {
-      onOpened(route, close);
+      onOpenedRef.current(route, close);
     }
-  }, [close, isFocused, onOpened, route]);
+  }, [close, isFocused, route]);
 
-  useEffect(() => () => onClosed(route), [onClosed, route]);
+  useEffect(
+    () => () => {
+      onClosedRef.current(route);
+      onHostClosedRef.current?.();
+    },
+    [route]
+  );
 
   return (
     <ShellScreenBody
