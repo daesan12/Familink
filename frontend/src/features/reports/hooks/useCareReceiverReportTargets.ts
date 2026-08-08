@@ -42,6 +42,7 @@ export function useCareReceiverReportTargets({
     // 캐시가 있으면 로딩 화면을 건너뛰고 바로 보여준 뒤 뒤에서 다시 조회한다.
     // 피보호자 목록은 멤버 변동으로 바뀔 수 있어 항상 재검증한다.
     const cached = cache.getTargets(groupId);
+    const cacheGeneration = cache.generation();
     setState(
       cached ? { status: "ready", targets: cached } : { status: "loading" }
     );
@@ -52,7 +53,7 @@ export function useCareReceiverReportTargets({
         // 의존성으로 쓰는 useReportPages가 전체 페이지를 다시 불러온다.
         const nextTargets =
           cached && areTargetsEqual(cached, targets) ? cached : targets;
-        cache.setTargets(groupId, nextTargets);
+        cache.setTargets(groupId, nextTargets, cacheGeneration);
         if (isActive) {
           setState({ status: "ready", targets: nextTargets });
         }

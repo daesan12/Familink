@@ -20,6 +20,9 @@ export interface ReportCacheOptions {
 
 export interface ReportCache {
   clear(): void;
+  // clear를 호출할 때마다 커진다. 조회를 시작할 때 이 값을 들고 있다가 기록할 때
+  // 함께 넘기면, 세션이 끝난 뒤 도착한 응답이 캐시를 다시 채우는 것을 막는다.
+  generation(): number;
   getCallReport(callSessionId: string): ReadyCallReport | undefined;
   getPages(
     groupId: string,
@@ -27,15 +30,26 @@ export interface ReportCache {
   ): readonly CareReceiverReportPage[] | undefined;
   getTargets(groupId: string): readonly CareReceiverReportTarget[] | undefined;
   invalidatePages(groupId: string, reportDate: string): void;
-  setCallReport(report: ReadyCallReport): void;
+  setCallReport(report: ReadyCallReport, generation?: number): void;
   setPages(
     groupId: string,
     reportDate: string,
-    pages: readonly CareReceiverReportPage[]
+    pages: readonly CareReceiverReportPage[],
+    generation?: number
   ): void;
   setTargets(
     groupId: string,
-    targets: readonly CareReceiverReportTarget[]
+    targets: readonly CareReceiverReportTarget[],
+    generation?: number
+  ): void;
+  // 기존 스냅샷에서 한 피보호자의 페이지만 교체한다. 스냅샷이 없거나 그 멤버가
+  // 없으면 아무것도 하지 않는다.
+  updatePage(
+    groupId: string,
+    reportDate: string,
+    memberId: string,
+    page: CareReceiverReportPage,
+    generation?: number
   ): void;
 }
 
@@ -88,12 +102,23 @@ export function createReportCache(
   const targetLists = createBoundedMap<readonly CareReceiverReportTarget[]>(
     options.maxTargetLists ?? DEFAULT_MAX_TARGET_LISTS
   );
+  let currentGeneration = 0;
+
+  // 조회를 시작한 세션이 이미 끝났으면 기록하지 않는다. 세대를 넘기지 않은
+  // 호출은 검사 없이 통과시켜 호출부가 필요한 곳에서만 쓰게 한다.
+  function isStale(generation: number | undefined): boolean {
+    return generation !== undefined && generation !== currentGeneration;
+  }
 
   return {
     clear() {
       callReports.clear();
       pageSnapshots.clear();
       targetLists.clear();
+      currentGeneration += 1;
+    },
+    generation() {
+      return currentGeneration;
     },
     getCallReport(callSessionId) {
       return callReports.get(callSessionId);
@@ -107,14 +132,43 @@ export function createReportCache(
     invalidatePages(groupId, reportDate) {
       pageSnapshots.delete(createPageKey(groupId, reportDate));
     },
-    setCallReport(report) {
+    setCallReport(report, generation) {
+      if (isStale(generation)) {
+        return;
+      }
       callReports.set(report.callSessionId, report);
     },
-    setPages(groupId, reportDate, pages) {
+    setPages(groupId, reportDate, pages, generation) {
+      if (isStale(generation)) {
+        return;
+      }
       pageSnapshots.set(createPageKey(groupId, reportDate), pages);
     },
-    setTargets(groupId, targets) {
+    setTargets(groupId, targets, generation) {
+      if (isStale(generation)) {
+        return;
+      }
       targetLists.set(groupId, targets);
+    },
+    updatePage(groupId, reportDate, memberId, page, generation) {
+      if (isStale(generation)) {
+        return;
+      }
+
+      const key = createPageKey(groupId, reportDate);
+      const snapshot = pageSnapshots.get(key);
+      if (snapshot === undefined) {
+        return;
+      }
+
+      const index = snapshot.findIndex((item) => item.memberId === memberId);
+      if (index === -1) {
+        return;
+      }
+
+      const next = [...snapshot];
+      next[index] = page;
+      pageSnapshots.set(key, next);
     },
   };
 }

@@ -1287,6 +1287,29 @@ test("생성 중 상태는 캐시하지 않아 다시 열면 상태를 새로 �
   expect(gateway.getCallReportStatus).toHaveBeenCalledTimes(2);
 });
 
+test("캐시를 비운 뒤 도착한 건별 리포트 응답은 캐시에 남기지 않는다", async () => {
+  const gateway = createGateway();
+  mockDailyReportWithCall(gateway);
+  gateway.getCallReportStatus.mockResolvedValue({
+    callSessionId: "31",
+    status: "ready",
+  });
+  // 본문 조회가 떠 있는 사이에 로그아웃으로 캐시가 비워지는 상황을 재현한다.
+  gateway.getCallReport.mockImplementation(async () => {
+    reportCache.clear();
+    return readyCallReport();
+  });
+  const renderer = await renderWithGateway(gateway);
+
+  await openCallReport(renderer);
+
+  expect(reportCache.getCallReport("31")).toBeUndefined();
+  // 화면에는 받은 리포트가 그대로 표시된다.
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    "아침 식사와 가족 이야기를 나누셨어요."
+  );
+});
+
 test("캐시는 통화별로 분리되어 다른 통화는 그대로 조회한다", async () => {
   const gateway = createGateway();
   gateway.getDailyReport.mockResolvedValue({

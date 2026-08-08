@@ -419,6 +419,7 @@ export function ReportScreen({
       }
 
       const requestId = ++callRequestId.current;
+      const cacheGeneration = reportCache.generation();
       const pollingStartedAt = Date.now();
       setSelectedDetail({ call, status: "loading" });
       scheduleCallReportDeadline();
@@ -499,7 +500,7 @@ export function ReportScreen({
           const report = await gateway.getCallReport(call.callSessionId);
           if (report.status === "ready") {
             // 준비된 리포트는 불변이라 조회가 무효화된 뒤 도착해도 캐시에 남긴다.
-            reportCache.setCallReport(report);
+            reportCache.setCallReport(report, cacheGeneration);
           }
           if (requestId !== callRequestId.current) {
             return;
