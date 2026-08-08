@@ -5,7 +5,7 @@ import {
   type NavigationProp,
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import {Pressable} from "react-native";
+import {Alert, Pressable} from "react-native";
 import TestRenderer from "react-test-renderer";
 
 import type { MainTabsParamList } from "../../../app-shell";
@@ -297,6 +297,159 @@ test("리포트 조회가 idle인 첫 렌더를 로딩 화면으로 표시한다
     expect(tree).not.toContain("리포트를 확인할 피보호자가 없어요");
   } finally {
     reportPagesSpy.mockRestore();
+  }
+});
+
+// 달력이 열리면 월별 날짜 조회가 시작되므로 async act로 응답까지 흘려보낸다.
+async function pressCalendarButton(renderer: TestRenderer.ReactTestRenderer) {
+  await TestRenderer.act(async () => {
+    renderer.root
+      .findByProps({ accessibilityLabel: "리포트 캘린더" })
+      .props.onPress();
+  });
+}
+
+function isCalendarVisible(renderer: TestRenderer.ReactTestRenderer) {
+  return JSON.stringify(renderer.toJSON()).includes("리포트 날짜 선택");
+}
+
+test("리포트를 불러오는 중 캘린더 버튼을 누르면 안내를 표시한다", async () => {
+  const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  const reportPagesSpy = jest
+    .spyOn(reportPageHooks, "useReportPages")
+    .mockReturnValue({ retry: jest.fn(), status: "loading" });
+  const gateway = createGateway();
+  let renderer!: TestRenderer.ReactTestRenderer;
+
+  try {
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        withReportRoute(
+          <ReportScreen
+            careReceiverTargets={[target]}
+            currentGroup={currentGroup}
+            reportDate="2026-07-31"
+            reportGateway={gateway}
+            role="guardian"
+          />
+        )
+      );
+    });
+    renderedScreens.add(renderer);
+
+    await pressCalendarButton(renderer);
+
+    // 한 번만 떠야 한다. 두 번이면 요청 소비가 확정적이지 않다는 뜻이다.
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(alertSpy.mock.calls[0]?.[0]).toBe("리포트를 불러오고 있어요");
+    expect(isCalendarVisible(renderer)).toBe(false);
+  } finally {
+    reportPagesSpy.mockRestore();
+    alertSpy.mockRestore();
+  }
+});
+
+test("피보호자 조회에 실패한 상태에서 캘린더 버튼을 누르면 실패 안내를 표시한다", async () => {
+  const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  const targetStateSpy = jest
+    .spyOn(reportTargetHooks, "useCareReceiverReportTargets")
+    .mockReturnValue({
+      message: "피보호자를 불러오지 못했어요.",
+      retry: jest.fn(),
+      status: "error",
+    });
+  const gateway = createGateway();
+  let renderer!: TestRenderer.ReactTestRenderer;
+
+  try {
+    await TestRenderer.act(async () => {
+      renderer = TestRenderer.create(
+        withReportRoute(
+          <ReportScreen
+            careReceiverTargetsLoader={jest.fn()}
+            currentGroup={currentGroup}
+            reportDate="2026-07-31"
+            reportGateway={gateway}
+            role="guardian"
+          />
+        )
+      );
+    });
+    renderedScreens.add(renderer);
+
+    await pressCalendarButton(renderer);
+
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(alertSpy.mock.calls[0]?.[1]).toContain("불러오지 못했어요");
+    expect(isCalendarVisible(renderer)).toBe(false);
+  } finally {
+    targetStateSpy.mockRestore();
+    alertSpy.mockRestore();
+  }
+});
+
+test("캘린더를 열지 못한 뒤 리포트 조회가 성공해도 달력이 저절로 열리지 않는다", async () => {
+  const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  const gateway = createGateway();
+  gateway.getReportDates.mockResolvedValue({
+    latestReportDate: "2026-07-31",
+    reportDates: ["2026-07-31"],
+    yearMonth: "2026-07",
+  });
+  const dailyReportRequest = createDeferred<DailyReportResult>();
+  gateway.getDailyReport.mockReturnValue(dailyReportRequest.promise);
+  let renderer!: TestRenderer.ReactTestRenderer;
+
+  try {
+    TestRenderer.act(() => {
+      renderer = TestRenderer.create(
+        withReportRoute(
+          <ReportScreen
+            careReceiverTargets={[target]}
+            currentGroup={currentGroup}
+            reportDate="2026-07-31"
+            reportGateway={gateway}
+            role="guardian"
+          />
+        )
+      );
+    });
+    renderedScreens.add(renderer);
+
+    expect(JSON.stringify(renderer.toJSON())).toContain(
+      "리포트를 불러오고 있어요"
+    );
+
+    await pressCalendarButton(renderer);
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+
+    await TestRenderer.act(async () => {
+      dailyReportRequest.resolve({
+        calls: [],
+        dailyReport: {
+          emotionCategory: "NEUTRAL",
+          emotionSubcategory: "평온",
+          guardianMessageSummary: null,
+          id: "daily-31",
+          summary: "오늘의 리포트입니다.",
+        },
+        date: "2026-07-31",
+        generationStatus: "ready",
+      });
+      await dailyReportRequest.promise;
+    });
+
+    expect(JSON.stringify(renderer.toJSON())).toContain("오늘의 리포트입니다.");
+    // 소비되지 않은 요청이 남아 있었다면 여기서 달력이 저절로 열린다.
+    expect(isCalendarVisible(renderer)).toBe(false);
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+
+    // 한 번 막힌 뒤에도 다음 누름은 정상 동작해야 한다.
+    await pressCalendarButton(renderer);
+    expect(isCalendarVisible(renderer)).toBe(true);
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+  } finally {
+    alertSpy.mockRestore();
   }
 });
 

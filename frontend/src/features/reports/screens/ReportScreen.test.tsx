@@ -5,7 +5,7 @@ import {
   type NavigationProp,
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import {Dimensions, Pressable, StyleSheet} from "react-native";
+import {Alert, Dimensions, Pressable, StyleSheet} from "react-native";
 import TestRenderer from "react-test-renderer";
 
 import type {MainTabsParamList} from "../../../app-shell";
@@ -108,6 +108,27 @@ function createLatestOnlyPage(): CareReceiverReportPage {
     todayCalls: [],
   };
 }
+
+test("피보호자가 없으면 캘린더 버튼을 눌러도 로딩이 아닌 피보호자 안내를 표시한다", () => {
+  const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  const renderer = renderReportScreen([]);
+
+  try {
+    TestRenderer.act(() => {
+      renderer.root
+        .findByProps({ accessibilityLabel: "리포트 캘린더" })
+        .props.onPress();
+    });
+
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(alertSpy.mock.calls[0]?.[1]).toContain("피보호자가 없어요");
+    expect(
+      renderer.root.findAllByProps({ accessibilityLabel: "리포트 날짜 선택" })
+    ).toHaveLength(0);
+  } finally {
+    alertSpy.mockRestore();
+  }
+});
 
 test("캘린더 아이콘을 누르면 생성된 날짜를 선택하는 팝업을 연다", () => {
   const renderer = renderReportScreen([createLatestOnlyPage()]);
