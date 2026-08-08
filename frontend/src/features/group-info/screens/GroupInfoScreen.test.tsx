@@ -1090,25 +1090,40 @@ test('그룹명 변경 메뉴를 누르면 H-10 화면으로 이동한다', () =
   expect(hasText(renderer, '그룹 이름을 변경하세요')).toBe(true);
 });
 
+function hasMenuItem(
+  renderer: TestRenderer.ReactTestRenderer,
+  label: string,
+): boolean {
+  return renderer.root.findAllByProps({accessibilityLabel: label}).length > 0;
+}
+
 test.each([
   '가입 승인 대기',
   '그룹관리자 변경',
   '구성원 내보내기',
   '그룹 삭제',
   '그룹명 변경',
-])('비관리자가 %s 메뉴를 누르면 진입하지 않고 권한을 안내한다', label => {
-  const onFullscreenChange = jest.fn();
-  const renderer = renderScreen('m-dad', {onFullscreenChange});
-  onFullscreenChange.mockClear();
+])('비관리자 화면에는 %s 메뉴를 표시하지 않는다', label => {
+  const renderer = renderScreen('m-dad');
 
-  press(renderer, label);
+  expect(hasMenuItem(renderer, label)).toBe(false);
+});
 
-  expect(hasText(renderer, '그룹관리자만 접근할 수 있습니다')).toBe(true);
-  expect(onFullscreenChange).not.toHaveBeenCalledWith(true);
-  expect(hasText(renderer, '정말 그룹을 삭제하시겠어요?')).toBe(false);
+test('비관리자에게도 그룹 코드와 그룹 나가기는 표시한다', () => {
+  const renderer = renderScreen('m-dad');
 
-  press(renderer, '그룹관리자 접근 안내 확인');
-  expect(hasText(renderer, '그룹관리자만 접근할 수 있습니다')).toBe(false);
+  expect(hasMenuItem(renderer, '그룹 코드')).toBe(true);
+  expect(hasMenuItem(renderer, '그룹 나가기')).toBe(true);
+});
+
+test('관리자 화면에는 관리자 전용 메뉴를 모두 표시한다', () => {
+  const renderer = renderScreen('m-manager');
+
+  ['가입 승인 대기', '그룹관리자 변경', '구성원 내보내기', '그룹 삭제', '그룹명 변경'].forEach(
+    label => {
+      expect(hasMenuItem(renderer, label)).toBe(true);
+    },
+  );
 });
 
 test('구성원 로딩 중에도 그룹 요약이 관리자이면 관리 메뉴에 진입한다', () => {
@@ -1134,7 +1149,7 @@ test('구성원 로딩 중에도 그룹 요약이 관리자이면 관리 메뉴�
   expect(hasText(renderer!, '그룹관리자만 접근할 수 있습니다')).toBe(false);
 });
 
-test('구성원 로드 실패 후에는 오래된 그룹 요약 권한으로 관리 메뉴에 진입하지 않는다', async () => {
+test('구성원 로드 실패 후에는 오래된 그룹 요약 권한으로 관리 메뉴를 표시하지 않는다', async () => {
   let renderer: TestRenderer.ReactTestRenderer;
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
@@ -1150,9 +1165,7 @@ test('구성원 로드 실패 후에는 오래된 그룹 요약 권한으로 관
   });
   mountedRenderers.push(renderer!);
 
-  press(renderer!, '그룹명 변경');
-
-  expect(hasText(renderer!, '그룹관리자만 접근할 수 있습니다')).toBe(true);
+  expect(hasMenuItem(renderer!, '그룹명 변경')).toBe(false);
   expect(hasText(renderer!, '그룹 이름을 변경할까요')).toBe(false);
 });
 
@@ -1179,9 +1192,8 @@ test('그룹관리자 변경을 확정하면 이전 관리자의 재진입을 �
   press(renderer!, '그룹관리자 변경하기');
 
   expect(changed).toEqual(['m-dad']);
-  // 권한은 즉시 손수호에게 이동하므로 이전 관리자는 관리 화면을 다시 열 수 없다.
-  press(renderer!, '그룹관리자 변경');
-  expect(hasText(renderer!, '그룹관리자만 접근할 수 있습니다')).toBe(true);
+  // 권한은 즉시 손수호에게 이동하므로 이전 관리자에게는 관리 메뉴가 사라진다.
+  expect(hasMenuItem(renderer!, '그룹관리자 변경')).toBe(false);
   expect(hasText(renderer!, '새 그룹관리자를 선택하세요')).toBe(false);
 });
 
@@ -1353,7 +1365,7 @@ test('관리자에게는 목업 prop이 아니라 실제 대기 요청 건수를
   expect(hasText(renderer!, '승인 요청 2건')).toBe(false);
 });
 
-test('관리자가 아니면 건수를 조회하지 않고 조회 권한을 안내한다', async () => {
+test('관리자가 아니면 건수를 조회하지 않고 대기 메뉴도 숨긴다', async () => {
   const joinRequestsLoader = jest.fn().mockResolvedValue([]);
   let renderer: TestRenderer.ReactTestRenderer;
 
@@ -1373,7 +1385,7 @@ test('관리자가 아니면 건수를 조회하지 않고 조회 권한을 안�
 
   // API-GROUPS-008은 관리자만 호출할 수 있어 확정 실패 요청을 보내지 않는다.
   expect(joinRequestsLoader).not.toHaveBeenCalled();
-  expect(hasText(renderer!, '관리자만 확인할 수 있어요')).toBe(true);
+  expect(hasMenuItem(renderer!, '가입 승인 대기')).toBe(false);
 });
 
 test('건수 조회에 실패하면 0건 대신 실패를 알린다', async () => {
