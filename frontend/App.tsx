@@ -1245,7 +1245,11 @@ export default function App({
         if (restorableGroupId !== null) {
           onOpenActiveGroup?.(restorableGroupId);
         }
-        if (loadedJoinRequests !== undefined && loadedJoinRequests.length > 0) {
+        // 승인된 요청은 아직 입장하지 않은 새 그룹이라 B-3의 입장 카드를 거친다.
+        // 반면 대기 중인 요청만 있으면 온보딩을 거치지 않는다. 활성 그룹이 있는
+        // 사용자의 요청 결과는 앱 내부 알림으로 전달한다
+        // (GROUPS_AND_MEMBERSHIP 확정된 동작 9).
+        if (loadedJoinRequests?.some((request) => request.status !== "PENDING_ADMIN")) {
           setGroupOnboardingReturnRoute("appShell");
           setGroupOnboardingAction(null);
           setAppShellEntryRoute("feed");
