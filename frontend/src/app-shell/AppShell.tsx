@@ -316,9 +316,19 @@ export function AppShell({
     [navigateInTab]
   );
   // 리포트 탭은 내부 스택이 없어 탭 route params로 화면 내부 동작을 전달한다.
+  // merge:true — 알림 딥링크(openReport)와 헤더 캘린더 버튼(openCalendar)이 같은
+  // params 객체를 공유한다. 기본 NAVIGATE는 params를 통째로 교체하므로, 딥링크가
+  // 아직 소비되지 않은 커밋에서 캘린더 버튼을 누르면 openReport가 유실된다.
+  // navigateInTab을 거치지 않는 이유: 다른 탭들은 중첩 NavigatorScreenParams를
+  // 넘기므로 merge 의미가 달라 함께 바꾸면 회귀 위험이 있다.
   const navigateToReportTab = useCallback(
-    (params: MainTabsParamList['report']) => navigateInTab('report', params),
-    [navigateInTab]
+    (params: MainTabsParamList['report']) => {
+      mirrorTabRoute('report');
+      tabNavRef.current?.dispatch(
+        CommonActions.navigate('report', params, { merge: true })
+      );
+    },
+    [mirrorTabRoute]
   );
 
 

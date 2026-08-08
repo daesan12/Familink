@@ -653,6 +653,22 @@ test('리포트 목적지는 리포트 화면으로 이동하며 통화·날짜�
   expect(hasText(renderer, 'report:11:21:2026-08-03')).toBe(true);
 });
 
+// 리포트 탭은 딥링크(openReport)와 헤더 캘린더 버튼(openCalendar)이 같은 탭
+// route params를 공유한다. 캘린더 요청이 params를 통째로 교체하면 아직 소비되지
+// 않은 딥링크가 사라져 알림으로 열려던 리포트가 나타나지 않는다.
+test('헤더 캘린더 버튼이 아직 소비되지 않은 리포트 딥링크를 지우지 않는다', () => {
+  const renderer = renderForDeepLink();
+
+  pressText(renderer, 'open-call-report');
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({accessibilityLabel: '리포트 캘린더'})
+      .props.onPress();
+  });
+
+  expect(hasText(renderer, 'report:11:21:2026-08-03')).toBe(true);
+});
+
 test('가입 승인 목적지는 피드 탭 스택의 하위 화면을 열고 그룹정보 탭으로 가지 않는다', () => {
   const renderer = renderForDeepLink();
 
