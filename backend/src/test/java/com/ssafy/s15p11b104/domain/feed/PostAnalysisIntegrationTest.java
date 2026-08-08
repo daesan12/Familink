@@ -87,6 +87,20 @@ class PostAnalysisIntegrationTest extends IntegrationTest {
 	}
 
 	@Test
+	void newlyCreatedPostIsAnalyzedWithoutStabilityDelay() {
+		Post post = createPost(4L);
+		when(postAnalysisGateway.analyze(post.getId())).thenReturn("방금 작성한 게시글 요약");
+
+		postAnalysisService.analyzeStablePosts();
+		entityManager.flush();
+		entityManager.clear();
+
+		PostAnalysis analysis = postAnalysisRepository.findByPostId(post.getId()).orElseThrow();
+		assertThat(analysis.getStatus()).isEqualTo(AnalysisStatus.SUCCESS);
+		assertThat(analysis.getSummary()).isEqualTo("방금 작성한 게시글 요약");
+	}
+
+	@Test
 	void gatewayFailureStoresFailedResult() {
 		Post post = createStablePost(2L);
 		when(postAnalysisGateway.analyze(post.getId())).thenThrow(new IllegalStateException("gateway failure"));
@@ -116,6 +130,16 @@ class PostAnalysisIntegrationTest extends IntegrationTest {
 	}
 
 	private Post createStablePost(Long inviteCodeSuffix) {
+		Post post = createPost(inviteCodeSuffix);
+		jdbcTemplate.update(
+			"update posts set updated_at = ? where id = ?",
+			Timestamp.from(STABLE_UPDATED_AT),
+			post.getId());
+		entityManager.clear();
+		return postRepository.findById(post.getId()).orElseThrow();
+	}
+
+	private Post createPost(Long inviteCodeSuffix) {
 		User user = userRepository.save(new User(
 			"analysis_user_" + inviteCodeSuffix,
 			"password-hash",
@@ -128,10 +152,6 @@ class PostAnalysisIntegrationTest extends IntegrationTest {
 			new GroupMember(group, user, GroupRole.GUARDIAN, true, Instant.now()));
 		Post post = postRepository.save(new Post(group, member, "분석할 게시글"));
 		entityManager.flush();
-		jdbcTemplate.update(
-			"update posts set updated_at = ? where id = ?",
-			Timestamp.from(STABLE_UPDATED_AT),
-			post.getId());
 		entityManager.clear();
 		return postRepository.findById(post.getId()).orElseThrow();
 	}

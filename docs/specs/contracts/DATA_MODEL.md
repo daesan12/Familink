@@ -112,6 +112,7 @@ UTC를 사용한다. 사용자 화면, 상대 날짜 해석, 일정 알림과 �
 - FK: `group_id -> family_groups.id`,
   `author_member_id -> group_members.id`
 - 컬럼: `content VARCHAR(140)`, `created_at`, `updated_at` NOT NULL
+- Index: `(updated_at, id)` — 게시글 분석 후보를 수정 시각순으로 조회한다.
 
 ### `post_media`
 
