@@ -162,7 +162,6 @@ public class CalendarEventService {
 			schedule.startAt(),
 			schedule.endAt(),
 			clock.instant()));
-		event.changeParticipantScope(!participants.isEmpty());
 		eventParticipantRepository.saveAll(participants.stream()
 			.map(participant -> new EventParticipant(event, participant))
 			.toList());
@@ -203,7 +202,6 @@ public class CalendarEventService {
 			schedule.startAt(),
 			schedule.endAt(),
 			clock.instant());
-		event.changeParticipantScope(!participants.isEmpty());
 		replaceParticipants(event, participants);
 		calendarEventRepository.flush();
 		publishCalendarChanged(

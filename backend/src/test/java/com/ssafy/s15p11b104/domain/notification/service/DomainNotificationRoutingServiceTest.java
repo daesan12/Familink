@@ -203,6 +203,41 @@ class DomainNotificationRoutingServiceTest {
 	}
 
 	@Test
+	void doesNotRouteCalendarChangeWhenEventHasNoParticipant() {
+		routingService.route(new DomainNotificationEvent.CalendarChanged(
+			50L,
+			10L,
+			11L,
+			"병원 방문",
+			List.of(),
+			List.of(),
+			DomainNotificationEvent.CalendarAction.CREATED,
+			UUID.fromString("3d3e9a40-846e-40df-b065-093366a955cf")));
+
+		verifyNoInteractions(groupMemberRepository, notificationCreationService);
+	}
+
+	@Test
+	void doesNotRouteCalendarCreationWhenTheOnlyParticipantIsTheCreator() {
+		FamilyGroup group = group(10L, "우리 가족");
+		GroupMember creator = member(11L, 101L, group, GroupRole.GUARDIAN, false, "작성자");
+		GroupMember other = member(12L, 102L, group, GroupRole.GUARDIAN, false, "다른 구성원");
+		when(groupMemberRepository.findAllActiveByGroupId(10L)).thenReturn(List.of(creator, other));
+
+		routingService.route(new DomainNotificationEvent.CalendarChanged(
+			50L,
+			10L,
+			11L,
+			"병원 방문",
+			List.of(),
+			List.of(11L),
+			DomainNotificationEvent.CalendarAction.CREATED,
+			UUID.fromString("3d3e9a40-846e-40df-b065-093366a955cf")));
+
+		verifyNoInteractions(notificationCreationService);
+	}
+
+	@Test
 	void routesCallReportToGuardiansOnly() {
 		FamilyGroup group = group(10L, "우리 가족");
 		GroupMember careReceiver = member(11L, 101L, group, GroupRole.CARE_RECEIVER, false, "피보호자");

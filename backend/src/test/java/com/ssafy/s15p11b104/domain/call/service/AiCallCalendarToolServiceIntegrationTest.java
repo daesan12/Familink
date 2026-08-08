@@ -276,12 +276,11 @@ class AiCallCalendarToolServiceIntegrationTest extends IntegrationTest {
 				end_date,
 				start_at,
 				end_at,
-				participants_specified,
 				created_at,
 				updated_at,
 				reminder_schedule_updated_at
 			)
-			values (?, ?, ?, ?, ?, ?, ?, ?, ?, true, ?, ?, ?)
+			values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			returning id
 			""",
 			Long.class,
