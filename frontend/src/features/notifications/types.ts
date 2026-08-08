@@ -16,8 +16,9 @@ export interface AppNotification {
   // 알림을 발생시킨 사용자 이름. 가입 요청 알림의 역할 지정 팝업에 표시한다.
   actorName?: string;
   // 행위자 프로필 사진(API-NOTIFICATIONS-003 actor.profileImageUrl).
-  // 없으면 avatarText 이니셜로 대체한다.
+  // 없으면 알림 종류 아이콘으로 대체한다(NotificationItem TYPE_ICONS).
   actorProfileImageUrl?: string;
+  // 행위자 이름 이니셜. 목록은 종류 아이콘을 쓰므로 지금은 표시하지 않는다.
   avatarText: string;
   body: string;
   createdAt?: string;
