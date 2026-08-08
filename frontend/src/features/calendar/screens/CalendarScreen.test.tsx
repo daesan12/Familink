@@ -78,6 +78,7 @@ function createGateway(): jest.Mocked<CalendarGateway> {
     createEvent: jest.fn().mockResolvedValue("15"),
     deleteEvent: jest.fn().mockResolvedValue(undefined),
     getEvent: jest.fn().mockResolvedValue({
+      creatorDisplayName: "이종철",
       creatorMemberId: "7",
       description: "수호 할아버지 데리고 예약한 정형외과 가야 함",
       endAt: "2026-07-17T07:00:00Z",
@@ -385,9 +386,57 @@ test("날짜 바텀시트에서 일정을 열고 작성자·참여자 상세를 
   ).toBeTruthy();
 });
 
+test("그룹을 나간 작성자도 서버가 준 이름으로 표시한다", async () => {
+  const gateway = createGateway();
+  gateway.getEvent.mockResolvedValueOnce({
+    creatorDisplayName: "이종철",
+    // 활성 구성원 목록에 없는 멤버십이다. 작성자가 그룹을 나간 상황을 재현한다.
+    creatorMemberId: "36",
+    description: "",
+    endAt: "2026-07-17T07:00:00Z",
+    endDate: "2026-07-17",
+    eventDate: "2026-07-17",
+    groupId: "3",
+    id: "12",
+    participantMemberIds: ["8"],
+    startAt: "2026-07-17T06:00:00Z",
+    title: "홍박사 정형외과",
+  });
+  const {renderer} = await renderCalendar(gateway);
+
+  await openEventDetail(renderer);
+
+  expect(renderer.root.findByProps({children: "이종철"})).toBeTruthy();
+  expect(renderer.root.findAllByProps({children: "구성원 36"})).toHaveLength(0);
+});
+
+test("작성자 이름을 주지 않는 구버전 서버에서는 구성원 목록으로 이름을 채운다", async () => {
+  const gateway = createGateway();
+  gateway.getEvent.mockResolvedValueOnce({
+    creatorDisplayName: null,
+    creatorMemberId: "7",
+    description: "",
+    endAt: "2026-07-17T07:00:00Z",
+    endDate: "2026-07-17",
+    eventDate: "2026-07-17",
+    groupId: "3",
+    id: "12",
+    participantMemberIds: ["8"],
+    startAt: "2026-07-17T06:00:00Z",
+    title: "홍박사 정형외과",
+  });
+  const {renderer} = await renderCalendar(gateway);
+
+  await openEventDetail(renderer);
+
+  expect(renderer.root.findByProps({children: "이종철"})).toBeTruthy();
+  expect(renderer.root.findAllByProps({children: "구성원 7"})).toHaveLength(0);
+});
+
 test("활성 구성원에서 사라진 참여자 태그와 편집 선택값을 제거한다", async () => {
   const gateway = createGateway();
   gateway.getEvent.mockResolvedValueOnce({
+    creatorDisplayName: "이종철",
     creatorMemberId: "7",
     description: "",
     endAt: "2026-07-17T07:00:00Z",

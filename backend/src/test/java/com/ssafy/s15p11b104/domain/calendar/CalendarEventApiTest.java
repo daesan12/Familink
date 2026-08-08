@@ -35,8 +35,10 @@ import com.ssafy.s15p11b104.domain.calendar.repository.EventParticipantRepositor
 import com.ssafy.s15p11b104.domain.group.entity.FamilyGroup;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
+import com.ssafy.s15p11b104.domain.group.entity.MemberAlias;
 import com.ssafy.s15p11b104.domain.group.repository.FamilyGroupRepository;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
 import com.ssafy.s15p11b104.domain.notification.entity.Notification;
 import com.ssafy.s15p11b104.domain.notification.entity.NotificationType;
 import com.ssafy.s15p11b104.domain.notification.entity.ReminderSlot;
@@ -73,6 +75,9 @@ class CalendarEventApiTest extends IntegrationTest {
 
 	@Autowired
 	private GroupMemberRepository groupMemberRepository;
+
+	@Autowired
+	private MemberAliasRepository memberAliasRepository;
 
 	@Autowired
 	private CalendarEventRepository calendarEventRepository;
@@ -116,7 +121,7 @@ class CalendarEventApiTest extends IntegrationTest {
 		managerUser = userRepository.save(user("cal_manager", "관리자"));
 		creatorUser = userRepository.save(user("cal_creator", "작성자"));
 		memberUser = userRepository.save(user("cal_member", "구성원"));
-		leftUser = userRepository.save(user("cal_left", "탈퇴자"));
+		leftUser = userRepository.save(user("cal_left", "나간사람"));
 		otherGroupUser = userRepository.save(user("cal_other", "타그룹"));
 		outsiderUser = userRepository.save(user("cal_outsider", "외부인"));
 		group = familyGroupRepository.save(new FamilyGroup("우리가족", "CAL123"));
@@ -178,8 +183,43 @@ class CalendarEventApiTest extends IntegrationTest {
 			.andExpect(jsonPath("$.data.startAt").doesNotExist())
 			.andExpect(jsonPath("$.data.endAt").doesNotExist())
 			.andExpect(jsonPath("$.data.creatorMemberId").value(creatorMember.getId()))
+			.andExpect(jsonPath("$.data.creatorDisplayName").value("작성자"))
 			.andExpect(jsonPath("$.data.participantMemberIds.length()").value(1))
 			.andExpect(jsonPath("$.data.participantMemberIds[0]").value(memberMember.getId()));
+	}
+
+	@Test
+	void creatorWhoOnlyLeftGroupKeepsRealName() throws Exception {
+		Long eventId = persistAllDayEventIn(
+			group, leftMember, "가족 모임", LocalDate.of(2026, 8, 5), LocalDate.of(2026, 8, 5));
+
+		mockMvc.perform(get("/events/{eventId}", eventId).with(authenticatedAs(memberUser.getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.creatorMemberId").value(leftMember.getId()))
+			.andExpect(jsonPath("$.data.creatorDisplayName").value("나간사람"));
+	}
+
+	@Test
+	void withdrawnCreatorIsDisplayedWithFallbackNameIgnoringViewerAlias() throws Exception {
+		Long eventId = persistAllDayEventIn(
+			group, leftMember, "가족 모임", LocalDate.of(2026, 8, 5), LocalDate.of(2026, 8, 5));
+		persistAlias(memberMember, leftMember, "삼촌");
+		withdraw(leftUser);
+
+		mockMvc.perform(get("/events/{eventId}", eventId).with(authenticatedAs(memberUser.getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.creatorMemberId").value(leftMember.getId()))
+			.andExpect(jsonPath("$.data.creatorDisplayName").value(User.WITHDRAWN_DISPLAY_NAME));
+	}
+
+	@Test
+	void creatorDisplayNameUsesViewerAlias() throws Exception {
+		Long eventId = persistAllDayEvent("가족 모임", LocalDate.of(2026, 8, 5), LocalDate.of(2026, 8, 5));
+		persistAlias(memberMember, creatorMember, "아빠");
+
+		mockMvc.perform(get("/events/{eventId}", eventId).with(authenticatedAs(memberUser.getId())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.creatorDisplayName").value("아빠"));
 	}
 
 	@Test
@@ -941,6 +981,28 @@ class CalendarEventApiTest extends IntegrationTest {
 			startAt,
 			endAt,
 			Instant.now()));
+		entityManager.flush();
+		entityManager.clear();
+	}
+
+	private void persistAlias(GroupMember owner, GroupMember target, String alias) {
+		memberAliasRepository.save(new MemberAlias(
+			familyGroupRepository.findById(group.getId()).orElseThrow(),
+			groupMemberRepository.findById(owner.getId()).orElseThrow(),
+			groupMemberRepository.findById(target.getId()).orElseThrow(),
+			alias));
+		entityManager.flush();
+		entityManager.clear();
+	}
+
+	/**
+	 * 회원 탈퇴로 이름을 익명화한다.
+	 *
+	 * <p>{@link #setUp()}이 영속성 컨텍스트를 비우므로 필드로 들고 있는 사용자는 준영속 상태다. 다시
+	 * 조회하지 않고 {@code withdraw}를 호출하면 변경이 반영되지 않아 검증이 무의미해진다.
+	 */
+	private void withdraw(User target) {
+		entityManager.find(User.class, target.getId()).withdraw(Instant.now());
 		entityManager.flush();
 		entityManager.clear();
 	}

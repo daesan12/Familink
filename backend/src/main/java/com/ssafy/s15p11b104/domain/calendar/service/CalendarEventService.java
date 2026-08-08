@@ -28,7 +28,9 @@ import com.ssafy.s15p11b104.domain.calendar.entity.EventParticipant;
 import com.ssafy.s15p11b104.domain.calendar.repository.CalendarEventRepository;
 import com.ssafy.s15p11b104.domain.calendar.repository.EventParticipantRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
+import com.ssafy.s15p11b104.domain.group.entity.MemberAlias;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
+import com.ssafy.s15p11b104.domain.group.repository.MemberAliasRepository;
 import com.ssafy.s15p11b104.domain.notification.entity.NotificationType;
 import com.ssafy.s15p11b104.domain.notification.entity.ReminderSlot;
 import com.ssafy.s15p11b104.domain.notification.event.DomainNotificationEvent;
@@ -51,6 +53,7 @@ public class CalendarEventService {
 	private final CalendarEventRepository calendarEventRepository;
 	private final EventParticipantRepository eventParticipantRepository;
 	private final GroupMemberRepository groupMemberRepository;
+	private final MemberAliasRepository memberAliasRepository;
 	private final ApplicationEventPublisher eventPublisher;
 	private final Clock clock;
 	private final NotificationRepository notificationRepository;
@@ -59,12 +62,14 @@ public class CalendarEventService {
 		CalendarEventRepository calendarEventRepository,
 		EventParticipantRepository eventParticipantRepository,
 		GroupMemberRepository groupMemberRepository,
+		MemberAliasRepository memberAliasRepository,
 		ApplicationEventPublisher eventPublisher,
 		Clock clock,
 		NotificationRepository notificationRepository) {
 		this.calendarEventRepository = calendarEventRepository;
 		this.eventParticipantRepository = eventParticipantRepository;
 		this.groupMemberRepository = groupMemberRepository;
+		this.memberAliasRepository = memberAliasRepository;
 		this.eventPublisher = eventPublisher;
 		this.clock = clock;
 		this.notificationRepository = notificationRepository;
@@ -98,7 +103,7 @@ public class CalendarEventService {
 	@Transactional(readOnly = true)
 	public CalendarEventDetailResponse getEvent(Long eventId, Long authenticatedUserId) {
 		CalendarEvent event = getEvent(eventId);
-		getActiveMember(event.getGroup().getId(), authenticatedUserId);
+		GroupMember viewer = getActiveMember(event.getGroup().getId(), authenticatedUserId);
 
 		return new CalendarEventDetailResponse(
 			event.getId(),
@@ -110,7 +115,25 @@ public class CalendarEventService {
 			event.getStartAt(),
 			event.getEndAt(),
 			event.getCreatorMember().getId(),
+			resolveCreatorDisplayName(event, viewer),
 			eventParticipantRepository.findMemberIdsByEventId(event.getId()));
+	}
+
+	/**
+	 * 조회자의 호칭을 반영한 작성자 표시 이름을 반환한다.
+	 *
+	 * <p>작성자가 그룹을 나가면 활성 구성원만 담는 {@code API-GROUPS-005}에서 사라져 클라이언트가
+	 * 이름을 조회할 수 없으므로 서버가 해석한다. 그룹만 나간 작성자는 이름과 호칭을 그대로 유지하고,
+	 * 회원 탈퇴한 작성자만 고정 문구로 통일한다.
+	 */
+	private String resolveCreatorDisplayName(CalendarEvent event, GroupMember viewer) {
+		GroupMember creator = event.getCreatorMember();
+		String alias = memberAliasRepository
+			.findByGroupIdAndOwnerMemberIdAndTargetMemberId(
+				event.getGroup().getId(), viewer.getId(), creator.getId())
+			.map(MemberAlias::getAlias)
+			.orElse(null);
+		return creator.getUser().resolveDisplayName(alias);
 	}
 
 	/**
