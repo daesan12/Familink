@@ -35,15 +35,15 @@ class AiCallModelsTest {
     val durationLimited = aiCallEndedDescription(wasCancelled = false, endedByDurationLimit = true)
     val cancelled = aiCallEndedDescription(wasCancelled = true, endedByDurationLimit = false)
 
-    assertEquals("오늘 나눈 이야기는 소중히 기억할게요.", userEnded)
-    assertEquals("통화 가능한 시간이 다 되어 마무리했어요.", durationLimited)
-    assertEquals("준비되면 다시 이야기해 보세요.", cancelled)
+    assertEquals("오늘 나눈 이야기는 소중히 기억할게요", userEnded)
+    assertEquals("통화 가능한 시간이 다 되어 마무리했어요", durationLimited)
+    assertEquals("준비되면 다시 이야기해 보세요", cancelled)
   }
 
   @Test
   fun `연결 전에 취소된 통화는 시간 만료 안내를 쓰지 않는다`() {
     assertEquals(
-        "준비되면 다시 이야기해 보세요.",
+        "준비되면 다시 이야기해 보세요",
         aiCallEndedDescription(wasCancelled = true, endedByDurationLimit = true),
     )
   }
