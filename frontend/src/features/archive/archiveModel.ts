@@ -105,26 +105,38 @@ export function shiftMonth(
   };
 }
 
-// 달력 렌더링용 주 단위 배열. 각 칸은 일(day) 숫자이거나 빈 칸(null)이다.
+// 달력 격자는 항상 6주 42칸으로 고정한다.
+const CALENDAR_CELL_COUNT = 42;
+
+export interface CalendarDayCell {
+  dateKey: string;
+  day: number;
+  // 이 칸이 기준 달에 속하는지 여부. false면 인접 달 스필오버(흐리게, 선택 불가).
+  inMonth: boolean;
+}
+
+// 달력 렌더링용 주 단위 배열. 6주 42칸 고정이라 월마다 높이가 달라지지 않고,
+// 앞뒤 여유 칸은 인접 달의 실제 날짜로 채운다.
 export function getCalendarWeeks(
   year: number,
   month: number,
-): readonly (readonly (number | null)[])[] {
+): readonly (readonly CalendarDayCell[])[] {
   const firstWeekday = new Date(year, month - 1, 1).getDay();
-  const daysInMonth = new Date(year, month, 0).getDate();
 
-  const cells: (number | null)[] = [];
-  for (let index = 0; index < firstWeekday; index += 1) {
-    cells.push(null);
-  }
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    cells.push(day);
-  }
-  while (cells.length % 7 !== 0) {
-    cells.push(null);
+  const cells: CalendarDayCell[] = [];
+  for (let index = 0; index < CALENDAR_CELL_COUNT; index += 1) {
+    // Date 생성자가 범위를 벗어난 일(day) 값을 인접 달로 이월해 준다.
+    const date = new Date(year, month - 1, index - firstWeekday + 1);
+    const cellYear = date.getFullYear();
+    const cellMonth = date.getMonth() + 1;
+    cells.push({
+      dateKey: toDateKey(cellYear, cellMonth, date.getDate()),
+      day: date.getDate(),
+      inMonth: cellYear === year && cellMonth === month,
+    });
   }
 
-  const weeks: (number | null)[][] = [];
+  const weeks: CalendarDayCell[][] = [];
   for (let index = 0; index < cells.length; index += 7) {
     weeks.push(cells.slice(index, index + 7));
   }

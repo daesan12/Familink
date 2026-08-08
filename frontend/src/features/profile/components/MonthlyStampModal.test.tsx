@@ -112,3 +112,11 @@ test('인접 달 스필오버 도장은 흐리게, 기준 달 도장은 진하�
   const inMonthDimmed = stamps.filter(stamp => stamp.props.dimmed === false);
   expect(inMonthDimmed.length).toBeGreaterThanOrEqual(31);
 });
+
+test('달력은 월과 무관하게 항상 6주 42칸을 그린다', () => {
+  // 42칸이 고정이라야 월을 넘겨도 모달 높이가 변하지 않는다.
+  expect(render().root.findAllByType(CarnationStamp)).toHaveLength(42);
+  expect(
+    render({month: 2, year: 2026}).root.findAllByType(CarnationStamp),
+  ).toHaveLength(42);
+});
