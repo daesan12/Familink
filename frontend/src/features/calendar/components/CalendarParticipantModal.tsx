@@ -31,6 +31,9 @@ export function CalendarParticipantModal({
   visible,
 }: CalendarParticipantModalProps) {
   const insets = useSafeAreaInsets();
+  const allSelected =
+    members.length > 0 &&
+    members.every((member) => selectedMemberIds.includes(member.memberId));
   const toggleMember = (memberId: string) => {
     onChange(
       selectedMemberIds.includes(memberId)
@@ -59,17 +62,43 @@ export function CalendarParticipantModal({
             <AppText accessibilityRole="header" style={styles.title}>
               참여자 선택
             </AppText>
-            <Pressable
-              accessibilityLabel="참여자 선택 완료"
-              accessibilityRole="button"
-              onPress={onClose}
-              style={({ pressed }) => [
-                styles.doneButton,
-                pressed && styles.pressed,
-              ]}
-            >
-              <AppText style={styles.doneText}>완료</AppText>
-            </Pressable>
+            <View style={styles.headerActions}>
+              {members.length > 0 ? (
+                <Pressable
+                  accessibilityLabel={
+                    allSelected ? "참여자 모두 해제" : "참여자 모두 선택"
+                  }
+                  accessibilityRole="button"
+                  hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+                  onPress={() =>
+                    onChange(
+                      allSelected
+                        ? []
+                        : members.map((member) => member.memberId)
+                    )
+                  }
+                  style={({ pressed }) => [
+                    styles.selectAllButton,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <AppText style={styles.selectAllText}>
+                    {allSelected ? "모두 해제" : "모두 선택"}
+                  </AppText>
+                </Pressable>
+              ) : null}
+              <Pressable
+                accessibilityLabel="참여자 선택 완료"
+                accessibilityRole="button"
+                onPress={onClose}
+                style={({ pressed }) => [
+                  styles.doneButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <AppText style={styles.doneText}>완료</AppText>
+              </Pressable>
+            </View>
           </View>
           <ScrollView contentContainerStyle={styles.list}>
             {members.length === 0 ? (
@@ -176,6 +205,11 @@ const styles = StyleSheet.create({
     minHeight: 62,
     paddingHorizontal: 20,
   },
+  headerActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
   list: {
     paddingBottom: 24,
   },
@@ -205,6 +239,19 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     justifyContent: "flex-end",
+  },
+  selectAllButton: {
+    alignItems: "center",
+    backgroundColor: COLORS.lavenderSurface,
+    borderRadius: RADII.pill,
+    justifyContent: "center",
+    minHeight: 34,
+    paddingHorizontal: 12,
+  },
+  selectAllText: {
+    color: COLORS.purpleDeep,
+    fontSize: 13,
+    fontWeight: "700",
   },
   sheet: {
     backgroundColor: COLORS.background,

@@ -648,7 +648,6 @@ class UserApiTest extends IntegrationTest {
 				LocalDate.now(),
 				null,
 				null);
-			event.changeParticipantScope(true);
 			entityManager.persist(event);
 			entityManager.persist(new EventParticipant(event, member));
 			entityManager.flush();

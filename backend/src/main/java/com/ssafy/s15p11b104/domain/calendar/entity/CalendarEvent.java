@@ -58,9 +58,6 @@ public class CalendarEvent extends BaseEntity {
 	@Column(name = "reminder_schedule_updated_at", nullable = false)
 	private Instant reminderScheduleUpdatedAt;
 
-	@Column(name = "participants_specified", nullable = false)
-	private boolean participantsSpecified;
-
 	protected CalendarEvent() {
 	}
 
@@ -152,16 +149,6 @@ public class CalendarEvent extends BaseEntity {
 		touch();
 	}
 
-	/**
-	 * 참여자를 명시적으로 지정한 일정인지 기록한다.
-	 *
-	 * <p>지정 참여자가 모두 그룹을 떠나 연결 행이 없어져도 이 값은 유지한다. 사용자가 일정 편집에서
-	 * 참여자를 모두 해제한 경우에만 호출자가 {@code false}로 바꾼다.
-	 */
-	public void changeParticipantScope(boolean participantsSpecified) {
-		this.participantsSpecified = participantsSpecified;
-	}
-
 	public FamilyGroup getGroup() {
 		return group;
 	}
@@ -200,9 +187,5 @@ public class CalendarEvent extends BaseEntity {
 
 	public Instant getReminderScheduleUpdatedAt() {
 		return reminderScheduleUpdatedAt;
-	}
-
-	public boolean isParticipantsSpecified() {
-		return participantsSpecified;
 	}
 }
