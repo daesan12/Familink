@@ -10,6 +10,8 @@ import {
   View,
 } from 'react-native';
 
+import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
+
 import {COLORS, RADII} from '../../../design/tokens';
 import {AppText} from '../../../shared/components/AppText';
 import type {AppNotification} from '../types';
@@ -117,9 +119,18 @@ export function NotificationItem({
             pressed && styles.pressed,
           ]}
         >
-          <View style={styles.avatar}>
-            <AppText style={styles.avatarText}>{notification.avatarText}</AppText>
-          </View>
+          {notification.actorProfileImageUrl === undefined ? (
+            <View style={styles.avatar}>
+              <AppText style={styles.avatarText}>
+                {notification.avatarText}
+              </AppText>
+            </View>
+          ) : (
+            <CachedRemoteImage
+              source={{uri: notification.actorProfileImageUrl}}
+              style={styles.avatar}
+            />
+          )}
           <View style={styles.copy}>
             <AppText numberOfLines={1} style={[styles.title, textStyle]}>
               {notification.title}
