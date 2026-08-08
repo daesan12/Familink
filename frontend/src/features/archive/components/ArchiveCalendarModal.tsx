@@ -15,7 +15,6 @@ import {
   getActiveDaySet,
   getCalendarWeeks,
   shiftMonth,
-  toDateKey,
 } from '../archiveModel';
 import type {ArchiveMemberFilter, ArchivePost} from '../types';
 
@@ -110,37 +109,43 @@ export function ArchiveCalendarModal({
             ))}
           </View>
 
-          {weeks.map((week, weekIndex) => (
-            <View key={`week-${weekIndex}`} style={styles.weekRow}>
-              {week.map((day, dayIndex) => {
-                if (day == null) {
+          {weeks.map(week => (
+            <View key={week[0].dateKey} style={styles.weekRow}>
+              {week.map(cell => {
+                // 인접 달 칸은 7열 정렬용이므로 흐리게만 보여 주고 선택할 수 없다.
+                // 월 정보가 없는 숫자만 읽히면 혼란스러워 접근성 트리에서 감춘다.
+                if (!cell.inMonth) {
                   return (
                     <View
-                      key={`empty-${weekIndex}-${dayIndex}`}
+                      accessibilityElementsHidden
+                      importantForAccessibility="no-hide-descendants"
+                      key={cell.dateKey}
                       style={styles.dayCell}
-                    />
+                    >
+                      <AppText style={styles.dayOutsideText}>{cell.day}</AppText>
+                    </View>
                   );
                 }
 
-                const hasPosts = activeDays.has(day);
+                const hasPosts = activeDays.has(cell.day);
                 if (!hasPosts) {
                   return (
-                    <View key={day} style={styles.dayCell}>
-                      <AppText style={styles.dayDisabledText}>{day}</AppText>
+                    <View key={cell.dateKey} style={styles.dayCell}>
+                      <AppText style={styles.dayDisabledText}>{cell.day}</AppText>
                     </View>
                   );
                 }
 
                 return (
-                  <View key={day} style={styles.dayCell}>
+                  <View key={cell.dateKey} style={styles.dayCell}>
                     <Pressable
                       accessibilityHint="이 날짜의 게시글만 모아 봅니다"
-                      accessibilityLabel={`${month}월 ${day}일 게시글 보기`}
+                      accessibilityLabel={`${month}월 ${cell.day}일 게시글 보기`}
                       accessibilityRole="button"
-                      onPress={() => onSelectDate(toDateKey(year, month, day))}
+                      onPress={() => onSelectDate(cell.dateKey)}
                       style={styles.dayActive}
                     >
-                      <AppText style={styles.dayActiveText}>{day}</AppText>
+                      <AppText style={styles.dayActiveText}>{cell.day}</AppText>
                     </Pressable>
                   </View>
                 );
@@ -184,7 +189,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: `${100 / 7}%`,
   },
+  // 기준 달인데 게시글만 없는 날. 인접 달(textDisabled)과 확실히 구분되도록
+  // 기준 화면처럼 당월은 읽히는 진한 색을 쓴다. 누를 수 있는지는 색이 아니라
+  // 라벤더 알약이 나타낸다.
   dayDisabledText: {
+    color: COLORS.textMuted,
+    fontSize: 15,
+  },
+  // 인접 달 표기는 기준 화면(CalendarMonthGrid.outsideDayNumber)과 같은 토큰을 쓴다.
+  // 더 옅은 inactive는 흰 배경에서 대비가 1.4:1까지 떨어져 숫자가 읽히지 않는다.
+  dayOutsideText: {
     color: COLORS.textDisabled,
     fontSize: 15,
   },
