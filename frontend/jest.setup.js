@@ -11,6 +11,12 @@ jest.mock('react-native-config', () => ({
 // preset does not transform those files, so keep the icon as a lightweight
 // host component in tests.
 jest.mock('lucide-react-native/icons/trash-2', () => 'Trash2');
+// 알림 목록이 종류별로 쓰는 아이콘. 여러 스위트가 NotificationItem을 거쳐
+// 불러오므로 개별 테스트 파일이 아니라 여기서 한 번에 대체한다.
+jest.mock('lucide-react-native/icons/calendar', () => 'Calendar');
+jest.mock('lucide-react-native/icons/file-chart-column', () => 'FileChartColumn');
+jest.mock('lucide-react-native/icons/house', () => 'House');
+jest.mock('lucide-react-native/icons/users-round', () => 'UsersRound');
 
 // 패키지 루트도 ESM이라 같은 이유로 파싱에 실패한다. 아이콘 이름을 그대로
 // host 컴포넌트로 돌려주어 앱 셸을 포함한 통합 테스트가 실행되게 한다.

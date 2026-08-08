@@ -1,5 +1,9 @@
+import Calendar from 'lucide-react-native/icons/calendar';
 import Check from 'lucide-react-native/icons/check';
+import FileChartColumn from 'lucide-react-native/icons/file-chart-column';
+import House from 'lucide-react-native/icons/house';
 import Trash2 from 'lucide-react-native/icons/trash-2';
+import UsersRound from 'lucide-react-native/icons/users-round';
 import X from 'lucide-react-native/icons/x';
 import {useCallback, useMemo, useRef, useState} from 'react';
 import {
@@ -14,7 +18,21 @@ import {CachedRemoteImage} from '../../../shared/media/CachedRemoteImage';
 
 import {COLORS, RADII} from '../../../design/tokens';
 import {AppText} from '../../../shared/components/AppText';
-import type {AppNotification} from '../types';
+import type {AppNotification, NotificationType} from '../types';
+
+// 프로필 사진이 없는 알림은 종류를 알려주는 아이콘으로 대체한다. 시스템이
+// 만든 리포트·일정 알림은 보낸 사람 자체가 없어 사진을 띄울 대상이 없고,
+// 사람이 보낸 알림도 사진 미등록이면 이니셜만으로는 무슨 알림인지 알 수 없다.
+// 아이콘은 해당 알림이 이동하는 탭의 아이콘과 맞춰 목적지를 예측하게 한다.
+const TYPE_ICONS = {
+  CALL_REPORT: FileChartColumn,
+  DAILY_REPORT: FileChartColumn,
+  EVENT_CHANGED: Calendar,
+  EVENT_REMINDER: Calendar,
+  GROUP_JOIN_REQUEST: UsersRound,
+  NEW_POST: House,
+  POST_ACTIVITY: House,
+} satisfies Record<NotificationType, typeof House>;
 
 interface NotificationItemProps {
   // 가입 요청 처리(API 왕복)가 진행 중이면 승인·거부 버튼을 잠근다.
@@ -37,6 +55,7 @@ export function NotificationItem({
   const textStyle = notification.isRead
     ? styles.readText
     : styles.unreadText;
+  const TypeIcon = TYPE_ICONS[notification.type];
   const translateX = useRef(new Animated.Value(0)).current;
   const [revealed, setRevealed] = useState(false);
   const close = useCallback(() => {
@@ -120,10 +139,12 @@ export function NotificationItem({
           ]}
         >
           {notification.actorProfileImageUrl === undefined ? (
-            <View style={styles.avatar}>
-              <AppText style={styles.avatarText}>
-                {notification.avatarText}
-              </AppText>
+            <View style={[styles.avatar, styles.typeAvatar]}>
+              <TypeIcon
+                color={COLORS.purpleDeep}
+                size={24}
+                strokeWidth={2}
+              />
             </View>
           ) : (
             <CachedRemoteImage
@@ -211,10 +232,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 46,
   },
-  avatarText: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: '700',
+  // 사진 자리와 같은 원 안에 아이콘을 넣어 목록의 왼쪽 열이 어긋나지 않게 한다.
+  typeAvatar: {
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.inactive,
   },
   body: {
     fontSize: 14,
