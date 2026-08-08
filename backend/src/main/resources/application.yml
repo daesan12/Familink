@@ -58,8 +58,8 @@ app:
     refresh-token-validity: 14d
   ai-analysis:
     enabled: true
-    fixed-delay-ms: 60000
-    initial-delay-ms: 60000
+    fixed-delay-ms: 3000
+    initial-delay-ms: 3000
   event-reminder:
     fixed-delay-ms: 60000
     initial-delay-ms: 60000

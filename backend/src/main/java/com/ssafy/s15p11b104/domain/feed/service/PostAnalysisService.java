@@ -26,7 +26,7 @@ public class PostAnalysisService {
 	static final int MAX_ATTEMPTS = 3;
 	static final int BATCH_SIZE = 20;
 	static final Duration CLAIM_LEASE = Duration.ofSeconds(90);
-	private static final Duration STABILITY_DELAY = Duration.ofMinutes(10);
+	private static final Duration STABILITY_DELAY = Duration.ZERO;
 	private static final Duration INITIAL_RETRY_DELAY = Duration.ofMinutes(1);
 	private static final Duration MAX_RETRY_DELAY = Duration.ofMinutes(15);
 
@@ -51,7 +51,7 @@ public class PostAnalysisService {
 		this.clock = clock;
 	}
 
-	/** 마지막 수정 후 10분이 지난 게시글을 한 번에 최대 20건 분석한다. */
+	/** 생성 또는 수정된 게시글을 한 번에 최대 20건 분석한다. */
 	public void analyzeStablePosts() {
 		PostAnalysisGateway gateway = gatewayProvider.getIfAvailable();
 		if (gateway == null || !processingLock.tryLock()) {

@@ -224,8 +224,10 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
   `expiresAt`은 발급 시각 10분 뒤의 ISO-8601 UTC 절대 시각이다. 반환
   헤더가 빠졌거나 값이 다른 업로드는 성공으로 간주하지 않는다.
 - 게시글에는 최적화본 URL만 저장한다.
-- Spring Scheduler가 마지막 `updated_at` 이후 10분간 변경이 없는 게시글을
-  찾고 Spring 내부 `PostAnalysisService`를 호출한다.
+- Spring Scheduler가 기본 3초 주기로 생성 또는 수정된 게시글을 별도 안정화
+  대기 없이 찾고 Spring 내부 `PostAnalysisService`를 호출한다. 분석 직전
+  `updated_at` 버전을 다시 확인하고 게시글별 영속 claim으로 중복 실행과
+  오래된 결과 저장을 방지한다.
 
 ## 일정
 

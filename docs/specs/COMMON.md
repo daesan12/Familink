@@ -100,8 +100,10 @@
 - AI 전화 음성은 Kotlin 모듈과 OpenAI Realtime이 WebRTC로 직접
   주고받는다. Spring Boot는 SDP 교환, Sideband WebSocket, Tool Calling,
   발화 완료 전사와 통화 상태를 처리한다.
-- Spring Boot는 마지막 수정 후 10분이 지난 게시글을 직접 조회해 Gemini로
-  분석하고 `post_analyses`에 저장한다.
+- Spring Boot는 생성 또는 수정된 게시글을 기본 3초 주기로 직접 조회해
+  별도 안정화 대기 없이 Gemini로 분석하고 `post_analyses`에 저장한다.
+  분석 직전 게시글 버전을 다시 확인하고 영속 claim으로 중복 실행과 오래된
+  결과 저장을 방지한다.
 - 게시글 분석의 Gemini 호출은 SSAFY GMS 프록시를 사용한다.
   `GMS_API_KEY`는 프록시 인증 키로 서버에서만 보관하며
   `x-goog-api-key` 헤더로 전달한다.
