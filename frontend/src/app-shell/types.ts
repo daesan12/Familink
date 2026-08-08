@@ -69,6 +69,8 @@ export interface AppScreenProps {
     entrySource?: 'feed' | 'notification',
   ) => void;
   onRequestLogout?: () => void;
+  // 셸이 들고 있는 읽지 않은 알림 수. 헤더에 알림 벨을 그리는 화면이 배지에 쓴다.
+  unreadNotificationCount?: number;
   onRequestWithdrawal?: () => Promise<void>;
   readNotificationIds?: readonly string[];
   // 내부 스택을 가진 탭이 공유 하위 화면 라우트를 등록할 때 본문을 받는다.

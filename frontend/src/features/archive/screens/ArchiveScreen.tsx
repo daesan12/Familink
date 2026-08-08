@@ -272,7 +272,11 @@ export function ArchiveScreen({
             되면 뒤로가기는 진입 지점으로 돌아가므로 늘 피드가 아니고
             (S15P11B104-367), 게시글 상세와 같은 스택에
             공존해 접근성 라벨이 중복된다. 알림 화면의 "알림 화면 닫기"와 대칭. */}
-        <BackButton accessibilityLabel="보관함 닫기" onPress={onCloseArchive} />
+        {/* 좌우 슬롯 폭과 헤더 여백은 셸 헤더·게시글 상세·알림과 같게 맞춘다
+            (S15P11B104-341). 화면을 오가도 아이콘이 제자리에 있어야 한다. */}
+        <View style={styles.headerSide}>
+          <BackButton accessibilityLabel="보관함 닫기" onPress={onCloseArchive} />
+        </View>
         <AppText style={styles.title}>보관함</AppText>
         <Pressable
           accessibilityHint="날짜별로 게시글을 찾습니다"
@@ -434,6 +438,8 @@ function ArchiveEmptyState({memberName}: {memberName: string | null}) {
 }
 
 const styles = StyleSheet.create({
+  // 제목이 flex:1이라 이 버튼은 오른쪽 끝에 붙는다. 폭 40 + 헤더 여백 16이면
+  // 중심이 가장자리에서 36으로, 왼쪽 슬롯의 뒤로가기와 대칭이 된다.
   calendarButton: {
     alignItems: 'center',
     backgroundColor: COLORS.surfaceMuted,
@@ -508,8 +514,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     minHeight: 60,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 4,
+  },
+  headerSide: {
+    alignItems: 'flex-start',
+    height: 44,
+    justifyContent: 'center',
+    width: 80,
   },
   listContent: {
     paddingBottom: 24,

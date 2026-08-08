@@ -199,6 +199,7 @@ export function FeedScreen({
   onFullscreenChange,
   onHeaderVisibilityChange,
   onOpenNotifications,
+  unreadNotificationCount,
   onSubmitPost,
   onUpdateComment,
   pageLoader,
@@ -1247,6 +1248,7 @@ export function FeedScreen({
                   }}
                   onMenuPress={() => setMenuPostId(selectedPost.id)}
                   onOpenNotifications={onOpenNotifications}
+                  unreadNotificationCount={unreadNotificationCount}
                   onPressAuthor={handlePressAuthor}
                   onScrollBeginDrag={closeReactionPicker}
                   onRetryComments={() => {
