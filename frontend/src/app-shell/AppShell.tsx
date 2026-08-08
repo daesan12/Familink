@@ -16,6 +16,7 @@ import { Pressable,
   View,
 } from 'react-native';
 import {AppText} from '../shared/components/AppText';
+import {NotificationBellButton} from '../shared/components/NotificationBellButton';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../design/tokens';
@@ -296,12 +297,12 @@ export function AppShell({
     ) => navigateInTab('feed', { initial: false, params, screen }),
     [navigateInTab]
   );
+  // 그룹정보 탭의 딥링크 목적지는 홈뿐이다. 가입 승인 대기는 피드 탭 스택의
+  // 공유 하위 화면이므로 openSubScreen이 담당한다(S15P11B104-336).
   const navigateInGroupInfoTab = useCallback(
     (
-      screen: 'GroupInfoHome' | 'JoinApproval',
-      params:
-        | GroupInfoStackParamList['GroupInfoHome']
-        | GroupInfoStackParamList['JoinApproval'],
+      screen: 'GroupInfoHome',
+      params: GroupInfoStackParamList['GroupInfoHome'],
     ) => navigateInTab('groupInfo', { initial: false, params, screen }),
     [navigateInTab]
   );
@@ -662,6 +663,7 @@ export function AppShell({
     onUnreadCountChange: setUnreadNotificationCount,
     readNotificationIds,
     role: currentGroup.role,
+    unreadNotificationCount,
   };
   // 하위 화면 본문 주입. 스택 소유자(FeedScreen)가 라우트를 등록하고 셸이 본문만
   // 채우므로 배선이 셸에 남고 피처끼리 직접 import하지 않는다. 본문에 screenProps를
@@ -755,27 +757,10 @@ export function AppShell({
               />
             </View>
           ) : resolvedTabRoute === 'feed' ? (
-            <Pressable
-              accessibilityLabel="알림"
-              accessibilityRole="button"
+            <NotificationBellButton
               onPress={() => openSubScreen('notifications')}
-              style={styles.headerSide}
-            >
-              <MaterialDesignIcons
-                color={COLORS.textStrong}
-                name="bell"
-                size={28}
-              />
-              {unreadNotificationCount > 0 ? (
-                <View style={styles.notificationBadge}>
-                  <AppText style={styles.notificationBadgeText}>
-                    {unreadNotificationCount > 99
-                      ? '99+'
-                      : unreadNotificationCount}
-                  </AppText>
-                </View>
-              ) : null}
-            </Pressable>
+              unreadCount={unreadNotificationCount}
+            />
           ) : resolvedTabRoute === 'report' ? (
             <Pressable
               accessibilityHint="생성된 일간 리포트 날짜를 월별로 확인합니다"
@@ -1138,6 +1123,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 80,
   },
+  // 벨 아이콘 크기. 배지가 이 상자를 기준으로 붙는다.
+  bellIcon: {
+    alignItems: 'center',
+    height: 28,
+    justifyContent: 'center',
+    width: 28,
+  },
   notificationBadge: {
     alignItems: 'center',
     backgroundColor: '#D92D20',
@@ -1148,8 +1140,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 20,
     position: 'absolute',
-    right: 5,
-    top: 2,
+    right: -6,
+    top: -6,
   },
   notificationBadgeText: {
     color: COLORS.background,

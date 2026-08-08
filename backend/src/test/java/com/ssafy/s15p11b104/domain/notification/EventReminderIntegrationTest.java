@@ -38,9 +38,14 @@ import jakarta.persistence.EntityManager;
 /**
  * 일정 시작 알림의 시점·대상자·중복 방지·생략 규칙을 검증한다.
  *
- * <p>스케줄러의 실제 주기를 기다리지 않고 {@code remind(now)}에 시각을 직접 넘겨 KST 09:00과 시작
- * 1시간 전 경계를 고정한다. 알림 시점이 지난 뒤의 등록·수정을 걸러내는 판정이 일정의
- * {@code updated_at}에 의존하므로 픽스처는 그 값을 네이티브 갱신으로 못 박는다.
+ * <p>스케줄러의 실제 주기를 기다리지 않고 시각을 직접 넘겨 KST 09:00과 시작 1시간 전 경계를
+ * 고정한다. 알림 시점이 지난 뒤의 등록·수정을 걸러내는 판정이 일정의 시각 컬럼에 의존하므로
+ * 픽스처는 그 값을 네이티브 갱신으로 못 박는다. 판정 컬럼은 경로마다 달라
+ * {@code remind}는 {@code updated_at}({@link #stampEvent}), {@code createDueReminders}는
+ * {@code reminder_schedule_updated_at}({@link #stampReminderSchedule})을 본다.
+ *
+ * <p>알림 대상은 일정의 참여자로만 정해진다. 참여자를 넘기지 않은 픽스처는 수신자가 0명이 되므로,
+ * 수신자를 검증하는 테스트는 반드시 참여자를 함께 전달해야 단언이 빈 목록에서 통과하지 않는다.
  */
 @Transactional
 class EventReminderIntegrationTest extends IntegrationTest {
@@ -136,8 +141,8 @@ class EventReminderIntegrationTest extends IntegrationTest {
 	// --- 전날 09:00 알림 ---
 
 	@Test
-	void remindsEveryActiveMemberWhenEventHasNoParticipant() {
-		Long eventId = persistAllDayEvent("병원 방문");
+	void remindsEveryActiveParticipant() {
+		Long eventId = persistAllDayEvent("병원 방문", managerMember, memberMember);
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
 
 		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE);
@@ -182,7 +187,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 	}
 
 	@Test
-	void doesNotExpandReminderToWholeGroupWhenLastExplicitParticipantLinkIsDeleted() {
+	void remindsNobodyWhenParticipantLinkWasRemovedByMembershipChange() {
 		Long eventId = persistAllDayEvent("참여자 없는 약속");
 		persistParticipants(eventId, memberMember);
 		eventParticipantRepository.deleteAllByGroupIdAndMemberId(group.getId(), memberMember.getId());
@@ -192,13 +197,22 @@ class EventReminderIntegrationTest extends IntegrationTest {
 
 		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE);
 
-		assertThat(calendarEventRepository.findById(eventId).orElseThrow().isParticipantsSpecified()).isTrue();
+		assertThat(notificationRepository.findAll()).isEmpty();
+	}
+
+	@Test
+	void remindsNobodyWhenEventHasNoParticipant() {
+		Long eventId = persistAllDayEvent("참여자를 고르지 않은 일정");
+		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
+
+		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE);
+
 		assertThat(notificationRepository.findAll()).isEmpty();
 	}
 
 	@Test
 	void skipsDayBeforeReminderWhenEventChangedAfterItsDueTime() {
-		Long eventId = persistAllDayEvent("당일 등록");
+		Long eventId = persistAllDayEvent("당일 등록", managerMember, memberMember);
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.plusSeconds(1));
 
 		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE);
@@ -208,7 +222,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 
 	@Test
 	void skipsDayBeforeReminderBeforeNineInBusinessZone() {
-		Long eventId = persistAllDayEvent("병원 방문");
+		Long eventId = persistAllDayEvent("병원 방문", managerMember, memberMember);
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
 
 		eventReminderService.remind(JUST_BEFORE_DAY_BEFORE_DUE);
@@ -218,21 +232,50 @@ class EventReminderIntegrationTest extends IntegrationTest {
 
 	@Test
 	void describesStartTimeInDayBeforeReminderOfTimedEvent() {
-		Long eventId = persistTimedEvent("병원 방문");
+		Long eventId = persistTimedEvent("병원 방문", managerMember, memberMember);
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
 
 		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE);
 
 		assertThat(notificationRepository.findAll())
+			.hasSize(2)
 			.allSatisfy(reminder -> assertThat(reminder.getBody())
 				.isEqualTo("내일 14:00에 '병원 방문' 일정이 시작됩니다."));
+	}
+
+	// --- 스케줄러가 실제로 호출하는 경로 ---
+
+	/**
+	 * 운영 스케줄러는 {@code remind}가 아니라 {@code createDueReminders}를 호출한다. 알림 대상 정책이
+	 * 이 경로에서도 참여자로 한정되는지 DB 수준에서 고정한다.
+	 */
+	@Test
+	void createDueRemindersNotifiesOnlyParticipants() {
+		Long eventId = persistAllDayEvent("병원 방문", memberMember);
+		stampReminderSchedule(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
+
+		eventReminderService.createDueReminders(JUST_AFTER_DAY_BEFORE_DUE);
+
+		assertThat(receiverIdsOf(eventReminders()))
+			.containsExactly(memberUser.getId())
+			.doesNotContain(managerUser.getId(), leftUser.getId(), otherGroupUser.getId());
+	}
+
+	@Test
+	void createDueRemindersNotifiesNobodyWhenEventHasNoParticipant() {
+		Long eventId = persistAllDayEvent("참여자를 고르지 않은 일정");
+		stampReminderSchedule(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
+
+		eventReminderService.createDueReminders(JUST_AFTER_DAY_BEFORE_DUE);
+
+		assertThat(eventReminders()).isEmpty();
 	}
 
 	// --- 시작 1시간 전 알림 ---
 
 	@Test
 	void remindsOneHourBeforeTimedEventStarts() {
-		Long eventId = persistTimedEvent("병원 방문");
+		Long eventId = persistTimedEvent("병원 방문", managerMember, memberMember);
 		stampEvent(eventId, HOUR_BEFORE_DUE_AT.minusSeconds(1));
 
 		eventReminderService.remind(HOUR_BEFORE_DUE_AT.plusSeconds(600));
@@ -249,7 +292,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 
 	@Test
 	void skipsHourBeforeReminderWhenEventChangedInsideTheLastHour() {
-		Long eventId = persistTimedEvent("급한 약속");
+		Long eventId = persistTimedEvent("급한 약속", managerMember, memberMember);
 		Instant halfAnHourBeforeStart = TIMED_EVENT_START_AT.minusSeconds(1800);
 		stampEvent(eventId, halfAnHourBeforeStart);
 
@@ -260,7 +303,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 
 	@Test
 	void neverRemindsOneHourBeforeAllDayEvent() {
-		Long eventId = persistAllDayEvent("하루종일 일정");
+		Long eventId = persistAllDayEvent("하루종일 일정", managerMember, memberMember);
 		stampEvent(eventId, HOUR_BEFORE_DUE_AT.minusSeconds(1));
 
 		eventReminderService.remind(HOUR_BEFORE_DUE_AT.plusSeconds(600));
@@ -270,7 +313,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 
 	@Test
 	void remindsTimedEventTwiceAcrossBothDueTimes() {
-		Long eventId = persistTimedEvent("병원 방문");
+		Long eventId = persistTimedEvent("병원 방문", managerMember, memberMember);
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
 
 		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE);
@@ -286,7 +329,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 
 	@Test
 	void remindsOncePerReceiverWhenScannedRepeatedly() {
-		Long eventId = persistAllDayEvent("병원 방문");
+		Long eventId = persistAllDayEvent("병원 방문", managerMember, memberMember);
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
 
 		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE);
@@ -296,9 +339,12 @@ class EventReminderIntegrationTest extends IntegrationTest {
 			.containsExactlyInAnyOrder(managerUser.getId(), memberUser.getId());
 	}
 
+	/**
+	 * 새로 가입한 구성원은 기존 일정의 참여자가 아니므로 그 일정의 알림을 받지 않는다.
+	 */
 	@Test
-	void remindsNewlyJoinedMemberOnTheNextScan() {
-		Long eventId = persistAllDayEvent("병원 방문");
+	void doesNotRemindNewlyJoinedMemberWhoIsNotAParticipant() {
+		Long eventId = persistAllDayEvent("병원 방문", managerMember, memberMember);
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
 		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE);
 
@@ -310,7 +356,8 @@ class EventReminderIntegrationTest extends IntegrationTest {
 		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE.plusSeconds(60));
 
 		assertThat(receiverIdsOf(notificationRepository.findAll()))
-			.containsExactlyInAnyOrder(managerUser.getId(), memberUser.getId(), joinedUser.getId());
+			.containsExactlyInAnyOrder(managerUser.getId(), memberUser.getId())
+			.doesNotContain(joinedUser.getId());
 	}
 
 	// --- 일정 수정 후 재생성 ---
@@ -320,7 +367,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 	 */
 	@Test
 	void keepsExistingReminderWhenEventDateMovesForward() {
-		Long eventId = persistAllDayEvent("병원 방문");
+		Long eventId = persistAllDayEvent("병원 방문", managerMember, memberMember);
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
 		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE);
 		assertThat(notificationRepository.findAll()).hasSize(2);
@@ -328,7 +375,14 @@ class EventReminderIntegrationTest extends IntegrationTest {
 		LocalDate movedDate = EVENT_DATE.plusDays(10);
 		calendarEventService.update(
 			eventId,
-			new CalendarEventUpdateRequest("병원 방문", null, movedDate, movedDate, null, null, null),
+			new CalendarEventUpdateRequest(
+				"병원 방문",
+				null,
+				movedDate,
+				movedDate,
+				null,
+				null,
+				List.of(managerMember.getId(), memberMember.getId())),
 			managerUser.getId());
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
 
@@ -351,7 +405,7 @@ class EventReminderIntegrationTest extends IntegrationTest {
 	 */
 	@Test
 	void keepsDayBeforeReminderWhenOnlyStartTimeMovesWithinTheSameDate() {
-		Long eventId = persistTimedEvent("병원 방문");
+		Long eventId = persistTimedEvent("병원 방문", managerMember, memberMember);
 		stampEvent(eventId, DAY_BEFORE_DUE_AT.minusSeconds(1));
 		eventReminderService.remind(JUST_AFTER_DAY_BEFORE_DUE);
 		assertThat(notificationRepository.findAll()).hasSize(2);
@@ -360,7 +414,13 @@ class EventReminderIntegrationTest extends IntegrationTest {
 		calendarEventService.update(
 			eventId,
 			new CalendarEventUpdateRequest(
-				"병원 방문", null, null, null, movedStartAt, movedStartAt.plusSeconds(3600), null),
+				"병원 방문",
+				null,
+				null,
+				null,
+				movedStartAt,
+				movedStartAt.plusSeconds(3600),
+				List.of(managerMember.getId(), memberMember.getId())),
 			managerUser.getId());
 
 		assertThat(receiverIdsOf(eventReminders()))
@@ -385,15 +445,21 @@ class EventReminderIntegrationTest extends IntegrationTest {
 			.toList();
 	}
 
-	private Long persistAllDayEvent(String title) {
+	/**
+	 * 일정을 저장하고 전달한 구성원을 참여자로 연결한다.
+	 *
+	 * <p>알림 대상은 참여자로만 정해지므로, 참여자를 넘기지 않으면 수신자가 0명이 된다. 수신자를
+	 * 검증하는 테스트는 반드시 참여자를 함께 전달해야 단언이 빈 목록에서 통과하지 않는다.
+	 */
+	private Long persistAllDayEvent(String title, GroupMember... participants) {
 		CalendarEvent event = calendarEventRepository.save(
 			new CalendarEvent(group, managerMember, title, null, EVENT_DATE, EVENT_DATE, null, null));
 		entityManager.flush();
 		entityManager.clear();
-		return event.getId();
+		return withParticipants(event.getId(), participants);
 	}
 
-	private Long persistTimedEvent(String title) {
+	private Long persistTimedEvent(String title, GroupMember... participants) {
 		CalendarEvent event = calendarEventRepository.save(new CalendarEvent(
 			group,
 			managerMember,
@@ -405,12 +471,18 @@ class EventReminderIntegrationTest extends IntegrationTest {
 			TIMED_EVENT_START_AT.plusSeconds(3600)));
 		entityManager.flush();
 		entityManager.clear();
-		return event.getId();
+		return withParticipants(event.getId(), participants);
+	}
+
+	private Long withParticipants(Long eventId, GroupMember... participants) {
+		if (participants.length > 0) {
+			persistParticipants(eventId, participants);
+		}
+		return eventId;
 	}
 
 	private void persistParticipants(Long eventId, GroupMember... members) {
 		CalendarEvent event = calendarEventRepository.findById(eventId).orElseThrow();
-		event.changeParticipantScope(true);
 		for (GroupMember member : members) {
 			eventParticipantRepository.save(new EventParticipant(event, member));
 		}
@@ -424,6 +496,24 @@ class EventReminderIntegrationTest extends IntegrationTest {
 	 * <p>{@code @PrePersist}가 넣는 실제 시각으로는 알림 시점과의 선후를 검증할 수 없다. 네이티브
 	 * 갱신은 영속성 컨텍스트를 우회하므로 오래된 엔티티가 남지 않도록 비운다.
 	 */
+	/**
+	 * 일정의 알림 시점 기준 시각을 고정한다.
+	 *
+	 * <p>{@link EventReminderService#createDueReminders(Instant)}는 {@code updated_at}이 아니라
+	 * {@code reminder_schedule_updated_at}으로 지난 시점을 판정하므로 {@link #stampEvent}와 대상
+	 * 컬럼이 다르다. 생성자가 넣는 실제 시각에 맡기면 테스트가 실행 날짜에 따라 갈린다.
+	 */
+	private void stampReminderSchedule(Long eventId, Instant reminderScheduleUpdatedAt) {
+		entityManager.flush();
+		entityManager.createNativeQuery(
+				"UPDATE calendar_events SET reminder_schedule_updated_at = :stampedAt WHERE id = :eventId")
+			.setParameter("stampedAt", reminderScheduleUpdatedAt)
+			.setParameter("eventId", eventId)
+			.executeUpdate();
+		entityManager.flush();
+		entityManager.clear();
+	}
+
 	private void stampEvent(Long eventId, Instant updatedAt) {
 		entityManager.flush();
 		entityManager.createNativeQuery(

@@ -315,6 +315,56 @@ test('내비게이션으로 전달된 postId의 게시글 상세를 바로 연�
   });
 });
 
+// 셸 헤더는 탭 네비게이터 위에 일반 흐름으로 놓여 있어, 상세 화면이 이미 그려진
+// 뒤에 숨김을 알리면 두 헤더가 함께 보이는 프레임에서 화면이 덜컹인다.
+// useLayoutEffect로 알려 상세 헤더 등장과 셸 헤더 제거가 한 프레임에 끝나야 한다.
+test('상세를 열고 닫을 때 셸 헤더 숨김을 그리기 전에 알린다', async () => {
+  const navRef = createNavigationContainerRef<FeedStackParamList>();
+  const onHeaderVisibilityChange = jest.fn();
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <NavigationContainer ref={navRef}>
+        <FeedScreen
+          currentGroup={{id: 'group-1', name: '우리 가족', role: 'guardian'}}
+          currentUser={{avatarText: '다', id: 'current-user', name: '다영'}}
+          initialCommentsByPostId={{'post-1': []}}
+          loader={jest.fn().mockResolvedValue([post])}
+          onHeaderVisibilityChange={onHeaderVisibilityChange}
+          role="guardian"
+        />
+      </NavigationContainer>,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  onHeaderVisibilityChange.mockClear();
+
+  await TestRenderer.act(async () => {
+    navRef.navigate('PostDetail', {groupId: 'group-1', postId: 'post-1'});
+    await Promise.resolve();
+  });
+
+  // 상세가 열리면 셸 헤더를 숨긴다.
+  expect(onHeaderVisibilityChange).toHaveBeenCalledWith(false);
+
+  onHeaderVisibilityChange.mockClear();
+
+  await TestRenderer.act(async () => {
+    navRef.goBack();
+    await Promise.resolve();
+  });
+
+  // 목록으로 돌아오면 셸 헤더를 다시 보여준다.
+  expect(onHeaderVisibilityChange).toHaveBeenCalledWith(true);
+
+  await TestRenderer.act(() => {
+    renderer!.unmount();
+  });
+});
+
 test('상세에서 하드웨어 뒤로가기는 목록으로 돌아간다', async () => {
   // 상세는 마운트 후에 연다 — 초기 커밋에 열면 jest에서 컨테이너 리스너
   // 등록 순서가 프로덕션과 역전된다.

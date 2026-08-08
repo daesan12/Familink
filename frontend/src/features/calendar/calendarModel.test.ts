@@ -28,6 +28,7 @@ const event = (
 
 const detail: CalendarEventDetail = {
   ...event({}),
+  creatorDisplayName: '이종철',
   creatorMemberId: '7',
   description: '',
   groupId: '3',

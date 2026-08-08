@@ -17,6 +17,38 @@ class AiCallModelsTest {
   }
 
   @Test
+  fun `통화 최대 시간은 10분이다`() {
+    assertEquals(10 * 60, AI_CALL_MAX_DURATION_SECONDS)
+  }
+
+  @Test
+  fun `상한에 도달한 순간부터 통화를 끝낼 대상으로 판정한다`() {
+    assertEquals(false, isAiCallDurationLimitReached(AI_CALL_MAX_DURATION_SECONDS - 1))
+    assertEquals(true, isAiCallDurationLimitReached(AI_CALL_MAX_DURATION_SECONDS))
+    // 1초 카운터가 한 틱을 건너뛰어도 상한을 지나치지 않는다.
+    assertEquals(true, isAiCallDurationLimitReached(AI_CALL_MAX_DURATION_SECONDS + 1))
+  }
+
+  @Test
+  fun `시간 만료로 끝난 통화는 사용자 종료와 다른 안내 문구를 쓴다`() {
+    val userEnded = aiCallEndedDescription(wasCancelled = false, endedByDurationLimit = false)
+    val durationLimited = aiCallEndedDescription(wasCancelled = false, endedByDurationLimit = true)
+    val cancelled = aiCallEndedDescription(wasCancelled = true, endedByDurationLimit = false)
+
+    assertEquals("오늘 나눈 이야기는 소중히 기억할게요.", userEnded)
+    assertEquals("통화 가능한 시간이 다 되어 마무리했어요.", durationLimited)
+    assertEquals("준비되면 다시 이야기해 보세요.", cancelled)
+  }
+
+  @Test
+  fun `연결 전에 취소된 통화는 시간 만료 안내를 쓰지 않는다`() {
+    assertEquals(
+        "준비되면 다시 이야기해 보세요.",
+        aiCallEndedDescription(wasCancelled = true, endedByDurationLimit = true),
+    )
+  }
+
+  @Test
   fun `페르소나 선택 화면은 관계별 세로 짝이 맞는 순서를 사용한다`() {
     assertEquals(
         listOf("듬직한 아들", "비서 민정", "친구 복희", "사랑스러운 딸", "비서 도윤", "친구 학수"),

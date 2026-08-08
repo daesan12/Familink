@@ -17,6 +17,7 @@ import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS, FONT_FAMILY, RADII} from '../../../design/tokens';
 import {BackButton} from '../../../shared/components/BackButton';
+import {NotificationBellButton} from '../../../shared/components/NotificationBellButton';
 import {CommentItem} from '../components/CommentItem';
 import {FeedAvatar} from '../components/FeedAvatar';
 import {PostActionsSheet} from '../components/PostActionsSheet';
@@ -68,6 +69,8 @@ interface PostDetailScreenProps {
   post: FeedPost;
   reactions: readonly FeedReaction[];
   selectedReactionId: ReactionId | null;
+  // 읽지 않은 알림 수. 피드 헤더와 같은 배지를 보여주기 위해 셸에서 내려온다.
+  unreadNotificationCount?: number;
 }
 
 export function PostDetailScreen({
@@ -97,6 +100,7 @@ export function PostDetailScreen({
   post,
   reactions,
   selectedReactionId,
+  unreadNotificationCount,
 }: PostDetailScreenProps) {
   const [commentMenu, setCommentMenu] = useState<PostComment | null>(null);
   const [editingComment, setEditingComment] =
@@ -200,25 +204,21 @@ export function PostDetailScreen({
             돌아가면서(S15P11B104-368) 목적지가 피드·알림·보관함으로 갈리는데,
             entrySource는 보관함을 구분하지 못한다(기본값 feed).
             알림의 "알림 화면 닫기", 보관함의 "보관함 닫기"와 같은 계열. */}
-        <BackButton accessibilityLabel="게시글 닫기" onPress={onBack} />
+        {/* 좌우 슬롯 폭과 헤더 여백을 셸 헤더(AppShell)와 같게 맞춘다.
+            피드에서 게시글로 들어와도 알림 버튼이 제자리에 있어야 한다. */}
+        <View style={styles.headerSide}>
+          <BackButton accessibilityLabel="게시글 닫기" onPress={onBack} />
+        </View>
         <AppText numberOfLines={1} style={styles.title}>
           {currentGroupName}
         </AppText>
         {onOpenNotifications ? (
-          <Pressable
-            accessibilityLabel="알림"
-            accessibilityRole="button"
+          <NotificationBellButton
             onPress={onOpenNotifications}
-            style={styles.notificationButton}
-          >
-            <MaterialDesignIcons
-              color={COLORS.textStrong}
-              name="bell"
-              size={28}
-            />
-          </Pressable>
+            unreadCount={unreadNotificationCount}
+          />
         ) : (
-          <View accessibilityElementsHidden style={styles.headerSpacer} />
+          <View accessibilityElementsHidden style={styles.headerSide} />
         )}
       </View>
 
@@ -555,11 +555,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     minHeight: 64,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
-  headerSpacer: {
+  // 셸 헤더의 headerActions와 같은 규격. 폭 80은 제목을 정중앙에 두기 위한
+  // 값이고, 아이콘은 왼쪽에 붙여 피드의 보관함 아이콘과 같은 위치에 온다.
+  headerSide: {
+    alignItems: 'flex-start',
     height: 44,
-    width: 44,
+    justifyContent: 'center',
+    width: 80,
   },
   input: {
     color: COLORS.textStrong,
@@ -593,12 +597,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 44,
     paddingHorizontal: 20,
-  },
-  notificationButton: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
   },
   readOnlyNotice: {
     alignItems: 'center',

@@ -85,9 +85,12 @@ public class EventReminderService {
 	/**
 	 * 기존 일정 알림 호출자와의 호환 진입점이다.
 	 *
-	 * <p>새 스케줄러는 {@link #createDueReminders(Instant)}를 사용해 도메인 이벤트·푸시 발행까지
-	 * 연결한다. 이 메서드는 122번 일정 알림 계약의 직접 저장 경로를 보존해 이미 배포된 호출자와
-	 * 회귀 테스트가 같은 중복·수신자 규칙을 유지하도록 한다.
+	 * <p>운영 스케줄러는 {@link #createDueReminders(Instant)}만 호출한다. 이 메서드는 122번 일정 알림
+	 * 계약의 직접 저장 경로를 보존해 알림 시점 경계와 중복 방지 회귀 테스트가 계속 그 규칙을 고정하게
+	 * 한다. 현재 호출자는 그 회귀 테스트뿐이다.
+	 *
+	 * <p>수신자 규칙은 {@code createDueReminders}와 같이 일정의 참여자로 한정한다. 두 경로가 다른
+	 * 대상을 계산하면 이 진입점이 폐지된 정책을 되살리는 통로가 된다.
 	 */
 	public void remind(Instant now) {
 		Objects.requireNonNull(now, "now must not be null");
@@ -153,9 +156,9 @@ public class EventReminderService {
 
 		List<GroupMember> activeMembers = activeMembersByGroup.getOrDefault(event.getGroup().getId(), List.of());
 		Set<Long> participantIds = participantIdsByEvent.getOrDefault(event.getId(), Set.of());
-		List<GroupMember> receivers = event.isParticipantsSpecified()
-			? activeMembers.stream().filter(member -> participantIds.contains(member.getId())).toList()
-			: activeMembers;
+		List<GroupMember> receivers = activeMembers.stream()
+			.filter(member -> participantIds.contains(member.getId()))
+			.toList();
 		String title = slot == ReminderSlot.DAY_BEFORE ? "내일 일정이 있어요" : "곧 일정이 시작돼요";
 		String body = slot == ReminderSlot.DAY_BEFORE
 			? "\"%s\" 일정이 내일 시작돼요.".formatted(event.getTitle())
@@ -240,12 +243,7 @@ public class EventReminderService {
 	}
 
 	private List<User> resolveLegacyReceivers(CalendarEvent event) {
-		if (event.isParticipantsSpecified()) {
-			return eventParticipantRepository.findActiveParticipantUsersByEventId(event.getId());
-		}
-		return groupMemberRepository.findAllActiveByGroupId(event.getGroup().getId()).stream()
-			.map(GroupMember::getUser)
-			.toList();
+		return eventParticipantRepository.findActiveParticipantUsersByEventId(event.getId());
 	}
 
 	private String legacyTitle(ReminderSlot reminderSlot) {

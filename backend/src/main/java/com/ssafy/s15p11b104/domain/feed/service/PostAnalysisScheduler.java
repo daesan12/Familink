@@ -25,8 +25,8 @@ public class PostAnalysisScheduler {
 	}
 
 	@Scheduled(
-		fixedDelayString = "${app.ai-analysis.fixed-delay-ms:60000}",
-		initialDelayString = "${app.ai-analysis.initial-delay-ms:60000}")
+		fixedDelayString = "${app.ai-analysis.fixed-delay-ms:3000}",
+		initialDelayString = "${app.ai-analysis.initial-delay-ms:3000}")
 	public void schedule() {
 		if (!aiTaskExecutor.submit(postAnalysisService::analyzeStablePosts)) {
 			LOGGER.warn("게시글 분석 작업이 포화된 AI 실행기에서 거부됐습니다.");

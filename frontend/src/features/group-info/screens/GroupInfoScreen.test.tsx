@@ -814,7 +814,8 @@ test('그룹을 바꾸면 편집 중이던 상태가 초기화된다', () => {
 });
 
 // 공동 2위(손수호·홍유라)와 지난주 1위 왕관(홍유라)을 담은 랭킹 목업.
-// 필드명은 API-CARNATION-001 응답(rankings/displayName/previousWeekWinner)에 맞춘다.
+// 필드명은 API-CARNATION-001 응답(rankings/displayName/postCount/previousWeekWinner)에 맞춘다.
+// 강다영의 12건은 주 7일을 넘는 값으로, 순위 기준이 날짜 수가 아니라 게시글 수임을 드러낸다.
 const RANKING: WeeklyRankingSnapshot = {
   weekStart: '2026-07-20',
   weekEnd: '2026-07-26',
@@ -822,19 +823,19 @@ const RANKING: WeeklyRankingSnapshot = {
     {
       memberId: 'r-first',
       displayName: '강다영',
-      carnationCount: 5,
+      postCount: 12,
       previousWeekWinner: false,
     },
     {
       memberId: 'r-crown',
       displayName: '홍유라',
-      carnationCount: 3,
+      postCount: 3,
       previousWeekWinner: true,
     },
     {
       memberId: 'r-tie',
       displayName: '손수호',
-      carnationCount: 3,
+      postCount: 3,
       previousWeekWinner: false,
     },
   ],
@@ -868,28 +869,40 @@ test('랭킹 카드를 누르면 주간 효자 랭킹을 순위·날짜와 함�
 
   expect(hasText(renderer, '주간 효자 랭킹')).toBe(true);
   expect(hasText(renderer, '2026년 7월 20일 ~ 26일')).toBe(true);
-  // 카네이션 5개인 강다영이 1위다.
+  // 게시글 12건인 강다영이 1위다.
   expect(
-    renderer.root.findByProps({accessibilityLabel: '1위 강다영'}),
+    renderer.root.findByProps({accessibilityLabel: '1위 강다영 12개'}),
   ).toBeTruthy();
 });
 
-test('같은 카네이션 수는 공동 순위로, 지난주 1위는 왕관으로 표시한다', async () => {
+test('각 행에 이번 주 게시글 수를 표시한다', async () => {
   const renderer = await renderWithRanking();
 
   press(renderer, '이번주 우리 가족 효자 랭킹 조회하기');
 
-  // 손수호·홍유라는 카네이션 3개로 공동 2위다. 손수호 행에는 왕관 표시가 없다.
+  // 순위 근거를 화면에서 확인할 수 있어야 한다. 7을 넘는 값도 그대로 보인다.
+  expect(hasText(renderer, '12개')).toBe(true);
+  expect(hasText(renderer, '3개')).toBe(true);
+});
+
+test('같은 게시글 수는 공동 순위로, 지난주 1위는 왕관으로 표시한다', async () => {
+  const renderer = await renderWithRanking();
+
+  press(renderer, '이번주 우리 가족 효자 랭킹 조회하기');
+
+  // 손수호·홍유라는 게시글 3건으로 공동 2위다. 손수호 행에는 왕관 표시가 없다.
   expect(
-    renderer.root.findByProps({accessibilityLabel: '2위 손수호'}),
+    renderer.root.findByProps({accessibilityLabel: '2위 손수호 3개'}),
   ).toBeTruthy();
   // 홍유라는 공동 2위이면서 지난주 1위라 왕관을 단다(라벨에만 왕관 표기가 붙는다).
   expect(
-    renderer.root.findByProps({accessibilityLabel: '2위 홍유라, 지난주 1위'}),
+    renderer.root.findByProps({
+      accessibilityLabel: '2위 홍유라 3개, 지난주 1위',
+    }),
   ).toBeTruthy();
   // 1위(강다영)는 지난주 1위가 아니라 왕관 표기가 없다.
   expect(
-    renderer.root.findByProps({accessibilityLabel: '1위 강다영'}),
+    renderer.root.findByProps({accessibilityLabel: '1위 강다영 12개'}),
   ).toBeTruthy();
 });
 
@@ -977,7 +990,7 @@ test('로더 실패 시 에러와 다시 시도를 보여주고, 재시도로 �
   });
 
   expect(
-    renderer!.root.findByProps({accessibilityLabel: '1위 강다영'}),
+    renderer!.root.findByProps({accessibilityLabel: '1위 강다영 12개'}),
   ).toBeTruthy();
   expect(
     hasText(renderer!, '랭킹을 불러오지 못했어요. 다시 시도해 주세요.'),
@@ -1077,25 +1090,40 @@ test('그룹명 변경 메뉴를 누르면 H-10 화면으로 이동한다', () =
   expect(hasText(renderer, '그룹 이름을 변경하세요')).toBe(true);
 });
 
+function hasMenuItem(
+  renderer: TestRenderer.ReactTestRenderer,
+  label: string,
+): boolean {
+  return renderer.root.findAllByProps({accessibilityLabel: label}).length > 0;
+}
+
 test.each([
   '가입 승인 대기',
   '그룹관리자 변경',
   '구성원 내보내기',
   '그룹 삭제',
   '그룹명 변경',
-])('비관리자가 %s 메뉴를 누르면 진입하지 않고 권한을 안내한다', label => {
-  const onFullscreenChange = jest.fn();
-  const renderer = renderScreen('m-dad', {onFullscreenChange});
-  onFullscreenChange.mockClear();
+])('비관리자 화면에는 %s 메뉴를 표시하지 않는다', label => {
+  const renderer = renderScreen('m-dad');
 
-  press(renderer, label);
+  expect(hasMenuItem(renderer, label)).toBe(false);
+});
 
-  expect(hasText(renderer, '그룹관리자만 접근할 수 있습니다')).toBe(true);
-  expect(onFullscreenChange).not.toHaveBeenCalledWith(true);
-  expect(hasText(renderer, '정말 그룹을 삭제하시겠어요?')).toBe(false);
+test('비관리자에게도 그룹 코드와 그룹 나가기는 표시한다', () => {
+  const renderer = renderScreen('m-dad');
 
-  press(renderer, '그룹관리자 접근 안내 확인');
-  expect(hasText(renderer, '그룹관리자만 접근할 수 있습니다')).toBe(false);
+  expect(hasMenuItem(renderer, '그룹 코드')).toBe(true);
+  expect(hasMenuItem(renderer, '그룹 나가기')).toBe(true);
+});
+
+test('관리자 화면에는 관리자 전용 메뉴를 모두 표시한다', () => {
+  const renderer = renderScreen('m-manager');
+
+  ['가입 승인 대기', '그룹관리자 변경', '구성원 내보내기', '그룹 삭제', '그룹명 변경'].forEach(
+    label => {
+      expect(hasMenuItem(renderer, label)).toBe(true);
+    },
+  );
 });
 
 test('구성원 로딩 중에도 그룹 요약이 관리자이면 관리 메뉴에 진입한다', () => {
@@ -1121,7 +1149,7 @@ test('구성원 로딩 중에도 그룹 요약이 관리자이면 관리 메뉴�
   expect(hasText(renderer!, '그룹관리자만 접근할 수 있습니다')).toBe(false);
 });
 
-test('구성원 로드 실패 후에는 오래된 그룹 요약 권한으로 관리 메뉴에 진입하지 않는다', async () => {
+test('구성원 로드 실패 후에는 오래된 그룹 요약 권한으로 관리 메뉴를 표시하지 않는다', async () => {
   let renderer: TestRenderer.ReactTestRenderer;
   await TestRenderer.act(async () => {
     renderer = TestRenderer.create(
@@ -1137,9 +1165,7 @@ test('구성원 로드 실패 후에는 오래된 그룹 요약 권한으로 관
   });
   mountedRenderers.push(renderer!);
 
-  press(renderer!, '그룹명 변경');
-
-  expect(hasText(renderer!, '그룹관리자만 접근할 수 있습니다')).toBe(true);
+  expect(hasMenuItem(renderer!, '그룹명 변경')).toBe(false);
   expect(hasText(renderer!, '그룹 이름을 변경할까요')).toBe(false);
 });
 
@@ -1166,9 +1192,8 @@ test('그룹관리자 변경을 확정하면 이전 관리자의 재진입을 �
   press(renderer!, '그룹관리자 변경하기');
 
   expect(changed).toEqual(['m-dad']);
-  // 권한은 즉시 손수호에게 이동하므로 이전 관리자는 관리 화면을 다시 열 수 없다.
-  press(renderer!, '그룹관리자 변경');
-  expect(hasText(renderer!, '그룹관리자만 접근할 수 있습니다')).toBe(true);
+  // 권한은 즉시 손수호에게 이동하므로 이전 관리자에게는 관리 메뉴가 사라진다.
+  expect(hasMenuItem(renderer!, '그룹관리자 변경')).toBe(false);
   expect(hasText(renderer!, '새 그룹관리자를 선택하세요')).toBe(false);
 });
 
@@ -1204,8 +1229,11 @@ test('그룹 코드 카드를 누르면 그룹 코드 화면으로 이동한다'
   expect(hasText(renderer!, '그룹 정보')).toBe(true);
 });
 
-test('내비게이션으로 전달된 가입 승인 딥링크는 승인 화면을 바로 연다', async () => {
-  // 셸의 중첩 navigate(딥링크)가 도달하는 경로를 컨테이너 ref로 재현한다.
+test('가입 승인 화면이 초기 포커스여도 요청 목록을 렌더한다', async () => {
+  // 컨테이너 ref로 스택 최상단을 JoinApproval로 만들어, 홈을 거치지 않고 이
+  // 화면이 포커스를 받아도 목록이 조회·렌더되는지 본다. 딥링크 재현이 아니다 —
+  // 가입 승인 딥링크는 피드 탭 스택으로 가므로 이 스택에 도달하지 않는다
+  // (S15P11B104-336, 369).
   const navRef = createNavigationContainerRef<GroupInfoStackParamList>();
   let renderer: TestRenderer.ReactTestRenderer;
   await TestRenderer.act(async () => {
@@ -1238,7 +1266,7 @@ test('내비게이션으로 전달된 가입 승인 딥링크는 승인 화면�
   mountedRenderers.push(renderer!);
 
   await TestRenderer.act(async () => {
-    navRef.navigate('JoinApproval', {groupId: 'group-1'});
+    navRef.navigate('JoinApproval');
     await Promise.resolve();
   });
 
@@ -1337,7 +1365,7 @@ test('관리자에게는 목업 prop이 아니라 실제 대기 요청 건수를
   expect(hasText(renderer!, '승인 요청 2건')).toBe(false);
 });
 
-test('관리자가 아니면 건수를 조회하지 않고 조회 권한을 안내한다', async () => {
+test('관리자가 아니면 건수를 조회하지 않고 대기 메뉴도 숨긴다', async () => {
   const joinRequestsLoader = jest.fn().mockResolvedValue([]);
   let renderer: TestRenderer.ReactTestRenderer;
 
@@ -1357,7 +1385,7 @@ test('관리자가 아니면 건수를 조회하지 않고 조회 권한을 안�
 
   // API-GROUPS-008은 관리자만 호출할 수 있어 확정 실패 요청을 보내지 않는다.
   expect(joinRequestsLoader).not.toHaveBeenCalled();
-  expect(hasText(renderer!, '관리자만 확인할 수 있어요')).toBe(true);
+  expect(hasMenuItem(renderer!, '가입 승인 대기')).toBe(false);
 });
 
 test('건수 조회에 실패하면 0건 대신 실패를 알린다', async () => {
@@ -1620,7 +1648,11 @@ test('그룹을 바꾸면 열려 있던 하위 화면이 닫힌다', () => {
   expect(hasText(renderer!, '새 그룹관리자를 선택하세요')).toBe(false);
 });
 
-test('그룹 전환과 함께 도착한 새 그룹의 가입 승인 딥링크는 닫지 않는다', async () => {
+test('가입 승인 대기가 열려 있어도 그룹을 전환하면 그룹정보 홈으로 되돌린다', async () => {
+  // S15P11B104-369에서 딥링크 예외 판별자를 지운 뒤의 계약. 되돌리지 않으면
+  // 새 그룹 화면 위에 옛 그룹의 요청 목록이 남는다. 예외가 있던 시절에는 그룹
+  // 전환이 동반된 승인 딥링크가 이 스택에 도달했으나, 336에서 그 목적지가
+  // 피드 탭 스택으로 옮겨져 판별자가 영구히 false가 됐다.
   const navRef = createNavigationContainerRef<GroupInfoStackParamList>();
   const joinRequestsLoader = jest.fn().mockResolvedValue([]);
   let renderer: TestRenderer.ReactTestRenderer;
@@ -1643,9 +1675,8 @@ test('그룹 전환과 함께 도착한 새 그룹의 가입 승인 딥링크는
   });
   mountedRenderers.push(renderer!);
 
-  // 그룹 전환이 동반된 딥링크: 새 그룹(g-b)의 승인 화면이 먼저 push된다.
   await TestRenderer.act(async () => {
-    navRef.navigate('JoinApproval', {groupId: GROUP_B.id});
+    navRef.navigate('JoinApproval');
     await Promise.resolve();
   });
 
@@ -1666,8 +1697,7 @@ test('그룹 전환과 함께 도착한 새 그룹의 가입 승인 딥링크는
     await Promise.resolve();
   });
 
-  // params.groupId가 새 그룹과 일치하므로 그룹 전환 정리(popToTop)에서 제외된다.
-  expect(navRef.getCurrentRoute()?.name).toBe('JoinApproval');
+  expect(navRef.getCurrentRoute()?.name).toBe('GroupInfoHome');
 });
 
 test('구성원 목록 API 응답을 화면에 반영하고 역할 변경 성공 후 상태를 갱신한다', async () => {

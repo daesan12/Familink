@@ -14,23 +14,6 @@ import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 class CalendarEventTest {
 
 	@Test
-	void keepsExplicitParticipantScopeAfterParticipantLinksAreRemoved() {
-		CalendarEvent event = new CalendarEvent(
-			mock(FamilyGroup.class),
-			mock(GroupMember.class),
-			"가족 일정",
-			null,
-			LocalDate.of(2026, 8, 2),
-			LocalDate.of(2026, 8, 2),
-			null,
-			null);
-
-		event.changeParticipantScope(true);
-
-		assertThat(event.isParticipantsSpecified()).isTrue();
-	}
-
-	@Test
 	void preservesReminderScheduleTimestampWhenOnlyNonScheduleFieldsChange() {
 		Instant registeredAt = Instant.parse("2026-08-01T00:00:00Z");
 		Instant editedAt = Instant.parse("2026-08-01T01:00:00Z");

@@ -1,6 +1,7 @@
 package com.ssafy.s15p11b104.domain.carnation.service;
 
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
@@ -17,6 +18,7 @@ import com.ssafy.s15p11b104.domain.carnation.dto.CarnationCalendarResponse;
 import com.ssafy.s15p11b104.domain.carnation.dto.GrassRankingResponse;
 import com.ssafy.s15p11b104.domain.carnation.dto.GrassResponse;
 import com.ssafy.s15p11b104.domain.carnation.repository.CarnationRepository;
+import com.ssafy.s15p11b104.domain.feed.repository.PostRepository;
 import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 import com.ssafy.s15p11b104.domain.group.repository.GroupMemberRepository;
@@ -30,14 +32,17 @@ public class CarnationService {
 	private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
 
 	private final CarnationRepository carnationRepository;
+	private final PostRepository postRepository;
 	private final GroupMemberRepository groupMemberRepository;
 	private final MemberAliasRepository memberAliasRepository;
 
 	public CarnationService(
 		CarnationRepository carnationRepository,
+		PostRepository postRepository,
 		GroupMemberRepository groupMemberRepository,
 		MemberAliasRepository memberAliasRepository) {
 		this.carnationRepository = carnationRepository;
+		this.postRepository = postRepository;
 		this.groupMemberRepository = groupMemberRepository;
 		this.memberAliasRepository = memberAliasRepository;
 	}
@@ -83,11 +88,11 @@ public class CarnationService {
 		DateRange previousRange = currentRange.previous();
 
 		Map<Long, Long> currentCounts = toCountMap(
-			carnationRepository.countByMember(
-				groupId, currentRange.start(), currentRange.endExclusive()));
+			postRepository.countByAuthorMember(
+				groupId, currentRange.startInstant(), currentRange.endExclusiveInstant()));
 		Map<Long, Long> previousCounts = toCountMap(
-			carnationRepository.countByMember(
-				groupId, previousRange.start(), previousRange.endExclusive()));
+			postRepository.countByAuthorMember(
+				groupId, previousRange.startInstant(), previousRange.endExclusiveInstant()));
 
 		List<GroupMember> guardians = groupMemberRepository.findAllActiveByGroupId(groupId).stream()
 			.filter(member -> member.getRole() == GroupRole.GUARDIAN)
@@ -113,7 +118,7 @@ public class CarnationService {
 				currentCounts.getOrDefault(member.getId(), 0L),
 				previousWinnerCount > 0
 					&& previousCounts.getOrDefault(member.getId(), 0L) == previousWinnerCount))
-			.sorted(Comparator.comparingLong(RankingRow::carnationCount).reversed()
+			.sorted(Comparator.comparingLong(RankingRow::postCount).reversed()
 				.thenComparing(RankingRow::memberId))
 			.toList();
 
@@ -127,24 +132,24 @@ public class CarnationService {
 		List<GrassRankingResponse> rankings = new ArrayList<>();
 		for (int index = 0; index < rows.size(); index++) {
 			RankingRow row = rows.get(index);
-			if (row.carnationCount() != previousCount) {
+			if (row.postCount() != previousCount) {
 				rank = index + 1;
-				previousCount = row.carnationCount();
+				previousCount = row.postCount();
 			}
 			rankings.add(new GrassRankingResponse(
 				rank,
 				row.memberId(),
 				row.displayName(),
-				row.carnationCount(),
+				row.postCount(),
 				row.previousWeekWinner()));
 		}
 		return rankings;
 	}
 
-	private Map<Long, Long> toCountMap(List<CarnationRepository.CarnationCount> counts) {
+	private Map<Long, Long> toCountMap(List<PostRepository.PostCount> counts) {
 		return counts.stream().collect(Collectors.toMap(
-			CarnationRepository.CarnationCount::getMemberId,
-			CarnationRepository.CarnationCount::getCarnationCount));
+			PostRepository.PostCount::getMemberId,
+			PostRepository.PostCount::getPostCount));
 	}
 
 	private GroupMember getActiveMember(Long groupId, Long memberId) {
@@ -177,10 +182,16 @@ public class CarnationService {
 		return new DateRange(requestedStartDate, requestedEndDate);
 	}
 
+	// 랭킹은 posts.created_at(UTC Instant)을 세지만 주 경계는 KST 날짜다.
+	// 두 타입이 다르므로 경계를 KST 자정 기준 Instant로 변환해 넘긴다.
 	private record DateRange(LocalDate start, LocalDate endInclusive) {
 
-		private LocalDate endExclusive() {
-			return endInclusive.plusDays(1);
+		private Instant startInstant() {
+			return start.atStartOfDay(BUSINESS_ZONE).toInstant();
+		}
+
+		private Instant endExclusiveInstant() {
+			return endInclusive.plusDays(1).atStartOfDay(BUSINESS_ZONE).toInstant();
 		}
 
 		private DateRange previous() {
@@ -192,7 +203,7 @@ public class CarnationService {
 	private record RankingRow(
 		Long memberId,
 		String displayName,
-		long carnationCount,
+		long postCount,
 		boolean previousWeekWinner) {
 	}
 }

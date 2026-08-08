@@ -50,7 +50,7 @@ class EventReminderServiceTest {
 	private EventReminderService reminderService;
 
 	@Test
-	void createsDayBeforeReminderForAllDayEventWithoutParticipants() {
+	void createsDayBeforeReminderForAllDayEventParticipants() {
 		FamilyGroup group = group(10L);
 		CalendarEvent event = event(
 			20L,
@@ -68,7 +68,8 @@ class EventReminderServiceTest {
 			LocalDate.of(2026, 8, 2), 0L, PageRequest.of(0, 100)))
 			.thenReturn(List.of(event));
 		when(groupMemberRepository.findAllActiveByGroupIds(java.util.Set.of(10L))).thenReturn(List.of(first, second));
-		when(eventParticipantRepository.findMemberIdsByEventIds(List.of(20L))).thenReturn(List.of());
+		when(eventParticipantRepository.findMemberIdsByEventIds(List.of(20L)))
+			.thenReturn(List.<Object[]>of(new Object[] {20L, 11L}, new Object[] {20L, 12L}));
 
 		reminderService.createDueReminders(NOW);
 
@@ -103,7 +104,6 @@ class EventReminderServiceTest {
 		when(groupMemberRepository.findAllActiveByGroupIds(java.util.Set.of(10L))).thenReturn(List.of(first, second));
 		when(eventParticipantRepository.findMemberIdsByEventIds(List.of(20L)))
 			.thenReturn(java.util.Collections.singletonList(new Object[] {20L, 12L}));
-		when(event.isParticipantsSpecified()).thenReturn(true);
 
 		reminderService.createDueReminders(NOW);
 
@@ -115,7 +115,7 @@ class EventReminderServiceTest {
 	}
 
 	@Test
-	void doesNotNotifyWholeGroupWhenLastExplicitParticipantLinkWasDeleted() {
+	void doesNotNotifyWholeGroupWhenEventHasNoParticipant() {
 		FamilyGroup group = group(10L);
 		CalendarEvent event = event(
 			20L,
@@ -135,7 +135,6 @@ class EventReminderServiceTest {
 		when(groupMemberRepository.findAllActiveByGroupIds(java.util.Set.of(10L)))
 			.thenReturn(List.of(first, second));
 		when(eventParticipantRepository.findMemberIdsByEventIds(List.of(20L))).thenReturn(List.of());
-		when(event.isParticipantsSpecified()).thenReturn(true);
 
 		reminderService.createDueReminders(NOW);
 

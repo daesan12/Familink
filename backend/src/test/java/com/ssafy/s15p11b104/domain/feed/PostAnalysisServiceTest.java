@@ -37,7 +37,7 @@ import com.ssafy.s15p11b104.domain.feed.service.PostAnalysisService;
 class PostAnalysisServiceTest {
 
 	private static final Instant NOW = Instant.parse("2026-08-02T06:00:00Z");
-	private static final Instant STABLE_UPDATED_AT = Instant.parse("2026-08-02T05:00:00Z");
+	private static final Instant STABLE_UPDATED_AT = NOW;
 
 	@Mock
 	private PostRepository postRepository;
@@ -108,6 +108,7 @@ class PostAnalysisServiceTest {
 		assertThat(analysis.getSummary()).isEqualTo("가족과 산책한 이야기");
 		assertThat(analysis.getAttemptCount()).isOne();
 		assertThat(analysis.getClaimToken()).isNull();
+		verify(postAnalysisRepository).findCandidatePostIds(eq(NOW), eq(NOW), eq(3), any());
 		verify(gateway).analyze(1L);
 	}
 

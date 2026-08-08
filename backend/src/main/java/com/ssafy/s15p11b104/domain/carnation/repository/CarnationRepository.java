@@ -26,19 +26,6 @@ public interface CarnationRepository extends JpaRepository<Carnation, Long> {
 		@Param("startDate") LocalDate startDate,
 		@Param("endDate") LocalDate endDate);
 
-	@Query("""
-		select carnation.groupMember.id as memberId, count(carnation) as carnationCount
-		from Carnation carnation
-		where carnation.group.id = :groupId
-		  and carnation.earnedDate >= :startDate
-		  and carnation.earnedDate < :endDateExclusive
-		group by carnation.groupMember.id
-		""")
-	List<CarnationCount> countByMember(
-		@Param("groupId") Long groupId,
-		@Param("startDate") LocalDate startDate,
-		@Param("endDateExclusive") LocalDate endDateExclusive);
-
 	@Modifying(flushAutomatically = true)
 	@Query(value = """
 		insert into carnations (group_id, group_member_id, earned_date)
@@ -49,11 +36,4 @@ public interface CarnationRepository extends JpaRepository<Carnation, Long> {
 		@Param("groupId") Long groupId,
 		@Param("groupMemberId") Long groupMemberId,
 		@Param("earnedDate") LocalDate earnedDate);
-
-	interface CarnationCount {
-
-		Long getMemberId();
-
-		long getCarnationCount();
-	}
 }

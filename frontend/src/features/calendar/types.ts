@@ -10,6 +10,10 @@ export interface CalendarEventSummary {
 }
 
 export interface CalendarEventDetail extends CalendarEventSummary {
+  // 서버가 조회자 호칭까지 반영해 내려주는 작성자 이름이다. 그룹을 나간 작성자는 활성 구성원
+  // 목록에 없어 화면에서 이름을 찾을 수 없으므로 이 값을 우선 사용한다. 값을 내려주지 않는
+  // 구버전 서버에서는 null이다.
+  creatorDisplayName: string | null;
   creatorMemberId: string;
   description: string;
   groupId: string;

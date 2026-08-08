@@ -116,12 +116,11 @@ test('성별 코드값을 표시 문구로 바꾼다', () => {
   expect(formatGenderLabel('female')).toBe('여자');
 });
 
-test('월간 도장 그리드는 완전한 주 단위로 인접 달 날짜까지 채운다', () => {
+test('월간 도장 그리드는 6주 42칸 고정으로 인접 달 날짜까지 채운다', () => {
   // 2026-07-01은 수요일(getDay=3)이라 앞에 6월 28·29·30일(스필오버)이 붙고,
-  // 마지막 주는 8월 1일로 채워져 총 35칸(5주)이 된다.
+  // 뒤는 8월 1~8일로 채워져 총 42칸(6주)이 된다.
   const cells = buildMonthGrid(2026, 7, new Set());
-  expect(cells).toHaveLength(35);
-  expect(cells.length % 7).toBe(0);
+  expect(cells).toHaveLength(42);
   expect(cells[0]).toEqual({
     day: 28,
     filled: false,
@@ -136,7 +135,25 @@ test('월간 도장 그리드는 완전한 주 단위로 인접 달 날짜까지
     iso: '2026-07-01',
   });
   const last = cells[cells.length - 1];
-  expect(last).toEqual({day: 1, filled: false, inMonth: false, iso: '2026-08-01'});
+  expect(last).toEqual({day: 8, filled: false, inMonth: false, iso: '2026-08-08'});
+});
+
+test('28일뿐인 달도 6주 42칸을 채운다', () => {
+  // 2026-02-01은 일요일이라 앞 스필오버가 없고, 28일 뒤를 3월 1~14일로 채운다.
+  const cells = buildMonthGrid(2026, 2, new Set());
+  expect(cells).toHaveLength(42);
+  expect(cells[0]).toEqual({
+    day: 1,
+    filled: false,
+    inMonth: true,
+    iso: '2026-02-01',
+  });
+  expect(cells[41]).toEqual({
+    day: 14,
+    filled: false,
+    inMonth: false,
+    iso: '2026-03-14',
+  });
 });
 
 test('적립 날짜는 기준 달·인접 달 모두 채워진 도장으로 표시한다', () => {
@@ -151,6 +168,7 @@ test('적립 날짜는 기준 달·인접 달 모두 채워진 도장으로 표�
 
 test('셀을 7칸 단위 주로 나눈다', () => {
   const weeks = chunkIntoWeeks(buildMonthGrid(2026, 7, new Set()));
+  expect(weeks).toHaveLength(6);
   weeks.forEach(week => expect(week).toHaveLength(7));
 });
 

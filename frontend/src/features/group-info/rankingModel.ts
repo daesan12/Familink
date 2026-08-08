@@ -75,24 +75,22 @@ function toIsoDateUtc(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-// 카네이션 수 내림차순으로 표준 경쟁 순위를 매긴다.
+// 게시글 수 내림차순으로 표준 경쟁 순위를 매긴다.
 // 같은 수는 공동 순위(예: 1,1,3)를 허용하고, 표시 순서는 이름 오름차순으로 고정한다.
 export function rankEntries(
   entries: readonly WeeklyRankingEntry[],
 ): readonly RankedEntry[] {
   const sorted = [...entries].sort((a, b) => {
-    if (b.carnationCount !== a.carnationCount) {
-      return b.carnationCount - a.carnationCount;
+    if (b.postCount !== a.postCount) {
+      return b.postCount - a.postCount;
     }
     return a.displayName.localeCompare(b.displayName, 'ko');
   });
   return sorted.map((entry) => ({
     ...entry,
-    // 자신보다 카네이션이 많은 사람 수 + 1이 표준 경쟁 순위다.
+    // 자신보다 게시글이 많은 사람 수 + 1이 표준 경쟁 순위다.
     rank:
-      1 +
-      sorted.filter((other) => other.carnationCount > entry.carnationCount)
-        .length,
+      1 + sorted.filter((other) => other.postCount > entry.postCount).length,
   }));
 }
 

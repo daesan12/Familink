@@ -99,6 +99,76 @@ test('알림을 읽음 처리하고 연결된 게시글을 연다', () => {
   ).toBe(true);
 });
 
+// 프로필 사진이 있어도 이니셜만 그려서 알림 탭에 사진이 뜨지 않았다.
+test('행위자 프로필 사진이 있으면 이니셜 대신 사진을 그린다', () => {
+  const notifications: readonly AppNotification[] = [
+    {
+      actorName: '홍유라',
+      actorProfileImageUrl: 'https://cdn.example.com/u7.jpg?sig=abc',
+      avatarText: '홍유',
+      body: '새 게시글이 올라왔어요.',
+      createdAtLabel: '방금',
+      groupId: 'group-1',
+      id: 'with-photo',
+      isRead: false,
+      relatedJoinRequestStatus: null,
+      title: '새 게시글',
+      type: 'NEW_POST',
+    },
+  ];
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen {...baseProps} initialNotifications={notifications} />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(
+    renderer!.root.findAll(
+      node =>
+        node.props.source?.uri === 'https://cdn.example.com/u7.jpg?sig=abc',
+    ).length,
+  ).toBeGreaterThan(0);
+  expect(
+    renderer!.root
+      .findAllByType(Text)
+      .some(node => joinedChildren(node.props.children) === '홍유'),
+  ).toBe(false);
+});
+
+test('프로필 사진이 없으면 이니셜을 그대로 그린다', () => {
+  const notifications: readonly AppNotification[] = [
+    {
+      actorName: '홍유라',
+      avatarText: '홍유',
+      body: '새 게시글이 올라왔어요.',
+      createdAtLabel: '방금',
+      groupId: 'group-1',
+      id: 'without-photo',
+      isRead: false,
+      relatedJoinRequestStatus: null,
+      title: '새 게시글',
+      type: 'NEW_POST',
+    },
+  ];
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(
+      <NotificationsScreen {...baseProps} initialNotifications={notifications} />,
+    );
+  });
+  mountedRenderers.push(renderer!);
+
+  expect(
+    renderer!.root
+      .findAllByType(Text)
+      .some(node => joinedChildren(node.props.children) === '홍유'),
+  ).toBe(true);
+});
+
 test('일정 알림을 탭하면 이벤트 상세 목적지로 라우팅한다', () => {
   const onOpenNotificationTarget = jest.fn();
   const notifications: readonly AppNotification[] = [

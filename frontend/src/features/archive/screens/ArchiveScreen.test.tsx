@@ -1,5 +1,5 @@
 import React from 'react';
-import {Text} from 'react-native';
+import {StyleSheet, Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import type {ArchiveLoader, ArchiveQuery} from '../api/archiveApi';
@@ -96,6 +96,16 @@ function press(
     target.props.onPress();
   });
 }
+
+// 좌우 슬롯 폭이 다르면 제목이 화면 중앙에서 밀린다(S15P11B104-341).
+test('헤더 좌우 슬롯을 같은 폭으로 두어 제목을 가운데 유지한다', () => {
+  const renderer = renderArchive();
+  const slots = renderer.root.findAll(
+    node => StyleSheet.flatten(node.props.style)?.width === 80,
+  );
+
+  expect(slots.length).toBeGreaterThanOrEqual(2);
+});
 
 test('기본 상태에서 날짜별 묶음을 보여준다', () => {
   const renderer = renderArchive();
@@ -364,6 +374,49 @@ test('날짜 결과를 다시 불러와도 달력에서 다른 날짜로 바로 
     date: '2026-08-02',
     memberId: null,
   });
+});
+
+test('달력의 인접 달 날짜는 같은 일자에 게시글이 있어도 선택할 수 없다', async () => {
+  // 2026년 8월 격자는 6주 42칸이라 9월 1~5일까지 포함한다. 게시글 유무는
+  // 일(day) 숫자 집합으로 판정하므로, 인접 달을 걸러내지 않으면 9월 1일 칸이
+  // 8월 1일 버튼으로 중복 렌더되어 엉뚱한 날짜를 조회한다.
+  const archiveLoader: ArchiveLoader = jest.fn(async () => [
+    {
+      dateKey: '2026-08-01',
+      groupId: 'group-1',
+      id: 'group-1-1',
+      mediaKind: 'text' as const,
+      memberId: null,
+      postId: '1',
+      text: '2026-08-01',
+    },
+  ]);
+  const membersLoader = jest.fn().mockResolvedValue(MEMBERS);
+  let renderer: TestRenderer.ReactTestRenderer;
+
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <ArchiveScreen
+        {...baseProps}
+        archiveLoader={archiveLoader}
+        membersLoader={membersLoader}
+      />,
+    );
+    await Promise.resolve();
+  });
+  mountedRenderers.push(renderer!);
+
+  press(renderer!, '날짜로 찾기');
+
+  // 라벨은 표시 중인 달로 만들므로 9월 1일 칸이 새면 '9월 1일'이 아니라
+  // '8월 1일' 버튼이 하나 더 생긴다. 개수로만 잡을 수 있다.
+  // deep:false로 중첩 노드를 제외해야 버튼 개수를 그대로 센다.
+  expect(
+    renderer!.root.findAllByProps(
+      {accessibilityLabel: '8월 1일 게시글 보기'},
+      {deep: false},
+    ),
+  ).toHaveLength(1);
 });
 
 test('날짜 조회 실패 후 재시도해도 달력의 날짜 목록을 유지한다', async () => {

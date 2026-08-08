@@ -47,9 +47,9 @@ function createLoaders() {
     rankingLoader: jest.fn().mockResolvedValue({
       rankings: [
         {
-          carnationCount: 3,
           displayName: '홍길동',
           memberId: 'm-1',
+          postCount: 3,
           previousWeekWinner: true,
         },
       ],

@@ -130,6 +130,40 @@ test("캐시로 목록을 보여주는 중이면 재검증 실패해도 에러�
   expect(observed.targets.at(-1)).toBe(cachedTargets);
 });
 
+test("캐시를 비운 뒤 도착한 응답은 목록을 다시 채우지 않는다", async () => {
+  const cache = createReportCache();
+  let resolveTargets:
+    | ((value: readonly CareReceiverReportTarget[]) => void)
+    | undefined;
+  const loader = jest.fn(
+    () =>
+      new Promise<readonly CareReceiverReportTarget[]>((resolve) => {
+        resolveTargets = resolve;
+      })
+  );
+
+  const observed: Observed = { statuses: [], targets: [] };
+  let renderer: TestRenderer.ReactTestRenderer | undefined;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <Harness cache={cache} loader={loader} observed={observed} />
+    );
+  });
+
+  // 조회가 떠 있는 사이에 로그아웃으로 캐시를 비운다.
+  cache.clear();
+  await TestRenderer.act(async () => {
+    resolveTargets?.(cachedTargets);
+    await Promise.resolve();
+  });
+
+  expect(cache.getTargets("group-1")).toBeUndefined();
+
+  TestRenderer.act(() => {
+    renderer?.unmount();
+  });
+});
+
 test("캐시가 없을 때 조회에 실패하면 에러를 표시한다", async () => {
   const cache = createReportCache();
   const loader = jest.fn().mockRejectedValue(new Error("network"));

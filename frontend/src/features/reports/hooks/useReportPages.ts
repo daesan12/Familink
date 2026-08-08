@@ -57,14 +57,21 @@ export function useReportPages({
   const loadGeneration = useRef(0);
   const nextRetryRequestId = useRef(0);
   const retryRequests = useRef(new Map<string, number>());
-  // retry는 더 최신 데이터를 가져오므로, 그보다 먼저 시작한 전체 재검증 응답이
-  // 뒤늦게 도착해 retry 결과를 되돌리지 못하게 구분한다. 언마운트로 증가하는
-  // loadGeneration과 달리 이 값이 바뀌면 캐시 기록도 건너뛴다.
-  const pagesInvalidation = useRef(0);
+  // 현재 전체 로드가 시작된 뒤 재조회한 멤버. 재조회는 전체 재검증보다 나중에
+  // 시작하므로 더 최신이다. 재조회가 먼저 끝나 진행 중이 아니게 된 뒤에도
+  // 먼저 시작한 전체 응답이 그 자리를 덮어쓰면 안 되므로, in-flight 여부가 아니라
+  // "이 로드 이후 재조회가 있었는지"로 판단한다.
+  const retriedSinceLoad = useRef(new Set<string>());
 
   useEffect(() => {
     const generation = ++loadGeneration.current;
     retryRequests.current.clear();
+    // 새 전체 로드가 이전 재조회들보다 최신이므로 기준을 새로 만든다. 아래
+    // 콜백은 ref가 아니라 이 인스턴스를 붙잡는다. 캐시 기록은 loadGeneration
+    // 검사 밖에 있어서, ref를 읽으면 effect가 다시 실행된 뒤 도착한 낡은 응답이
+    // 비어 있는 새 Set을 보고 재조회 이전 데이터를 기록해 버린다.
+    const retriedMembers = new Set<string>();
+    retriedSinceLoad.current = retriedMembers;
 
     if (!enabled || !reportGateway) {
       setState({ status: "idle" });
@@ -79,7 +86,7 @@ export function useReportPages({
     // 캐시가 있으면 전체 로딩 화면을 건너뛰고 바로 보여준 뒤 뒤에서 다시 조회한다.
     // 통화와 일일 리포트는 계속 추가되므로 캐시를 그대로 두지 않고 항상 재검증한다.
     const cachedPages = readCachedPages(cache, groupId, reportDate, targets);
-    const invalidationAtStart = pagesInvalidation.current;
+    const cacheGeneration = cache.generation();
     setState(
       cachedPages
         ? { items: toReadyItems(cachedPages, targets), status: "ready" }
@@ -93,27 +100,26 @@ export function useReportPages({
       targets,
     })
       .then((items) => {
-        if (pagesInvalidation.current !== invalidationAtStart) {
-          // retry가 이미 더 최신 결과를 반영했다. 낡은 응답으로 덮어쓰지 않는다.
-          return;
-        }
         // 실패한 대상만 캐시된 페이지로 대신한다. 캐시가 없으면 오류 항목이 남는다.
         const merged = cachedPages
           ? fillFailedItemsFromCache(items, cachedPages, targets)
           : items;
-        // 캐시 기록은 원본 기준이라 실패가 섞이면 기존 스냅샷을 그대로 둔다.
+        // 이 로드 이후 재조회한 멤버가 있으면 그 자리가 낡은 채로 스냅샷에 박히므로
+        // 기록하지 않는다. 재조회 성공은 updatePage로 이미 스냅샷에 반영돼 있다.
+        // 기록은 원본 기준이라 실패가 섞여도 기존 스냅샷을 남긴다.
         // 화면을 떠난 뒤 도착한 결과도 남겨 다음 진입에서 바로 쓴다.
-        writeCachedPages(cache, groupId, reportDate, items);
+        if (retriedMembers.size === 0) {
+          writeCachedPages(cache, groupId, reportDate, items, cacheGeneration);
+        }
         if (loadGeneration.current === generation) {
-          setState({ items: merged, status: "ready" });
+          // 재조회한 멤버 자리는 더 최신이므로 현재 항목을 유지한다.
+          setState((current) =>
+            keepRetriedItems(current, merged, retriedMembers)
+          );
         }
       })
       .catch(() => {
-        if (
-          loadGeneration.current !== generation ||
-          pagesInvalidation.current !== invalidationAtStart ||
-          cachedPages
-        ) {
+        if (loadGeneration.current !== generation || cachedPages) {
           // 이미 캐시로 페이지를 보여주는 중이면 재검증 실패로 에러 화면에 되돌리지 않는다.
           return;
         }
@@ -143,11 +149,9 @@ export function useReportPages({
 
       const generation = loadGeneration.current;
       const requestId = ++nextRetryRequestId.current;
+      const cacheGeneration = cache.generation();
       retryRequests.current.set(memberId, requestId);
-      // 재조회를 요청했다는 건 이 스냅샷이 더 이상 최신이 아니라는 뜻이다.
-      // 일일 리포트 생성 직후에도 호출되므로 낡은 페이지를 다시 보여주지 않는다.
-      cache.invalidatePages(groupId, reportDate);
-      pagesInvalidation.current += 1;
+      retriedSinceLoad.current.add(memberId);
       setState((current) =>
         replaceReadyItem(current, memberId, { status: "loading", target })
       );
@@ -159,6 +163,16 @@ export function useReportPages({
         target,
       })
         .then((page) => {
+          // 일일 리포트 생성 직후에도 호출되므로, 스냅샷을 지우는 대신 이 멤버
+          // 자리만 최신 페이지로 갱신한다. 지우기만 하면 다음 진입에서 전체
+          // 로딩이 다시 뜬다.
+          cache.updatePage(
+            groupId,
+            reportDate,
+            memberId,
+            page,
+            cacheGeneration
+          );
           if (
             loadGeneration.current === generation &&
             retryRequests.current.get(memberId) === requestId
@@ -173,6 +187,15 @@ export function useReportPages({
           }
         })
         .catch(() => {
+          // 최신 상태를 알 수 없게 됐으므로 낡은 스냅샷을 남기지 않는다. 단
+          // 세션이 끝났거나 이 화면이 이미 다시 로드됐다면 그쪽 스냅샷이 더
+          // 최신이므로 지우지 않는다.
+          if (
+            loadGeneration.current === generation &&
+            cache.generation() === cacheGeneration
+          ) {
+            cache.invalidatePages(groupId, reportDate);
+          }
           if (
             loadGeneration.current === generation &&
             retryRequests.current.get(memberId) === requestId
@@ -254,7 +277,8 @@ function writeCachedPages(
   cache: ReportCache,
   groupId: string,
   reportDate: string,
-  items: readonly ReportPageLoadItem[]
+  items: readonly ReportPageLoadItem[],
+  generation: number
 ) {
   const pages: CareReceiverReportPage[] = [];
 
@@ -266,7 +290,34 @@ function writeCachedPages(
     pages.push(item.page);
   }
 
-  cache.setPages(groupId, reportDate, pages);
+  cache.setPages(groupId, reportDate, pages, generation);
+}
+
+// 전체 재검증 결과를 반영하되, 이 로드 이후 재조회한 멤버 자리는 현재 항목을
+// 그대로 둔다. 재조회가 더 나중에 시작해 더 최신이기 때문이다. 재조회가 이미
+// 끝난 뒤라도 마찬가지라, 먼저 시작한 전체 응답이 최신 결과를 되돌리지 않는다.
+function keepRetriedItems(
+  current: ReportPagesLoadState,
+  loaded: readonly ReportPageLoadItem[],
+  retriedMembers: ReadonlySet<string>
+): ReportPagesLoadState {
+  if (retriedMembers.size === 0 || current.status !== "ready") {
+    return { items: loaded, status: "ready" };
+  }
+
+  const currentByMember = new Map(
+    current.items.map((item) => [item.target.memberId, item])
+  );
+
+  return {
+    items: loaded.map((item) => {
+      if (!retriedMembers.has(item.target.memberId)) {
+        return item;
+      }
+      return currentByMember.get(item.target.memberId) ?? item;
+    }),
+    status: "ready",
+  };
 }
 
 async function loadReportPageItems({

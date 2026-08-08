@@ -1,6 +1,6 @@
 import React from 'react';
 import TestRenderer from 'react-test-renderer';
-import {ScrollView} from 'react-native';
+import {ScrollView, StyleSheet, Text} from 'react-native';
 
 import type {
   FeedMember,
@@ -65,6 +65,10 @@ function deferred(): {promise: Promise<void>; resolve: () => void} {
     promise,
     resolve: () => resolvePromise?.(),
   };
+}
+
+function joinedChildren(children: unknown): string {
+  return Array.isArray(children) ? children.join('') : String(children);
 }
 
 async function renderScreen(
@@ -132,6 +136,91 @@ test('onOpenNotifications가 있으면 헤더 알림 벨로 알림 화면을 연
   });
 
   expect(onOpenNotifications).toHaveBeenCalledTimes(1);
+
+  await TestRenderer.act(() => {
+    renderer.unmount();
+  });
+});
+
+// 셸 헤더는 좌우 슬롯 80·여백 16으로 알림 벨 위치를 잡는다. 게시글 상세가
+// 44·20을 쓰던 탓에 피드에서 들어오면 벨이 14dp 옮겨 보였다.
+test('알림 벨을 셸 헤더와 같은 슬롯 규격으로 배치한다', async () => {
+  const renderer = await renderScreen({onOpenNotifications: jest.fn()});
+  const bell = renderer.root.findByProps({accessibilityLabel: '알림'});
+  const bellStyle = StyleSheet.flatten(bell.props.style);
+
+  expect(bellStyle.width).toBe(80);
+  expect(bellStyle.height).toBe(44);
+
+  await TestRenderer.act(() => {
+    renderer.unmount();
+  });
+});
+
+// 피드에서만 배지를 그려서, 게시글로 들어가면 읽지 않은 알림 수가 사라졌다.
+test('읽지 않은 알림 수를 피드와 같은 배지로 보여준다', async () => {
+  const renderer = await renderScreen({
+    onOpenNotifications: jest.fn(),
+    unreadNotificationCount: 3,
+  });
+
+  expect(
+    renderer.root
+      .findAllByType(Text)
+      .some(node => joinedChildren(node.props.children) === '3'),
+  ).toBe(true);
+
+  await TestRenderer.act(() => {
+    renderer.unmount();
+  });
+});
+
+test('읽지 않은 알림이 없으면 배지를 그리지 않는다', async () => {
+  const renderer = await renderScreen({
+    onOpenNotifications: jest.fn(),
+    unreadNotificationCount: 0,
+  });
+
+  expect(
+    renderer.root
+      .findAllByType(Text)
+      .some(node => joinedChildren(node.props.children) === '0'),
+  ).toBe(false);
+
+  await TestRenderer.act(() => {
+    renderer.unmount();
+  });
+});
+
+test('99를 넘는 알림 수는 99+로 줄여 표시한다', async () => {
+  const renderer = await renderScreen({
+    onOpenNotifications: jest.fn(),
+    unreadNotificationCount: 120,
+  });
+
+  expect(
+    renderer.root
+      .findAllByType(Text)
+      .some(node => joinedChildren(node.props.children) === '99+'),
+  ).toBe(true);
+
+  await TestRenderer.act(() => {
+    renderer.unmount();
+  });
+});
+
+test('알림 벨이 없어도 같은 폭의 빈 슬롯을 두어 제목을 가운데 유지한다', async () => {
+  const renderer = await renderScreen();
+  const backButton = renderer.root.findByProps({
+    accessibilityLabel: '게시글 닫기',
+  });
+  const slots = renderer.root
+    .findAll(node => StyleSheet.flatten(node.props.style)?.width === 80)
+    .length;
+
+  expect(backButton).toBeTruthy();
+  // 좌측 뒤로가기 슬롯과 우측 빈 슬롯 두 개가 같은 폭이어야 한다.
+  expect(slots).toBeGreaterThanOrEqual(2);
 
   await TestRenderer.act(() => {
     renderer.unmount();

@@ -783,19 +783,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 18,
   },
+  // 여백과 좌우 슬롯 폭은 셸 헤더·게시글 상세와 같게 맞춘다(S15P11B104-341).
   header: {
     alignItems: 'center',
     borderBottomColor: COLORS.divider,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     minHeight: 64,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
   },
+  // 아이콘일 때는 반대편 슬롯과 같은 80으로 대칭을 맞추고, '전체 지우기' 문구로
+  // 바뀌면 잘리지 않도록 그만큼만 넓어진다. paddingRight는 휴지통 아이콘(21)의
+  // 중심을 다른 헤더의 아이콘과 같은 위치(가장자리에서 36)에 두기 위한 값이다.
   headerButton: {
-    alignItems: 'center',
+    alignItems: 'flex-end',
     height: 44,
     justifyContent: 'center',
-    width: 86,
+    minWidth: 80,
+    paddingRight: 10,
   },
   deleteAllText: {
     color: COLORS.purpleDeep,
@@ -812,8 +817,9 @@ const styles = StyleSheet.create({
   },
   headerSide: {
     alignItems: 'flex-start',
+    height: 44,
     justifyContent: 'center',
-    width: 86,
+    width: 80,
   },
   listContent: {
     paddingBottom: 24,

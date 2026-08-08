@@ -246,10 +246,13 @@ public class DomainNotificationRoutingService {
 		Set<Long> requestedMemberIds = new LinkedHashSet<>();
 		requestedMemberIds.addAll(event.beforeParticipantMemberIds());
 		requestedMemberIds.addAll(event.afterParticipantMemberIds());
+		if (requestedMemberIds.isEmpty()) {
+			return;
+		}
 		List<GroupMember> activeMembers = groupMemberRepository.findAllActiveByGroupId(event.groupId());
-		List<GroupMember> receivers = requestedMemberIds.isEmpty()
-			? activeMembers
-			: activeMembers.stream().filter(member -> requestedMemberIds.contains(member.getId())).toList();
+		List<GroupMember> receivers = activeMembers.stream()
+			.filter(member -> requestedMemberIds.contains(member.getId()))
+			.toList();
 
 		CalendarMessage message = switch (event.action()) {
 			case CREATED -> new CalendarMessage(

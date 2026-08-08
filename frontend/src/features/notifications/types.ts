@@ -15,6 +15,9 @@ export type NotificationJoinRequestStatus =
 export interface AppNotification {
   // 알림을 발생시킨 사용자 이름. 가입 요청 알림의 역할 지정 팝업에 표시한다.
   actorName?: string;
+  // 행위자 프로필 사진(API-NOTIFICATIONS-003 actor.profileImageUrl).
+  // 없으면 avatarText 이니셜로 대체한다.
+  actorProfileImageUrl?: string;
   avatarText: string;
   body: string;
   createdAt?: string;

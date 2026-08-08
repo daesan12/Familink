@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState} from 'react';
 import {StackActions,
@@ -199,6 +200,7 @@ export function FeedScreen({
   onFullscreenChange,
   onHeaderVisibilityChange,
   onOpenNotifications,
+  unreadNotificationCount,
   onSubmitPost,
   onUpdateComment,
   pageLoader,
@@ -479,6 +481,14 @@ export function FeedScreen({
               '작성자가 게시글을 삭제했거나 더 이상 볼 수 없습니다.',
               [
                 {
+                  // 두 호출은 서로 다른 스택 형태를 담당하므로 둘 다 필요하다.
+                  // 알림 목록에서 열었으면 [FeedHome, notifications, PostDetail]
+                  // 이라 goBack()이 알림으로 돌아가고, 두 번째 호출은 대상이
+                  // 이미 최상단이어서 singleTop 무동작이 된다.
+                  // 푸시를 탭해 상세로 바로 들어왔으면(앱 종료 콜드 스타트든
+                  // 피드에 머무는 중 백그라운드 푸시든) [FeedHome, PostDetail]
+                  // 이라 goBack()이 피드 목록으로 가고, 알림을 여는 것은 두 번째
+                  // 호출뿐이다. 어느 하나만 남기면 나머지 형태가 깨진다.
                   onPress: () => {
                     feedNavRef.current?.goBack();
                     onOpenNotifications?.();
@@ -565,6 +575,8 @@ export function FeedScreen({
                   '작성자가 게시글을 삭제했거나 더 이상 볼 수 없습니다.',
                   [
                     {
+                      // 최초 조회 실패와 같은 2단 복귀다. 두 호출이 각각
+                      // 담당하는 진입 경로는 위 상세 로드 effect의 주석에 있다.
                       onPress: () => {
                         feedNavRef.current?.goBack();
                         onOpenNotifications?.();
@@ -654,11 +666,15 @@ export function FeedScreen({
     return () => onFullscreenChange?.(false);
   }, [isComposerFocused, onFullscreenChange]);
 
-  useEffect(() => {
+  // 셸 헤더는 탭 네비게이터 위에 일반 흐름으로 놓여 있어 마운트·언마운트가
+  // 아래 내용을 헤더 높이만큼 밀어낸다. useEffect로 알리면 상세 화면이 이미
+  // 그려진 뒤에 셸 헤더가 사라져, 두 헤더가 함께 보이는 프레임에서 화면이
+  // 덜컹인다. useLayoutEffect는 그리기 전에 실행돼 전환이 한 프레임에 끝난다.
+  useLayoutEffect(() => {
     onHeaderVisibilityChange?.(!selectedPostId);
   }, [onHeaderVisibilityChange, selectedPostId]);
 
-  useEffect(
+  useLayoutEffect(
     () => () => onHeaderVisibilityChange?.(true),
     [onHeaderVisibilityChange],
   );
@@ -1237,6 +1253,7 @@ export function FeedScreen({
                   }}
                   onMenuPress={() => setMenuPostId(selectedPost.id)}
                   onOpenNotifications={onOpenNotifications}
+                  unreadNotificationCount={unreadNotificationCount}
                   onPressAuthor={handlePressAuthor}
                   onScrollBeginDrag={closeReactionPicker}
                   onRetryComments={() => {

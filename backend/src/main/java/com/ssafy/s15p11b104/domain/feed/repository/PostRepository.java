@@ -1,5 +1,6 @@
 package com.ssafy.s15p11b104.domain.feed.repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.time.Instant;
 
@@ -83,4 +84,24 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 		where post.id = :postId
 		""")
 	Optional<Post> findWithAuthorAndGroupById(@Param("postId") Long postId);
+
+	@Query("""
+		select post.authorMember.id as memberId, count(post) as postCount
+		from Post post
+		where post.group.id = :groupId
+		  and post.createdAt >= :startAt
+		  and post.createdAt < :endAt
+		group by post.authorMember.id
+		""")
+	List<PostCount> countByAuthorMember(
+		@Param("groupId") Long groupId,
+		@Param("startAt") Instant startAt,
+		@Param("endAt") Instant endAt);
+
+	interface PostCount {
+
+		Long getMemberId();
+
+		long getPostCount();
+	}
 }

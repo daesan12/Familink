@@ -114,6 +114,65 @@ test("제목·시간·참여자를 입력해 실제 생성 API 폼으로 저장�
   TestRenderer.act(() => renderer!.unmount());
 });
 
+test("모두 선택으로 구성원 전원을 참여자로 등록해 저장한다", async () => {
+  const gateway = createGateway();
+  let renderer: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    renderer = TestRenderer.create(
+      <CalendarEventFormScreen
+        gateway={gateway}
+        groupId="3"
+        initialDate="2026-07-31"
+        members={members}
+        now={new Date("2026-07-30T20:42:00Z")}
+        onCancel={jest.fn()}
+        onSaved={jest.fn()}
+      />
+    );
+  });
+
+  expect(
+    renderer!.root.findAllByProps({
+      children: "참여자를 선택하지 않으면 알림이 가지 않아요.",
+    }).length
+  ).toBeGreaterThan(0);
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "일정 제목" })
+      .props.onChangeText("가족 모임");
+    renderer!.root
+      .findByProps({ accessibilityLabel: "참여자 추가" })
+      .props.onPress();
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "참여자 모두 선택" })
+      .props.onPress();
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "참여자 선택 완료" })
+      .props.onPress();
+  });
+
+  await TestRenderer.act(async () => {
+    renderer!.root
+      .findByProps({ accessibilityLabel: "일정 저장" })
+      .props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(gateway.createEvent).toHaveBeenCalledWith(
+    "3",
+    expect.objectContaining({ participantMemberIds: ["7", "8"] })
+  );
+
+  TestRenderer.act(() => renderer!.unmount());
+});
+
 test("제목이 비어 있으면 API를 호출하지 않고 입력 오류를 표시한다", async () => {
   const gateway = createGateway();
   let renderer: TestRenderer.ReactTestRenderer;
@@ -261,6 +320,7 @@ test("수정 화면은 작성자를 표시하지 않고 기존 일정으로 저�
         groupId="3"
         initialDate="2026-07-31"
         initialDetail={{
+          creatorDisplayName: "홍유라",
           creatorMemberId: "8",
           description: "수호 할아버지 병원",
           endAt: null,

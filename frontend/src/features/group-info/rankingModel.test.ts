@@ -52,15 +52,15 @@ describe('getCurrentMonthRange', () => {
 describe('rankEntries', () => {
   const entry = (
     displayName: string,
-    carnationCount: number,
+    postCount: number,
   ): WeeklyRankingEntry => ({
     memberId: displayName,
     displayName,
-    carnationCount,
+    postCount,
     previousWeekWinner: false,
   });
 
-  test('카네이션 수 내림차순으로 순위를 매긴다', () => {
+  test('게시글 수 내림차순으로 순위를 매긴다', () => {
     const ranked = rankEntries([entry('가', 2), entry('나', 5), entry('다', 3)]);
     expect(ranked.map((r) => [r.displayName, r.rank])).toEqual([
       ['나', 1],
@@ -69,7 +69,7 @@ describe('rankEntries', () => {
     ]);
   });
 
-  test('같은 카네이션 수는 공동 순위를 허용하고 다음 순위를 건너뛴다', () => {
+  test('같은 게시글 수는 공동 순위를 허용하고 다음 순위를 건너뛴다', () => {
     // 5,5,3 → 공동 1위 두 명, 그다음은 3위다(표준 경쟁 순위).
     const ranked = rankEntries([entry('나', 5), entry('가', 5), entry('다', 3)]);
     expect(ranked.map((r) => [r.displayName, r.rank])).toEqual([

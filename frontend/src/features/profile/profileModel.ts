@@ -224,8 +224,11 @@ export interface MonthCell {
   iso: string;
 }
 
-// (year, month 1~12)의 달력을 일요일 시작·완전한 주 단위로 만든다.
-// 첫 주 앞은 이전 달 말일, 마지막 주 뒤는 다음 달 초로 채워 7열 정렬을 맞추고
+// 달력 격자는 항상 6주 42칸으로 고정한다.
+const CALENDAR_CELL_COUNT = 42;
+
+// (year, month 1~12)의 달력을 일요일 시작 6주 42칸으로 만든다.
+// 첫 주 앞은 이전 달 말일, 남는 뒤 칸은 다음 달 초로 채워 월마다 높이가 달라지지 않게 하고
 // 각 셀은 실제 날짜를 가진다(inMonth=false는 인접 달). postDates에 있는 날짜는 도장이 채워진다.
 export function buildMonthGrid(
   year: number,
@@ -251,10 +254,10 @@ export function buildMonthGrid(
     cells.push({day, filled: postDates.has(iso), inMonth: true, iso});
   }
 
-  // 마지막 주를 채우기 위한 다음 달 초.
+  // 남는 칸을 42칸까지 채우기 위한 다음 달 초.
   const next = shiftMonth(year, month, 1);
   let nextDay = 1;
-  while (cells.length % 7 !== 0) {
+  while (cells.length < CALENDAR_CELL_COUNT) {
     const iso = toIsoDate(next.year, next.month, nextDay);
     cells.push({
       day: nextDay,

@@ -228,6 +228,9 @@ function parseNotification(value: unknown): AppNotification | null {
 
   return {
     ...(actor === null || actor.name === null ? {} : {actorName: actor.name}),
+    ...(actor === null || actor.profileImageUrl === null
+      ? {}
+      : {actorProfileImageUrl: actor.profileImageUrl}),
     avatarText: actor === null ? '알' : avatarText(actor.name),
     body,
     createdAt,
@@ -256,7 +259,10 @@ function parseNotification(value: unknown): AppNotification | null {
 
 function parseActor(
   value: unknown,
-): {name: string | null; userId: string} | null | undefined {
+):
+  | {name: string | null; profileImageUrl: string | null; userId: string}
+  | null
+  | undefined {
   if (value === null) {
     return null;
   }
@@ -275,7 +281,14 @@ function parseActor(
   ) {
     return undefined;
   }
-  return {name, userId};
+  return {
+    name,
+    profileImageUrl:
+      typeof profileImageUrl === 'string' && profileImageUrl.length > 0
+        ? profileImageUrl
+        : null,
+    userId,
+  };
 }
 
 function parseUnreadCount(value: unknown): number | null {

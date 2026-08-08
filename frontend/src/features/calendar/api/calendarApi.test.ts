@@ -87,6 +87,7 @@ test("상세와 구성원 API 응답을 화면 모델로 변환한다", async ()
   client.get
     .mockResolvedValueOnce(
       success({
+        creatorDisplayName: "탈퇴한 사용자",
         creatorMemberId: 7,
         description: "병원 정기 검진",
         endAt: "2026-07-31T07:00:00Z",
@@ -115,6 +116,7 @@ test("상세와 구성원 API 응답을 화면 모델로 변환한다", async ()
   const gateway = createCalendarHttpGateway({client});
 
   await expect(gateway.getEvent("12")).resolves.toMatchObject({
+    creatorDisplayName: "탈퇴한 사용자",
     creatorMemberId: "7",
     id: "12",
     participantMemberIds: ["8"],
@@ -289,6 +291,51 @@ test("계약과 다른 응답은 조용히 목업으로 대체하지 않고 오�
       startDate: "2026-07-01",
     })
   ).rejects.toBeInstanceOf(CalendarApiError);
+});
+
+test("작성자 이름이 없는 구버전 서버 응답을 null로 변환한다", async () => {
+  const client = createClient();
+  client.get.mockResolvedValueOnce(
+    success({
+      creatorMemberId: 7,
+      endAt: null,
+      endDate: "2026-07-31",
+      eventDate: "2026-07-31",
+      groupId: 3,
+      id: 12,
+      participantMemberIds: [],
+      startAt: null,
+      title: "가족 모임",
+    })
+  );
+  const gateway = createCalendarHttpGateway({client});
+
+  await expect(gateway.getEvent("12")).resolves.toMatchObject({
+    creatorDisplayName: null,
+  });
+});
+
+test("작성자 이름이 문자열이 아니면 거부한다", async () => {
+  const client = createClient();
+  client.get.mockResolvedValueOnce(
+    success({
+      creatorDisplayName: 7,
+      creatorMemberId: 7,
+      endAt: null,
+      endDate: "2026-07-31",
+      eventDate: "2026-07-31",
+      groupId: 3,
+      id: 12,
+      participantMemberIds: [],
+      startAt: null,
+      title: "가족 모임",
+    })
+  );
+  const gateway = createCalendarHttpGateway({client});
+
+  await expect(gateway.getEvent("12")).rejects.toBeInstanceOf(
+    CalendarApiError
+  );
 });
 
 test("상세 응답의 잘못된 식별자를 거부한다", async () => {

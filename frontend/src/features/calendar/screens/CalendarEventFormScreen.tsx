@@ -281,7 +281,9 @@ export function CalendarEventFormScreen({
           </View>
           <View style={styles.chips}>
             {draft.participantMemberIds.length === 0 ? (
-              <AppText style={styles.emptyText}>참여자를 추가할 수 있어요.</AppText>
+              <AppText style={styles.emptyText}>
+                참여자를 선택하지 않으면 알림이 가지 않아요.
+              </AppText>
             ) : (
               draft.participantMemberIds.map((memberId) => {
                 const member = memberById.get(memberId);

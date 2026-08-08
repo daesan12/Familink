@@ -525,7 +525,6 @@ class GroupApiTest extends IntegrationTest {
 		GroupMember creator = entityManager.find(GroupMember.class, managerMember.getId());
 		CalendarEvent event = new CalendarEvent(
 			managedGroup, creator, "가족 일정", null, LocalDate.now(), LocalDate.now(), null, null);
-		event.changeParticipantScope(true);
 		entityManager.persist(event);
 		for (GroupMember participant : participants) {
 			entityManager.persist(new EventParticipant(

@@ -62,13 +62,45 @@ test('shiftMonth는 연도 경계를 넘어 이동한다', () => {
   expect(shiftMonth(2026, 12, 1)).toEqual({month: 1, year: 2027});
 });
 
-test('getCalendarWeeks는 7칸 단위 주 배열을 만든다', () => {
+test('getCalendarWeeks는 6주 42칸 고정 격자를 만든다', () => {
   const weeks = getCalendarWeeks(2026, 7);
 
+  expect(weeks).toHaveLength(6);
   expect(weeks.every(week => week.length === 7)).toBe(true);
-  // 2026년 7월 1일은 수요일이라 앞에 빈 칸 3개가 온다.
-  expect(weeks[0]?.slice(0, 4)).toEqual([null, null, null, 1]);
-  expect(weeks.flat().filter(day => day === 31)).toEqual([31]);
+  // 2026년 7월 1일은 수요일이라 앞에 6월 28~30일이 붙는다.
+  expect(weeks[0]?.[0]).toEqual({
+    dateKey: '2026-06-28',
+    day: 28,
+    inMonth: false,
+  });
+  expect(weeks[0]?.[3]).toEqual({
+    dateKey: '2026-07-01',
+    day: 1,
+    inMonth: true,
+  });
+  expect(weeks[5]?.[6]).toEqual({
+    dateKey: '2026-08-08',
+    day: 8,
+    inMonth: false,
+  });
+  expect(weeks.flat().filter(cell => cell.inMonth)).toHaveLength(31);
+});
+
+test('28일뿐인 달도 6주 42칸을 채운다', () => {
+  // 2026년 2월 1일은 일요일이라 앞 스필오버가 없고, 뒤를 3월 1~14일로 채운다.
+  const weeks = getCalendarWeeks(2026, 2);
+
+  expect(weeks).toHaveLength(6);
+  expect(weeks[0]?.[0]).toEqual({
+    dateKey: '2026-02-01',
+    day: 1,
+    inMonth: true,
+  });
+  expect(weeks[5]?.[6]).toEqual({
+    dateKey: '2026-03-14',
+    day: 14,
+    inMonth: false,
+  });
 });
 
 test('날짜·월 라벨을 한국어 형식으로 만든다', () => {
