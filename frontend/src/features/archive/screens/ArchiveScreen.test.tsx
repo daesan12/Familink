@@ -1,5 +1,5 @@
 import React from 'react';
-import {Text} from 'react-native';
+import {StyleSheet, Text} from 'react-native';
 import TestRenderer from 'react-test-renderer';
 
 import type {ArchiveLoader, ArchiveQuery} from '../api/archiveApi';
@@ -96,6 +96,16 @@ function press(
     target.props.onPress();
   });
 }
+
+// 좌우 슬롯 폭이 다르면 제목이 화면 중앙에서 밀린다(S15P11B104-341).
+test('헤더 좌우 슬롯을 같은 폭으로 두어 제목을 가운데 유지한다', () => {
+  const renderer = renderArchive();
+  const slots = renderer.root.findAll(
+    node => StyleSheet.flatten(node.props.style)?.width === 80,
+  );
+
+  expect(slots.length).toBeGreaterThanOrEqual(2);
+});
 
 test('기본 상태에서 날짜별 묶음을 보여준다', () => {
   const renderer = renderArchive();
