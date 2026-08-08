@@ -153,6 +153,10 @@ function readEventDetail(value: unknown): CalendarEventDetail {
   const item = readObject(value, "일정 상세");
   return {
     ...readEventSummary(item),
+    creatorDisplayName: readOptionalNullableString(
+      item.creatorDisplayName,
+      "작성자 이름"
+    ),
     creatorMemberId: readId(item.creatorMemberId, "작성자 구성원 ID"),
     description:
       readOptionalNullableString(item.description, "일정 세부 내용") ?? "",

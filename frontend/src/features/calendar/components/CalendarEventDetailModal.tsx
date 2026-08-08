@@ -141,6 +141,7 @@ export function CalendarEventDetailModal({
                   label="작성자"
                   memberIds={[detail.creatorMemberId]}
                   members={members}
+                  nameOverride={detail.creatorDisplayName}
                 />
                 <PeopleSection
                   emptyLabel="참여자가 없어요."
@@ -220,11 +221,16 @@ function PeopleSection({
   label,
   memberIds,
   members,
+  // 서버가 해석해 준 이름을 활성 구성원 목록보다 우선 사용한다. 그룹을 나간 작성자는 구성원
+  // 목록에 없어 이름을 찾을 수 없기 때문이다. 인물 한 명을 그리는 작성자 섹션 전용이며,
+  // 여러 명을 그리는 참여자 섹션에 넘기면 전원이 같은 이름으로 보인다.
+  nameOverride,
 }: {
   emptyLabel?: string;
   label: string;
   memberIds: readonly string[];
   members: readonly CalendarMember[];
+  nameOverride?: string | null;
 }) {
   return (
     <View style={styles.peopleSection}>
@@ -235,14 +241,12 @@ function PeopleSection({
         <View style={styles.peopleList}>
           {memberIds.map((memberId) => {
             const member = members.find((item) => item.memberId === memberId);
+            const displayName =
+              nameOverride ?? member?.displayName ?? `구성원 ${memberId}`;
             return (
               <View key={memberId} style={styles.personChip}>
                 <CachedRemoteImage
-                  accessibilityLabel={
-                    member
-                      ? `${member.displayName} 프로필 사진`
-                      : "기본 프로필 사진"
-                  }
+                  accessibilityLabel={`${displayName} 프로필 사진`}
                   source={
                     member?.profileImageUrl
                       ? { uri: member.profileImageUrl }
@@ -251,7 +255,7 @@ function PeopleSection({
                   style={styles.avatar}
                 />
                 <AppText numberOfLines={1} style={styles.personName}>
-                  {member?.displayName ?? `구성원 ${memberId}`}
+                  {displayName}
                 </AppText>
               </View>
             );

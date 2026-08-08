@@ -261,6 +261,7 @@ test("수정 화면은 작성자를 표시하지 않고 기존 일정으로 저�
         groupId="3"
         initialDate="2026-07-31"
         initialDetail={{
+          creatorDisplayName: "홍유라",
           creatorMemberId: "8",
           description: "수호 할아버지 병원",
           endAt: null,

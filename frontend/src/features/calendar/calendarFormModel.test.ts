@@ -41,6 +41,7 @@ test("23시에는 종료 기본값을 같은 날 23:59로 제한한다", () => {
 test("수정 일정은 KST 시간과 참여자를 기존 값으로 채운다", () => {
   expect(
     createCalendarEventDraftFromDetail({
+      creatorDisplayName: "이종철",
       creatorMemberId: "7",
       description: "정기 검진",
       endAt: "2026-07-31T07:30:00Z",
