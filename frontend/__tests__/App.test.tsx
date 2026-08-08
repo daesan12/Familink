@@ -730,6 +730,92 @@ test("로그인 후 서버 그룹 목록이 있으면 해당 그룹으로 앱 �
   ).toBeTruthy();
 });
 
+// 그룹이 있는데도 대기 요청 때문에 온보딩을 거치면 뒤로가기를 눌러야 피드에
+// 도달한다. 활성 그룹이 있는 사용자의 요청 결과는 앱 내부 알림으로 전달한다.
+test("대기 중인 가입 요청이 있어도 그룹이 있으면 온보딩 없이 앱 셸로 진입한다", async () => {
+  const groupGateway = createGroupGateway();
+  groupGateway.loadGroups.mockResolvedValueOnce({
+    groups: [
+      {
+        id: "101",
+        isManager: true,
+        memberCount: 2,
+        myMemberId: "201",
+        name: "서버 가족",
+        role: "guardian",
+      },
+    ],
+    joinRequests: [
+      {
+        groupId: "other-group",
+        groupName: "다른 가족",
+        joinRequestId: "request-pending",
+        processedAt: null,
+        requestedAt: "2026-08-08T01:02:03Z",
+        status: "PENDING_ADMIN",
+      },
+    ],
+  });
+  const { renderer } = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    groupGateway
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {});
+
+  expect(renderer.root.findByProps({ children: "서버 가족" })).toBeTruthy();
+  expect(
+    renderer.root.findByProps({ accessibilityRole: "tablist" })
+  ).toBeTruthy();
+  expect(JSON.stringify(renderer.toJSON())).not.toContain(
+    "우리 가족을\n연결해볼까요?"
+  );
+});
+
+test("그룹이 없고 대기 중인 가입 요청만 있으면 온보딩 화면으로 진입한다", async () => {
+  const groupGateway = createGroupGateway();
+  groupGateway.loadGroups.mockResolvedValueOnce({
+    groups: [],
+    joinRequests: [
+      {
+        groupId: "other-group",
+        groupName: "다른 가족",
+        joinRequestId: "request-pending",
+        processedAt: null,
+        requestedAt: "2026-08-08T01:02:03Z",
+        status: "PENDING_ADMIN",
+      },
+    ],
+  });
+  const { renderer } = await renderApp(
+    createAuthGateway(),
+    createAuthSessionCoordinator(),
+    groupGateway
+  );
+  await openLogin(renderer);
+  await enterValidCredentials(renderer);
+
+  await TestRenderer.act(async () => {
+    await renderer.root
+      .findByProps({ accessibilityLabel: "로그인" })
+      .props.onPress();
+  });
+  await TestRenderer.act(async () => {});
+
+  expect(JSON.stringify(renderer.toJSON())).toContain("대기 중");
+  expect(
+    renderer.root.findAllByProps({ accessibilityRole: "tablist" })
+  ).toHaveLength(0);
+});
+
 test("포그라운드로 돌아오면 그룹 목록을 다시 조회해 바뀐 역할을 반영한다", async () => {
   const appStateListener = jest.spyOn(AppState, "addEventListener");
   const groupGateway = createGroupGateway();
