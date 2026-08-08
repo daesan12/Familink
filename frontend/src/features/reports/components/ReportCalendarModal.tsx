@@ -102,12 +102,27 @@ export function ReportCalendarModal({
 
           {status !== "error" ? (
             <View style={styles.calendarGrid}>
-              {calendarDays.map((day, index) => {
-                if (day === null) {
-                  return <View key={`empty-${index}`} style={styles.dayCell} />;
+              {calendarDays.map((cell) => {
+                // 인접 달 칸은 7열 정렬용이므로 흐리게만 보여 주고 버튼으로 만들지
+                // 않는다. 여기서 걸러야 아래 라벨의 `${year}년 ${month}월`이 맞다.
+                // 월 정보가 없는 숫자만 읽히면 혼란스러워 접근성 트리에서 감춘다.
+                if (!cell.inMonth) {
+                  return (
+                    <View
+                      accessibilityElementsHidden
+                      importantForAccessibility="no-hide-descendants"
+                      key={cell.date}
+                      style={styles.dayCell}
+                    >
+                      <AppText style={[styles.dayText, styles.outsideDayText]}>
+                        {cell.day}
+                      </AppText>
+                    </View>
+                  );
                 }
 
-                const date = formatDate(year, month, day);
+                const day = cell.day;
+                const date = cell.date;
                 const isAvailable = availableDates.has(date);
                 const isSelected = isAvailable && selectedDate === date;
 
@@ -197,23 +212,35 @@ function CalendarStatus({
   );
 }
 
+// 달력 격자는 항상 6주 42칸으로 고정한다.
+const CALENDAR_CELL_COUNT = 42;
+
+interface CalendarCell {
+  date: string;
+  day: number;
+  // 이 칸이 기준 달에 속하는지 여부. false면 인접 달 스필오버(흐리게, 선택 불가).
+  inMonth: boolean;
+}
+
+// 6주 42칸 고정이라 월마다 팝업 높이가 달라지지 않는다. 앞뒤 여유 칸은 인접 달의
+// 실제 날짜로 채우며, date는 표시 중인 달이 아니라 각 칸 자신의 연·월로 만든다.
 function createCalendarDays(
   year: number,
   month: number
-): readonly (number | null)[] {
+): readonly CalendarCell[] {
   const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
-  const dayCount = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const cells: (number | null)[] = Array.from(
-    { length: firstWeekday },
-    () => null
-  );
+  const cells: CalendarCell[] = [];
 
-  for (let day = 1; day <= dayCount; day += 1) {
-    cells.push(day);
-  }
-
-  while (cells.length % 7 !== 0) {
-    cells.push(null);
+  for (let index = 0; index < CALENDAR_CELL_COUNT; index += 1) {
+    // Date.UTC가 범위를 벗어난 일(day) 값을 인접 달로 이월해 준다.
+    const date = new Date(Date.UTC(year, month - 1, index - firstWeekday + 1));
+    const cellYear = date.getUTCFullYear();
+    const cellMonth = date.getUTCMonth() + 1;
+    cells.push({
+      date: formatDate(cellYear, cellMonth, date.getUTCDate()),
+      day: date.getUTCDate(),
+      inMonth: cellYear === year && cellMonth === month,
+    });
   }
 
   return cells;
@@ -301,6 +328,9 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     position: "absolute",
   },
+  outsideDayText: {
+    color: COLORS.textDisabled,
+  },
   overlay: {
     alignItems: "center",
     backgroundColor: "rgba(18, 23, 41, 0.58)",
@@ -318,7 +348,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 14,
     justifyContent: "center",
-    minHeight: 330,
+    // 6주 격자(58*6 + calendarGrid의 paddingTop 12 + paddingBottom 24)와 같은 높이라야
+    // error ↔ ready 전환에서 카드가 튀지 않는다.
+    minHeight: 384,
     padding: 24,
   },
   statusText: {
