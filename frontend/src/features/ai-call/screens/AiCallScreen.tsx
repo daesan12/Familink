@@ -6,7 +6,9 @@ import type {AppScreenProps} from '../../../app-shell';
 import AiCallView, {Commands} from '../native/AiCallViewNativeComponent';
 
 const SELECTION_BACKGROUND = '#FFFFFF';
-const CALL_BACKGROUND = '#32313D';
+// 통화 화면 배경이 위쪽 연보라에서 아래쪽 흰색으로 내려가므로 상태바도 그 위쪽 색을
+// 따라간다. 어두운 색을 그대로 두면 밝은 배경 위에 흰 시계·배터리가 겹쳐 보이지 않는다.
+const CALL_BACKGROUND = '#F2F0FF';
 
 export function AiCallScreen({
   apiBaseUrl,
@@ -115,7 +117,7 @@ export function AiCallScreen({
         backgroundColor={
           isFullscreen ? CALL_BACKGROUND : SELECTION_BACKGROUND
         }
-        barStyle={isFullscreen ? 'light-content' : 'dark-content'}
+        barStyle="dark-content"
       />
       <AiCallView
         ref={aiCallViewRef}

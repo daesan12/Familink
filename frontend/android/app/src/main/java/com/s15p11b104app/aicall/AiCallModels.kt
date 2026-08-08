@@ -100,7 +100,7 @@ internal val aiPersonas =
             toneTag = "다정한 말투",
             introduction =
                 "다정한 말투로 안부를 챙기고\n" +
-                    "편안한 존댓말로 천천히 이야기를 이어가요.",
+                    "편안한 존댓말로 천천히 이야기를 이어가요",
             imageResource = R.drawable.persona_son,
         ),
         AiPersona(
@@ -110,7 +110,7 @@ internal val aiPersonas =
             toneTag = "세심한 말투",
             introduction =
                 "세심한 말투로 가족을 살뜰히 챙겨요.\n" +
-                    "밝은 맞장구로 기분 좋은 대화를 만들어요.",
+                    "밝은 맞장구로 기분 좋은 대화를 만들어요",
             imageResource = R.drawable.persona_daughter,
         ),
         AiPersona(
@@ -120,7 +120,7 @@ internal val aiPersonas =
             toneTag = "침착한 말투",
             introduction =
                 "침착한 말투로 일정과 궁금한 일을 또박또박 정리해요.\n" +
-                    "여유로운 재치로 즐거운 대화를 이끌어요.",
+                    "여유로운 재치로 즐거운 대화를 이끌어요",
             imageResource = R.drawable.persona_assistant_male,
         ),
         AiPersona(
@@ -130,7 +130,7 @@ internal val aiPersonas =
             toneTag = "차분한 말투",
             introduction =
                 "차분한 말투로 필요한 내용을 쉽고 꼼꼼하게 안내해요.\n" +
-                    "부담 없는 유머를 곁들여 편안하게 이야기를 이어가요.",
+                    "부담 없는 유머를 곁들여 편안하게 이야기를 이어가요",
             imageResource = R.drawable.persona_assistant_female,
         ),
         AiPersona(
@@ -140,7 +140,7 @@ internal val aiPersonas =
             toneTag = "유쾌한 말투",
             introduction =
                 "오랜 친구처럼 편한 반말과 옅은 경상도 말투로\n" +
-                    "구수한 농담과 옛이야기를 건네며 웃음을 더해요.",
+                    "구수한 농담과 옛이야기를 건네며 웃음을 더해요",
             imageResource = R.drawable.persona_friend_haksu,
         ),
         AiPersona(
@@ -201,9 +201,9 @@ internal fun aiCallEndedDescription(
     endedByDurationLimit: Boolean,
 ): String =
     when {
-      wasCancelled -> "준비되면 다시 이야기해 보세요."
-      endedByDurationLimit -> "통화 가능한 시간이 다 되어 마무리했어요."
-      else -> "오늘 나눈 이야기는 소중히 기억할게요."
+      wasCancelled -> "준비되면 다시 이야기해 보세요"
+      endedByDurationLimit -> "통화 가능한 시간이 다 되어 마무리했어요"
+      else -> "오늘 나눈 이야기는 소중히 기억할게요"
     }
 
 /**

@@ -16,15 +16,17 @@ internal object AiCallColors {
   val Background = Color(0xFFFFFFFF)
   val BrandPurple = Color(0xFF8B7CF6)
   val BrandPurplePressed = Color(0xFF7665E7)
-  val CallBackground = Color(0xFF32313D)
   val CallControlSurface = Color(0xFF292833)
   val CoralRed = Color(0xFFD84A42)
   val Disabled = Color(0xFFD8D5E3)
-  val EndBackground = Color(0xFF3A3848)
+  /** 서비스 공통 연보라(RN COLORS.lavenderSurface). 선택 전 통화 버튼과 기본 원 테두리에 쓴다. */
+  val LavenderTint = Color(0xFFF2F0FF)
+  /** 본문 글자와 같은 색. 통화 중 화면의 자막과 켜진 제어 버튼 배경에 쓴다. 검정이 아니다. */
+  val Ink = Color(0xFF121729)
+  /** 통화 중 제어 버튼의 얇은 외곽선. */
+  val ControlOutline = Color(0x14121729)
   val Lavender = Color(0xFFE2DEFF)
   val LavenderSurface = Color(0xFFF3F1FF)
-  val OnDark = Color(0xFFFFFFFF)
-  val OnDarkMuted = Color(0xFFFFFFFF)
   val TextMuted = Color(0xFF777482)
   val TextStrong = Color(0xFF42404A)
 }
