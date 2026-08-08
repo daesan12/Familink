@@ -124,6 +124,70 @@ test('알림 목록 응답을 화면 모델로 변환하고 페이지 파라미�
   expect(client.get).toHaveBeenCalledWith('/notifications?page=2&size=10');
 });
 
+// 계약(API-NOTIFICATIONS-003)의 actor.profileImageUrl은 검증만 하고 버려져
+// 알림 목록이 항상 이니셜만 보여줬다.
+test('행위자 프로필 사진 URL을 알림 항목으로 넘긴다', async () => {
+  const client = createClient();
+  client.get.mockResolvedValueOnce(
+    success({
+      content: [
+        {
+          actor: {
+            name: '홍유라',
+            profileImageUrl: 'https://cdn.example.com/u7.jpg?sig=abc',
+            userId: 7,
+          },
+          body: '본문',
+          createdAt: '2026-08-08T01:02:03Z',
+          groupId: 3,
+          id: 12,
+          readAt: null,
+          title: '제목',
+          type: 'NEW_POST',
+        },
+      ],
+      hasNext: false,
+    }),
+  );
+  const gateway = createNotificationGateway({client});
+
+  const page = await gateway.loadPage(0, 10);
+
+  expect(page.notifications[0].actorProfileImageUrl).toBe(
+    'https://cdn.example.com/u7.jpg?sig=abc',
+  );
+});
+
+test.each([
+  ['null', null],
+  ['빈 문자열', ''],
+])('프로필 사진이 %s이면 이니셜을 쓰도록 값을 비운다', async (_label, url) => {
+  const client = createClient();
+  client.get.mockResolvedValueOnce(
+    success({
+      content: [
+        {
+          actor: {name: '홍유라', profileImageUrl: url, userId: 7},
+          body: '본문',
+          createdAt: '2026-08-08T01:02:03Z',
+          groupId: 3,
+          id: 12,
+          readAt: null,
+          title: '제목',
+          type: 'NEW_POST',
+        },
+      ],
+      hasNext: false,
+    }),
+  );
+  const gateway = createNotificationGateway({client});
+
+  const page = await gateway.loadPage(0, 10);
+
+  expect(page.notifications[0].actorProfileImageUrl).toBeUndefined();
+  expect(page.notifications[0].avatarText).toBe('홍유');
+});
+
 test('리포트 알림의 이동용 조회 키를 파싱하고 부재나 잘못된 형식도 허용한다', async () => {
   const client = createClient();
   client.get.mockResolvedValueOnce(
