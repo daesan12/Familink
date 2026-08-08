@@ -94,6 +94,7 @@ export function createCalendarMonth(
   const gridStart = addDays(firstDate, -firstDate.getUTCDay());
   const days: CalendarDay[] = [];
 
+  // 달력 격자는 항상 6주 42칸으로 고정한다.
   for (let index = 0; index < 42; index += 1) {
     const date = addDays(gridStart, index);
     const cellMonth = date.getUTCMonth() + 1;
