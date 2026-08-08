@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState} from 'react';
 import {StackActions,
@@ -665,11 +666,15 @@ export function FeedScreen({
     return () => onFullscreenChange?.(false);
   }, [isComposerFocused, onFullscreenChange]);
 
-  useEffect(() => {
+  // 셸 헤더는 탭 네비게이터 위에 일반 흐름으로 놓여 있어 마운트·언마운트가
+  // 아래 내용을 헤더 높이만큼 밀어낸다. useEffect로 알리면 상세 화면이 이미
+  // 그려진 뒤에 셸 헤더가 사라져, 두 헤더가 함께 보이는 프레임에서 화면이
+  // 덜컹인다. useLayoutEffect는 그리기 전에 실행돼 전환이 한 프레임에 끝난다.
+  useLayoutEffect(() => {
     onHeaderVisibilityChange?.(!selectedPostId);
   }, [onHeaderVisibilityChange, selectedPostId]);
 
-  useEffect(
+  useLayoutEffect(
     () => () => onHeaderVisibilityChange?.(true),
     [onHeaderVisibilityChange],
   );
