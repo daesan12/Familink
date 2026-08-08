@@ -8,6 +8,8 @@ export interface GroupMenuItem {
   description: string;
   key: string;
   label: string;
+  // 그룹 관리자만 실행할 수 있는 항목. 비관리자 화면에서는 아예 그리지 않는다.
+  managerOnly?: boolean;
   onPress: () => void;
 }
 

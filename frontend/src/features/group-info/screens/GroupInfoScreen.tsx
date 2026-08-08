@@ -772,12 +772,18 @@ export function GroupInfoScreen({
 
   // 관리자 전용 진입점은 한 곳에서 검사해 화면별 권한 문구와 분기가 어긋나지 않게
   // 한다. 게이트가 navigate 앞에서 실행되므로 실패 시 화면이 push되지 않고
-  // 풀스크린 신호도 발화하지 않는다. popToTop은 하위 화면에서 재진입을 시도한
-  // 경우에 대비한 이중 방어다. 비관리자에게는 그룹 나가기의 관리자 변경 링크를
-  // 렌더하지 않으므로 현재 그 경로는 없고, 홈에서 호출되면 no-op이다.
+  // 풀스크린 신호도 발화하지 않는다. 메뉴에서 관리자 전용 항목을 숨기므로 홈에서는
+  // 이 경로를 타지 않지만, 보는 중에 권한을 잃거나 하위 화면에서 재진입하는 경우를
+  // 위해 검사는 남긴다.
+  //
+  // popToTop은 하위 화면이 쌓여 있을 때만 보낸다. 홈에서 보내면 처리할 스택이 없어
+  // "The action 'POP_TO_TOP' was not handled by any navigator" 경고가 뜬다.
   const openManagerOnly = (open: () => void) => {
     if (!canManageRoles) {
-      groupInfoNavRef.current?.dispatch(StackActions.popToTop());
+      const navigation = groupInfoNavRef.current;
+      if (navigation !== null && navigation.getState().index > 0) {
+        navigation.dispatch(StackActions.popToTop());
+      }
       setIsManagerAccessNoticeOpen(true);
       return;
     }
@@ -833,6 +839,7 @@ export function GroupInfoScreen({
       description: waitingDescription,
       key: 'join-requests',
       label: '가입 승인 대기',
+      managerOnly: true,
       onPress: () =>
         openManagerOnly(() =>
           groupInfoNavRef.current?.navigate('JoinApproval'),
@@ -845,6 +852,7 @@ export function GroupInfoScreen({
       description: '관리자 권한을 다른 구성원에게 넘깁니다',
       key: 'change-manager',
       label: '그룹관리자 변경',
+      managerOnly: true,
       onPress: () =>
         openManagerOnly(() =>
           groupInfoNavRef.current?.navigate('ChangeManager'),
@@ -854,10 +862,12 @@ export function GroupInfoScreen({
       description: '그룹 연결을 해제합니다',
       key: 'remove-member',
       label: '구성원 내보내기',
+      managerOnly: true,
       onPress: () =>
         openManagerOnly(() => groupInfoNavRef.current?.navigate('RemoveMember')),
     },
     {
+      // 그룹 나가기는 권한과 무관하게 모든 구성원에게 필요하다.
       description: '그룹을 떠납니다',
       key: 'leave-group',
       label: '그룹 나가기',
@@ -873,16 +883,23 @@ export function GroupInfoScreen({
       description: '전체 구성원에게 영향을 줍니다',
       key: 'delete-group',
       label: '그룹 삭제',
+      managerOnly: true,
       onPress: () => openManagerOnly(() => setIsDeleteOpen(true)),
     },
     {
       description: '그룹의 이름을 변경합니다',
       key: 'rename-group',
       label: '그룹명 변경',
+      managerOnly: true,
       onPress: () =>
         openManagerOnly(() => groupInfoNavRef.current?.navigate('RenameGroup')),
     },
   ];
+
+  // 관리자 여부가 확정되기 전에는 관리자 전용 항목을 숨긴다. 먼저 보여줬다가
+  // 지우면 눌러본 사용자가 권한 안내 팝업을 만나게 되므로 나중에 드러내는 쪽이 낫다.
+  const visibleMenuItems = (items: readonly GroupMenuItem[]) =>
+    canManageRoles === true ? items : items.filter(item => !item.managerOnly);
 
   // 홈 본문. 하위 화면이 열려도 스택 아래에서 마운트를 유지하므로 모달 4종과
   // 스크롤 위치가 보존된다(기존 얼리 리턴과 달리 언마운트되지 않음).
@@ -960,8 +977,14 @@ export function GroupInfoScreen({
           )}
         </View>
 
-        <GroupMenuSection items={inviteItems} title="구성원 초대" />
-        <GroupMenuSection items={manageItems} title="그룹 관리" />
+        <GroupMenuSection
+          items={visibleMenuItems(inviteItems)}
+          title="구성원 초대"
+        />
+        <GroupMenuSection
+          items={visibleMenuItems(manageItems)}
+          title="그룹 관리"
+        />
       </ScrollView>
 
       <MemberProfileModal
