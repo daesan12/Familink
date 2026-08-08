@@ -224,6 +224,76 @@ function createFourCallPage(): CareReceiverReportPage {
   };
 }
 
+function pageWithoutCalls(
+  displayName: string,
+  memberId: string
+): CareReceiverReportPage {
+  return { ...createLatestOnlyPage(), displayName, memberId, todayCalls: [] };
+}
+
+// 가입 순서가 아니라 볼 내용이 있는 피보호자부터 보여줘야 한다.
+test("첫 진입에는 통화 리포트가 있는 피보호자를 먼저 보여준다", () => {
+  const renderer = renderReportScreen([
+    pageWithoutCalls("김말순", "m-1"),
+    pageWithoutCalls("박영수", "m-2"),
+    { ...createFourCallPage(), displayName: "이경호", memberId: "m-3" },
+  ]);
+
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "이경호 리포트, 현재 화면",
+    })
+  ).toBeTruthy();
+});
+
+test("첫 피보호자에게 통화가 있으면 페이지를 옮기지 않는다", () => {
+  const renderer = renderReportScreen([
+    { ...createFourCallPage(), displayName: "김말순", memberId: "m-1" },
+    { ...createFourCallPage(), displayName: "박영수", memberId: "m-2" },
+  ]);
+
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "김말순 리포트, 현재 화면",
+    })
+  ).toBeTruthy();
+});
+
+test("통화가 있는 피보호자가 없으면 첫 페이지를 그대로 둔다", () => {
+  const renderer = renderReportScreen([
+    pageWithoutCalls("김말순", "m-1"),
+    pageWithoutCalls("박영수", "m-2"),
+  ]);
+
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "김말순 리포트, 현재 화면",
+    })
+  ).toBeTruthy();
+});
+
+// 첫 진입 이동이 사용자가 직접 넘긴 페이지를 되돌리면 안 된다.
+test("사용자가 페이지를 넘기면 첫 진입 이동이 다시 끼어들지 않는다", () => {
+  const renderer = renderReportScreen([
+    pageWithoutCalls("김말순", "m-1"),
+    { ...createFourCallPage(), displayName: "이경호", memberId: "m-2" },
+  ]);
+
+  TestRenderer.act(() => {
+    renderer.root
+      .findByProps({ testID: "care-receiver-report-pager" })
+      .props.onMomentumScrollEnd({
+        nativeEvent: { contentOffset: { x: 0, y: 0 } },
+      });
+  });
+
+  expect(
+    renderer.root.findByProps({
+      accessibilityLabel: "김말순 리포트, 현재 화면",
+    })
+  ).toBeTruthy();
+});
+
 function callList(renderer: TestRenderer.ReactTestRenderer) {
   return renderer.root.findByProps({ testID: "call-report-list" });
 }

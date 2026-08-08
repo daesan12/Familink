@@ -182,6 +182,9 @@ export function ReportScreen({
   const calendarRequests = useRef(new Map<string, number>());
   const callRequestId = useRef(0);
   const pagerRef = useRef<ScrollView>(null);
+  // 첫 진입 페이지를 이미 정한 피보호자 구성. 같은 구성에서는 다시 옮기지 않아
+  // 사용자가 넘긴 페이지를 되돌리지 않는다.
+  const initialPageAppliedFor = useRef<string | null>(null);
   // 알림 딥링크로 진입할 멤버·통화. 목적지 날짜의 페이지 로드가 끝난 뒤 적용한다.
   // state여야 새 딥링크 소비가 적용 effect를 다시 실행한다.
   const [pendingDeepLink, setPendingDeepLink] = useState<{
@@ -644,6 +647,38 @@ export function ReportScreen({
     navigation,
     openCalendar,
     reportItems,
+  ]);
+
+  // 첫 진입은 가입 순서가 아니라 통화 리포트가 있는 피보호자부터 보여준다.
+  // 딥링크가 있으면 그쪽이 우선이라 건드리지 않는다.
+  useEffect(() => {
+    if (
+      initialPageAppliedFor.current === pageIdentity ||
+      pendingDeepLink ||
+      reportItems.length === 0 ||
+      width <= 0 ||
+      (hasRemoteSource && remotePages.status !== "ready")
+    ) {
+      return;
+    }
+
+    initialPageAppliedFor.current = pageIdentity;
+    const index = reportItems.findIndex(
+      (item) => item.status === "ready" && item.page.todayCalls.length > 0
+    );
+    // 아무도 없으면(-1) 첫 페이지를 그대로 두고, 이미 첫 페이지면(0) 옮길 필요가 없다.
+    if (index <= 0) {
+      return;
+    }
+    pagerRef.current?.scrollTo({ animated: false, x: index * width });
+    setCurrentIndex(index);
+  }, [
+    hasRemoteSource,
+    pageIdentity,
+    pendingDeepLink,
+    remotePages.status,
+    reportItems,
+    width,
   ]);
 
   // 페이지 로드가 끝나면 딥링크 대상 멤버로 페이저를 이동하고,
@@ -1303,7 +1338,7 @@ const styles = StyleSheet.create({
   pageContent: {
     paddingBottom: 28,
     paddingHorizontal: PAGE_HORIZONTAL_PADDING,
-    paddingTop: 30,
+    paddingTop: 16,
   },
   pendingCard: {
     alignItems: "center",
