@@ -278,19 +278,21 @@ export function ArchiveScreen({
           <BackButton accessibilityLabel="보관함 닫기" onPress={onCloseArchive} />
         </View>
         <AppText style={styles.title}>보관함</AppText>
-        <Pressable
-          accessibilityHint="날짜별로 게시글을 찾습니다"
-          accessibilityLabel="날짜로 찾기"
-          accessibilityRole="button"
-          onPress={() => setIsCalendarOpen(true)}
-          style={styles.calendarButton}
-        >
-          <MaterialDesignIcons
-            color={COLORS.textStrong}
-            name="calendar-blank-outline"
-            size={22}
-          />
-        </Pressable>
+        <View style={styles.headerSideEnd}>
+          <Pressable
+            accessibilityHint="날짜별로 게시글을 찾습니다"
+            accessibilityLabel="날짜로 찾기"
+            accessibilityRole="button"
+            onPress={() => setIsCalendarOpen(true)}
+            style={styles.calendarButton}
+          >
+            <MaterialDesignIcons
+              color={COLORS.textStrong}
+              name="calendar-blank-outline"
+              size={22}
+            />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.toolbar}>
@@ -438,8 +440,6 @@ function ArchiveEmptyState({memberName}: {memberName: string | null}) {
 }
 
 const styles = StyleSheet.create({
-  // 제목이 flex:1이라 이 버튼은 오른쪽 끝에 붙는다. 폭 40 + 헤더 여백 16이면
-  // 중심이 가장자리에서 36으로, 왼쪽 슬롯의 뒤로가기와 대칭이 된다.
   calendarButton: {
     alignItems: 'center',
     backgroundColor: COLORS.surfaceMuted,
@@ -519,6 +519,13 @@ const styles = StyleSheet.create({
   },
   headerSide: {
     alignItems: 'flex-start',
+    height: 44,
+    justifyContent: 'center',
+    width: 80,
+  },
+  // 좌우 슬롯 폭이 같아야 제목이 화면 정중앙에 온다.
+  headerSideEnd: {
+    alignItems: 'flex-end',
     height: 44,
     justifyContent: 'center',
     width: 80,
