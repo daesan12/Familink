@@ -1,0 +1,7 @@
+<resources>
+
+    <!-- 서비스 대표 보라(RN COLORS.purpleDeep). 시스템이 그리는 날짜 선택 같은
+         네이티브 다이얼로그의 강조색으로 쓴다. -->
+    <color name="brand_purple">#7160E0</color>
+
+</resources>

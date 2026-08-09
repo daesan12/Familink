@@ -241,7 +241,7 @@ export function InterestSelectionScreen({
               }}>
               <View style={styles.chip}>
                 <MaterialDesignIcons
-                  color={COLORS.textStrong}
+                  color={AUTH_COLORS.body}
                   name="plus"
                   size={18}
                 />
@@ -332,7 +332,7 @@ function InterestChip({interest, onPress, selected}: InterestChipProps) {
       onPress={onPress}>
       <View style={[styles.chip, selected && styles.selectedChip]}>
         <MaterialDesignIcons
-          color={selected ? COLORS.purpleDeep : COLORS.textStrong}
+          color={selected ? COLORS.purpleDeep : AUTH_COLORS.body}
           name={selected ? 'check' : 'plus'}
           size={18}
         />
@@ -571,11 +571,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   selectedChip: {
-    backgroundColor: COLORS.lemon,
-    borderColor: COLORS.lemon,
+    // 선택 표시는 앱 전체가 보라 계열을 쓴다. 같은 화면의 뒤로가기 버튼과 같은 연보라를
+    // 써서 톤을 맞춘다.
+    backgroundColor: COLORS.lavenderSurface,
+    borderColor: COLORS.lavenderSurface,
   },
   chipLabel: {
-    color: COLORS.textStrong,
+    // 제목과 같은 색. 더 진한 색을 쓰면 칩 글자만 검정처럼 튄다.
+    color: AUTH_COLORS.body,
     fontSize: 13,
     fontWeight: '500',
   },

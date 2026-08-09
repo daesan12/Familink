@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     alignItems: 'center',
-    backgroundColor: COLORS.textMuted,
+    backgroundColor: COLORS.purpleDeep,
     borderCurve: 'continuous',
     borderRadius: RADII.pill,
     justifyContent: 'center',

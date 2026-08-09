@@ -5,9 +5,6 @@ import type {
   WeeklyStampBoard,
 } from '../types';
 
-// 앱 버전 표기(I-1 하단). 실제 빌드 정보 연동 전까지 mock 상수로 둔다.
-export const APP_VERSION = '3.11.9';
-
 // I-1·I-2 mock 프로필. 스크린샷의 이종철 보호자 기준.
 export const GUARDIAN_PROFILE: GuardianProfile = {
   age: 27,

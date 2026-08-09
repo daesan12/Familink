@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   noticeCard: {
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: COLORS.lavenderSurface,
     borderCurve: 'continuous',
     borderRadius: RADII.medium,
     gap: 8,
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     alignItems: 'center',
-    backgroundColor: COLORS.textMuted,
+    backgroundColor: COLORS.purpleDeep,
     borderCurve: 'continuous',
     borderRadius: RADII.pill,
     justifyContent: 'center',
