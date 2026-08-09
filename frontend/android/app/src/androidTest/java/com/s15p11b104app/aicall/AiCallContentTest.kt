@@ -46,7 +46,6 @@ class AiCallContentTest {
     }
 
     composeRule.onNodeWithTag("start-call").assertIsNotEnabled()
-    composeRule.onNodeWithTag("featured-persona-depth").assertIsDisplayed()
     composeRule.onNodeWithTag("start-call-depth").assertIsDisplayed()
     composeRule.onNodeWithTag("persona-4").performClick().assertIsSelected()
     composeRule.onNodeWithTag("start-call").assertIsEnabled()
@@ -54,13 +53,13 @@ class AiCallContentTest {
     composeRule
         .onNodeWithText(
             "차분한 말투로 필요한 내용을 쉽고 꼼꼼하게 안내해요.\n" +
-                "부담 없는 유머를 곁들여 편안하게 이야기를 이어가요."
+                "부담 없는 유머를 곁들여 편안하게 이야기를 이어가요"
         )
         .assertIsDisplayed()
   }
 
   @Test
-  fun 페르소나를_바꿀_때마다_이름과_태그와_소개글이_함께_바뀐다() {
+  fun 페르소나를_바꿀_때마다_태그와_소개글이_함께_바뀐다() {
     var selectedPersonaId by mutableStateOf<Long?>(1)
 
     composeRule.setContent {
@@ -87,12 +86,43 @@ class AiCallContentTest {
       composeRule
           .onNodeWithTag("persona-selected-check-${persona.id}")
           .assertIsDisplayed()
-      composeRule.onNodeWithTag("selected-persona-name").assertTextEquals(persona.displayName)
       composeRule.onNodeWithTag("selected-persona-tag").assertTextEquals(persona.toneTag)
       composeRule
           .onNodeWithTag("selected-persona-introduction")
           .assertTextEquals(persona.introduction)
     }
+  }
+
+  // 말투 칩과 소개글을 선택했을 때만 그리면, 처음 누르는 순간 통화 버튼이 밀려 내려간다.
+  @Test
+  fun 페르소나를_처음_선택해도_통화_버튼_위치가_움직이지_않는다() {
+    var selectedPersonaId by mutableStateOf<Long?>(null)
+
+    composeRule.setContent {
+      AiCallTheme {
+        AiCallContent(
+            state = AiCallUiState(phase = AiCallPhase.Selecting, persona = null),
+            selectedPersonaId = selectedPersonaId,
+            onPersonaSelected = { selectedPersonaId = it },
+            onStartCall = {},
+            onToggleMute = {},
+            onToggleSpeaker = {},
+            onEndCall = {},
+            onConfirm = {},
+            onRetry = {},
+        )
+      }
+    }
+
+    val callButtonBoundsBefore =
+        composeRule.onNodeWithTag("start-call").fetchSemanticsNode().boundsInRoot
+
+    composeRule.onNodeWithTag("persona-4").performClick().assertIsSelected()
+
+    assertEquals(
+        callButtonBoundsBefore,
+        composeRule.onNodeWithTag("start-call").fetchSemanticsNode().boundsInRoot,
+    )
   }
 
   @Test
@@ -114,15 +144,15 @@ class AiCallContentTest {
       }
     }
 
-    val personaNameBounds =
-        composeRule.onNodeWithTag("selected-persona-name").fetchSemanticsNode().boundsInRoot
+    val personaTagBounds =
+        composeRule.onNodeWithTag("selected-persona-tag").fetchSemanticsNode().boundsInRoot
     val callButtonBounds = composeRule.onNodeWithTag("start-call").fetchSemanticsNode().boundsInRoot
 
     composeRule.mainClock.advanceTimeBy(4_200)
 
     assertEquals(
-        personaNameBounds,
-        composeRule.onNodeWithTag("selected-persona-name").fetchSemanticsNode().boundsInRoot,
+        personaTagBounds,
+        composeRule.onNodeWithTag("selected-persona-tag").fetchSemanticsNode().boundsInRoot,
     )
     assertEquals(
         callButtonBounds,
@@ -154,7 +184,7 @@ class AiCallContentTest {
 
     composeRule.onNodeWithTag("call-status").assertIsDisplayed()
     composeRule.onNodeWithText("통화 연결 중").assertIsDisplayed()
-    composeRule.onNodeWithText("잠시만 기다려 주세요.").assertIsDisplayed()
+    composeRule.onNodeWithText("잠시만 기다려 주세요").assertIsDisplayed()
   }
 
   @Test
@@ -444,11 +474,12 @@ class AiCallContentTest {
       }
     }
 
-    composeRule.onNodeWithText("통화가 종료되었어요.").assertIsDisplayed()
-    composeRule.onNodeWithText("오늘 나눈 이야기는 소중히 기억할게요.").assertIsDisplayed()
+    composeRule.onNodeWithText("통화가 종료되었어요").assertIsDisplayed()
+    composeRule.onNodeWithText("오늘 나눈 이야기는 소중히 기억할게요").assertIsDisplayed()
     composeRule.onNodeWithTag("call-gradient-background").assertIsDisplayed()
-    composeRule.onNodeWithText("02:05").assertIsDisplayed()
     composeRule.onNodeWithTag("confirm-call-ended").assertIsDisplayed()
+    // 종료 화면은 문구와 확인 버튼만 남긴다. 통화 시간은 통화 중 화면에서만 보여 준다.
+    composeRule.onNodeWithText("02:05").assertDoesNotExist()
   }
 
   @Test
@@ -475,9 +506,8 @@ class AiCallContentTest {
       }
     }
 
-    composeRule.onNodeWithText("통화가 종료되었어요.").assertIsDisplayed()
-    composeRule.onNodeWithText("통화 가능한 시간이 다 되어 마무리했어요.").assertIsDisplayed()
-    composeRule.onNodeWithText("10:00").assertIsDisplayed()
+    composeRule.onNodeWithText("통화가 종료되었어요").assertIsDisplayed()
+    composeRule.onNodeWithText("통화 가능한 시간이 다 되어 마무리했어요").assertIsDisplayed()
     composeRule.onNodeWithTag("confirm-call-ended").assertIsDisplayed()
   }
 
@@ -509,27 +539,29 @@ class AiCallContentTest {
     }
 
     composeRule.onNodeWithTag("call-gradient-background").assertIsDisplayed()
-    composeRule.onNodeWithText("통화를 연결하지 못했어요.").assertIsDisplayed()
-    composeRule.onNodeWithText("인터넷 연결을 확인한 뒤 다시 시도해 주세요.").assertIsDisplayed()
+    composeRule.onNodeWithText("통화 실패").assertIsDisplayed()
+    composeRule.onNodeWithText("인터넷 연결을 확인한 뒤 다시 시도해 주세요").assertIsDisplayed()
     composeRule.onNodeWithText("다시 시도").assertIsDisplayed()
+    composeRule.onNodeWithText("종료").assertIsDisplayed()
 
     composeRule.runOnIdle {
       state = state.copy(failureReason = AiCallFailureReason.EndRequest)
     }
-    composeRule.onNodeWithText("통화를 종료하지 못했어요.").assertIsDisplayed()
-    composeRule.onNodeWithText("다른 상대 선택").assertDoesNotExist()
+    composeRule.onNodeWithText("통화를 종료하지 못했어요").assertIsDisplayed()
+    // 종료 요청 실패에서는 선택 화면으로 빠져나갈 수 없어야 한다.
+    composeRule.onNodeWithTag("failed-exit").assertDoesNotExist()
 
     composeRule.runOnIdle {
       state = state.copy(failureReason = AiCallFailureReason.MicrophonePermissionDenied)
     }
-    composeRule.onNodeWithText("마이크 권한이 필요해요.").assertIsDisplayed()
+    composeRule.onNodeWithText("마이크 권한이 필요해요").assertIsDisplayed()
     composeRule.onNodeWithText("권한 다시 요청").performClick()
 
     composeRule.runOnIdle {
       state = state.copy(failureReason = AiCallFailureReason.MicrophonePermissionBlocked)
     }
-    composeRule.onNodeWithText("마이크 권한이 꺼져 있어요.").assertIsDisplayed()
-    composeRule.onNodeWithText("휴대폰 설정에서 마이크 권한을 허용해 주세요.").assertIsDisplayed()
+    composeRule.onNodeWithText("마이크 권한이 꺼져 있어요").assertIsDisplayed()
+    composeRule.onNodeWithText("휴대폰 설정에서 마이크 권한을 허용해 주세요").assertIsDisplayed()
     composeRule.onNodeWithText("설정 열기").performClick()
 
     composeRule.runOnIdle { assertEquals(2, primaryActionCount) }

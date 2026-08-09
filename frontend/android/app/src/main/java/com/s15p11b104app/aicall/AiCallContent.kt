@@ -22,6 +22,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,6 +34,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,6 +42,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -78,7 +81,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.paint
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -103,7 +105,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.s15p11b104app.R
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -116,7 +117,7 @@ private val CAPTION_ALPHAS = listOf(1f, 0.45f, 0.2f)
 /** 자막 영역 위쪽에서 잘린 글자를 감추는 페이드 높이. */
 private val CAPTION_FADE_HEIGHT = 40.dp
 
-private const val CAPTION_PLACEHOLDER = "자막을 기다리는 중입니다."
+private const val CAPTION_PLACEHOLDER = "자막을 기다리는 중입니다"
 
 /** 조작할 수 없는 통화 제어 버튼을 흐리게 보여 줄 때 사용하는 불투명도. */
 private const val DISABLED_CONTROL_ALPHA = 0.45f
@@ -506,7 +507,6 @@ private fun PersonaSelectionScreen(
     onStartCall: () -> Unit,
 ) {
   val selectedPersona = aiPersonas.firstOrNull { it.id == selectedPersonaId }
-  val featuredPersona = selectedPersona ?: aiPersonas.first()
   val context = LocalContext.current
   val animationsEnabled = remember(context) { areSystemAnimationsEnabled(context) }
 
@@ -514,9 +514,13 @@ private fun PersonaSelectionScreen(
       modifier =
           Modifier.fillMaxSize()
               .background(AiCallColors.Background)
+              // 선택 화면은 한 화면에 들어가도록 잡았지만, 화면이 작거나 글꼴을 키운
+              // 사용자에게는 넘칠 수 있다. 스크롤을 없애면 그런 기기에서 통화 버튼이
+              // 잘려 아예 누를 수 없으므로 남겨 둔다.
               .verticalScroll(rememberScrollState())
-              .padding(horizontal = 24.dp, vertical = 18.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
+              // `통화 시작` 글자를 없애면서 아래에 여백이 남으므로 위쪽을 조금 더 띄워
+              // 내용 전체를 살짝 내린다.
+              .padding(start = 24.dp, end = 24.dp, top = 26.dp, bottom = 12.dp),
   ) {
     Text(
         text = "오늘은 누구와\n이야기할까요?",
@@ -524,7 +528,6 @@ private fun PersonaSelectionScreen(
         fontSize = 28.sp,
         fontWeight = FontWeight.Bold,
         lineHeight = 34.sp,
-        textAlign = TextAlign.Center,
     )
     Spacer(modifier = Modifier.height(8.dp))
     Text(
@@ -532,22 +535,18 @@ private fun PersonaSelectionScreen(
         color = AiCallColors.TextMuted,
         fontSize = 14.sp,
         lineHeight = 20.sp,
-        textAlign = TextAlign.Center,
     )
-    Spacer(modifier = Modifier.height(16.dp))
+    // 부제와 첫 줄 사진이 붙어 보이지 않게 띄운다. 대신 두 줄 사이 간격을 조금
+    // 줄여 늘어난 높이를 상쇄해 한 화면 안에 그대로 머물게 한다.
+    Spacer(modifier = Modifier.height(22.dp))
 
-    FeaturedPersona(
-        persona = featuredPersona,
-        selected = selectedPersona != null,
-        animationsEnabled = animationsEnabled,
-    )
-    Spacer(modifier = Modifier.height(20.dp))
-
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
       aiPersonasForSelection.chunked(3).forEach { rowPersonas ->
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            // 사진은 칸 폭을 그대로 채운다. 이 간격이 곧 사진 사이의 여백이라
+            // 값을 키우면 사진이 작아진다.
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
         ) {
           rowPersonas.forEach { persona ->
             PersonaItem(
@@ -562,8 +561,14 @@ private fun PersonaSelectionScreen(
       }
     }
 
-    Spacer(modifier = Modifier.height(24.dp))
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Spacer(modifier = Modifier.height(14.dp))
+    SelectedPersonaSummary(persona = selectedPersona)
+
+    Spacer(modifier = Modifier.height(12.dp))
+    Column(
+        modifier = Modifier.align(Alignment.CenterHorizontally),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
       val callInteractionSource = remember { MutableInteractionSource() }
       val callPressed by callInteractionSource.collectIsPressedAsState()
       val callScale by
@@ -578,7 +583,7 @@ private fun PersonaSelectionScreen(
           )
 
       Box(
-          modifier = Modifier.size(104.dp).testTag("start-call-depth"),
+          modifier = Modifier.size(88.dp).testTag("start-call-depth"),
           contentAlignment = Alignment.Center,
       ) {
         FilledIconButton(
@@ -602,7 +607,7 @@ private fun PersonaSelectionScreen(
                 IconButtonDefaults.filledIconButtonColors(
                     containerColor = Color(0xFF6C5CE7),
                     contentColor = Color.White,
-                    disabledContainerColor = AiCallColors.Disabled,
+                    disabledContainerColor = AiCallColors.LavenderTint,
                     disabledContentColor = Color.White,
                 ),
         ) {
@@ -613,122 +618,30 @@ private fun PersonaSelectionScreen(
           )
         }
       }
-      Spacer(modifier = Modifier.height(4.dp))
-      Text(
-          text = "통화 시작",
-          color =
-              if (selectedPersona == null) {
-                AiCallColors.TextMuted
-              } else {
-                AiCallColors.BrandPurplePressed
-              },
-          fontSize = 20.sp,
-          fontWeight = FontWeight.Bold,
-      )
     }
-    Spacer(modifier = Modifier.height(8.dp))
   }
 }
 
+/**
+ * 선택한 페르소나의 말투 칩과 소개글.
+ *
+ * 아무것도 선택하지 않았을 때도 같은 높이를 차지한다. 내용이 있을 때만 그리면 페르소나를 처음 누르는
+ * 순간 아래 통화 버튼이 밀려 내려가 화면이 덜컹인다.
+ */
 @Composable
-private fun FeaturedPersona(
-    persona: AiPersona,
-    selected: Boolean,
-    animationsEnabled: Boolean,
-) {
-  val density = LocalDensity.current
-  val floatingProgress =
-      if (selected && animationsEnabled) {
-        val transition = rememberInfiniteTransition(label = "featured persona float")
-        transition
-            .animateFloat(
-                initialValue = -1f,
-                targetValue = 1f,
-                animationSpec =
-                    infiniteRepeatable(
-                        animation = tween(7_200, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Reverse,
-                    ),
-                label = "featured persona vertical position",
-            )
-            .value
-      } else {
-        0f
-      }
-  val floatingDistance = with(density) { 1.5.dp.toPx() }
-
-  Column(horizontalAlignment = Alignment.CenterHorizontally) {
-    Box(
-        modifier =
-            Modifier.size(188.dp)
-                .graphicsLayer { translationY = floatingDistance * floatingProgress }
-                .testTag("featured-persona-depth"),
-        contentAlignment = Alignment.Center,
-    ) {
-      Box(
-          modifier =
-              Modifier.size(158.dp)
-                  .shadow(
-                      elevation = if (selected) 18.dp else 9.dp,
-                      shape = CircleShape,
-                      ambientColor = Color.Black.copy(alpha = if (selected) 0.16f else 0.10f),
-                      spotColor = Color.Black.copy(alpha = if (selected) 0.20f else 0.12f),
-                  )
-                  .testTag("featured-persona-image")
-                  .background(Color.White, CircleShape)
-                  .padding(6.dp)
-                  .clip(CircleShape),
-      ) {
-        Image(
-            painter = painterResource(persona.imageResource),
-            contentDescription = "${persona.displayName} 대표 사진",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-        )
-      }
-      if (selected) {
-        Box(
-            modifier =
-                Modifier.align(Alignment.BottomEnd)
-                    .offset(x = (-8).dp, y = (-8).dp)
-                    .size(50.dp)
-                    .shadow(
-                        elevation = 8.dp,
-                        shape = CircleShape,
-                        ambientColor = Color.Black.copy(alpha = 0.12f),
-                        spotColor = Color.Black.copy(alpha = 0.16f),
-                    )
-                    .background(Color.White, CircleShape)
-                    .padding(4.dp)
-                    .background(AiCallColors.BrandPurple, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-          Icon(
-              imageVector = Icons.Rounded.Check,
-              contentDescription = null,
-              tint = Color.White,
-              modifier = Modifier.size(28.dp),
-          )
-        }
-      }
-    }
-    Spacer(modifier = Modifier.height(6.dp))
-    Text(
-        text = persona.displayName,
-        modifier = Modifier.testTag("selected-persona-name"),
-        color = AiCallColors.TextStrong,
-        fontSize = 24.sp,
-        fontWeight = FontWeight.Bold,
-        lineHeight = 30.sp,
-        textAlign = TextAlign.Center,
-    )
-    Spacer(modifier = Modifier.height(8.dp))
+private fun SelectedPersonaSummary(persona: AiPersona?) {
+  Column(modifier = Modifier.fillMaxWidth()) {
     Surface(
-        color = AiCallColors.LavenderSurface,
+        color =
+            if (persona == null) {
+              Color.Transparent
+            } else {
+              AiCallColors.LavenderSurface
+            },
         shape = RoundedCornerShape(50),
     ) {
       Text(
-          text = persona.toneTag,
+          text = persona?.toneTag ?: "",
           modifier =
               Modifier.testTag("selected-persona-tag")
                   .padding(horizontal = 14.dp, vertical = 6.dp),
@@ -739,12 +652,15 @@ private fun FeaturedPersona(
     }
     Spacer(modifier = Modifier.height(10.dp))
     Text(
-        text = persona.introduction,
+        text = persona?.introduction ?: "",
         modifier = Modifier.fillMaxWidth().testTag("selected-persona-introduction"),
         color = AiCallColors.TextStrong,
         fontSize = 14.sp,
         lineHeight = 21.sp,
-        textAlign = TextAlign.Center,
+        // 소개글은 넓은 화면에서 두 줄이므로 두 줄을 확보해 선택 전후로 통화 버튼이 움직이지
+        // 않게 한다. 좁은 화면에서는 소개글이 더 늘어나 버튼이 아래로 밀리지만, 남겨 둔
+        // verticalScroll로 닿을 수 있어 넓은 화면의 여백을 지키는 쪽을 택했다.
+        minLines = 2,
     )
   }
 }
@@ -806,7 +722,14 @@ private fun PersonaItem(
   ) {
     Box(
         modifier =
-            Modifier.size(100.dp)
+            // 고정 크기로 두면 좁은 기기에서 세 칸이 넘치고, 칸 폭을 그대로 쓰면 넓은
+            // 기기(S10은 411dp)에서 사진이 커져 통화 버튼이 화면 밖으로 밀린다. 칸 폭을
+            // 받되 상한을 둬서 두 경우를 모두 막는다.
+            // widthIn을 fillMaxWidth보다 먼저 둬야 상한이 걸린다. 순서를 바꾸면
+            // fillMaxWidth가 최소·최대를 칸 폭으로 고정해 상한이 무시된다.
+            Modifier.widthIn(max = 96.dp)
+                .fillMaxWidth()
+                .aspectRatio(1f)
                 .graphicsLayer {
                   scaleX = scale
                   scaleY = scale
@@ -817,7 +740,7 @@ private fun PersonaItem(
     ) {
       Box(
           modifier =
-              Modifier.size(82.dp)
+              Modifier.fillMaxSize()
                   .shadow(
                       elevation = if (selected) 7.dp else 2.dp,
                       shape = CircleShape,
@@ -831,7 +754,7 @@ private fun PersonaItem(
                           if (selected) {
                             AiCallColors.BrandPurple
                           } else {
-                            Color(0xFFE7E4EC)
+                            AiCallColors.LavenderTint
                           },
                       shape = CircleShape,
                   )
@@ -903,15 +826,39 @@ private fun ActiveCallScreen(
   Column(
       modifier =
           Modifier.fillMaxSize()
-              .background(AiCallColors.CallBackground)
-              .paint(
-                  painter = painterResource(R.drawable.ai_call_gradient_background),
-                  contentScale = ContentScale.Crop,
+              // 위쪽 연보라에서 아래쪽 흰색으로 내려가는 배경. 제어 버튼이 놓이는 아래쪽이
+              // 흰색이어야 흰 버튼과 그림자가 또렷하게 읽힌다.
+              .background(
+                  Brush.verticalGradient(
+                      colors = listOf(AiCallColors.LavenderTint, Color.White),
+                  )
               )
               .testTag("call-gradient-background")
               .padding(horizontal = 24.dp, vertical = 22.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
   ) {
+    Image(
+        painter = painterResource(persona.imageResource),
+        contentDescription = "${persona.displayName} 사진",
+        modifier =
+            Modifier.size(132.dp)
+                .shadow(
+                    elevation = 12.dp,
+                    shape = CircleShape,
+                    ambientColor = Color.Black.copy(alpha = 0.12f),
+                    spotColor = Color.Black.copy(alpha = 0.16f),
+                )
+                .clip(CircleShape),
+        contentScale = ContentScale.Crop,
+    )
+    Spacer(modifier = Modifier.height(14.dp))
+    Text(
+        text = persona.callName,
+        color = AiCallColors.Ink,
+        fontSize = 20.sp,
+        fontWeight = FontWeight.Bold,
+    )
+    Spacer(modifier = Modifier.height(4.dp))
     Text(
         text =
             if (isConnecting) {
@@ -921,34 +868,13 @@ private fun ActiveCallScreen(
             } else {
               formatCallDuration(state.durationSeconds)
             },
-        color = AiCallColors.OnDarkMuted,
+        color = AiCallColors.TextMuted,
         fontSize = 15.sp,
         fontWeight = FontWeight.Medium,
         modifier = Modifier.testTag("call-status"),
     )
-    Spacer(modifier = Modifier.height(8.dp))
-    Text(
-        text = persona.callName,
-        color = AiCallColors.OnDark,
-        fontSize = 20.sp,
-        fontWeight = FontWeight.Bold,
-    )
-    Spacer(modifier = Modifier.height(18.dp))
-    Image(
-        painter = painterResource(persona.imageResource),
-        contentDescription = "${persona.displayName} 사진",
-        modifier =
-            Modifier.size(132.dp)
-                .shadow(
-                    elevation = 12.dp,
-                    shape = CircleShape,
-                    ambientColor = Color.Black.copy(alpha = 0.24f),
-                    spotColor = Color.Black.copy(alpha = 0.24f),
-                )
-                .clip(CircleShape),
-        contentScale = ContentScale.Crop,
-    )
 
+    Spacer(modifier = Modifier.height(20.dp))
     // 자막이 이 영역을 넘겨도 통화 제어 버튼을 밀어낼 수 없도록 weight를 자막 쪽에 준다. weight가 붙은
     // 자식은 나머지 자식을 모두 배분한 뒤 남은 높이만 받으므로, 버튼은 항상 자기 크기를 먼저 확보한다.
     Box(
@@ -976,8 +902,8 @@ private fun ActiveCallScreen(
         CaptionStack(lines = captionLines)
       } else {
         Text(
-            text = if (isEnding) "통화 종료 중입니다." else "잠시만 기다려 주세요.",
-            color = AiCallColors.OnDarkMuted,
+            text = if (isEnding) "통화 종료 중입니다" else "잠시만 기다려 주세요",
+            color = AiCallColors.TextMuted,
             fontSize = 17.sp,
         )
       }
@@ -1005,7 +931,7 @@ private fun ActiveCallScreen(
       }
       CallControlButton(
           label = "통화 종료",
-          containerColor = AiCallColors.CoralRed,
+          containerColor = AiCallColors.BrandPurple,
           size = 78.dp,
           // 종료 중에는 finishCall이 이미 no-op이므로 눌리는 것처럼 보이지 않게 한다.
           enabled = !isEnding,
@@ -1058,7 +984,7 @@ private fun CaptionStack(lines: List<String>) {
       Text(
           text = line,
           color =
-              AiCallColors.OnDark.copy(
+              AiCallColors.Ink.copy(
                   alpha =
                       CAPTION_ALPHAS.getOrElse(lines.lastIndex - index) { CAPTION_ALPHAS.last() },
               ),
@@ -1081,21 +1007,32 @@ private fun CallControlButton(
     enabled: Boolean = true,
     icon: @Composable () -> Unit,
 ) {
+  // 켜진 버튼은 글자색으로 꽉 채우고 아이콘을 흰색으로 뒤집는다. 꺼진 버튼은 흰 배경에
+  // 글자색 아이콘을 두고, 흰 배경 위에서도 원의 경계가 보이도록 얇은 외곽선을 더한다.
+  val resolvedContainer =
+      when {
+        containerColor != Color.White -> containerColor
+        accented -> AiCallColors.Ink
+        else -> Color.White
+      }
+  val isFilled = resolvedContainer != Color.White
+
   Surface(
       modifier =
           Modifier.size(size).alpha(if (enabled) 1f else DISABLED_CONTROL_ALPHA).semantics {
             contentDescription = label
             stateDescription?.let { this.stateDescription = it }
           },
-      color = containerColor,
-      contentColor =
-          when {
-            containerColor != Color.White -> Color.White
-            accented -> AiCallColors.BrandPurplePressed
-            else -> AiCallColors.TextStrong
-          },
+      color = resolvedContainer,
+      contentColor = if (isFilled) Color.White else AiCallColors.Ink,
       shape = CircleShape,
-      shadowElevation = 5.dp,
+      border =
+          if (isFilled) {
+            null
+          } else {
+            BorderStroke(0.5.dp, AiCallColors.ControlOutline)
+          },
+      shadowElevation = 4.dp,
       enabled = enabled,
       onClick = onClick,
   ) {
@@ -1108,60 +1045,33 @@ private fun CallEndedScreen(
     state: AiCallUiState,
     onConfirm: () -> Unit,
 ) {
-  val persona = state.persona ?: return
+  // 사진·이름을 그리지 않게 됐지만 이 조기 반환은 남긴다. 페르소나가 없을 때 아무것도
+  // 그리지 않던 기존 동작을 그대로 유지하기 위한 것이다.
+  if (state.persona == null) return
   val wasCancelled = state.phase == AiCallPhase.Cancelled
 
   Column(
       modifier =
           Modifier.fillMaxSize()
-              .background(AiCallColors.EndBackground)
-              .paint(
-                  painter = painterResource(R.drawable.ai_call_gradient_background),
-                  contentScale = ContentScale.Crop,
+              .background(
+                  Brush.verticalGradient(
+                      colors = listOf(AiCallColors.LavenderTint, Color.White),
+                  )
               )
               .testTag("call-gradient-background")
               .padding(horizontal = 30.dp, vertical = 32.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
   ) {
-    Image(
-        painter = painterResource(persona.imageResource),
-        contentDescription = "${persona.displayName} 사진",
-        modifier =
-            Modifier.size(138.dp)
-                .shadow(
-                    elevation = 12.dp,
-                    shape = CircleShape,
-                    ambientColor = Color.Black.copy(alpha = 0.22f),
-                    spotColor = Color.Black.copy(alpha = 0.22f),
-                )
-                .clip(CircleShape),
-        contentScale = ContentScale.Crop,
-    )
-    Spacer(modifier = Modifier.height(24.dp))
-    Text(
-        text = persona.callName,
-        color = AiCallColors.OnDark,
-        fontSize = 21.sp,
-        fontWeight = FontWeight.Bold,
-    )
-    if (!wasCancelled) {
-      Spacer(modifier = Modifier.height(7.dp))
-      Text(
-          text = formatCallDuration(state.durationSeconds),
-          color = AiCallColors.OnDarkMuted,
-          fontSize = 16.sp,
-      )
-    }
-    Spacer(modifier = Modifier.height(34.dp))
+    // 문구는 화면 가운데보다 살짝 위에, 확인 버튼은 아래에 붙인다.
+    Spacer(modifier = Modifier.weight(1f))
     Text(
         text =
             if (wasCancelled) {
-              "통화가 취소되었어요."
+              "통화가 취소되었어요"
             } else {
-              "통화가 종료되었어요."
+              "통화가 종료되었어요"
             },
-        color = AiCallColors.OnDark,
+        color = AiCallColors.Ink,
         fontSize = 25.sp,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
@@ -1169,21 +1079,21 @@ private fun CallEndedScreen(
     Spacer(modifier = Modifier.height(10.dp))
     Text(
         text = aiCallEndedDescription(wasCancelled, state.endedByDurationLimit),
-        color = AiCallColors.OnDarkMuted,
+        color = AiCallColors.TextMuted,
         fontSize = 16.sp,
         lineHeight = 24.sp,
         textAlign = TextAlign.Center,
     )
-    Spacer(modifier = Modifier.height(42.dp))
+    Spacer(modifier = Modifier.weight(1.2f))
     Button(
         onClick = onConfirm,
         modifier = Modifier.fillMaxWidth().height(58.dp).testTag("confirm-call-ended"),
         colors =
             ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                contentColor = AiCallColors.TextStrong,
+                containerColor = AiCallColors.Lavender,
+                contentColor = AiCallColors.Ink,
             ),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(50),
     ) {
       Text(
           text = "확인",
@@ -1203,19 +1113,19 @@ private fun CallFailedScreen(
 ) {
   val title =
       when (failureReason) {
-        AiCallFailureReason.Connection -> "통화를 연결하지 못했어요."
-        AiCallFailureReason.EndRequest -> "통화를 종료하지 못했어요."
-        AiCallFailureReason.MicrophonePermissionDenied -> "마이크 권한이 필요해요."
-        AiCallFailureReason.MicrophonePermissionBlocked -> "마이크 권한이 꺼져 있어요."
+        AiCallFailureReason.Connection -> "통화 실패"
+        AiCallFailureReason.EndRequest -> "통화를 종료하지 못했어요"
+        AiCallFailureReason.MicrophonePermissionDenied -> "마이크 권한이 필요해요"
+        AiCallFailureReason.MicrophonePermissionBlocked -> "마이크 권한이 꺼져 있어요"
       }
   val message =
       when (failureReason) {
-        AiCallFailureReason.Connection -> "인터넷 연결을 확인한 뒤 다시 시도해 주세요."
-        AiCallFailureReason.EndRequest -> "종료 요청을 다시 시도해 주세요."
+        AiCallFailureReason.Connection -> "인터넷 연결을 확인한 뒤 다시 시도해 주세요"
+        AiCallFailureReason.EndRequest -> "종료 요청을 다시 시도해 주세요"
         AiCallFailureReason.MicrophonePermissionDenied ->
-            "AI 통화를 시작하려면 마이크 사용을 허용해 주세요."
+            "AI 통화를 시작하려면 마이크 사용을 허용해 주세요"
         AiCallFailureReason.MicrophonePermissionBlocked ->
-            "휴대폰 설정에서 마이크 권한을 허용해 주세요."
+            "휴대폰 설정에서 마이크 권한을 허용해 주세요"
       }
   val primaryActionLabel =
       when (failureReason) {
@@ -1231,28 +1141,22 @@ private fun CallFailedScreen(
   Column(
       modifier =
           Modifier.fillMaxSize()
-              .background(AiCallColors.EndBackground)
-              .paint(
-                  painter = painterResource(R.drawable.ai_call_gradient_background),
-                  contentScale = ContentScale.Crop,
+              // 통화 중·종료 화면과 같은 배경. 어두운 배경만 남기면 상태바를 밝은 화면에
+              // 맞춰 dark-content로 바꾼 탓에 이 화면에서 시계·배터리가 보이지 않는다.
+              .background(
+                  Brush.verticalGradient(
+                      colors = listOf(AiCallColors.LavenderTint, Color.White),
+                  )
               )
               .testTag("call-gradient-background")
               .padding(horizontal = 30.dp, vertical = 32.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
   ) {
-    persona?.let {
-      Image(
-          painter = painterResource(it.imageResource),
-          contentDescription = "${it.displayName} 사진",
-          modifier = Modifier.size(132.dp).clip(CircleShape),
-          contentScale = ContentScale.Crop,
-      )
-      Spacer(modifier = Modifier.height(28.dp))
-    }
+    // 문구는 화면 가운데보다 살짝 위에, 동작 버튼은 아래에 붙인다(종료 화면과 같은 구성).
+    Spacer(modifier = Modifier.weight(1f))
     Text(
         text = title,
-        color = AiCallColors.OnDark,
+        color = AiCallColors.Ink,
         fontSize = 25.sp,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
@@ -1260,50 +1164,84 @@ private fun CallFailedScreen(
     Spacer(modifier = Modifier.height(10.dp))
     Text(
         text = message,
-        color = AiCallColors.OnDarkMuted,
+        color = AiCallColors.TextMuted,
         fontSize = 16.sp,
         lineHeight = 24.sp,
         textAlign = TextAlign.Center,
     )
-    Spacer(modifier = Modifier.height(38.dp))
-    Button(
-        onClick = onRetry,
-        modifier = Modifier.fillMaxWidth().height(58.dp).testTag("failed-primary-action"),
-        colors =
-            ButtonDefaults.buttonColors(
-                containerColor = AiCallColors.BrandPurple,
-                contentColor = Color.White,
-            ),
-        shape = RoundedCornerShape(18.dp),
-    ) {
-      Icon(
-          imageVector =
-              if (failureReason == AiCallFailureReason.MicrophonePermissionBlocked) {
-                Icons.Rounded.Settings
-              } else {
-                Icons.Rounded.Refresh
-              },
-          contentDescription = null,
-      )
-      Spacer(modifier = Modifier.width(8.dp))
-      Text(
-          text = primaryActionLabel,
-          fontSize = 18.sp,
-          fontWeight = FontWeight.Bold,
-      )
-    }
+    Spacer(modifier = Modifier.weight(1.2f))
+    val recoveryIcon =
+        if (failureReason == AiCallFailureReason.MicrophonePermissionBlocked) {
+          Icons.Rounded.Settings
+        } else {
+          Icons.Rounded.Refresh
+        }
+
+    // 종료 요청이 실패한 상황에서는 선택 화면으로 빠져나가는 길을 그대로 막아 둔다. 그때는
+    // 유일하게 남은 복구 동작을 큰 버튼으로 올려 화면이 비어 보이지 않게 한다.
     if (canSelectAnotherPersona) {
-      Spacer(modifier = Modifier.height(12.dp))
-      Text(
-          text = "다른 상대 선택",
-          color = AiCallColors.OnDark,
-          fontSize = 16.sp,
-          fontWeight = FontWeight.SemiBold,
+      Button(
+          onClick = onConfirm,
+          modifier = Modifier.fillMaxWidth().height(58.dp).testTag("failed-exit"),
+          colors =
+              ButtonDefaults.buttonColors(
+                  containerColor = AiCallColors.Lavender,
+                  contentColor = AiCallColors.Ink,
+              ),
+          shape = RoundedCornerShape(50),
+      ) {
+        Text(
+            text = "종료",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+        )
+      }
+      Spacer(modifier = Modifier.height(6.dp))
+      Row(
           modifier =
               Modifier.clip(RoundedCornerShape(12.dp))
-                  .clickable(onClick = onConfirm)
-                  .padding(horizontal = 20.dp, vertical = 14.dp),
-      )
+                  .clickable(onClick = onRetry)
+                  .padding(horizontal = 20.dp, vertical = 12.dp)
+                  .testTag("failed-primary-action"),
+          verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Icon(
+            imageVector = recoveryIcon,
+            contentDescription = null,
+            tint = AiCallColors.Ink,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = primaryActionLabel,
+            color = AiCallColors.Ink,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+        )
+      }
+    } else {
+      Button(
+          onClick = onRetry,
+          modifier = Modifier.fillMaxWidth().height(58.dp).testTag("failed-primary-action"),
+          colors =
+              ButtonDefaults.buttonColors(
+                  containerColor = AiCallColors.Lavender,
+                  contentColor = AiCallColors.Ink,
+              ),
+          shape = RoundedCornerShape(50),
+      ) {
+        Icon(
+            imageVector = recoveryIcon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = primaryActionLabel,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+        )
+      }
     }
   }
 }

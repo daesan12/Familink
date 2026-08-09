@@ -138,15 +138,69 @@ test('행위자 프로필 사진이 있으면 이니셜 대신 사진을 그린�
   ).toBe(false);
 });
 
-test('프로필 사진이 없으면 이니셜을 그대로 그린다', () => {
+// 이니셜은 무슨 알림인지 알려주지 못했다. 리포트 알림 여러 건이 모두 '알'로
+// 보여 사용자가 프로필 사진이 누락된 것으로 오해했다.
+test.each([
+  ['NEW_POST', 'House'],
+  ['POST_ACTIVITY', 'House'],
+  ['EVENT_CHANGED', 'Calendar'],
+  ['EVENT_REMINDER', 'Calendar'],
+  ['CALL_REPORT', 'FileChartColumn'],
+  ['DAILY_REPORT', 'FileChartColumn'],
+  ['GROUP_JOIN_REQUEST', 'UsersRound'],
+] as const)(
+  '프로필 사진이 없으면 %s 알림에 %s 아이콘을 그린다',
+  (type, iconName) => {
+    const notifications: readonly AppNotification[] = [
+      {
+        actorName: '홍유라',
+        avatarText: '홍유',
+        body: '알림 본문',
+        createdAtLabel: '방금',
+        groupId: 'group-1',
+        id: `without-photo-${type}`,
+        isRead: false,
+        relatedJoinRequestStatus: null,
+        title: '알림 제목',
+        type,
+      },
+    ];
+    let renderer: TestRenderer.ReactTestRenderer;
+
+    TestRenderer.act(() => {
+      renderer = TestRenderer.create(
+        <NotificationsScreen
+          {...baseProps}
+          initialNotifications={notifications}
+        />,
+      );
+    });
+    mountedRenderers.push(renderer!);
+
+    // 아이콘은 jest.setup.js에서 이름 문자열 host 컴포넌트로 대체된다.
+    expect(
+      renderer!.root.findAll(node => String(node.type) === iconName).length,
+    ).toBeGreaterThan(0);
+    // 이니셜을 함께 그리면 원 안에 글자와 아이콘이 겹친다.
+    expect(
+      renderer!.root
+        .findAllByType(Text)
+        .some(node => joinedChildren(node.props.children) === '홍유'),
+    ).toBe(false);
+  },
+);
+
+// 사진이 있으면 아이콘보다 사람을 먼저 보여준다(381).
+test('프로필 사진이 있으면 종류 아이콘 대신 사진을 그린다', () => {
   const notifications: readonly AppNotification[] = [
     {
       actorName: '홍유라',
+      actorProfileImageUrl: 'https://cdn.example.com/u9.jpg',
       avatarText: '홍유',
       body: '새 게시글이 올라왔어요.',
       createdAtLabel: '방금',
       groupId: 'group-1',
-      id: 'without-photo',
+      id: 'photo-wins',
       isRead: false,
       relatedJoinRequestStatus: null,
       title: '새 게시글',
@@ -163,10 +217,13 @@ test('프로필 사진이 없으면 이니셜을 그대로 그린다', () => {
   mountedRenderers.push(renderer!);
 
   expect(
-    renderer!.root
-      .findAllByType(Text)
-      .some(node => joinedChildren(node.props.children) === '홍유'),
-  ).toBe(true);
+    renderer!.root.findAll(
+      node => node.props.source?.uri === 'https://cdn.example.com/u9.jpg',
+    ).length,
+  ).toBeGreaterThan(0);
+  expect(
+    renderer!.root.findAll(node => String(node.type) === 'House').length,
+  ).toBe(0);
 });
 
 test('일정 알림을 탭하면 이벤트 상세 목적지로 라우팅한다', () => {

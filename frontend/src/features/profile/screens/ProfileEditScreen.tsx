@@ -75,6 +75,8 @@ export function ProfileEditScreen<T extends BaseProfile>({
   });
   const [isGenderOpen, setIsGenderOpen] = useState(false);
   const [isDateOpen, setIsDateOpen] = useState(false);
+  // 이름 칸에도 성별·생년월일과 같은 포커스 테두리를 주기 위한 표시 전용 상태다.
+  const [isNameFocused, setIsNameFocused] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const savingRef = useRef(false);
@@ -350,10 +352,12 @@ export function ProfileEditScreen<T extends BaseProfile>({
           <TextInput
             accessibilityLabel="이름 입력"
             editable={!isSaving}
+            onBlur={() => setIsNameFocused(false)}
             onChangeText={handleChangeName}
+            onFocus={() => setIsNameFocused(true)}
             placeholder="이름은 2 ~ 10자로 입력해주세요."
             placeholderTextColor={COLORS.textSubtle}
-            style={styles.textInput}
+            style={[styles.textInput, isNameFocused && styles.fieldBoxActive]}
             value={name}
           />
           {nameError !== null ? (
@@ -377,7 +381,7 @@ export function ProfileEditScreen<T extends BaseProfile>({
             accessibilityState={{disabled: isSaving}}
             disabled={isSaving}
             onPress={handleOpenDate}
-            style={styles.fieldBox}
+            style={[styles.fieldBox, isDateOpen && styles.fieldBoxActive]}
           >
             <AppText style={styles.fieldValue}>{birthDate}</AppText>
             <MaterialDesignIcons

@@ -12,6 +12,7 @@ import { useCallback,
   useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
@@ -35,13 +36,17 @@ import {
 import { ReportPageIndicator } from "../components/ReportPageIndicator";
 import { DEVELOPMENT_REPORT_PAGES } from "../fixtures/reportFixtures";
 import { reportCache } from "../reportCache";
-import { useCareReceiverReportTargets } from "../hooks/useCareReceiverReportTargets";
+import {
+  type CareReceiverReportTargetsLoadState,
+  useCareReceiverReportTargets,
+} from "../hooks/useCareReceiverReportTargets";
 import {
   type DailyReportGenerationUiState,
   useDailyReportGeneration,
 } from "../hooks/useDailyReportGeneration";
 import {
   type ReportPageLoadItem,
+  type ReportPagesLoadState,
   useReportPages,
 } from "../hooks/useReportPages";
 import {
@@ -68,6 +73,88 @@ const CALL_REPORT_POLL_TIMEOUT_MS = 90_000;
 const PAGE_HORIZONTAL_PADDING = 24;
 const CALL_LIST_GAP = 14;
 const CALL_LIST_COLUMNS = 3;
+
+// 헤더 캘린더 버튼이 막히는 사유. 아래 화면 조기 반환과 같은 술어로 판정해
+// "effect는 열었다고 판단했는데 화면이 조기 반환 중이라 모달이 렌더되지 않는"
+// 상태가 생기지 않게 한다.
+type CalendarBlockReason = "error" | "loading" | "noCareReceiver";
+
+const CALENDAR_BLOCK_ALERTS: Record<
+  CalendarBlockReason,
+  { message: string; title: string }
+> = {
+  error: {
+    message: "리포트를 불러오지 못했어요. 화면의 다시 시도를 눌러 주세요.",
+    title: "달력을 열 수 없어요",
+  },
+  loading: {
+    message: "잠시 후 달력을 다시 눌러 주세요.",
+    title: "리포트를 불러오고 있어요",
+  },
+  noCareReceiver: {
+    message: "현재 그룹에 리포트를 확인할 피보호자가 없어요.",
+    title: "달력을 열 수 없어요",
+  },
+};
+
+// 아래 화면 조기 반환과 판정 순서를 그대로 맞춘다. 순서가 어긋나면 열 수 없는
+// 상태를 열 수 있다고 판단하게 된다.
+function resolveCalendarBlockReason({
+  currentItem,
+  hasRemoteSource,
+  remotePagesStatus,
+  reportItemCount,
+  shouldLoadTargets,
+  targetStatus,
+}: {
+  currentItem: ReportPageLoadItem | undefined;
+  hasRemoteSource: boolean;
+  remotePagesStatus: ReportPagesLoadState["status"];
+  reportItemCount: number;
+  shouldLoadTargets: boolean;
+  targetStatus: CareReceiverReportTargetsLoadState["status"];
+}): CalendarBlockReason | null {
+  if (shouldLoadTargets) {
+    if (targetStatus === "idle" || targetStatus === "loading") {
+      return "loading";
+    }
+    if (targetStatus === "error") {
+      return "error";
+    }
+  }
+  if (hasRemoteSource && remotePagesStatus !== "ready") {
+    return "loading";
+  }
+  if (reportItemCount === 0) {
+    return "noCareReceiver";
+  }
+  if (currentItem === undefined) {
+    // 피보호자 구성이 줄어든 커밋이라 인덱스가 아직 범위를 벗어나 있다. 화면은
+    // 페이저를 그리고 있으므로 "피보호자 없음"이 아니라 곧 보정될 상태다.
+    return "loading";
+  }
+  return currentItem.status === "ready" ? null : currentItem.status;
+}
+
+function showCalendarBlockAlert(
+  reason: CalendarBlockReason,
+  visible: { current: boolean }
+) {
+  if (visible.current) {
+    return;
+  }
+  visible.current = true;
+  const { message, title } = CALENDAR_BLOCK_ALERTS[reason];
+  const release = () => {
+    visible.current = false;
+  };
+  // 안드로이드 전용 앱이라 onDismiss가 유효하다. 확인 버튼을 거치지 않고
+  // 다이얼로그가 해제·교체되는 경로에서도 플래그를 내려야, 이후 누름이 영구
+  // 무반응이 되는 지금 고치는 버그가 되살아나지 않는다.
+  Alert.alert(title, message, [{ onPress: release, text: "확인" }], {
+    onDismiss: release,
+  });
+}
 
 function callCardWidth(pageWidth: number): number {
   const available =
@@ -180,6 +267,9 @@ export function ReportScreen({
   >({});
   const calendarLoadGeneration = useRef(0);
   const calendarRequests = useRef(new Map<string, number>());
+  // 캘린더를 열 수 없다는 안내가 떠 있는 동안인지. 연타로 다이얼로그가 쌓이는
+  // 것을 막는다.
+  const calendarAlertVisible = useRef(false);
   const callRequestId = useRef(0);
   const pagerRef = useRef<ScrollView>(null);
   // 첫 진입 페이지를 이미 정한 피보호자 구성. 같은 구성에서는 다시 옮기지 않아
@@ -630,19 +720,42 @@ export function ReportScreen({
     handleSelectReportDate(openReport.reportDate);
   }, [handleSelectReportDate, navigation, openReport]);
 
+  const calendarBlockReason = resolveCalendarBlockReason({
+    currentItem: reportItems[currentIndex],
+    hasRemoteSource,
+    remotePagesStatus: remotePages.status,
+    reportItemCount: reportItems.length,
+    shouldLoadTargets,
+    targetStatus: targetState.status,
+  });
+
+  // 헤더 캘린더 요청은 게이트 통과 여부와 무관하게 즉시 소비한다. 남겨두면
+  // (1) 나중에 리포트가 준비되는 순간 누르지 않은 달력이 저절로 열리고,
+  // (2) 남아 있는 동안 다시 눌러도 같은 게이트에 막혀 계속 무반응이 된다.
+  // 열 수 없으면 사유에 맞는 안내를 띄워 "아무 반응 없음" 구간을 없앤다.
   useEffect(() => {
     if (openCalendar !== true) {
       return;
     }
 
-    const currentItem = reportItems[currentIndex];
-    if (!currentItem || currentItem.status !== "ready") {
+    navigation.setParams({ openCalendar: undefined });
+
+    if (calendarBlockReason !== null) {
+      showCalendarBlockAlert(calendarBlockReason, calendarAlertVisible);
       return;
     }
 
-    navigation.setParams({openCalendar: undefined});
+    const currentItem = reportItems[currentIndex];
+    if (!currentItem || currentItem.status !== "ready") {
+      // 위 사유 판정과 어긋난 경우. 조용히 반환하면 아무 반응 없는 구간이
+      // 되살아나므로 로딩으로 간주해 안내한다.
+      showCalendarBlockAlert("loading", calendarAlertVisible);
+      return;
+    }
+
     handleOpenCalendar(currentItem.page);
   }, [
+    calendarBlockReason,
     currentIndex,
     handleOpenCalendar,
     navigation,

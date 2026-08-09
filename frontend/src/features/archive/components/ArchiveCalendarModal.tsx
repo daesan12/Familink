@@ -79,7 +79,7 @@ export function ArchiveCalendarModal({
               style={styles.navButton}
             >
               <MaterialDesignIcons
-                color={COLORS.background}
+                color={COLORS.purpleDeep}
                 name="chevron-left"
                 size={22}
               />
@@ -94,7 +94,7 @@ export function ArchiveCalendarModal({
               style={styles.navButton}
             >
               <MaterialDesignIcons
-                color={COLORS.background}
+                color={COLORS.purpleDeep}
                 name="chevron-right"
                 size={22}
               />
@@ -221,9 +221,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
+  // 화면 상단 뒤로가기 버튼과 같은 옷을 입힌다. 회색 원은 이 서비스에서 이 자리에만
+  // 쓰여 튀어 보였다.
   navButton: {
     alignItems: 'center',
-    backgroundColor: '#9AA0AC',
+    backgroundColor: COLORS.lavenderSurface,
     borderCurve: 'continuous',
     borderRadius: RADII.pill,
     height: 34,

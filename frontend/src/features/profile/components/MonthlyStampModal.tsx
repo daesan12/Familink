@@ -105,7 +105,7 @@ export function MonthlyStampModal({
                 style={[styles.navButton, !canGoPrev && styles.navButtonDisabled]}
               >
                 <MaterialDesignIcons
-                  color={canGoPrev ? COLORS.textStrong : COLORS.inactive}
+                  color={canGoPrev ? COLORS.purpleDeep : COLORS.inactive}
                   name="chevron-left"
                   size={24}
                 />
@@ -121,7 +121,7 @@ export function MonthlyStampModal({
                 style={[styles.navButton, !canGoNext && styles.navButtonDisabled]}
               >
                 <MaterialDesignIcons
-                  color={canGoNext ? COLORS.textStrong : COLORS.inactive}
+                  color={canGoNext ? COLORS.purpleDeep : COLORS.inactive}
                   name="chevron-right"
                   size={24}
                 />
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
   },
   navButton: {
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: COLORS.lavenderSurface,
     borderRadius: RADII.pill,
     height: 36,
     justifyContent: 'center',

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">S15P11B104App</string>
+    <string name="app_name">패밀링크</string>
     <string name="default_notification_channel_id" translatable="false">familink_default</string>
     <string name="default_notification_channel_name">알림</string>
 </resources>
