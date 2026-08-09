@@ -25,6 +25,7 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.ssafy.s15p11b104.domain.account.entity.User;
 import com.ssafy.s15p11b104.domain.call.entity.CallReport;
 import com.ssafy.s15p11b104.domain.call.entity.CallSession;
 import com.ssafy.s15p11b104.domain.call.entity.CallStatus;
@@ -35,6 +36,7 @@ import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallTranscriptEventRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallTranscriptRepository;
+import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.report.entity.EmotionCategory;
 import com.ssafy.s15p11b104.domain.report.service.DailyReportGenerationDispatcher;
 
@@ -78,6 +80,12 @@ class CallReportGenerationServiceTest {
 	@Mock
 	private CallTranscript transcript;
 
+	@Mock
+	private GroupMember careReceiverMember;
+
+	@Mock
+	private User careReceiverUser;
+
 	private CallReportGenerationRequest request;
 	private CallReportGenerationService generationService;
 
@@ -90,6 +98,7 @@ class CallReportGenerationServiceTest {
 			callReportRepository,
 			requestRepository,
 			analyzer,
+			new DemoCallReportFixtureProvider(),
 			dailyReportGenerationDispatcher,
 			Clock.fixed(NOW, ZoneOffset.UTC),
 			transactionTemplate,
@@ -105,6 +114,31 @@ class CallReportGenerationServiceTest {
 			return null;
 		}).when(transactionTemplate).executeWithoutResult(any());
 		request = new CallReportGenerationRequest(CALL_SESSION_ID, TRANSCRIPT_REVISION);
+	}
+
+	@Test
+	void storesFixedDemoReportWithoutCallingGemini() {
+		stubEligibleSession();
+		when(careReceiverUser.getLoginId()).thenReturn("demoyounghee810");
+		when(callSession.getEndedAt()).thenReturn(Instant.parse("2026-07-31T13:01:00Z"));
+		ArgumentCaptor<CallReport> reportCaptor = ArgumentCaptor.forClass(CallReport.class);
+
+		generationService.generate(CALL_SESSION_ID);
+
+		verify(analyzer, never()).analyze(any());
+		verify(callReportRepository).saveAndFlush(reportCaptor.capture());
+		CallReport savedReport = reportCaptor.getValue();
+		assertThat(savedReport.getSummary()).isEqualTo(
+			"지우의 생일을 맞아 민수가 준비한 미역국 이야기를 나누며 기쁜 마음을 표현했습니다. "
+				+ "가족 일정을 확인한 뒤, 오늘 오후 7시 지우 생일 축하 영상통화를 기대했습니다."
+		);
+		assertThat(savedReport.getEmotionCategory()).isEqualTo(EmotionCategory.JOY);
+		assertThat(savedReport.getEmotionSubcategory()).isEqualTo("기대");
+		assertThat(savedReport.getGuardianMessage()).isEqualTo(
+			"민수가 지우의 생일 미역국을 준비한 소식을 확인했으며, "
+				+ "오늘 오후 7시 가족 영상통화를 기다리고 있다고 전했습니다."
+		);
+		assertThat(savedReport.getCallSession()).isSameAs(callSession);
 	}
 
 	@Test
@@ -201,6 +235,9 @@ class CallReportGenerationServiceTest {
 		when(callSession.getStatus()).thenReturn(CallStatus.COMPLETED);
 		when(callSession.isTranscriptComplete()).thenReturn(true);
 		when(callSession.getTranscriptRevision()).thenReturn(TRANSCRIPT_REVISION);
+		when(callSession.getCareReceiverMember()).thenReturn(careReceiverMember);
+		when(careReceiverMember.getUser()).thenReturn(careReceiverUser);
+		when(careReceiverUser.getLoginId()).thenReturn("regular-user");
 		when(transcriptEventRepository.countByCallSessionIdAndStatusNot(
 			CALL_SESSION_ID,
 			TranscriptIngestStatus.APPLIED

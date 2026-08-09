@@ -36,6 +36,7 @@ public class CallReportGenerationService {
 	private final CallReportCallRepository callReportRepository;
 	private final CallReportGenerationRequestRepository requestRepository;
 	private final CallReportAnalyzer analyzer;
+	private final DemoCallReportFixtureProvider demoFixtureProvider;
 	private final DailyReportGenerationDispatcher dailyReportGenerationDispatcher;
 	private final Clock applicationClock;
 	private final TransactionTemplate transactionTemplate;
@@ -48,6 +49,7 @@ public class CallReportGenerationService {
 		CallReportCallRepository callReportRepository,
 		CallReportGenerationRequestRepository requestRepository,
 		CallReportAnalyzer analyzer,
+		DemoCallReportFixtureProvider demoFixtureProvider,
 		DailyReportGenerationDispatcher dailyReportGenerationDispatcher,
 		Clock applicationClock,
 		TransactionTemplate transactionTemplate,
@@ -59,6 +61,7 @@ public class CallReportGenerationService {
 		this.callReportRepository = callReportRepository;
 		this.requestRepository = requestRepository;
 		this.analyzer = analyzer;
+		this.demoFixtureProvider = demoFixtureProvider;
 		this.dailyReportGenerationDispatcher = dailyReportGenerationDispatcher;
 		this.applicationClock = applicationClock;
 		this.transactionTemplate = transactionTemplate;
@@ -74,7 +77,9 @@ public class CallReportGenerationService {
 
 		CallReportAnalysis analysis;
 		try {
-			analysis = analyzer.analyze(target.input());
+			analysis = demoFixtureProvider
+				.resolve(target.careReceiverLoginId())
+				.orElseGet(() -> analyzer.analyze(target.input()));
 		} catch (RuntimeException exception) {
 			transactionTemplate.executeWithoutResult(status -> markGeminiFailed(target, ANALYSIS_FAILURE_CODE));
 			return;
@@ -130,6 +135,7 @@ public class CallReportGenerationService {
 			callSessionId,
 			revision,
 			claimToken,
+			session.getCareReceiverMember().getUser().getLoginId(),
 			new CallReportInput(transcripts)
 		);
 	}
@@ -200,6 +206,7 @@ public class CallReportGenerationService {
 		Long callSessionId,
 		long revision,
 		UUID claimToken,
+		String careReceiverLoginId,
 		CallReportInput input
 	) {
 	}
