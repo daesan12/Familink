@@ -2,18 +2,17 @@ import {Pressable, StyleSheet, View} from 'react-native';
 import {AppText} from '../../../shared/components/AppText';
 
 import {COLORS} from '../../../design/tokens';
-import {APP_VERSION} from '../fixtures/profileFixtures';
 
 interface MyPageFooterProps {
   onLogout: () => void;
 }
 
-// I-1·J-1 하단: 앱 버전 표기 + 로그아웃.
+// I-1·J-1 하단: 로그아웃. 앱 버전은 실제 빌드 정보와 무관한 고정 문자열이라
+// 잘못된 정보를 보여 주고 있어서 뺐다. 실제 versionName을 읽어 올 수 있게 되면
+// 다시 넣는다.
 export function MyPageFooter({onLogout}: MyPageFooterProps) {
   return (
     <View style={styles.footer}>
-      <AppText style={styles.text}>앱 버전 {APP_VERSION}</AppText>
-      <AppText style={styles.divider}>|</AppText>
       <Pressable
         accessibilityLabel="로그아웃"
         accessibilityRole="button"
@@ -27,10 +26,6 @@ export function MyPageFooter({onLogout}: MyPageFooterProps) {
 }
 
 const styles = StyleSheet.create({
-  divider: {
-    color: COLORS.inactive,
-    fontSize: 13,
-  },
   footer: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -41,5 +36,6 @@ const styles = StyleSheet.create({
   text: {
     color: COLORS.textSubtle,
     fontSize: 13,
+    textDecorationLine: 'underline',
   },
 });

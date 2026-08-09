@@ -183,7 +183,7 @@ function MonthButton({ accessibilityLabel, icon, onPress }: MonthButtonProps) {
       onPress={onPress}
       style={styles.monthButton}
     >
-      <MaterialDesignIcons color={COLORS.background} name={icon} size={28} />
+      <MaterialDesignIcons color={COLORS.purpleDeep} name={icon} size={28} />
     </Pressable>
   );
 }
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
   },
   monthButton: {
     alignItems: "center",
-    backgroundColor: COLORS.textSubtle,
+    backgroundColor: COLORS.lavenderSurface,
     borderRadius: RADII.pill,
     height: 36,
     justifyContent: "center",

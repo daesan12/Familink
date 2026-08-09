@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   guideCard: {
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: COLORS.lavenderSurface,
     borderCurve: 'continuous',
     borderRadius: RADII.medium,
     gap: 12,
