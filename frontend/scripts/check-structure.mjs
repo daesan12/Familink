@@ -30,7 +30,6 @@ const requiredPaths = [
   "src/features/auth/components/LogoutConfirmationModal.tsx",
   "src/features/auth/components/FloatingIllustration.tsx",
   "src/features/auth/hooks/useScreenEntrance.ts",
-  "src/features/auth/api/mockAuthGateway.ts",
   "src/features/auth/validation.ts",
   "src/assets/images/family-album-welcome-illustration.png",
   "src/features/feed/index.ts",

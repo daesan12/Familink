@@ -9,7 +9,7 @@ import com.ssafy.s15p11b104.domain.group.entity.GroupMember;
 import com.ssafy.s15p11b104.domain.group.entity.GroupRole;
 
 @Component
-@Profile("ai-call-dev")
+@Profile("local & ai-call-dev")
 public class DevCallActorResolver implements CallActorResolver {
 
 	private final GroupMemberCallRepository groupMemberRepository;

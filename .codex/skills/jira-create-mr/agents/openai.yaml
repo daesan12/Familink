@@ -1,4 +1,0 @@
-interface:
-  display_name: "Jira MR 생성"
-  short_description: "glab으로 Jira 작업의 GitLab MR을 생성·검증·연결"
-  default_prompt: "Use $jira-create-mr to read the local Jira and Git conventions, identify the single Jira issue from my current branch, verify exactly one assignee, due date, allowed Story Points, intended work, observable completion criteria, and the Story-versus-Task prefix role, verify and commit the implementation, preserve Jira's exact domain prefix once after the key in the MR title without inventing one, verify glab authentication and project context, create or reuse one Merge Request targeting develop, re-fetch it, attach only its canonical URL to Jira, and stop before merge or Jira completion."

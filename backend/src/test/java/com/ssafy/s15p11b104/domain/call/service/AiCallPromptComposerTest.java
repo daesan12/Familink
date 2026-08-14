@@ -71,7 +71,7 @@ class AiCallPromptComposerTest {
 			.contains("\"personKey\":\"person_1\",\"name\":\"민지\",\"displayName\":\"딸\"")
 			.doesNotContain("date_expression")
 			.doesNotContain("groupMemberId")
-			.doesNotContain("ai-call-user");
+			.doesNotContain("demoaicare");
 	}
 
 	/**

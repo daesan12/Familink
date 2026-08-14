@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 
 @Configuration
-@Profile("ai-call-dev")
+@Profile("local & ai-call-dev")
 public class AiCallDevWebSecurityConfig {
 
 	@Bean

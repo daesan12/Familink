@@ -1,4 +1,0 @@
-interface:
-  display_name: "UI 상호작용 인터뷰"
-  short_description: "UI 구현 전 필요한 동작만 짧고 쉽게 확인"
-  default_prompt: "Use $ui-interview when the current work is UI implementation and an interaction outcome is unclear. Skip broad discovery and design-material requests, ask one high-impact question at a time in plain Korean that describes what the user will see, usually stop within one to three questions, and finish with a compact summary of confirmed and conventionally chosen behavior."
