@@ -6,7 +6,7 @@
 
 # Agent tooling
 # .claude/skills 는 .codex/skills 로 연결된 로컬 정션이므로 커밋하지 않는다.
-# 스킬 원본은 .codex/skills 하나만 추적한다. 생성 방법은 CLAUDE.md 참고.
+# 스킬 원본은 .codex/skills 하나만 추적한다.
 /.claude/skills/
 .claude/settings.local.json
 

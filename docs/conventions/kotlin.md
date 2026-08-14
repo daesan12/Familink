@@ -89,8 +89,7 @@ fun createCallSession(
 - 취소 예외를 일반 실패로 삼키지 않는다.
 - Flow와 콜백의 수집·등록은 수명주기 종료 시 함께 정리한다.
 - AI 전화 전용 Kotlin 경계를 넘어 React Native 영역의 화면을 Kotlin으로
-  새로 구현하지 않는다. 제품 경계는
-  [`../specs/COMMON.md`](../specs/COMMON.md)를 따른다.
+  새로 구현하지 않아 현재 제품 경계를 유지한다.
 
 ## Compose
 

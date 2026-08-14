@@ -1,4 +1,0 @@
-interface:
-  display_name: "Jira 커밋"
-  short_description: "한 Jira 작업의 변경을 검증하고 논리적 커밋으로 정리"
-  default_prompt: "Use $jira-commit to read the local Jira and Git conventions, infer the Jira key from the current valid work branch, use any Jira domain prefix only as scope metadata without changing the `[JIRA_KEY] <type>: <작업 내용>` format, inspect staged, unstaged, and untracked changes, exclude secrets and unrelated work, run relevant verification, create the smallest convention-compliant logical commits, and push only when I explicitly request it."

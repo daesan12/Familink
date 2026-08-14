@@ -13,7 +13,6 @@ import { clearAllMockStorages } from "@react-native-async-storage/async-storage/
 
 import App from "../App";
 import { AppShell, type AppScreenProps } from "../src/app-shell";
-import { InvalidCredentialsError } from "../src/features/auth/api/mockAuthGateway";
 import { LoginBottomSheet } from "../src/features/auth/components/LoginBottomSheet";
 import { CreateGroupSheet } from "../src/features/auth/components/CreateGroupSheet";
 import { JoinGroupSheet } from "../src/features/auth/components/JoinGroupSheet";
@@ -473,7 +472,14 @@ test("로그인 입력을 보존하고 비밀번호 표시 전환을 제공한�
 
 test("로그인 실패 오류를 표시한다", async () => {
   const authGateway = createAuthGateway();
-  authGateway.login.mockRejectedValueOnce(new InvalidCredentialsError());
+  authGateway.login.mockRejectedValueOnce(
+    new ApiError({
+      code: "INVALID_CREDENTIALS",
+      kind: "server",
+      message: "아이디 또는 비밀번호가 일치하지 않습니다.",
+      status: 401,
+    })
+  );
   const { renderer } = await renderApp(authGateway);
   await openLogin(renderer);
   await enterValidCredentials(renderer);
