@@ -11,7 +11,7 @@ import com.ssafy.s15p11b104.domain.call.repository.CallReportCallRepository;
 import com.ssafy.s15p11b104.domain.call.repository.CallSessionRepository;
 
 @Service
-@Profile("ai-call-dev")
+@Profile("local & ai-call-dev")
 public class AiCallDevReportService {
 
 	private final CallActorResolver callActorResolver;

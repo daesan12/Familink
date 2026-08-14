@@ -54,7 +54,7 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 		assertThat(loadFixtureAliases()).containsExactly("딸", "손자");
 
 		GroupMember careReceiver = groupMemberRepository.findActiveCareReceiverByLoginId(
-			"ai-call-user",
+			"demoaicare",
 			GroupRole.CARE_RECEIVER
 		).orElseThrow();
 		AiCallPromptContext context = promptContextProvider.load(careReceiver).promptContext();
@@ -62,8 +62,8 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 		assertThat(context.todayPosts())
 			.extracting(AiCallPromptContext.TodayPostContext::summary)
 			.containsExactlyInAnyOrder(
-				"민지 딸이 오늘 점심으로 된장국을 먹었다는 소식을 전했습니다.",
-				"준호 손자가 주말 야구 경기에서 응원하는 팀이 이겨 기뻤다고 전했습니다."
+				"데모 보호자 일이 오늘 점심으로 된장국을 먹었다는 소식을 전했습니다.",
+				"데모 보호자 이가 주말 야구 경기에서 응원하는 팀이 이겨 기뻤다고 전했습니다."
 			);
 	}
 
@@ -71,16 +71,16 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 		jdbcTemplate.update("""
 			update member_aliases alias
 			set alias = case target_user.login_id
-				when 'ai-guardian-1' then '민지 딸'
-				when 'ai-guardian-2' then '준호 손자'
+				when 'demoaiguardian1' then '데모 보호자 일'
+				when 'demoaiguardian2' then '데모 보호자 이'
 			end
 			from family_groups family
 			join group_members target on target.group_id = family.id
 			join users target_user on target_user.id = target.user_id
 			where alias.group_id = family.id
 				and alias.target_member_id = target.id
-				and family.invite_code = 'AICALL'
-				and target_user.login_id in ('ai-guardian-1', 'ai-guardian-2')
+				and family.invite_code = 'DEMOAI'
+				and target_user.login_id in ('demoaiguardian1', 'demoaiguardian2')
 			""");
 	}
 
@@ -91,8 +91,8 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 			from family_groups family
 			join group_members author on author.group_id = family.id
 			join users author_user on author_user.id = author.user_id
-			where family.invite_code = 'AICALL'
-				and author_user.login_id = 'ai-guardian-1'
+			where family.invite_code = 'DEMOAI'
+				and author_user.login_id = 'demoaiguardian1'
 			returning id
 			""", Long.class,
 			UNRELATED_POST_CONTENT,
@@ -118,7 +118,7 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 			select count(*)
 			from posts post
 			join family_groups family on family.id = post.group_id
-			where family.invite_code = 'AICALL'
+			where family.invite_code = 'DEMOAI'
 				and post.content in (?, ?)
 			""", Integer.class, FIRST_POST_CONTENT, SECOND_POST_CONTENT);
 	}
@@ -129,7 +129,7 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 			from post_analyses analysis
 			join posts post on post.id = analysis.post_id
 			join family_groups family on family.id = post.group_id
-			where family.invite_code = 'AICALL'
+			where family.invite_code = 'DEMOAI'
 				and post.content in (?, ?)
 			""", Integer.class, FIRST_POST_CONTENT, SECOND_POST_CONTENT);
 	}
@@ -140,7 +140,7 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 			from post_analyses analysis
 			join posts post on post.id = analysis.post_id
 			join family_groups family on family.id = post.group_id
-			where family.invite_code = 'AICALL'
+			where family.invite_code = 'DEMOAI'
 				and post.content in (?, ?)
 			order by post.content
 			""", String.class, FIRST_POST_CONTENT, SECOND_POST_CONTENT);
@@ -153,8 +153,8 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 			join family_groups family on family.id = alias.group_id
 			join group_members target on target.id = alias.target_member_id
 			join users target_user on target_user.id = target.user_id
-			where family.invite_code = 'AICALL'
-				and target_user.login_id in ('ai-guardian-1', 'ai-guardian-2')
+			where family.invite_code = 'DEMOAI'
+				and target_user.login_id in ('demoaiguardian1', 'demoaiguardian2')
 			order by target_user.login_id
 			""", String.class);
 	}
@@ -164,7 +164,7 @@ class AiCallDevDataInitializerIntegrationTest extends IntegrationTest {
 			select count(*)
 			from posts post
 			join family_groups family on family.id = post.group_id
-			where family.invite_code = 'AICALL'
+			where family.invite_code = 'DEMOAI'
 				and post.content in (?, ?)
 				and post.created_at > ?
 				and post.updated_at > ?

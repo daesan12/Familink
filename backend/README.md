@@ -34,10 +34,10 @@ React Native 앱에서 실제 로그인 사용자와 보호자 리포트까지 E
 때는 위의 `local` 프로필만 사용합니다. `local` 프로필은 Access Token과 실제
 그룹 멤버십을 검증합니다.
 
-브라우저용 AI 전화 개발 UI와 고정 fixture만 확인하려면 OpenAI API 키를
-`.env`의 `OPENAI_API_KEY`에 설정하고 다음 프로필을 사용합니다. 이 프로필은
-`/call-sessions/**` 인증을 우회하고 모든 통화를 `ai-call-user` fixture로
-저장하므로 React Native 앱 E2E에는 사용하지 않습니다.
+브라우저용 AI 전화 개발 UI와 합성 fixture만 확인하려면 OpenAI API 키를
+`.env`의 `OPENAI_API_KEY`에 설정하고 다음 두 프로필을 함께 사용합니다. 개발 구성은
+`local & ai-call-dev`에서만 활성화되며 `/call-sessions/**` 인증을 우회하고 모든
+통화를 `demoaicare` fixture로 저장하므로 React Native 앱 E2E에는 사용하지 않습니다.
 
 ```powershell
 .\gradlew.bat bootRun --args='--spring.profiles.active=local,ai-call-dev'
@@ -90,6 +90,3 @@ DB 스키마는 Flyway가 소유합니다. Hibernate 자동 생성은 사용하�
 ```text
 src/main/resources/db/migration/
 ```
-
-실제 인증 API, 도메인 비즈니스 로직, AWS·Firebase·AI 연동과 운영 배포
-인프라는 후속 Jira 티켓에서 구현합니다.

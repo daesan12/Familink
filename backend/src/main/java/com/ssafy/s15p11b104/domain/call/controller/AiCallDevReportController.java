@@ -10,7 +10,7 @@ import com.ssafy.s15p11b104.domain.call.dto.AiCallDevReportResponse;
 import com.ssafy.s15p11b104.domain.call.service.AiCallDevReportService;
 
 @RestController
-@Profile("ai-call-dev")
+@Profile("local & ai-call-dev")
 @RequestMapping("/ai-call/dev/call-sessions")
 public class AiCallDevReportController {
 

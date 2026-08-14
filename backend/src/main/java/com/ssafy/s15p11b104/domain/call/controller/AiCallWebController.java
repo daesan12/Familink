@@ -5,7 +5,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 
 @Controller
-@Profile("ai-call-dev")
+@Profile("local & ai-call-dev")
 public class AiCallWebController {
 
 	@GetMapping("/")
