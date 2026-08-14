@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="frontend/src/assets/images/familink-logo.png" alt="Familink 로고" width="120" />
+<img src="docs/readme-assets/banner.png" alt="familink — 가족의 일상을 대화로 잇다" width="720" />
 
-# Familink
+# familink
 
 **AI 안부전화와 가족 간 일상 공유로 정서적 돌봄을 지원하는 서비스**
 
@@ -15,11 +15,9 @@ SSAFY 15기 2학기 공통 프로젝트 · 대전 1반 B104
 ## 목차
 
 1. [프로젝트 소개](#1-프로젝트-소개)
-2. [프로젝트 정보](#2-프로젝트-정보)
-3. [프로젝트 결과물](#3-프로젝트-결과물)
-4. [Contribute](#4-contribute)
-5. [LICENSE](#5-license)
-6. [외부 리소스 정보](#6-외부-리소스-정보)
+2. [팀원 구성](#2-팀원-구성)
+3. [프로젝트 정보](#3-프로젝트-정보)
+4. [프로젝트 결과물](#4-프로젝트-결과물)
 
 ---
 
@@ -27,11 +25,11 @@ SSAFY 15기 2학기 공통 프로젝트 · 대전 1반 B104
 
 ### 프로젝트명
 
-**Familink** — Family + Link. 떨어져 사는 가족을 하나의 그룹으로 연결합니다.
+**familink** — Family + Link. 떨어져 사는 가족을 하나의 그룹으로 연결합니다.
 
 ### 소개
 
-바쁜 일상 속에서 부모님께 매일 전화드리기는 쉽지 않습니다. Familink는 **AI가 대신 안부전화를 걸고, 그 내용을 요약 리포트로 가족에게 전달**합니다. 여기에 가족 피드·공용 캘린더·카네이션 잔디 같은 가벼운 일상 공유 기능을 더해, 보호자와 피보호자(고령 가족)가 부담 없이 서로의 하루를 확인할 수 있게 합니다.
+바쁜 일상 속에서 부모님께 매일 전화드리기는 쉽지 않습니다. familink는 **AI가 대신 안부전화를 걸고, 그 내용을 요약 리포트로 가족에게 전달**합니다. 여기에 가족 피드·공용 캘린더·카네이션 잔디 같은 가벼운 일상 공유 기능을 더해, 보호자와 피보호자(고령 가족)가 부담 없이 서로의 하루를 확인할 수 있게 합니다.
 
 - **AI 안부전화** — 6종 페르소나 중 원하는 상대를 골라 발신하면, OpenAI Realtime API 기반 실시간 음성 대화가 진행되고 AI 발화가 실시간 자막으로 표시됩니다.
 - **요약 리포트** — 통화가 끝나면 건별 리포트(요약·감정·전달 메시지)가 생성되고, 매일 밤 일일 리포트가 자동으로 만들어집니다.
@@ -68,7 +66,17 @@ S15P11B104/
 
 ---
 
-## 2. 프로젝트 정보
+## 2. 팀원 구성
+
+| 손수호 | 이종철 | 홍유라 | 강다영 | 이경호 | 장대산 |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| <img src="docs/readme-assets/members/shd437s.png" width="100" alt="손수호" /> | <img src="docs/readme-assets/members/whdcjf5454.png" width="100" alt="이종철" /> | <img src="docs/readme-assets/members/hongula2000.png" width="100" alt="홍유라" /> | <img src="docs/readme-assets/members/kdyarchive.png" width="100" alt="강다영" /> | <img src="docs/readme-assets/members/rudgh8182.png" width="100" alt="이경호" /> | <img src="docs/readme-assets/members/diqkraud.png" width="100" alt="장대산" /> |
+| **AI** | **AI** | **Frontend** | **Frontend** | **Backend** | **Backend · Infra** |
+| [@shd437s](https://lab.ssafy.com/shd437s) | [@whdcjf5454](https://lab.ssafy.com/whdcjf5454) | [@hongula2000](https://lab.ssafy.com/hongula2000) | [@kdyarchive](https://lab.ssafy.com/kdyarchive) | [@rudgh8182](https://lab.ssafy.com/rudgh8182) | [@diqkraud](https://lab.ssafy.com/diqkraud) |
+
+---
+
+## 3. 프로젝트 정보
 
 ### 사용 환경
 
@@ -130,7 +138,7 @@ npm run typecheck && npm run lint
 | 계정·프로필 | 로그인 ID/비밀번호 인증(JWT), 회원가입·온보딩, 프로필·관심사, 탈퇴 | [docs/specs/domains](docs/specs/INDEX.md) |
 | 그룹 | 그룹 생성, 초대 코드 + 관리자 승인 가입, 다중 그룹 전환, 호칭, 관리자 위임 | 〃 |
 | 피드·미디어 | 140자 본문 + 사진 1~4장/영상 1개, 댓글·반응, 보관함 필터, 게시글 AI 분석 | 〃 |
-| AI 통화 | 6종 페르소나, WebRTC 실시간 음성, 실시간 자막, Tool Calling | 〃 |
+| AI 통화 | 6종 페르소나, WebRTC 실시간 음성, 실시간 자막, 당일 게시글 컨텍스트 주입, Tool Calling(인물별 소식·일정 조회) | 〃 |
 | 리포트 | 통화 건별 리포트(요약·감정·전달 메시지), 일일 리포트 자동 생성 | 〃 |
 | 캘린더 | 일정 CRUD, 참여자 지정, 일정 알림, AI 일정 조회 연동 | 〃 |
 | 알림 | 앱 내 알림 목록·읽음 처리, FCM 푸시, 유형별 수신 설정 | 〃 |
@@ -145,11 +153,17 @@ npm run typecheck && npm run lint
 
 ---
 
-## 3. 프로젝트 결과물
+## 4. 프로젝트 결과물
 
 ### AI 안부전화
 
-6종 페르소나 중 대화 상대를 고르면 말투 설명이 함께 표시되고, 발신하면 WebRTC 실시간 음성 대화가 시작됩니다. AI 발화는 실시간 자막으로 표시됩니다.
+"듬직한 아들", "친구 복희"처럼 관계와 성격이 다른 **6종 페르소나** 중에서 오늘 이야기할 상대를 고릅니다. 페르소나를 선택하면 다정한 말투, 정겨운 사투리 같은 대화 스타일 설명이 함께 표시되어 어떤 대화가 될지 미리 알 수 있습니다.
+
+발신하면 **실시간 음성 대화**가 시작됩니다. 정해진 질문을 읽어주는 방식이 아니라 대답을 듣고 자연스럽게 이어가는 양방향 대화이며, 예약 발신이 아니라 **어르신이 원할 때 직접 거는 구조**입니다. AI가 말하는 내용은 **실시간 자막**으로 표시되어, 소리가 잘 들리지 않아도 대화를 눈으로 따라갈 수 있습니다.
+
+AI는 **그날 가족이 피드에 올린 소식을 알고 통화를 시작합니다.** 아들이 미역국 사진을 올렸다면 "별일 없으셨어요?" 대신 **"아드님이 미역국 끓이셨다면서요"** 처럼 오늘 실제로 있었던 일에서 대화가 출발합니다.
+
+대화 중 궁금한 것은 AI가 그 자리에서 찾아봅니다(**Tool Calling**). "우리 딸 요즘 뭐 하고 지내?"라고 물으면 그 사람의 최근 소식을, "이번 주에 무슨 일정 있나?"라고 물으면 공용 캘린더의 일정을 확인해 답합니다. 앱을 직접 열어보기 어려운 어르신도 말로 물어보는 것만으로 가족 소식을 확인할 수 있습니다.
 
 | 페르소나 선택 | 통화 (실시간 자막) |
 |:---:|:---:|
@@ -157,7 +171,9 @@ npm run typecheck && npm run lint
 
 ### 요약 리포트
 
-통화 종료 시 건별 리포트가 생성되고, 매일 밤 일일 리포트(요약·감정)가 자동 생성됩니다.
+통화가 끝나면 그 통화만의 **건별 리포트**가 만들어집니다. 무슨 이야기를 나눴는지 100자 이내로 요약하고, 대화에서 읽어낸 **감정**과 어르신이 가족에게 전하고 싶어 한 **전달 메시지**를 함께 담습니다. 리포트 목록은 통화 시각별로 정리되어 원하는 통화를 골라 볼 수 있습니다.
+
+하루가 끝나는 **매일 22시에는 그날의 통화를 묶은 일일 리포트**가 자동으로 생성됩니다. 200자 이내로 하루의 흐름을 정리하기 때문에, 보호자는 통화 내용을 일일이 확인하지 않아도 부모님이 어떤 하루를 보냈는지 한눈에 파악할 수 있습니다.
 
 | 일일 리포트 | 통화 리포트 목록 |
 |:---:|:---:|
@@ -165,7 +181,11 @@ npm run typecheck && npm run lint
 
 ### 가족 피드
 
-사진·영상과 함께 일상을 공유하고 댓글·반응을 남깁니다.
+**140자 본문에 사진 1~4장 또는 영상 1개**를 붙여 그날의 일상을 올립니다. 글자 수를 제한한 이유는 길게 쓰는 부담을 없애기 위해서로, "오늘 뭐 했어요" 한 줄과 사진 한 장이면 충분합니다. 올라온 글에는 **댓글과 반응**으로 서로 응답할 수 있습니다.
+
+피드는 그룹 단위로 분리되어 있어, 여러 가족 그룹에 속해 있어도 지금 보고 있는 그룹의 소식만 표시됩니다.
+
+여기에 올라온 글은 **[AI 안부전화](#ai-안부전화)의 대화 소재로도 쓰입니다.**
 
 | 피드 | 게시글 상세·댓글 |
 |:---:|:---:|
@@ -173,7 +193,9 @@ npm run typecheck && npm run lint
 
 ### 보관함
 
-가족이 올린 미디어를 모아 보고, 구성원·날짜별로 필터링합니다.
+피드에 올라온 사진과 영상만 따로 모아 날짜순으로 보여줍니다. 시간이 지나 피드 아래로 밀려난 사진도 여기서는 쉽게 찾을 수 있습니다.
+
+**구성원·날짜·미디어 유형** 세 가지로 필터링할 수 있어, "엄마가 올린 사진만", "지난달 것만" 같은 방식으로 좁혀볼 수 있습니다.
 
 | 미디어 모아보기 | 구성원 필터 |
 |:---:|:---:|
@@ -181,7 +203,9 @@ npm run typecheck && npm run lint
 
 ### 공용 캘린더
 
-가족 일정·기념일을 등록하고 참여자를 지정하면 일정 알림이 발송됩니다.
+생일, 가족 모임, 영상통화 약속 같은 **그룹 일정과 기념일**을 함께 관리합니다. 일정에는 제목과 시간 외에 세부 내용을 적을 수 있고, **참여자를 지정**하면 그 구성원들에게 일정 알림이 발송됩니다.
+
+월간 달력에서 일정이 있는 날을 바로 확인하고, 날짜를 누르면 그날 등록된 일정 목록이 아래에 펼쳐집니다.
 
 | 월간 뷰 | 날짜별 일정 | 일정 상세 |
 |:---:|:---:|:---:|
@@ -189,7 +213,9 @@ npm run typecheck && npm run lint
 
 ### 그룹 관리
 
-초대 코드 + 관리자 승인으로 그룹을 꾸리고, 여러 그룹을 토글로 전환합니다.
+그룹을 만들면 **초대 코드**가 발급됩니다. 가족에게 코드를 전달해 가입을 요청받고, **그룹 관리자가 승인**해야 구성원이 되는 2단계 구조라 모르는 사람이 들어올 수 없습니다. 구성원은 **보호자와 피보호자**로 구분되며, 각자에게 "사랑하는 엄마" 같은 **호칭(별칭)** 을 붙일 수 있습니다.
+
+한 사람이 **여러 그룹에 동시에 속할 수 있고**, 화면 상단의 그룹 이름을 눌러 바로 전환합니다. 시댁과 친정처럼 둘 이상의 가족을 앱 하나로 관리할 수 있습니다. 이 밖에 관리자 위임, 구성원 내보내기, 그룹명 변경, 그룹 나가기·삭제를 지원합니다.
 
 | 그룹 정보·구성원 | 그룹 전환 |
 |:---:|:---:|
@@ -197,7 +223,9 @@ npm run typecheck && npm run lint
 
 ### 카네이션 잔디 · 주간 효자랭킹
 
-하루 1건 이상 게시하면 잔디(도장)가 적립되고, 주간 랭킹 1위에게 왕관이 씌워집니다.
+**하루에 게시글을 1건 이상 올리면 카네이션 도장이 하루 1개** 찍힙니다. 여러 개를 올려도 하루 1개까지만 쌓이기 때문에, 몰아서 올리기보다 꾸준히 참여하도록 유도합니다.
+
+일주일 단위로 도장 수를 집계해 **주간 효자랭킹**을 만들고, **지난주 1위에게는 프로필에 왕관**이 표시됩니다. 안부를 전하는 일을 의무가 아니라 가벼운 놀이처럼 만들기 위한 장치입니다. 월별 달력에서 자신이 어느 날 참여했는지도 되돌아볼 수 있습니다.
 
 | 도장 현황 | 도장 달력 | 주간 랭킹 |
 |:---:|:---:|:---:|
@@ -205,72 +233,12 @@ npm run typecheck && npm run lint
 
 ### 알림
 
-앱 내 알림 목록·읽음 처리와 FCM 푸시, 유형별 수신 설정을 제공합니다.
+일정 시작, 통화 리포트 생성, 게시글 반응처럼 놓치면 아쉬운 소식을 **FCM 푸시**로 알립니다. 앱을 열면 알림 목록에서 지난 알림을 모아 볼 수 있고, 확인한 알림은 **읽음 처리**되어 새 소식만 눈에 띄게 남습니다.
+
+알림이 많아 부담스러우면 **유형별로 수신을 끌 수 있습니다.** 예를 들어 리포트 알림만 받고 반응 알림은 끄는 식입니다.
 
 | 알림 목록 | 알림 설정 |
 |:---:|:---:|
 | <img src="docs/readme-assets/8-notification/capture-notification-list.png" width="240" /> | <img src="docs/readme-assets/8-notification/notification-settings.jpg" width="240" /> |
 
-### 코드 설명
-
-- **스펙 기반 개발** — 모든 기능은 [docs/specs](docs/specs/INDEX.md)의 로컬 스펙을 단일 기준으로 구현했습니다. API 계약은 [API.md](docs/specs/contracts/API.md), 데이터 모델은 [DATA_MODEL.md](docs/specs/contracts/DATA_MODEL.md)에 정리되어 있고, 스펙 변경은 `docs/spec-changes/`에서 제안 → 승인 → 반영 절차를 거칩니다.
-- **AI 통화 파이프라인** — 앱(Kotlin `aicall` 네이티브 모듈)이 WebRTC로 음성을 주고받고, 백엔드가 OpenAI Realtime API와 WebSocket으로 중계합니다. 통화 전사는 Gemini 기반 리포트 생성(건별·일일)으로 이어집니다. 상세 설계는 [AI_CALL_README.md](AI_CALL_README.md) 참고.
-- **단일 백엔드 구성** — AI 오케스트레이션을 포함한 모든 서버 로직을 Spring Boot 하나가 담당합니다(별도 Python 서비스 없음). 도메인별 패키지(`domain/*`)와 전역 관심사(`global/*`)를 분리했고, 스키마는 Flyway로 버전 관리합니다.
-- **React Native + 네이티브 브리지** — 화면은 React Native(TypeScript)로, WebRTC 통화·FCM 수신처럼 플랫폼 기능이 필요한 부분만 Kotlin 모듈로 구현해 Codegen(TurboModule)으로 연결했습니다.
-- **CI/CD** — Jenkins Multibranch Pipeline이 테스트 → 이미지 빌드 → ECR 푸시 → develop은 스테이징, main은 운영(SSM 배포 + 헬스체크 + 롤백)으로 이어집니다.
-
-### 팀 · 후기
-
-| 이름 | 역할 | 후기 |
-|---|---|---|
-| 강다영 | | |
-| 손수호 | | |
-| 이경호 | | |
-| 이종철 | | |
-| 장대산 | | |
-| 홍유라 | | |
-
----
-
-## 4. Contribute
-
-프로젝트에 기여하려면 아래 절차를 따라 주세요.
-
-1. **이슈 확인** — Jira(S15P11B104) 티켓 기준으로 작업합니다. 새 작업은 티켓을 먼저 만들고 담당자·기한을 지정합니다.
-2. **브랜치 생성** — `develop`에서 분기합니다. 브랜치 이름은 `feature/S15P11B104-<티켓번호>-<요약>`, 버그는 `fix/...` 형식을 따릅니다.
-3. **구현 전 스펙 확인** — [docs/specs/INDEX.md](docs/specs/INDEX.md)에서 관련 스펙을 먼저 읽고, 스펙과 다르게 구현해야 한다면 코드가 아니라 `docs/spec-changes/`에 변경 제안을 먼저 올립니다.
-4. **컨벤션 준수** — [Java](docs/conventions/java.md) · [Kotlin](docs/conventions/kotlin.md) · [React Native/TypeScript](docs/conventions/react-native.md) 컨벤션과 커밋 메시지 규칙(`[S15P11B104-<번호>] <타입>: <설명>`)을 따릅니다.
-5. **검증 후 MR** — 변경 범위에 맞는 테스트(`./gradlew test`, `npm test`)와 정적 분석(`npm run typecheck`, `npm run lint`)을 통과시킨 뒤 `develop` 대상 MR을 올립니다. MR은 리뷰 승인 후 병합합니다.
-
-환영하는 기여: 버그 수정, 테스트 보강, 스펙 문서와 실제 구현의 불일치 제보, 접근성 개선. 스펙에 없는 신규 기능은 이슈로 먼저 논의해 주세요.
-
----
-
-## 5. LICENSE
-
-이 프로젝트는 **MIT License**를 따릅니다.
-
-> SSAFY 교육 과정에서 진행된 프로젝트로, 저장소 공개 범위와 라이선스 적용은 SSAFY 정책을 우선합니다.
-
----
-
-## 6. 외부 리소스 정보
-
-| 리소스 | 용도 | 라이선스/비고 |
-|---|---|---|
-| [OpenAI Realtime API](https://platform.openai.com/docs/guides/realtime) | AI 안부전화 실시간 음성 대화 (`gpt-realtime-2`) | OpenAI 이용약관 (상용 API) |
-| [Google Gemini API](https://ai.google.dev/) | 통화·일일 리포트, 게시글 분석 (`gemini-2.5-flash-lite`, `gemini-3.5-flash`) — SSAFY GMS 프록시 경유 | Google API 이용약관 |
-| [Firebase Cloud Messaging](https://firebase.google.com/products/cloud-messaging) | 푸시 알림 (서버 `firebase-admin`, 앱 `firebase-messaging`) | Apache-2.0 (SDK) |
-| [webrtc-sdk/android](https://github.com/webrtc-sdk/android) | 앱 내 WebRTC 음성 통화 | BSD-3-Clause (libwebrtc) |
-| [Spring Boot](https://spring.io/projects/spring-boot) 및 스타터 | 백엔드 프레임워크 | Apache-2.0 |
-| [React Native](https://reactnative.dev/) · [React Navigation](https://reactnavigation.org/) | 앱 프레임워크·내비게이션 | MIT |
-| [AWS SDK for Java v2](https://github.com/aws/aws-sdk-java-v2) | S3 미디어 스토리지 | Apache-2.0 |
-| [PostgreSQL](https://www.postgresql.org/) · [Redis](https://redis.io/) | 데이터베이스·캐시 | PostgreSQL License · RSALv2/SSPL |
-| [Flyway](https://github.com/flyway/flyway) | DB 마이그레이션 | Apache-2.0 |
-| [JJWT](https://github.com/jwtk/jjwt) | JWT 발급·검증 | Apache-2.0 |
-| [springdoc-openapi](https://springdoc.org/) | Swagger API 문서 | Apache-2.0 |
-| [Lucide](https://lucide.dev/) (`lucide-react-native`) | 앱 아이콘 | ISC |
-| [Material Design Icons](https://github.com/react-native-vector-icons/react-native-vector-icons) | 앱 아이콘 | MIT (아이콘 Apache-2.0) |
-| [Testcontainers](https://testcontainers.com/) | 백엔드 통합 테스트 | MIT |
-
-앱 화면에 사용된 인물 사진 등 데모 콘텐츠는 시연용으로 생성된 이미지입니다.
+> 위 화면의 인물 사진과 게시글은 시연용으로 생성한 데모 데이터입니다.
