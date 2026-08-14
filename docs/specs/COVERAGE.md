@@ -178,8 +178,8 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-ALIASES-001 그룹원 호칭 설정 | [API](./contracts/API.md), [그룹](./domains/GROUPS_AND_MEMBERSHIP.md) | 반영 | Spring Boot |
 | 활성 API | API-AUTH-001 로그인 ID 중복 확인 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
 | 활성 API | API-AUTH-002 회원가입 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
-| 활성 API | API-AUTH-003 로그인 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 | Keystore 보호 버전 세션 레코드 저장·Access Token 만료 시각 계산 |
-| 활성 API | API-AUTH-004 토큰 재발급 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 | 앱 복원 1회 재발급·보호 API `401` single-flight·원 요청 1회 재시도·확정/일시 실패 분리 |
+| 활성 API | API-AUTH-003 로그인 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 | 활성 Refresh Token 보존·중복 로그인 `409 ACTIVE_SESSION_EXISTS`·Keystore 보호 세션 저장 |
+| 활성 API | API-AUTH-004 토큰 재발급 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·확정 | Redis 원자 회전·14일 TTL 재설정·보호 API `401` single-flight·원 요청 1회 재시도 |
 | 활성 API | API-AUTH-005 로그아웃 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md), [알림](./domains/NOTIFICATIONS.md) | 반영·일부 확정 | 현재 기기 token 해제 후 인증 로그아웃; 서버 결과와 무관하게 로컬 세션 삭제 |
 | 활성 API | API-CALENDAR-001 그룹 일정 목록 조회 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
 | 활성 API | API-CALENDAR-002 일정 상세 조회 | [API](./contracts/API.md), [일정](./domains/CALENDAR.md) | 반영 | Spring Boot |
@@ -235,7 +235,7 @@ Notion 응답의 `as of`는 이 작업에서 읽은 스냅샷 시각이며 페�
 | 활성 API | API-REPORTS-005 시연용 일일 리포트 생성 요청 | [API](./contracts/API.md), [리포트](./domains/REPORTS.md), [UI](./UI_AND_NAVIGATION.md) | 반영·확정 | 보호자; KST 오늘·현재 피보호자, 준비된 건별 리포트만 사용 |
 | 활성 API | API-USERS-001 내 프로필 조회 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영 | Spring Boot |
 | 활성 API | API-USERS-002 내 프로필 수정 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md) | 반영·일부 확정 | 프로필 이미지 업로드·유지·삭제·교체 규칙 확정 |
-| 활성 API | API-USERS-003 회원 탈퇴 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md), [알림](./domains/NOTIFICATIONS.md) | 반영·일부 확정 | 모든 기기 토큰을 탈퇴 트랜잭션에서 비활성화 |
+| 활성 API | API-USERS-003 회원 탈퇴 | [API](./contracts/API.md), [계정](./domains/ACCOUNT_AND_PROFILE.md), [알림](./domains/NOTIFICATIONS.md) | 반영·일부 확정 | 모든 기기 토큰 비활성화·Refresh Token 폐기·기발급 Access Token 사용자 단위 차단 |
 
 ## 최신 확정 ERD 현행 테이블 24개
 

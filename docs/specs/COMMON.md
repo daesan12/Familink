@@ -20,17 +20,30 @@
 - 로그인·재발급·로그아웃은 API 계약의 인증 흐름을 따른다.
 - 클라이언트는 Access Token을 사용한다. Refresh Token 재발급은 `API-AUTH-004`, 로그아웃은 `API-AUTH-005` 계약을 따른다.
 - Access Token은 서버에 상시 저장하지 않는 자체 검증 JWT이며 유효 기간은
-  설정값으로 관리하고 기본값은 30분이다. 로그아웃한 Access Token만
-  `blacklist:{accessToken}` 키에 `logout` 값과 남은 만료 시간 TTL로
-  저장하며 인증 필터는 서명·만료 검증 후 블랙리스트를 확인한다.
+  설정값으로 관리하고 기본값은 30분이다. 로그아웃은 요청에 사용한 Access
+  Token을 `blacklist:{accessToken}` 키에 `logout` 값과 남은 만료 시간 TTL로
+  저장한다. 회원 탈퇴는 `blacklist:user:{userId}` 키에 `withdrawn` 값과
+  Access Token 전체 유효 기간 TTL을 저장해 탈퇴 전에 발급된 모든 Access
+  Token을 차단한다. 인증 필터는 서명·만료 검증 후 토큰 단위 키와 사용자
+  단위 키를 모두 확인한다.
 - Refresh Token은 JWT로 발급해 사용자별 단일 Redis 키
   `refresh:{userId}`의 값으로 저장한다. 유효 기간은 설정값으로 관리하고
   기본값은 14일이며 Redis 키에도 같은 TTL을 적용한다.
-- 새 로그인은 같은 사용자의 기존 Refresh Token을 덮어써 단일 세션을
-  유지한다. 재발급은 현재 저장된 Refresh Token만 원자적으로 새 토큰으로
-  회전하고 TTL을 기본 14일로 다시 설정하며, 기존 토큰의 재사용을 거부한다.
+- 새 로그인은 활성 Refresh Token이 없을 때만 사용자별 Redis 키를 생성한다.
+  이미 활성 Refresh Token이 있으면 기존 세션과 저장값을 보존하고
+  `409 ACTIVE_SESSION_EXISTS`를 반환한다. 로그아웃·탈퇴·만료로 키가 제거된
+  뒤에는 다시 로그인할 수 있다.
+- 재발급은 현재 저장된 Refresh Token만 원자적으로 새 토큰으로 회전하고
+  TTL을 기본 14일로 다시 설정하며, 기존 토큰의 재사용을 거부한다. 직전
+  토큰을 허용하는 유예 시간과 최초 로그인 시각 기준의 별도 절대 세션 상한은
+  두지 않는다.
+- Redis에서 사용자별 Refresh Token 키가 유실되면 기존 Refresh Token으로
+  재발급할 수 없으므로 다시 로그인해야 한다. 이미 발급된 Access Token은
+  만료되거나 블랙리스트에 등록될 때까지 자체 검증 규칙을 따른다.
 - 로그아웃은 인증에 사용한 Access Token을 블랙리스트에 등록하고, 요청한
   Refresh Token이 현재 저장값이면 해당 사용자 키를 삭제한다.
+- 회원 탈퇴는 사용자별 Refresh Token 키를 조건 없이 삭제하고, 요청 Access
+  Token과 탈퇴 전에 발급된 나머지 Access Token을 모두 차단한다.
 - 현재 회원가입과 로그인은 로그인 ID와 비밀번호를 사용한다. 이메일
   회원가입·이메일 로그인·이메일 인증은 지원하지 않는다.
 - AI 전화 전용 Kotlin 모듈은 Spring Boot에 Access Token, 선택한

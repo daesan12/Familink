@@ -6,7 +6,7 @@
 - 차단 변경: 예
 - 영향 스펙·계약: `API-AUTH-005`, `API-NOTIFICATIONS-001`, `API-NOTIFICATIONS-008`, `NOTIFICATIONS`, `device_tokens`
 - 관련 작업: `S15P11B104-210` N1~N8
-- 관련 제안: [`CHG-S15P11B104-114-auth-token-storage-and-ttl.md`](../pending/CHG-S15P11B104-114-auth-token-storage-and-ttl.md), [`CHG-S15P11B104-114-common-response-envelope.md`](../pending/CHG-S15P11B104-114-common-response-envelope.md), [`CHG-S15P11B104-116-withdrawal-side-effects.md`](../pending/CHG-S15P11B104-116-withdrawal-side-effects.md)
+- 관련 제안: [`CHG-S15P11B104-114-auth-token-storage-and-ttl.md`](./CHG-S15P11B104-114-auth-token-storage-and-ttl.md), [`CHG-S15P11B104-114-common-response-envelope.md`](../pending/CHG-S15P11B104-114-common-response-envelope.md), [`CHG-S15P11B104-116-withdrawal-side-effects.md`](../pending/CHG-S15P11B104-116-withdrawal-side-effects.md)
 
 ## 기존 내용
 

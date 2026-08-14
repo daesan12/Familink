@@ -6,7 +6,7 @@
 - 차단 변경: 예
 - 영향 스펙·계약: `docs/specs/COMMON.md`, `docs/specs/contracts/API.md`, `docs/specs/UI_AND_NAVIGATION.md`
 - 관련 작업: `S15P11B104-141`, `S15P11B104-142` 및 Access Token이 필요한 모든 프런트엔드 API 연동 작업
-- 관련 제안: [`CHG-S15P11B104-114-auth-token-storage-and-ttl.md`](../pending/CHG-S15P11B104-114-auth-token-storage-and-ttl.md)
+- 관련 제안: [`CHG-S15P11B104-114-auth-token-storage-and-ttl.md`](./CHG-S15P11B104-114-auth-token-storage-and-ttl.md)
 
 ## 기존 내용
 
@@ -34,7 +34,7 @@
 - 서버 로그아웃 실패 시 로컬 인증 정보를 삭제하는지
 
 기존
-`docs/spec-changes/pending/CHG-S15P11B104-114-auth-token-storage-and-ttl.md`는
+당시 pending이던 `CHG-S15P11B104-114-auth-token-storage-and-ttl.md`는
 클라이언트 single-flight를 질문으로 남겼고, 2026-07-29 일부 승인에서 해당
 항목을 승인 범위에서 제외했다. 따라서 그 pending 내용을 현재 구현 기준으로
 사용할 수 없다.
