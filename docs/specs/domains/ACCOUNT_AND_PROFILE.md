@@ -48,8 +48,16 @@
 7. 사용자는 자신의 프로필을 조회·수정할 수 있다. 같은 그룹의 활성
    구성원 프로필은 `memberId`, 조회자 기준 `displayName`, 만 나이 `age`,
    `gender`만 조회하며 로그인 ID·생년월일·사용자 ID는 반환하지 않는다.
-8. 사용자가 탈퇴하면 `login_id`, `password_hash`, `name`, `birth_date`, `gender`, `profile_image_url`을 NULL로 익명화하고 `withdrawn_at`을 기록한다. 같은 트랜잭션에서 사용자의 모든 기기 토큰을 비활성화한다. 작성 기록과 과거 그룹 관계는 보존하며 기존 계정은 복구하지 않는다.
-9. 인증이 필요한 기능은 Access Token을 사용한다. 토큰 재발급에는 Refresh Token을 사용한다.
+8. 사용자가 탈퇴하면 `login_id`, `password_hash`, `name`, `birth_date`,
+   `gender`, `profile_image_url`을 NULL로 익명화하고 `withdrawn_at`을 기록한다.
+   같은 트랜잭션에서 사용자의 모든 기기 토큰을 비활성화한다. 사용자별
+   Refresh Token을 폐기하고 탈퇴 전에 발급된 모든 Access Token을 사용자
+   단위 블랙리스트로 차단한다. 작성 기록과 과거 그룹 관계는 보존하며 기존
+   계정은 복구하지 않는다.
+9. 인증이 필요한 기능은 Access Token을 사용하고 토큰 재발급에는 Refresh
+   Token을 사용한다. 로그인은 활성 Refresh Token이 없을 때만 새 Token
+   Pair를 발급한다. 이미 활성 Refresh Token이 있으면 기존 세션을 보존하고
+   `409 ACTIVE_SESSION_EXISTS`를 반환한다.
 10. 프로필 이미지는 `profile-image` 목적의 업로드 URL로 이미지 1개를
     업로드한 뒤 반환된 안정적인 `fileUrl`로 연결한다. 프로필 수정 요청에서
     이미지 필드를 생략하면 유지하고, `null`이면 삭제하며, 문자열이면
@@ -116,9 +124,12 @@
 
 ### AC-002
 
-- Given: 사용자가 유효한 인증 정보를 갖고 있다.
+- Given: 사용자가 유효한 인증 정보를 갖고 있고 활성 Refresh Token이 없다.
 - When: 로그인을 요청한다.
 - Then: Access Token과 Refresh Token 기반 인증 결과를 받는다.
+- Given: 사용자의 활성 Refresh Token이 이미 저장되어 있다.
+- When: 같은 계정으로 다시 로그인을 요청한다.
+- Then: 기존 Refresh Token은 유지되고 `409 ACTIVE_SESSION_EXISTS`를 받는다.
 
 ### AC-003
 
@@ -138,7 +149,8 @@
 - When: 탈퇴가 처리된다.
 - Then: 개인정보는 익명화되고 모든 기기 토큰은 비활성화되며 기존 서비스
   기록은 보존된다. 모든 활성 멤버십은 종료되고 해당 멤버십의 일정 참여자
-  연결은 삭제되며, 일정 자체와 작성자·멤버십 이력은 유지된다.
+  연결은 삭제되며, 일정 자체와 작성자·멤버십 이력은 유지된다. Refresh
+  Token은 폐기되고 탈퇴 전에 발급된 모든 Access Token은 차단된다.
 
 ### AC-005
 

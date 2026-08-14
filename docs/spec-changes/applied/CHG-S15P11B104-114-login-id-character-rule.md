@@ -6,7 +6,7 @@
 - 차단 변경: 아니오
 - 영향 스펙·계약: `contracts/DATA_MODEL.md` `users` 활성 계정 제약, `contracts/API.md` `API-AUTH-001`·`API-AUTH-002`·`API-USERS-002`
 - 관련 작업: S15P11B104-114
-- 관련 제안: [`CHG-S15P11B104-114-common-response-envelope.md`](../pending/CHG-S15P11B104-114-common-response-envelope.md), [`CHG-S15P11B104-114-auth-token-storage-and-ttl.md`](../pending/CHG-S15P11B104-114-auth-token-storage-and-ttl.md)
+- 관련 제안: [`CHG-S15P11B104-114-common-response-envelope.md`](../pending/CHG-S15P11B104-114-common-response-envelope.md), [`CHG-S15P11B104-114-auth-token-storage-and-ttl.md`](./CHG-S15P11B104-114-auth-token-storage-and-ttl.md)
 
 ## 기존 내용
 

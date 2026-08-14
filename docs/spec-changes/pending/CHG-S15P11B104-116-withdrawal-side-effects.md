@@ -6,7 +6,7 @@
 - 차단 변경: 아니오
 - 영향 스펙·계약: `domains/ACCOUNT_AND_PROFILE.md` 「확정된 동작」 8번, `contracts/API.md` `API-USERS-003`, `contracts/DATA_MODEL.md` `group_members`·탈퇴 정책, `COMMON.md` 「인증과 요청 경계」의 블랙리스트 키와 인증 필터 규정. 미결 질문 1번은 `contracts/API.md` `API-GROUPS-013`과 `domains/GROUPS_AND_MEMBERSHIP.md` 「확정된 동작」 10·11번에도 걸친다.
 - 관련 작업: S15P11B104-116, S15P11B104-120(미결 질문 1번 보강), S15P11B104-194(사용자 단위 차단 구현), S15P11B104-348(미결 질문 2번 보강)
-- 관련 제안: [`CHG-S15P11B104-114-auth-token-storage-and-ttl.md`](./CHG-S15P11B104-114-auth-token-storage-and-ttl.md), [`CHG-S15P11B104-116-profile-partial-update.md`](./CHG-S15P11B104-116-profile-partial-update.md)
+- 관련 제안: [`CHG-S15P11B104-114-auth-token-storage-and-ttl.md`](../applied/CHG-S15P11B104-114-auth-token-storage-and-ttl.md), [`CHG-S15P11B104-116-profile-partial-update.md`](./CHG-S15P11B104-116-profile-partial-update.md)
 
 ## 기존 내용
 

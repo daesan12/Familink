@@ -90,16 +90,23 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
 |---|---|---|---|---|---|
 | `API-AUTH-001` | `GET /auth/login-id/check` | Spring Boot · 공개 | query `loginId` | `200`: `available` | `400 INVALID_REQUEST` |
 | `API-AUTH-002` | `POST /auth/signup` | Spring Boot · 공개 | `loginId`, `password`, `name`, `birthDate`, `gender` | `201`: `userId`, `loginId`, `name`, `createdAt` | `400 INVALID_REQUEST`; `409 LOGIN_ID_DUPLICATED` |
-| `API-AUTH-003` | `POST /auth/login` | Spring Boot · 공개 | `loginId`, `password` | `200`: `tokenType=Bearer`, `accessToken`, `accessTokenExpiresIn=1800`, `refreshToken`, `user{id,name}` | `400 INVALID_REQUEST`; `401 INVALID_CREDENTIALS` |
+| `API-AUTH-003` | `POST /auth/login` | Spring Boot · 공개 | `loginId`, `password` | `200`: `tokenType=Bearer`, `accessToken`, `accessTokenExpiresIn=1800`, `refreshToken`, `user{id,name}` | `400 INVALID_REQUEST`; `401 INVALID_CREDENTIALS`; `409 ACTIVE_SESSION_EXISTS`; `429 LOGIN_RATE_LIMITED` |
 | `API-AUTH-004` | `POST /auth/reissue` | Spring Boot · Refresh Token | `refreshToken` | `200`: `tokenType=Bearer`, `accessToken`, `accessTokenExpiresIn=1800`, `refreshToken` | `400 INVALID_REQUEST`; `401 INVALID_REFRESH_TOKEN` |
 | `API-AUTH-005` | `POST /auth/logout` | Spring Boot · 토큰 소유자 | `refreshToken` | `204 No Content` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-USERS-001` | `GET /users/me` | Spring Boot · 본인 | 없음 | `200`: `loginId`, `name`, `birthDate`, `gender`, `profileImageUrl` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN` |
 | `API-USERS-002` | `PATCH /users/me` | Spring Boot · 본인 | `name`, `loginId`, `birthDate`, `gender`, `profileImageUrl` | `200`: `id`, `name`, `updatedAt` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `409 LOGIN_ID_DUPLICATED` |
 | `API-USERS-003` | `DELETE /users/me` | Spring Boot · 본인 | 없음 | `204 No Content` | `400 INVALID_REQUEST`; `401 UNAUTHORIZED`; `403 FORBIDDEN`; `409 MANAGER_TRANSFER_REQUIRED` |
 
+- `API-AUTH-003`은 자격 증명이 유효해도 사용자별 Redis 키에 활성 Refresh
+  Token이 이미 있으면 새 Token Pair를 발급하지 않고 기존 저장값을 보존한
+  채 `409 ACTIVE_SESSION_EXISTS`를 반환한다. 로그아웃·탈퇴·만료로 키가
+  제거된 뒤에는 다시 로그인할 수 있다.
 - `API-AUTH-004`는 현재 Redis에 저장된 Refresh Token과 요청 토큰이 같을
   때만 새 Token Pair로 원자적으로 회전한다. 성공하면 기존 Refresh Token은
   즉시 무효화되고 새 Refresh Token의 유효 기간은 기본 14일로 다시 시작한다.
+  직전 토큰 유예 시간과 최초 로그인 기준의 별도 절대 세션 상한은 없다.
+  같은 Refresh Token으로 병렬 호출하면 한 요청만 성공하고 나머지는
+  `401 INVALID_REFRESH_TOKEN`을 반환한다.
 - 클라이언트는 보호 API의 `401 UNAUTHORIZED`에만 자동 재발급하고 `403`에는
   재발급하지 않는다. 동시에 발생한 여러 `401`은 하나의 재발급 결과를
   공유한다. 성공 시 새 Token Pair 저장을 완료한 뒤 각 원 요청을 한 번만
@@ -118,6 +125,10 @@ Notion 활성 API 59건의 ID, Method, Path, 처리 백엔드, 권한, 핵심 �
   발급받아 보관 중인 token으로 `API-NOTIFICATIONS-008`을 호출한다.
   `API-AUTH-005` 요청에 기기 token을 추가하지 않으며 서버가
   Access/Refresh Token만으로 기기를 추측하지 않는다.
+- `API-USERS-003`이 성공하면 사용자별 Refresh Token 키를 삭제하고, 요청에
+  사용한 Access Token은 남은 만료 시간 동안 차단한다. 또한
+  `blacklist:user:{userId}`를 Access Token 전체 유효 기간 동안 등록해 탈퇴
+  전에 발급된 다른 Access Token도 차단한다.
 - 프로필 이미지는 `API-FILES-001`에 `purpose=profile-image`와 이미지
   1개를 보내 받은 URL에 응답 `headers`를 그대로 사용해 PUT한 뒤, 반환된
   `fileUrl`을 `API-USERS-002.profileImageUrl`로 전달한다.
