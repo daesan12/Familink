@@ -1,0 +1,231 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1050" viewBox="0 0 1600 1050" role="img" aria-labelledby="title desc">
+  <title id="title">Familink 프로젝트 운영 당시 인프라 아키텍처</title>
+  <desc id="desc">GitLab과 Jenkins에서 ECR과 SSM을 거쳐 AWS 운영 EC2에 배포하고, Route 53, Nginx, Spring Boot, Redis, RDS, S3, CloudWatch를 사용하는 구성</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FCFBFF"/>
+      <stop offset="1" stop-color="#F5F1FF"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7764D6"/>
+      <stop offset="1" stop-color="#E487AE"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#4F3D7D" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7764D6"/>
+    </marker>
+    <marker id="arrow-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7C8496"/>
+    </marker>
+    <style>
+      text { font-family: Pretendard, "Noto Sans KR", "Segoe UI", sans-serif; fill: #28223A; }
+      .title { font-size: 34px; font-weight: 800; }
+      .subtitle { font-size: 16px; fill: #716985; }
+      .section { font-size: 19px; font-weight: 800; }
+      .box-title { font-size: 17px; font-weight: 800; }
+      .box-sub { font-size: 13px; fill: #6F687E; }
+      .small { font-size: 12px; fill: #6F687E; }
+      .pill { font-size: 12px; font-weight: 700; }
+      .white { fill: #FFFFFF; }
+      .flow { fill: none; stroke: #7764D6; stroke-width: 3; marker-end: url(#arrow-purple); }
+      .flow-dashed { fill: none; stroke: #7C8496; stroke-width: 2.5; stroke-dasharray: 8 7; marker-end: url(#arrow-gray); }
+      .boundary { fill: #FFFFFF; stroke: #CFC5F6; stroke-width: 2; }
+      .owned { fill: #F4F0FF; stroke: #8B78DE; stroke-width: 2; }
+      .team { fill: #F5F6F8; stroke: #B8BDC8; stroke-width: 2; }
+      .managed { fill: #FFF8FB; stroke: #E7A0BD; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1050" rx="28" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1600" height="9" rx="4" fill="url(#accent)"/>
+
+  <text x="64" y="65" class="title">프로젝트 운영 당시 인프라 구성</text>
+  <text x="64" y="96" class="subtitle">최종 Jenkinsfile · production Compose · AWS 운영 문서 기준</text>
+
+  <g transform="translate(1100,43)">
+    <rect width="195" height="36" rx="18" fill="#F4F0FF" stroke="#8B78DE"/>
+    <circle cx="20" cy="18" r="6" fill="#7764D6"/>
+    <text x="34" y="23" class="small" font-weight="700">장대산 Backend·Infra</text>
+    <rect x="210" width="150" height="36" rx="18" fill="#F5F6F8" stroke="#B8BDC8"/>
+    <circle cx="230" cy="18" r="6" fill="#9EA4B0"/>
+    <text x="244" y="23" class="small" font-weight="700">팀 AI 기능 영역</text>
+  </g>
+
+  <!-- Client and entry -->
+  <g filter="url(#shadow)">
+    <rect x="60" y="150" width="220" height="128" rx="20" class="boundary"/>
+    <rect x="82" y="172" width="54" height="82" rx="10" fill="#E8E1FF" stroke="#7764D6" stroke-width="2"/>
+    <rect x="96" y="181" width="26" height="58" rx="4" fill="#FFFFFF"/>
+    <circle cx="109" cy="246" r="3" fill="#7764D6"/>
+    <text x="154" y="193" class="box-title">Android App</text>
+    <text x="154" y="217" class="box-sub">React Native</text>
+    <text x="154" y="239" class="box-sub">Kotlin WebRTC</text>
+  </g>
+
+  <path d="M280 205 H360" class="flow"/>
+  <text x="300" y="190" class="small">HTTPS</text>
+
+  <g filter="url(#shadow)">
+    <rect x="360" y="150" width="240" height="128" rx="20" class="owned"/>
+    <text x="385" y="187" class="box-title">Route 53 · TLS</text>
+    <text x="385" y="214" class="box-sub">고정 도메인과 HTTPS 진입점</text>
+    <rect x="385" y="232" width="85" height="26" rx="13" fill="#7764D6"/>
+    <text x="427" y="250" class="pill" fill="#FFFFFF" text-anchor="middle">80 → 443</text>
+    <rect x="480" y="232" width="94" height="26" rx="13" fill="#E487AE"/>
+    <text x="527" y="250" class="pill" fill="#FFFFFF" text-anchor="middle">Certbot</text>
+  </g>
+
+  <path d="M600 205 H665" class="flow"/>
+
+  <!-- AWS VPC -->
+  <rect x="650" y="125" width="890" height="620" rx="30" fill="#FFFFFF" stroke="#B7A9EC" stroke-width="3"/>
+  <text x="682" y="165" class="section">개인 AWS · ap-northeast-2</text>
+  <text x="682" y="190" class="small">familink-prod-vpc · 10.0.0.0/16</text>
+
+  <rect x="680" y="220" width="520" height="355" rx="24" fill="#FBFAFF" stroke="#D9D0F5" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="705" y="253" class="box-title">Public Subnet · Production EC2</text>
+  <text x="705" y="276" class="box-sub">Internet에는 80·443만 공개 · SSH 22 미개방</text>
+
+  <g filter="url(#shadow)">
+    <rect x="720" y="305" width="170" height="92" rx="18" class="owned"/>
+    <text x="805" y="340" class="box-title" text-anchor="middle">Nginx</text>
+    <text x="805" y="366" class="box-sub" text-anchor="middle">Reverse Proxy</text>
+  </g>
+  <path d="M890 351 H935" class="flow"/>
+  <g filter="url(#shadow)">
+    <rect x="935" y="292" width="220" height="118" rx="18" class="owned"/>
+    <text x="1045" y="329" class="box-title" text-anchor="middle">Spring Boot</text>
+    <text x="1045" y="354" class="box-sub" text-anchor="middle">Java 21 · Actuator</text>
+    <text x="1045" y="379" class="box-sub" text-anchor="middle">Flyway · JPA · FCM</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="720" y="445" width="170" height="88" rx="18" class="owned"/>
+    <text x="805" y="480" class="box-title" text-anchor="middle">Redis 7.4</text>
+    <text x="805" y="505" class="box-sub" text-anchor="middle">AOF · Private</text>
+  </g>
+  <path d="M935 385 C910 410 890 445 860 456" class="flow"/>
+
+  <!-- RDS private subnets -->
+  <rect x="1230" y="220" width="275" height="205" rx="24" fill="#FFF9FC" stroke="#F0B0C8" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="1255" y="253" class="box-title">Private Subnets · 2 AZ</text>
+  <text x="1255" y="276" class="box-sub">Public access: No</text>
+  <g filter="url(#shadow)">
+    <rect x="1260" y="302" width="215" height="90" rx="18" class="managed"/>
+    <text x="1367" y="338" class="box-title" text-anchor="middle">RDS PostgreSQL 16</text>
+    <text x="1367" y="364" class="box-sub" text-anchor="middle">EC2 SG → 5432 only</text>
+  </g>
+  <path d="M1155 340 H1260" class="flow"/>
+
+  <!-- AWS managed supporting services -->
+  <g filter="url(#shadow)">
+    <rect x="1230" y="455" width="132" height="92" rx="18" class="owned"/>
+    <text x="1296" y="490" class="box-title" text-anchor="middle">S3</text>
+    <text x="1296" y="516" class="box-sub" text-anchor="middle">App Direct PUT</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1373" y="455" width="132" height="92" rx="18" class="owned"/>
+    <text x="1439" y="490" class="box-title" text-anchor="middle">Parameter</text>
+    <text x="1439" y="516" class="box-sub" text-anchor="middle">Store</text>
+  </g>
+  <path d="M1155 375 C1205 395 1210 470 1230 485" class="flow"/>
+  <path d="M1155 400 C1240 435 1340 460 1373 485" class="flow"/>
+
+  <g filter="url(#shadow)">
+    <rect x="700" y="615" width="245" height="92" rx="18" class="owned"/>
+    <text x="822" y="650" class="box-title" text-anchor="middle">CloudWatch</text>
+    <text x="822" y="676" class="box-sub" text-anchor="middle">Metrics · Logs · Health</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="965" y="615" width="220" height="92" rx="18" class="owned"/>
+    <text x="1075" y="650" class="box-title" text-anchor="middle">SSM · IAM Role</text>
+    <text x="1075" y="676" class="box-sub" text-anchor="middle">무SSH 배포·접속</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1205" y="615" width="280" height="92" rx="18" class="team"/>
+    <text x="1345" y="647" class="box-title" text-anchor="middle">External AI · FCM</text>
+    <text x="1345" y="673" class="box-sub" text-anchor="middle">OpenAI Realtime · Gemini · Firebase</text>
+  </g>
+  <path d="M1045 410 C1045 520 905 555 835 615" class="flow"/>
+  <path d="M1075 615 V575" class="flow"/>
+  <path d="M1155 365 C1220 410 1250 580 1305 615" class="flow-dashed"/>
+
+  <!-- CI/CD lane -->
+  <rect x="60" y="335" width="545" height="550" rx="28" fill="#FFFFFF" stroke="#CFC5F6" stroke-width="2"/>
+  <text x="90" y="377" class="section">CI/CD · SSAFY 제공 EC2</text>
+  <text x="90" y="402" class="small">운영 서버와 빌드·staging 환경 분리</text>
+
+  <g filter="url(#shadow)">
+    <rect x="95" y="440" width="195" height="86" rx="18" class="owned"/>
+    <text x="192" y="474" class="box-title" text-anchor="middle">GitLab</text>
+    <text x="192" y="499" class="box-sub" text-anchor="middle">Push · Merge Request</text>
+  </g>
+  <path d="M290 483 H345" class="flow"/>
+  <g filter="url(#shadow)">
+    <rect x="345" y="430" width="220" height="106" rx="18" class="owned"/>
+    <text x="455" y="466" class="box-title" text-anchor="middle">Jenkins</text>
+    <text x="455" y="491" class="box-sub" text-anchor="middle">Test · BootJar · Docker</text>
+    <text x="455" y="514" class="box-sub" text-anchor="middle">Multibranch Pipeline</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="95" y="585" width="210" height="104" rx="18" class="owned"/>
+    <text x="200" y="620" class="box-title" text-anchor="middle">Staging Compose</text>
+    <text x="200" y="646" class="box-sub" text-anchor="middle">Backend · PostgreSQL</text>
+    <text x="200" y="669" class="box-sub" text-anchor="middle">Redis · localhost only</text>
+  </g>
+  <path d="M430 536 C405 570 335 605 305 620" class="flow"/>
+  <text x="340" y="577" class="small">develop</text>
+
+  <g filter="url(#shadow)">
+    <rect x="350" y="585" width="215" height="104" rx="18" class="owned"/>
+    <text x="458" y="620" class="box-title" text-anchor="middle">Amazon ECR</text>
+    <text x="458" y="646" class="box-sub" text-anchor="middle">familink-backend</text>
+    <text x="458" y="669" class="box-sub" text-anchor="middle">Commit SHA Tag</text>
+  </g>
+  <path d="M475 536 V585" class="flow"/>
+  <text x="488" y="564" class="small">main</text>
+
+  <g filter="url(#shadow)">
+    <rect x="95" y="750" width="210" height="92" rx="18" class="owned"/>
+    <text x="200" y="785" class="box-title" text-anchor="middle">Mattermost</text>
+    <text x="200" y="811" class="box-sub" text-anchor="middle">시작 · 성공 · 실패 알림</text>
+  </g>
+  <path d="M405 536 C370 665 290 725 265 750" class="flow"/>
+
+  <g filter="url(#shadow)">
+    <rect x="350" y="750" width="215" height="92" rx="18" class="owned"/>
+    <text x="458" y="782" class="box-title" text-anchor="middle">Health &amp; Rollback</text>
+    <text x="458" y="807" class="box-sub" text-anchor="middle">Internal + External</text>
+    <text x="458" y="828" class="box-sub" text-anchor="middle">실패 시 직전 SHA 복구</text>
+  </g>
+
+  <path d="M565 636 C650 790 880 810 1005 707" class="flow"/>
+  <text x="665" y="782" class="small">ECR Pull · SSM Run Command</text>
+  <path d="M1005 707 C900 875 630 890 565 800" class="flow"/>
+  <text x="720" y="885" class="small">배포 결과·이중 health check</text>
+
+  <!-- Footer process -->
+  <rect x="650" y="785" width="890" height="150" rx="24" fill="#29243A"/>
+  <text x="685" y="824" class="section white">Production release flow</text>
+  <g transform="translate(690,852)">
+    <rect width="130" height="48" rx="14" fill="#493F6B"/>
+    <text x="65" y="30" class="pill white" text-anchor="middle">1. Test &amp; Build</text>
+    <text x="155" y="30" font-size="22" fill="#C8BDF7">→</text>
+    <rect x="180" width="130" height="48" rx="14" fill="#5D4F92"/>
+    <text x="245" y="30" class="pill white" text-anchor="middle">2. ECR SHA</text>
+    <text x="335" y="30" font-size="22" fill="#C8BDF7">→</text>
+    <rect x="360" width="130" height="48" rx="14" fill="#7764D6"/>
+    <text x="425" y="30" class="pill white" text-anchor="middle">3. SSM Deploy</text>
+    <text x="515" y="30" font-size="22" fill="#C8BDF7">→</text>
+    <rect x="540" width="130" height="48" rx="14" fill="#9B78D1"/>
+    <text x="605" y="30" class="pill white" text-anchor="middle">4. Health Check</text>
+    <text x="695" y="30" font-size="22" fill="#F1B2CA">→</text>
+    <rect x="720" width="130" height="48" rx="14" fill="#D47EA4"/>
+    <text x="785" y="30" class="pill white" text-anchor="middle">5. Auto Rollback</text>
+  </g>
+
+  <text x="65" y="1008" class="small">※ 프로젝트 종료 후 비용 방지를 위해 운영 AWS 리소스는 정리 대상입니다. 이 그림은 실제 운영 당시 구성을 기록합니다.</text>
+</svg>
