@@ -16,7 +16,7 @@ import com.ssafy.s15p11b104.global.security.AuthenticatedUser;
  * 사용자당 최대 1건을 보장하므로 단건 조회로 확정할 수 있다.
  */
 @Component
-@Profile("!ai-call-dev")
+@Profile("!local | !ai-call-dev")
 public class JwtCallActorResolver implements CallActorResolver {
 
 	private final GroupMemberCallRepository groupMemberRepository;

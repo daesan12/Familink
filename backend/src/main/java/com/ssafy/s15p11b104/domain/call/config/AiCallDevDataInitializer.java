@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
-@Profile("ai-call-dev")
+@Profile("local & ai-call-dev")
 public class AiCallDevDataInitializer implements ApplicationRunner {
 
 	private final JdbcTemplate jdbcTemplate;
@@ -35,9 +35,9 @@ public class AiCallDevDataInitializer implements ApplicationRunner {
 		jdbcTemplate.execute("""
 			insert into users (login_id, password_hash, name, birth_date, gender)
 			values
-				('ai-call-user', 'dev-only', '김수호', date '1952-04-18', 'MALE'),
-				('ai-guardian-1', 'dev-only', '민지', date '1980-06-12', 'FEMALE'),
-				('ai-guardian-2', 'dev-only', '준호', date '2002-11-03', 'MALE')
+				('demoaicare', 'dev-only', '데모 피보호자', date '1952-04-18', 'MALE'),
+				('demoaiguardian1', 'dev-only', '데모 보호자 일', date '1980-06-12', 'FEMALE'),
+				('demoaiguardian2', 'dev-only', '데모 보호자 이', date '2002-11-03', 'MALE')
 			on conflict (login_id) do nothing
 			""");
 	}
@@ -45,7 +45,7 @@ public class AiCallDevDataInitializer implements ApplicationRunner {
 	private void insertGroup() {
 		jdbcTemplate.execute("""
 			insert into family_groups (name, invite_code)
-			values ('AI가족', 'AICALL')
+			values ('데모 AI 가족', 'DEMOAI')
 			on conflict (invite_code) do nothing
 			""");
 	}
@@ -58,12 +58,12 @@ public class AiCallDevDataInitializer implements ApplicationRunner {
 			from family_groups family
 			cross join (
 				values
-					('ai-call-user', 'CARE_RECEIVER', false),
-					('ai-guardian-1', 'GUARDIAN', true),
-					('ai-guardian-2', 'GUARDIAN', false)
+					('demoaicare', 'CARE_RECEIVER', false),
+					('demoaiguardian1', 'GUARDIAN', true),
+					('demoaiguardian2', 'GUARDIAN', false)
 			) as values_to_insert(login_id, role, is_manager)
 			join users user_account on user_account.login_id = values_to_insert.login_id
-			where family.invite_code = 'AICALL'
+			where family.invite_code = 'DEMOAI'
 			on conflict (group_id, user_id) do nothing
 			""");
 	}
@@ -74,15 +74,15 @@ public class AiCallDevDataInitializer implements ApplicationRunner {
 			select family.id, owner.id, target.id, values_to_insert.alias
 			from family_groups family
 			join group_members owner on owner.group_id = family.id
-			join users owner_user on owner_user.id = owner.user_id and owner_user.login_id = 'ai-call-user'
+			join users owner_user on owner_user.id = owner.user_id and owner_user.login_id = 'demoaicare'
 			cross join (
 				values
-					('ai-guardian-1', '딸'),
-					('ai-guardian-2', '손자')
+					('demoaiguardian1', '딸'),
+					('demoaiguardian2', '손자')
 			) as values_to_insert(login_id, alias)
 			join users target_user on target_user.login_id = values_to_insert.login_id
 			join group_members target on target.group_id = family.id and target.user_id = target_user.id
-			where family.invite_code = 'AICALL'
+			where family.invite_code = 'DEMOAI'
 			on conflict (group_id, owner_member_id, target_member_id) do update
 			set alias = excluded.alias,
 				updated_at = current_timestamp
@@ -97,21 +97,21 @@ public class AiCallDevDataInitializer implements ApplicationRunner {
 			from group_members member
 			join users user_account on user_account.id = member.user_id
 			cross join (values ('산책'), ('야구')) as values_to_insert(interest)
-			where user_account.login_id = 'ai-call-user'
+			where user_account.login_id = 'demoaicare'
 			on conflict (care_receiver_member_id, interest_text) do nothing
 			""");
 	}
 
 	private void insertPosts() {
 		insertPost(
-			"ai-guardian-1",
+			"demoaiguardian1",
 			"오늘 점심에 된장국을 맛있게 먹었어요.",
-			"민지 딸이 오늘 점심으로 된장국을 먹었다는 소식을 전했습니다."
+			"데모 보호자 일이 오늘 점심으로 된장국을 먹었다는 소식을 전했습니다."
 		);
 		insertPost(
-			"ai-guardian-2",
+			"demoaiguardian2",
 			"주말 야구 경기에서 응원하는 팀이 이겼어요!",
-			"준호 손자가 주말 야구 경기에서 응원하는 팀이 이겨 기뻤다고 전했습니다."
+			"데모 보호자 이가 주말 야구 경기에서 응원하는 팀이 이겨 기뻤다고 전했습니다."
 		);
 	}
 
@@ -123,7 +123,7 @@ public class AiCallDevDataInitializer implements ApplicationRunner {
 				from family_groups family
 				join group_members author on author.group_id = family.id
 				join users author_user on author_user.id = author.user_id
-				where family.invite_code = 'AICALL'
+				where family.invite_code = 'DEMOAI'
 					and author_user.login_id = ?
 					and not exists (
 						select 1
@@ -146,7 +146,7 @@ public class AiCallDevDataInitializer implements ApplicationRunner {
 			join users author_user on author_user.id = author.user_id
 			where fixture_post.group_id = family.id
 				and fixture_post.author_member_id = author.id
-				and family.invite_code = 'AICALL'
+				and family.invite_code = 'DEMOAI'
 				and author_user.login_id = ?
 				and fixture_post.content = ?
 			""", authorLoginId, content);
@@ -158,7 +158,7 @@ public class AiCallDevDataInitializer implements ApplicationRunner {
 				select member.id as member_id, member.group_id
 				from group_members member
 				join users user_account on user_account.id = member.user_id
-				where user_account.login_id = 'ai-call-user' and member.left_at is null
+				where user_account.login_id = 'demoaicare' and member.left_at is null
 			)
 			insert into call_sessions (
 				group_id, care_receiver_member_id, persona_id, status,

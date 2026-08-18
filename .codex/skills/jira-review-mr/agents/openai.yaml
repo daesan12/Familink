@@ -1,4 +1,0 @@
-interface:
-  display_name: "Jira MR 리뷰"
-  short_description: "Jira 기준으로 GitLab MR을 결함 중심 검토·선택적 코멘트·승인"
-  default_prompt: "Use $jira-review-mr to resolve exactly one S15P11B104 GitLab Merge Request, read the Jira and Git conventions plus the matching Jira issue and local specifications, review the complete stable diff with existing discussions and CI evidence, report actionable P0-P3 findings locally by default, publish comments only when I explicitly request it, approve only when I explicitly request it and every gate passes, re-fetch every GitLab write for verification, and never merge or complete Jira."

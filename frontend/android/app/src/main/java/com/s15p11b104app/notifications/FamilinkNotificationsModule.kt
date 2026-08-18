@@ -12,7 +12,7 @@ import com.google.firebase.messaging.FirebaseMessaging
  * FCM 등록 토큰만 React Native에 전달하는 브리지.
  *
  * 서비스 API는 직접 호출하지 않는다. 토큰 등록·비활성화는 React Native가
- * 담당한다. 경계 규정은 `docs/specs/COMMON.md`를 따른다.
+ * 담당한다.
  */
 @ReactModule(name = FamilinkNotificationsModule.NAME)
 internal class FamilinkNotificationsModule(
