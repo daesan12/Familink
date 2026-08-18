@@ -1,0 +1,827 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="2450" viewBox="0 0 2200 2450" role="img" aria-labelledby="title desc">
+<title id="title">Familink 최종 데이터 모델 ERD</title>
+<desc id="desc">Flyway V1부터 V12까지 파싱해 생성한 24개 테이블과 외래 키 관계</desc>
+<defs>
+  <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FCFBFF"/><stop offset="1" stop-color="#F7F4FF"/></linearGradient>
+  <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#4F3D7D" flood-opacity="0.10"/></filter>
+  <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#9C91C7"/></marker>
+  <style>
+    text { font-family: Pretendard, "Noto Sans KR", "Segoe UI", sans-serif; fill: #29243A; }
+    .title { font-size: 34px; font-weight: 800; }
+    .subtitle { font-size: 15px; fill: #716985; }
+    .group { font-size: 18px; font-weight: 800; }
+    .table { font-size: 15px; font-weight: 800; fill: #FFFFFF; }
+    .field { font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px; }
+      .key { font-family: "Cascadia Mono", Consolas, monospace; font-size: 10px; font-weight: 800; }
+      .constraint { font-family: "Cascadia Mono", Consolas, monospace; font-size: 10px; fill: #6F687E; }
+    .relation { fill: none; stroke: #9C91C7; stroke-width: 1.35; stroke-opacity: .42; marker-end: url(#arrow); }
+  </style>
+</defs>
+<rect width="2200" height="2450" rx="28" fill="url(#background)"/>
+<rect x="0" y="0" width="2200" height="9" rx="4" fill="#7764D6"/>
+<text x="48" y="58" class="title">Familink Data Model</text>
+<text x="48" y="88" class="subtitle">Final schema · Flyway V1–V12 · 24 tables · 42 foreign-key relations</text>
+<text x="2150" y="58" text-anchor="end" class="subtitle">PK primary key · FK foreign key · UQ unique</text>
+<rect x="35" y="155" width="400" height="42" rx="14" fill="#F4F0FF" stroke="#7764D6" stroke-width="1.5"/>
+<circle cx="57" cy="176" r="7" fill="#7764D6"/>
+<text x="74" y="182" class="group" fill="#7764D6">Account · Group</text>
+<rect x="463" y="155" width="400" height="42" rx="14" fill="#FFF1F7" stroke="#D679A2" stroke-width="1.5"/>
+<circle cx="485" cy="176" r="7" fill="#D679A2"/>
+<text x="502" y="182" class="group" fill="#D679A2">Feed · Media</text>
+<rect x="891" y="155" width="400" height="42" rx="14" fill="#FFF8E8" stroke="#B58A3C" stroke-width="1.5"/>
+<circle cx="913" cy="176" r="7" fill="#B58A3C"/>
+<text x="930" y="182" class="group" fill="#B58A3C">Calendar · Engagement</text>
+<rect x="1319" y="155" width="400" height="42" rx="14" fill="#EDF7FF" stroke="#4D83B8" stroke-width="1.5"/>
+<circle cx="1341" cy="176" r="7" fill="#4D83B8"/>
+<text x="1358" y="182" class="group" fill="#4D83B8">Call · Report</text>
+<rect x="1747" y="155" width="400" height="42" rx="14" fill="#EEFAF4" stroke="#4D9A77" stroke-width="1.5"/>
+<circle cx="1769" cy="176" r="7" fill="#4D9A77"/>
+<text x="1786" y="182" class="group" fill="#4D9A77">Notification</text>
+<path d="M 35 718 C 203 718, 267 523, 435 523" class="relation"/>
+<path d="M 35 726 C 203 726, 267 241, 435 241" class="relation"/>
+<path d="M 35 1050 C 203 1050, 267 523, 435 523" class="relation"/>
+<path d="M 35 1058 C 203 1058, 267 241, 435 241" class="relation"/>
+<path d="M 35 1306 C 203 1306, 267 523, 435 523" class="relation"/>
+<path d="M 35 1314 C 203 1314, 267 710, 435 710" class="relation"/>
+<path d="M 35 1322 C 203 1322, 267 710, 435 710" class="relation"/>
+<path d="M 35 1562 C 203 1562, 267 710, 435 710" class="relation"/>
+<path d="M 463 249 C 423 249, 475 523, 435 523" class="relation"/>
+<path d="M 463 257 C 423 257, 475 710, 435 710" class="relation"/>
+<path d="M 463 455 C 631 455, 695 241, 863 241" class="relation"/>
+<path d="M 463 692 C 631 692, 695 241, 863 241" class="relation"/>
+<path d="M 463 700 C 423 700, 475 710, 435 710" class="relation"/>
+<path d="M 463 898 C 631 898, 695 241, 863 241" class="relation"/>
+<path d="M 463 906 C 423 906, 475 710, 435 710" class="relation"/>
+<path d="M 463 1135 C 631 1135, 695 241, 863 241" class="relation"/>
+<path d="M 891 249 C 699.48 249, 626.52 523, 435 523" class="relation"/>
+<path d="M 891 257 C 699.48 257, 626.52 710, 435 710" class="relation"/>
+<path d="M 891 265 C 699.48 265, 626.52 710, 435 710" class="relation"/>
+<path d="M 891 588 C 1059 588, 1123 241, 1291 241" class="relation"/>
+<path d="M 891 596 C 699.48 596, 626.52 710, 435 710" class="relation"/>
+<path d="M 1319 249 C 947.72 249, 806.28 523, 435 523" class="relation"/>
+<path d="M 1319 257 C 947.72 257, 806.28 710, 435 710" class="relation"/>
+<path d="M 1319 569 C 1487 569, 1551 241, 1719 241" class="relation"/>
+<path d="M 1319 1572 C 1487 1572, 1551 241, 1719 241" class="relation"/>
+<path d="M 1319 2072 C 947.72 2072, 806.28 523, 435 523" class="relation"/>
+<path d="M 1319 2080 C 947.72 2080, 806.28 710, 435 710" class="relation"/>
+<path d="M 891 768 C 699.48 768, 626.52 523, 435 523" class="relation"/>
+<path d="M 891 776 C 699.48 776, 626.52 710, 435 710" class="relation"/>
+<path d="M 1747 249 C 1195.96 249, 986.04 241, 435 241" class="relation"/>
+<path d="M 1747 257 C 1195.96 257, 986.04 241, 435 241" class="relation"/>
+<path d="M 1747 265 C 1195.96 265, 986.04 523, 435 523" class="relation"/>
+<path d="M 1747 273 C 1195.96 273, 986.04 1042, 435 1042" class="relation"/>
+<path d="M 1747 281 C 1375.72 281, 1234.28 241, 863 241" class="relation"/>
+<path d="M 1747 289 C 1555.48 289, 1482.52 241, 1291 241" class="relation"/>
+<path d="M 1747 297 C 1707 297, 1759 1564, 1719 1564" class="relation"/>
+<path d="M 1747 305 C 1707 305, 1759 2064, 1719 2064" class="relation"/>
+<path d="M 1747 695 C 1195.96 695, 986.04 241, 435 241" class="relation"/>
+<path d="M 1747 913 C 1195.96 913, 986.04 241, 435 241" class="relation"/>
+<path d="M 1319 1797 C 947.72 1797, 806.28 710, 435 710" class="relation"/>
+<path d="M 1319 844 C 1487 844, 1551 241, 1719 241" class="relation"/>
+<path d="M 1319 1301 C 1487 1301, 1551 241, 1719 241" class="relation"/>
+<g filter="url(#shadow)">
+<rect x="35" y="213" width="400" height="258" rx="14" fill="#FFFFFF" stroke="#7764D6" stroke-width="1.4"/>
+<path d="M 49 213 H 421 Q 435 213 435 227 V 253 H 35 V 227 Q 35 213 49 213" fill="#7764D6"/>
+<text x="50" y="239" class="table">users</text>
+</g>
+<text x="49" y="279" class="key" fill="#7764D6">PK   </text>
+<text x="97" y="279" class="field">id</text>
+<text x="421" y="279" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="298" class="key" fill="#7764D6">UQ   </text>
+<text x="97" y="298" class="field">login_id</text>
+<text x="421" y="298" class="field" text-anchor="end" fill="#726A80">VARCHAR(15)?</text>
+<text x="49" y="317" class="key" fill="#7764D6">     </text>
+<text x="97" y="317" class="field">password_hash</text>
+<text x="421" y="317" class="field" text-anchor="end" fill="#726A80">VARCHAR(255)?</text>
+<text x="49" y="336" class="key" fill="#7764D6">     </text>
+<text x="97" y="336" class="field">name</text>
+<text x="421" y="336" class="field" text-anchor="end" fill="#726A80">VARCHAR(10)?</text>
+<text x="49" y="355" class="key" fill="#7764D6">     </text>
+<text x="97" y="355" class="field">birth_date</text>
+<text x="421" y="355" class="field" text-anchor="end" fill="#726A80">DATE?</text>
+<text x="49" y="374" class="key" fill="#7764D6">     </text>
+<text x="97" y="374" class="field">gender</text>
+<text x="421" y="374" class="field" text-anchor="end" fill="#726A80">user_gender?</text>
+<text x="49" y="393" class="key" fill="#7764D6">     </text>
+<text x="97" y="393" class="field">profile_image_url</text>
+<text x="421" y="393" class="field" text-anchor="end" fill="#726A80">VARCHAR(500)?</text>
+<text x="49" y="412" class="key" fill="#7764D6">     </text>
+<text x="97" y="412" class="field">created_at</text>
+<text x="421" y="412" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="49" y="431" class="key" fill="#7764D6">     </text>
+<text x="97" y="431" class="field">updated_at</text>
+<text x="421" y="431" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="49" y="450" class="key" fill="#7764D6">     </text>
+<text x="97" y="450" class="field">withdrawn_at</text>
+<text x="421" y="450" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<g filter="url(#shadow)">
+<rect x="35" y="495" width="400" height="163" rx="14" fill="#FFFFFF" stroke="#7764D6" stroke-width="1.4"/>
+<path d="M 49 495 H 421 Q 435 495 435 509 V 535 H 35 V 509 Q 35 495 49 495" fill="#7764D6"/>
+<text x="50" y="521" class="table">family_groups</text>
+</g>
+<text x="49" y="561" class="key" fill="#7764D6">PK   </text>
+<text x="97" y="561" class="field">id</text>
+<text x="421" y="561" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="580" class="key" fill="#7764D6">     </text>
+<text x="97" y="580" class="field">name</text>
+<text x="421" y="580" class="field" text-anchor="end" fill="#726A80">VARCHAR(10)</text>
+<text x="49" y="599" class="key" fill="#7764D6">UQ   </text>
+<text x="97" y="599" class="field">invite_code</text>
+<text x="421" y="599" class="field" text-anchor="end" fill="#726A80">VARCHAR(6)</text>
+<text x="49" y="618" class="key" fill="#7764D6">     </text>
+<text x="97" y="618" class="field">created_at</text>
+<text x="421" y="618" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="49" y="637" class="key" fill="#7764D6">     </text>
+<text x="97" y="637" class="field">updated_at</text>
+<text x="421" y="637" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<g filter="url(#shadow)">
+<rect x="35" y="682" width="400" height="308" rx="14" fill="#FFFFFF" stroke="#7764D6" stroke-width="1.4"/>
+<path d="M 49 682 H 421 Q 435 682 435 696 V 722 H 35 V 696 Q 35 682 49 682" fill="#7764D6"/>
+<text x="50" y="708" class="table">group_members</text>
+</g>
+<text x="49" y="748" class="key" fill="#7764D6">PK   </text>
+<text x="97" y="748" class="field">id</text>
+<text x="421" y="748" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="767" class="key" fill="#7764D6">FK   </text>
+<text x="97" y="767" class="field">group_id</text>
+<text x="421" y="767" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="786" class="key" fill="#7764D6">FK   </text>
+<text x="97" y="786" class="field">user_id</text>
+<text x="421" y="786" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="805" class="key" fill="#7764D6">     </text>
+<text x="97" y="805" class="field">role</text>
+<text x="421" y="805" class="field" text-anchor="end" fill="#726A80">group_role</text>
+<text x="49" y="824" class="key" fill="#7764D6">     </text>
+<text x="97" y="824" class="field">is_manager</text>
+<text x="421" y="824" class="field" text-anchor="end" fill="#726A80">BOOLEAN</text>
+<text x="49" y="843" class="key" fill="#7764D6">     </text>
+<text x="97" y="843" class="field">joined_at</text>
+<text x="421" y="843" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="49" y="862" class="key" fill="#7764D6">     </text>
+<text x="97" y="862" class="field">left_at</text>
+<text x="421" y="862" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="49" y="881" class="key" fill="#7764D6">     </text>
+<text x="97" y="881" class="field">created_at</text>
+<text x="421" y="881" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="49" y="900" class="key" fill="#7764D6">     </text>
+<text x="97" y="900" class="field">updated_at</text>
+<text x="421" y="900" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<line x1="49" y1="914" x2="421" y2="914" stroke="#E8E4F0"/>
+<text x="49" y="929" class="constraint">UQ (group_id, user_id)</text>
+<text x="49" y="948" class="constraint">UIX (group_id) · partial</text>
+<text x="49" y="967" class="constraint">UIX (user_id) · partial</text>
+<g filter="url(#shadow)">
+<rect x="35" y="1014" width="400" height="232" rx="14" fill="#FFFFFF" stroke="#7764D6" stroke-width="1.4"/>
+<path d="M 49 1014 H 421 Q 435 1014 435 1028 V 1054 H 35 V 1028 Q 35 1014 49 1014" fill="#7764D6"/>
+<text x="50" y="1040" class="table">group_join_requests</text>
+</g>
+<text x="49" y="1080" class="key" fill="#7764D6">PK   </text>
+<text x="97" y="1080" class="field">id</text>
+<text x="421" y="1080" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="1099" class="key" fill="#7764D6">FK   </text>
+<text x="97" y="1099" class="field">group_id</text>
+<text x="421" y="1099" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="1118" class="key" fill="#7764D6">FK   </text>
+<text x="97" y="1118" class="field">applicant_user_id</text>
+<text x="421" y="1118" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="1137" class="key" fill="#7764D6">     </text>
+<text x="97" y="1137" class="field">assigned_role</text>
+<text x="421" y="1137" class="field" text-anchor="end" fill="#726A80">group_role?</text>
+<text x="49" y="1156" class="key" fill="#7764D6">     </text>
+<text x="97" y="1156" class="field">status</text>
+<text x="421" y="1156" class="field" text-anchor="end" fill="#726A80">join_request_status</text>
+<text x="49" y="1175" class="key" fill="#7764D6">     </text>
+<text x="97" y="1175" class="field">created_at</text>
+<text x="421" y="1175" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="49" y="1194" class="key" fill="#7764D6">     </text>
+<text x="97" y="1194" class="field">processed_at</text>
+<text x="421" y="1194" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<line x1="49" y1="1208" x2="421" y2="1208" stroke="#E8E4F0"/>
+<text x="49" y="1223" class="constraint">UIX (group_id, applicant_user_id) · partial</text>
+<g filter="url(#shadow)">
+<rect x="35" y="1270" width="400" height="232" rx="14" fill="#FFFFFF" stroke="#7764D6" stroke-width="1.4"/>
+<path d="M 49 1270 H 421 Q 435 1270 435 1284 V 1310 H 35 V 1284 Q 35 1270 49 1270" fill="#7764D6"/>
+<text x="50" y="1296" class="table">member_aliases</text>
+</g>
+<text x="49" y="1336" class="key" fill="#7764D6">PK   </text>
+<text x="97" y="1336" class="field">id</text>
+<text x="421" y="1336" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="1355" class="key" fill="#7764D6">FK   </text>
+<text x="97" y="1355" class="field">group_id</text>
+<text x="421" y="1355" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="1374" class="key" fill="#7764D6">FK   </text>
+<text x="97" y="1374" class="field">owner_member_id</text>
+<text x="421" y="1374" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="1393" class="key" fill="#7764D6">FK   </text>
+<text x="97" y="1393" class="field">target_member_id</text>
+<text x="421" y="1393" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="1412" class="key" fill="#7764D6">     </text>
+<text x="97" y="1412" class="field">alias</text>
+<text x="421" y="1412" class="field" text-anchor="end" fill="#726A80">VARCHAR(10)</text>
+<text x="49" y="1431" class="key" fill="#7764D6">     </text>
+<text x="97" y="1431" class="field">created_at</text>
+<text x="421" y="1431" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="49" y="1450" class="key" fill="#7764D6">     </text>
+<text x="97" y="1450" class="field">updated_at</text>
+<text x="421" y="1450" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<line x1="49" y1="1464" x2="421" y2="1464" stroke="#E8E4F0"/>
+<text x="49" y="1479" class="constraint">UQ (group_id, owner_member_id, target_member_id)</text>
+<g filter="url(#shadow)">
+<rect x="35" y="1526" width="400" height="175" rx="14" fill="#FFFFFF" stroke="#7764D6" stroke-width="1.4"/>
+<path d="M 49 1526 H 421 Q 435 1526 435 1540 V 1566 H 35 V 1540 Q 35 1526 49 1526" fill="#7764D6"/>
+<text x="50" y="1552" class="table">member_interests</text>
+</g>
+<text x="49" y="1592" class="key" fill="#7764D6">PK   </text>
+<text x="97" y="1592" class="field">id</text>
+<text x="421" y="1592" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="1611" class="key" fill="#7764D6">FK   </text>
+<text x="97" y="1611" class="field">care_receiver_member_id</text>
+<text x="421" y="1611" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="49" y="1630" class="key" fill="#7764D6">     </text>
+<text x="97" y="1630" class="field">interest_text</text>
+<text x="421" y="1630" class="field" text-anchor="end" fill="#726A80">VARCHAR(10)</text>
+<text x="49" y="1649" class="key" fill="#7764D6">     </text>
+<text x="97" y="1649" class="field">created_at</text>
+<text x="421" y="1649" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<line x1="49" y1="1663" x2="421" y2="1663" stroke="#E8E4F0"/>
+<text x="49" y="1678" class="constraint">UQ (care_receiver_member_id, interest_text)</text>
+<g filter="url(#shadow)">
+<rect x="463" y="213" width="400" height="182" rx="14" fill="#FFFFFF" stroke="#D679A2" stroke-width="1.4"/>
+<path d="M 477 213 H 849 Q 863 213 863 227 V 253 H 463 V 227 Q 463 213 477 213" fill="#D679A2"/>
+<text x="478" y="239" class="table">posts</text>
+</g>
+<text x="477" y="279" class="key" fill="#D679A2">PK   </text>
+<text x="525" y="279" class="field">id</text>
+<text x="849" y="279" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="298" class="key" fill="#D679A2">FK   </text>
+<text x="525" y="298" class="field">group_id</text>
+<text x="849" y="298" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="317" class="key" fill="#D679A2">FK   </text>
+<text x="525" y="317" class="field">author_member_id</text>
+<text x="849" y="317" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="336" class="key" fill="#D679A2">     </text>
+<text x="525" y="336" class="field">content</text>
+<text x="849" y="336" class="field" text-anchor="end" fill="#726A80">VARCHAR(140)</text>
+<text x="477" y="355" class="key" fill="#D679A2">     </text>
+<text x="525" y="355" class="field">created_at</text>
+<text x="849" y="355" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="477" y="374" class="key" fill="#D679A2">     </text>
+<text x="525" y="374" class="field">updated_at</text>
+<text x="849" y="374" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<g filter="url(#shadow)">
+<rect x="463" y="419" width="400" height="213" rx="14" fill="#FFFFFF" stroke="#D679A2" stroke-width="1.4"/>
+<path d="M 477 419 H 849 Q 863 419 863 433 V 459 H 463 V 433 Q 463 419 477 419" fill="#D679A2"/>
+<text x="478" y="445" class="table">post_media</text>
+</g>
+<text x="477" y="485" class="key" fill="#D679A2">PK   </text>
+<text x="525" y="485" class="field">id</text>
+<text x="849" y="485" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="504" class="key" fill="#D679A2">FK   </text>
+<text x="525" y="504" class="field">post_id</text>
+<text x="849" y="504" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="523" class="key" fill="#D679A2">     </text>
+<text x="525" y="523" class="field">media_type</text>
+<text x="849" y="523" class="field" text-anchor="end" fill="#726A80">media_type</text>
+<text x="477" y="542" class="key" fill="#D679A2">     </text>
+<text x="525" y="542" class="field">file_url</text>
+<text x="849" y="542" class="field" text-anchor="end" fill="#726A80">VARCHAR(500)</text>
+<text x="477" y="561" class="key" fill="#D679A2">     </text>
+<text x="525" y="561" class="field">display_order</text>
+<text x="849" y="561" class="field" text-anchor="end" fill="#726A80">INTEGER</text>
+<text x="477" y="580" class="key" fill="#D679A2">     </text>
+<text x="525" y="580" class="field">thumbnail_url</text>
+<text x="849" y="580" class="field" text-anchor="end" fill="#726A80">VARCHAR(500)?</text>
+<line x1="477" y1="594" x2="849" y2="594" stroke="#E8E4F0"/>
+<text x="477" y="609" class="constraint">UQ (post_id, display_order)</text>
+<g filter="url(#shadow)">
+<rect x="463" y="656" width="400" height="182" rx="14" fill="#FFFFFF" stroke="#D679A2" stroke-width="1.4"/>
+<path d="M 477 656 H 849 Q 863 656 863 670 V 696 H 463 V 670 Q 463 656 477 656" fill="#D679A2"/>
+<text x="478" y="682" class="table">comments</text>
+</g>
+<text x="477" y="722" class="key" fill="#D679A2">PK   </text>
+<text x="525" y="722" class="field">id</text>
+<text x="849" y="722" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="741" class="key" fill="#D679A2">FK   </text>
+<text x="525" y="741" class="field">post_id</text>
+<text x="849" y="741" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="760" class="key" fill="#D679A2">FK   </text>
+<text x="525" y="760" class="field">author_member_id</text>
+<text x="849" y="760" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="779" class="key" fill="#D679A2">     </text>
+<text x="525" y="779" class="field">content</text>
+<text x="849" y="779" class="field" text-anchor="end" fill="#726A80">VARCHAR(50)</text>
+<text x="477" y="798" class="key" fill="#D679A2">     </text>
+<text x="525" y="798" class="field">created_at</text>
+<text x="849" y="798" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="477" y="817" class="key" fill="#D679A2">     </text>
+<text x="525" y="817" class="field">updated_at</text>
+<text x="849" y="817" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<g filter="url(#shadow)">
+<rect x="463" y="862" width="400" height="213" rx="14" fill="#FFFFFF" stroke="#D679A2" stroke-width="1.4"/>
+<path d="M 477 862 H 849 Q 863 862 863 876 V 902 H 463 V 876 Q 463 862 477 862" fill="#D679A2"/>
+<text x="478" y="888" class="table">post_reactions</text>
+</g>
+<text x="477" y="928" class="key" fill="#D679A2">PK   </text>
+<text x="525" y="928" class="field">id</text>
+<text x="849" y="928" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="947" class="key" fill="#D679A2">FK   </text>
+<text x="525" y="947" class="field">post_id</text>
+<text x="849" y="947" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="966" class="key" fill="#D679A2">FK   </text>
+<text x="525" y="966" class="field">group_member_id</text>
+<text x="849" y="966" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="985" class="key" fill="#D679A2">     </text>
+<text x="525" y="985" class="field">reaction_type</text>
+<text x="849" y="985" class="field" text-anchor="end" fill="#726A80">reaction_type</text>
+<text x="477" y="1004" class="key" fill="#D679A2">     </text>
+<text x="525" y="1004" class="field">created_at</text>
+<text x="849" y="1004" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="477" y="1023" class="key" fill="#D679A2">     </text>
+<text x="525" y="1023" class="field">updated_at</text>
+<text x="849" y="1023" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<line x1="477" y1="1037" x2="849" y2="1037" stroke="#E8E4F0"/>
+<text x="477" y="1052" class="constraint">UQ (post_id, group_member_id)</text>
+<g filter="url(#shadow)">
+<rect x="463" y="1099" width="400" height="315" rx="14" fill="#FFFFFF" stroke="#D679A2" stroke-width="1.4"/>
+<path d="M 477 1099 H 849 Q 863 1099 863 1113 V 1139 H 463 V 1113 Q 463 1099 477 1099" fill="#D679A2"/>
+<text x="478" y="1125" class="table">post_analyses</text>
+</g>
+<text x="477" y="1165" class="key" fill="#D679A2">PK   </text>
+<text x="525" y="1165" class="field">id</text>
+<text x="849" y="1165" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="1184" class="key" fill="#D679A2">FK·UQ</text>
+<text x="525" y="1184" class="field">post_id</text>
+<text x="849" y="1184" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="477" y="1203" class="key" fill="#D679A2">     </text>
+<text x="525" y="1203" class="field">status</text>
+<text x="849" y="1203" class="field" text-anchor="end" fill="#726A80">analysis_status</text>
+<text x="477" y="1222" class="key" fill="#D679A2">     </text>
+<text x="525" y="1222" class="field">summary</text>
+<text x="849" y="1222" class="field" text-anchor="end" fill="#726A80">VARCHAR(500)?</text>
+<text x="477" y="1241" class="key" fill="#D679A2">     </text>
+<text x="525" y="1241" class="field">analyzed_at</text>
+<text x="849" y="1241" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="477" y="1260" class="key" fill="#D679A2">     </text>
+<text x="525" y="1260" class="field">created_at</text>
+<text x="849" y="1260" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="477" y="1279" class="key" fill="#D679A2">     </text>
+<text x="525" y="1279" class="field">attempt_count</text>
+<text x="849" y="1279" class="field" text-anchor="end" fill="#726A80">INTEGER</text>
+<text x="477" y="1298" class="key" fill="#D679A2">     </text>
+<text x="525" y="1298" class="field">next_attempt_at</text>
+<text x="849" y="1298" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="477" y="1317" class="key" fill="#D679A2">     </text>
+<text x="525" y="1317" class="field">last_failure_code</text>
+<text x="849" y="1317" class="field" text-anchor="end" fill="#726A80">VARCHAR(50)?</text>
+<text x="477" y="1336" class="key" fill="#D679A2">     </text>
+<text x="525" y="1336" class="field">last_failed_at</text>
+<text x="849" y="1336" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="477" y="1355" class="key" fill="#D679A2">     </text>
+<text x="525" y="1355" class="field">input_updated_at</text>
+<text x="849" y="1355" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="477" y="1374" class="key" fill="#D679A2">     </text>
+<text x="525" y="1374" class="field">claim_token</text>
+<text x="849" y="1374" class="field" text-anchor="end" fill="#726A80">UUID?</text>
+<text x="477" y="1393" class="key" fill="#D679A2">     </text>
+<text x="525" y="1393" class="field">claim_expires_at</text>
+<text x="849" y="1393" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<g filter="url(#shadow)">
+<rect x="891" y="213" width="400" height="315" rx="14" fill="#FFFFFF" stroke="#B58A3C" stroke-width="1.4"/>
+<path d="M 905 213 H 1277 Q 1291 213 1291 227 V 253 H 891 V 227 Q 891 213 905 213" fill="#B58A3C"/>
+<text x="906" y="239" class="table">calendar_events</text>
+</g>
+<text x="905" y="279" class="key" fill="#B58A3C">PK   </text>
+<text x="953" y="279" class="field">id</text>
+<text x="1277" y="279" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="905" y="298" class="key" fill="#B58A3C">FK   </text>
+<text x="953" y="298" class="field">group_id</text>
+<text x="1277" y="298" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="905" y="317" class="key" fill="#B58A3C">FK   </text>
+<text x="953" y="317" class="field">creator_member_id</text>
+<text x="1277" y="317" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="905" y="336" class="key" fill="#B58A3C">FK   </text>
+<text x="953" y="336" class="field">last_editor_member_id</text>
+<text x="1277" y="336" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="905" y="355" class="key" fill="#B58A3C">     </text>
+<text x="953" y="355" class="field">title</text>
+<text x="1277" y="355" class="field" text-anchor="end" fill="#726A80">VARCHAR(20)</text>
+<text x="905" y="374" class="key" fill="#B58A3C">     </text>
+<text x="953" y="374" class="field">description</text>
+<text x="1277" y="374" class="field" text-anchor="end" fill="#726A80">VARCHAR(50)?</text>
+<text x="905" y="393" class="key" fill="#B58A3C">     </text>
+<text x="953" y="393" class="field">event_date</text>
+<text x="1277" y="393" class="field" text-anchor="end" fill="#726A80">DATE</text>
+<text x="905" y="412" class="key" fill="#B58A3C">     </text>
+<text x="953" y="412" class="field">start_at</text>
+<text x="1277" y="412" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="905" y="431" class="key" fill="#B58A3C">     </text>
+<text x="953" y="431" class="field">end_at</text>
+<text x="1277" y="431" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="905" y="450" class="key" fill="#B58A3C">     </text>
+<text x="953" y="450" class="field">created_at</text>
+<text x="1277" y="450" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="905" y="469" class="key" fill="#B58A3C">     </text>
+<text x="953" y="469" class="field">updated_at</text>
+<text x="1277" y="469" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="905" y="488" class="key" fill="#B58A3C">     </text>
+<text x="953" y="488" class="field">end_date</text>
+<text x="1277" y="488" class="field" text-anchor="end" fill="#726A80">DATE</text>
+<text x="905" y="507" class="key" fill="#B58A3C">     </text>
+<text x="953" y="507" class="field">reminder_schedule_updated_at</text>
+<text x="1277" y="507" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<g filter="url(#shadow)">
+<rect x="891" y="552" width="400" height="156" rx="14" fill="#FFFFFF" stroke="#B58A3C" stroke-width="1.4"/>
+<path d="M 905 552 H 1277 Q 1291 552 1291 566 V 592 H 891 V 566 Q 891 552 905 552" fill="#B58A3C"/>
+<text x="906" y="578" class="table">event_participants</text>
+</g>
+<text x="905" y="618" class="key" fill="#B58A3C">PK   </text>
+<text x="953" y="618" class="field">id</text>
+<text x="1277" y="618" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="905" y="637" class="key" fill="#B58A3C">FK   </text>
+<text x="953" y="637" class="field">event_id</text>
+<text x="1277" y="637" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="905" y="656" class="key" fill="#B58A3C">FK   </text>
+<text x="953" y="656" class="field">group_member_id</text>
+<text x="1277" y="656" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<line x1="905" y1="670" x2="1277" y2="670" stroke="#E8E4F0"/>
+<text x="905" y="685" class="constraint">UQ (event_id, group_member_id)</text>
+<g filter="url(#shadow)">
+<rect x="1319" y="213" width="400" height="296" rx="14" fill="#FFFFFF" stroke="#4D83B8" stroke-width="1.4"/>
+<path d="M 1333 213 H 1705 Q 1719 213 1719 227 V 253 H 1319 V 227 Q 1319 213 1333 213" fill="#4D83B8"/>
+<text x="1334" y="239" class="table">call_sessions</text>
+</g>
+<text x="1333" y="279" class="key" fill="#4D83B8">PK   </text>
+<text x="1381" y="279" class="field">id</text>
+<text x="1705" y="279" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="298" class="key" fill="#4D83B8">FK   </text>
+<text x="1381" y="298" class="field">group_id</text>
+<text x="1705" y="298" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="317" class="key" fill="#4D83B8">FK   </text>
+<text x="1381" y="317" class="field">care_receiver_member_id</text>
+<text x="1705" y="317" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="336" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="336" class="field">persona_id</text>
+<text x="1705" y="336" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="355" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="355" class="field">status</text>
+<text x="1705" y="355" class="field" text-anchor="end" fill="#726A80">call_status</text>
+<text x="1333" y="374" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="374" class="field">created_at</text>
+<text x="1705" y="374" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="1333" y="393" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="393" class="field">started_at</text>
+<text x="1705" y="393" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="1333" y="412" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="412" class="field">ended_at</text>
+<text x="1705" y="412" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="1333" y="431" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="431" class="field">lease_expires_at</text>
+<text x="1705" y="431" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="1333" y="450" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="450" class="field">transcript_integrity_status</text>
+<text x="1705" y="450" class="field" text-anchor="end" fill="#726A80">transcript_integrity_st…</text>
+<text x="1333" y="469" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="469" class="field">transcript_revision</text>
+<text x="1705" y="469" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="488" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="488" class="field">transcript_finalized_at</text>
+<text x="1705" y="488" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<g filter="url(#shadow)">
+<rect x="1319" y="533" width="400" height="251" rx="14" fill="#FFFFFF" stroke="#4D83B8" stroke-width="1.4"/>
+<path d="M 1333 533 H 1705 Q 1719 533 1719 547 V 573 H 1319 V 547 Q 1319 533 1333 533" fill="#4D83B8"/>
+<text x="1334" y="559" class="table">call_transcripts</text>
+</g>
+<text x="1333" y="599" class="key" fill="#4D83B8">PK   </text>
+<text x="1381" y="599" class="field">id</text>
+<text x="1705" y="599" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="618" class="key" fill="#4D83B8">FK   </text>
+<text x="1381" y="618" class="field">call_session_id</text>
+<text x="1705" y="618" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="637" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="637" class="field">speaker</text>
+<text x="1705" y="637" class="field" text-anchor="end" fill="#726A80">speaker_type</text>
+<text x="1333" y="656" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="656" class="field">content</text>
+<text x="1705" y="656" class="field" text-anchor="end" fill="#726A80">TEXT</text>
+<text x="1333" y="675" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="675" class="field">sequence</text>
+<text x="1705" y="675" class="field" text-anchor="end" fill="#726A80">INTEGER</text>
+<text x="1333" y="694" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="694" class="field">created_at</text>
+<text x="1705" y="694" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="1333" y="713" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="713" class="field">openai_item_id</text>
+<text x="1705" y="713" class="field" text-anchor="end" fill="#726A80">VARCHAR(100)?</text>
+<line x1="1333" y1="727" x2="1705" y2="727" stroke="#E8E4F0"/>
+<text x="1333" y="742" class="constraint">UQ (call_session_id, sequence)</text>
+<text x="1333" y="761" class="constraint">UIX (call_session_id, openai_item_id) · partial</text>
+<g filter="url(#shadow)">
+<rect x="1319" y="1536" width="400" height="201" rx="14" fill="#FFFFFF" stroke="#4D83B8" stroke-width="1.4"/>
+<path d="M 1333 1536 H 1705 Q 1719 1536 1719 1550 V 1576 H 1319 V 1550 Q 1319 1536 1333 1536" fill="#4D83B8"/>
+<text x="1334" y="1562" class="table">call_reports</text>
+</g>
+<text x="1333" y="1602" class="key" fill="#4D83B8">PK   </text>
+<text x="1381" y="1602" class="field">id</text>
+<text x="1705" y="1602" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="1621" class="key" fill="#4D83B8">FK·UQ</text>
+<text x="1381" y="1621" class="field">call_session_id</text>
+<text x="1705" y="1621" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="1640" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1640" class="field">summary</text>
+<text x="1705" y="1640" class="field" text-anchor="end" fill="#726A80">VARCHAR(100)</text>
+<text x="1333" y="1659" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1659" class="field">emotion_category</text>
+<text x="1705" y="1659" class="field" text-anchor="end" fill="#726A80">emotion_category</text>
+<text x="1333" y="1678" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1678" class="field">emotion_subcategory</text>
+<text x="1705" y="1678" class="field" text-anchor="end" fill="#726A80">VARCHAR(50)</text>
+<text x="1333" y="1697" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1697" class="field">guardian_message</text>
+<text x="1705" y="1697" class="field" text-anchor="end" fill="#726A80">VARCHAR(100)?</text>
+<text x="1333" y="1716" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1716" class="field">created_at</text>
+<text x="1705" y="1716" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<g filter="url(#shadow)">
+<rect x="1319" y="2036" width="400" height="270" rx="14" fill="#FFFFFF" stroke="#4D83B8" stroke-width="1.4"/>
+<path d="M 1333 2036 H 1705 Q 1719 2036 1719 2050 V 2076 H 1319 V 2050 Q 1319 2036 1333 2036" fill="#4D83B8"/>
+<text x="1334" y="2062" class="table">daily_reports</text>
+</g>
+<text x="1333" y="2102" class="key" fill="#4D83B8">PK   </text>
+<text x="1381" y="2102" class="field">id</text>
+<text x="1705" y="2102" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="2121" class="key" fill="#4D83B8">FK   </text>
+<text x="1381" y="2121" class="field">group_id</text>
+<text x="1705" y="2121" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="2140" class="key" fill="#4D83B8">FK   </text>
+<text x="1381" y="2140" class="field">care_receiver_member_id</text>
+<text x="1705" y="2140" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="2159" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="2159" class="field">report_date</text>
+<text x="1705" y="2159" class="field" text-anchor="end" fill="#726A80">DATE</text>
+<text x="1333" y="2178" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="2178" class="field">summary</text>
+<text x="1705" y="2178" class="field" text-anchor="end" fill="#726A80">VARCHAR(200)</text>
+<text x="1333" y="2197" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="2197" class="field">emotion_category</text>
+<text x="1705" y="2197" class="field" text-anchor="end" fill="#726A80">emotion_category</text>
+<text x="1333" y="2216" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="2216" class="field">emotion_subcategory</text>
+<text x="1705" y="2216" class="field" text-anchor="end" fill="#726A80">VARCHAR(50)</text>
+<text x="1333" y="2235" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="2235" class="field">guardian_message</text>
+<text x="1705" y="2235" class="field" text-anchor="end" fill="#726A80">VARCHAR(200)?</text>
+<text x="1333" y="2254" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="2254" class="field">created_at</text>
+<text x="1705" y="2254" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<line x1="1333" y1="2268" x2="1705" y2="2268" stroke="#E8E4F0"/>
+<text x="1333" y="2283" class="constraint">UQ (care_receiver_member_id, report_date)</text>
+<g filter="url(#shadow)">
+<rect x="891" y="732" width="400" height="194" rx="14" fill="#FFFFFF" stroke="#B58A3C" stroke-width="1.4"/>
+<path d="M 905 732 H 1277 Q 1291 732 1291 746 V 772 H 891 V 746 Q 891 732 905 732" fill="#B58A3C"/>
+<text x="906" y="758" class="table">carnations</text>
+</g>
+<text x="905" y="798" class="key" fill="#B58A3C">PK   </text>
+<text x="953" y="798" class="field">id</text>
+<text x="1277" y="798" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="905" y="817" class="key" fill="#B58A3C">FK   </text>
+<text x="953" y="817" class="field">group_id</text>
+<text x="1277" y="817" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="905" y="836" class="key" fill="#B58A3C">FK   </text>
+<text x="953" y="836" class="field">group_member_id</text>
+<text x="1277" y="836" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="905" y="855" class="key" fill="#B58A3C">     </text>
+<text x="953" y="855" class="field">earned_date</text>
+<text x="1277" y="855" class="field" text-anchor="end" fill="#726A80">DATE</text>
+<text x="905" y="874" class="key" fill="#B58A3C">     </text>
+<text x="953" y="874" class="field">created_at</text>
+<text x="1277" y="874" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<line x1="905" y1="888" x2="1277" y2="888" stroke="#E8E4F0"/>
+<text x="905" y="903" class="constraint">UQ (group_member_id, earned_date)</text>
+<g filter="url(#shadow)">
+<rect x="1747" y="213" width="400" height="422" rx="14" fill="#FFFFFF" stroke="#4D9A77" stroke-width="1.4"/>
+<path d="M 1761 213 H 2133 Q 2147 213 2147 227 V 253 H 1747 V 227 Q 1747 213 1761 213" fill="#4D9A77"/>
+<text x="1762" y="239" class="table">notifications</text>
+</g>
+<text x="1761" y="279" class="key" fill="#4D9A77">PK   </text>
+<text x="1809" y="279" class="field">id</text>
+<text x="2133" y="279" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1761" y="298" class="key" fill="#4D9A77">FK   </text>
+<text x="1809" y="298" class="field">receiver_user_id</text>
+<text x="2133" y="298" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1761" y="317" class="key" fill="#4D9A77">FK   </text>
+<text x="1809" y="317" class="field">actor_user_id</text>
+<text x="2133" y="317" class="field" text-anchor="end" fill="#726A80">BIGINT?</text>
+<text x="1761" y="336" class="key" fill="#4D9A77">FK   </text>
+<text x="1809" y="336" class="field">group_id</text>
+<text x="2133" y="336" class="field" text-anchor="end" fill="#726A80">BIGINT?</text>
+<text x="1761" y="355" class="key" fill="#4D9A77">FK   </text>
+<text x="1809" y="355" class="field">related_join_request_id</text>
+<text x="2133" y="355" class="field" text-anchor="end" fill="#726A80">BIGINT?</text>
+<text x="1761" y="374" class="key" fill="#4D9A77">FK   </text>
+<text x="1809" y="374" class="field">related_post_id</text>
+<text x="2133" y="374" class="field" text-anchor="end" fill="#726A80">BIGINT?</text>
+<text x="1761" y="393" class="key" fill="#4D9A77">FK   </text>
+<text x="1809" y="393" class="field">related_event_id</text>
+<text x="2133" y="393" class="field" text-anchor="end" fill="#726A80">BIGINT?</text>
+<text x="1761" y="412" class="key" fill="#4D9A77">FK   </text>
+<text x="1809" y="412" class="field">related_call_report_id</text>
+<text x="2133" y="412" class="field" text-anchor="end" fill="#726A80">BIGINT?</text>
+<text x="1761" y="431" class="key" fill="#4D9A77">FK   </text>
+<text x="1809" y="431" class="field">related_daily_report_id</text>
+<text x="2133" y="431" class="field" text-anchor="end" fill="#726A80">BIGINT?</text>
+<text x="1761" y="450" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="450" class="field">type</text>
+<text x="2133" y="450" class="field" text-anchor="end" fill="#726A80">notification_type</text>
+<text x="1761" y="469" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="469" class="field">title</text>
+<text x="2133" y="469" class="field" text-anchor="end" fill="#726A80">TEXT</text>
+<text x="1761" y="488" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="488" class="field">body</text>
+<text x="2133" y="488" class="field" text-anchor="end" fill="#726A80">TEXT</text>
+<text x="1761" y="507" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="507" class="field">created_at</text>
+<text x="2133" y="507" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="1761" y="526" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="526" class="field">read_at</text>
+<text x="2133" y="526" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="1761" y="545" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="545" class="field">reminder_slot</text>
+<text x="2133" y="545" class="field" text-anchor="end" fill="#726A80">reminder_slot?</text>
+<text x="1761" y="564" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="564" class="field">source_event_key</text>
+<text x="2133" y="564" class="field" text-anchor="end" fill="#726A80">VARCHAR(160)?</text>
+<line x1="1761" y1="578" x2="2133" y2="578" stroke="#E8E4F0"/>
+<text x="1761" y="593" class="constraint">UIX (receiver_user_id, related_event_id, type, re…</text>
+<text x="1761" y="612" class="constraint">UIX (receiver_user_id, source_event_key) · partial</text>
+<g filter="url(#shadow)">
+<rect x="1747" y="659" width="400" height="194" rx="14" fill="#FFFFFF" stroke="#4D9A77" stroke-width="1.4"/>
+<path d="M 1761 659 H 2133 Q 2147 659 2147 673 V 699 H 1747 V 673 Q 1747 659 1761 659" fill="#4D9A77"/>
+<text x="1762" y="685" class="table">notification_settings</text>
+</g>
+<text x="1761" y="725" class="key" fill="#4D9A77">PK   </text>
+<text x="1809" y="725" class="field">id</text>
+<text x="2133" y="725" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1761" y="744" class="key" fill="#4D9A77">FK   </text>
+<text x="1809" y="744" class="field">user_id</text>
+<text x="2133" y="744" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1761" y="763" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="763" class="field">notification_type</text>
+<text x="2133" y="763" class="field" text-anchor="end" fill="#726A80">notification_type</text>
+<text x="1761" y="782" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="782" class="field">is_enabled</text>
+<text x="2133" y="782" class="field" text-anchor="end" fill="#726A80">BOOLEAN</text>
+<text x="1761" y="801" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="801" class="field">updated_at</text>
+<text x="2133" y="801" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<line x1="1761" y1="815" x2="2133" y2="815" stroke="#E8E4F0"/>
+<text x="1761" y="830" class="constraint">UQ (user_id, notification_type)</text>
+<g filter="url(#shadow)">
+<rect x="1747" y="877" width="400" height="201" rx="14" fill="#FFFFFF" stroke="#4D9A77" stroke-width="1.4"/>
+<path d="M 1761 877 H 2133 Q 2147 877 2147 891 V 917 H 1747 V 891 Q 1747 877 1761 877" fill="#4D9A77"/>
+<text x="1762" y="903" class="table">device_tokens</text>
+</g>
+<text x="1761" y="943" class="key" fill="#4D9A77">PK   </text>
+<text x="1809" y="943" class="field">id</text>
+<text x="2133" y="943" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1761" y="962" class="key" fill="#4D9A77">FK   </text>
+<text x="1809" y="962" class="field">user_id</text>
+<text x="2133" y="962" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1761" y="981" class="key" fill="#4D9A77">UQ   </text>
+<text x="1809" y="981" class="field">token</text>
+<text x="2133" y="981" class="field" text-anchor="end" fill="#726A80">VARCHAR(500)</text>
+<text x="1761" y="1000" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="1000" class="field">device_type</text>
+<text x="2133" y="1000" class="field" text-anchor="end" fill="#726A80">VARCHAR(20)</text>
+<text x="1761" y="1019" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="1019" class="field">is_active</text>
+<text x="2133" y="1019" class="field" text-anchor="end" fill="#726A80">BOOLEAN</text>
+<text x="1761" y="1038" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="1038" class="field">created_at</text>
+<text x="2133" y="1038" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="1761" y="1057" class="key" fill="#4D9A77">     </text>
+<text x="1809" y="1057" class="field">updated_at</text>
+<text x="2133" y="1057" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<g filter="url(#shadow)">
+<rect x="1319" y="1761" width="400" height="251" rx="14" fill="#FFFFFF" stroke="#4D83B8" stroke-width="1.4"/>
+<path d="M 1333 1761 H 1705 Q 1719 1761 1719 1775 V 1801 H 1319 V 1775 Q 1319 1761 1333 1761" fill="#4D83B8"/>
+<text x="1334" y="1787" class="table">daily_report_generation_claims</text>
+</g>
+<text x="1333" y="1827" class="key" fill="#4D83B8">PK   </text>
+<text x="1381" y="1827" class="field">id</text>
+<text x="1705" y="1827" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="1846" class="key" fill="#4D83B8">FK   </text>
+<text x="1381" y="1846" class="field">care_receiver_member_id</text>
+<text x="1705" y="1846" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="1865" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1865" class="field">report_date</text>
+<text x="1705" y="1865" class="field" text-anchor="end" fill="#726A80">DATE</text>
+<text x="1333" y="1884" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1884" class="field">claim_token</text>
+<text x="1705" y="1884" class="field" text-anchor="end" fill="#726A80">UUID</text>
+<text x="1333" y="1903" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1903" class="field">claim_expires_at</text>
+<text x="1705" y="1903" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="1333" y="1922" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1922" class="field">input_report_count</text>
+<text x="1705" y="1922" class="field" text-anchor="end" fill="#726A80">INTEGER</text>
+<text x="1333" y="1941" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1941" class="field">input_latest_report_id</text>
+<text x="1705" y="1941" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="1960" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1960" class="field">created_at</text>
+<text x="1705" y="1960" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<line x1="1333" y1="1974" x2="1705" y2="1974" stroke="#E8E4F0"/>
+<text x="1333" y="1989" class="constraint">UQ (care_receiver_member_id, report_date)</text>
+<g filter="url(#shadow)">
+<rect x="1319" y="808" width="400" height="441" rx="14" fill="#FFFFFF" stroke="#4D83B8" stroke-width="1.4"/>
+<path d="M 1333 808 H 1705 Q 1719 808 1719 822 V 848 H 1319 V 822 Q 1319 808 1333 808" fill="#4D83B8"/>
+<text x="1334" y="834" class="table">call_transcript_events</text>
+</g>
+<text x="1333" y="874" class="key" fill="#4D83B8">PK   </text>
+<text x="1381" y="874" class="field">id</text>
+<text x="1705" y="874" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="893" class="key" fill="#4D83B8">FK   </text>
+<text x="1381" y="893" class="field">call_session_id</text>
+<text x="1705" y="893" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="912" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="912" class="field">openai_item_id</text>
+<text x="1705" y="912" class="field" text-anchor="end" fill="#726A80">VARCHAR(100)</text>
+<text x="1333" y="931" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="931" class="field">speaker</text>
+<text x="1705" y="931" class="field" text-anchor="end" fill="#726A80">speaker_type</text>
+<text x="1333" y="950" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="950" class="field">sequence</text>
+<text x="1705" y="950" class="field" text-anchor="end" fill="#726A80">INTEGER</text>
+<text x="1333" y="969" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="969" class="field">status</text>
+<text x="1705" y="969" class="field" text-anchor="end" fill="#726A80">transcript_ingest_status</text>
+<text x="1333" y="988" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="988" class="field">attempt_count</text>
+<text x="1705" y="988" class="field" text-anchor="end" fill="#726A80">INTEGER</text>
+<text x="1333" y="1007" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1007" class="field">content</text>
+<text x="1705" y="1007" class="field" text-anchor="end" fill="#726A80">TEXT?</text>
+<text x="1333" y="1026" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1026" class="field">content_hash</text>
+<text x="1705" y="1026" class="field" text-anchor="end" fill="#726A80">VARCHAR(64)?</text>
+<text x="1333" y="1045" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1045" class="field">next_attempt_at</text>
+<text x="1705" y="1045" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="1333" y="1064" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1064" class="field">claim_token</text>
+<text x="1705" y="1064" class="field" text-anchor="end" fill="#726A80">UUID?</text>
+<text x="1333" y="1083" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1083" class="field">claim_expires_at</text>
+<text x="1705" y="1083" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="1333" y="1102" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1102" class="field">failure_code</text>
+<text x="1705" y="1102" class="field" text-anchor="end" fill="#726A80">VARCHAR(80)?</text>
+<text x="1333" y="1121" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1121" class="field">ready_at</text>
+<text x="1705" y="1121" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="1333" y="1140" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1140" class="field">applied_at</text>
+<text x="1705" y="1140" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="1333" y="1159" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1159" class="field">created_at</text>
+<text x="1705" y="1159" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="1333" y="1178" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1178" class="field">updated_at</text>
+<text x="1705" y="1178" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<line x1="1333" y1="1192" x2="1705" y2="1192" stroke="#E8E4F0"/>
+<text x="1333" y="1207" class="constraint">UQ (call_session_id, openai_item_id)</text>
+<text x="1333" y="1226" class="constraint">UQ (call_session_id, sequence)</text>
+<g filter="url(#shadow)">
+<rect x="1319" y="1273" width="400" height="239" rx="14" fill="#FFFFFF" stroke="#4D83B8" stroke-width="1.4"/>
+<path d="M 1333 1273 H 1705 Q 1719 1273 1719 1287 V 1313 H 1319 V 1287 Q 1319 1273 1333 1273" fill="#4D83B8"/>
+<text x="1334" y="1299" class="table">call_report_generation_requests</text>
+</g>
+<text x="1333" y="1339" class="key" fill="#4D83B8">PK·FK</text>
+<text x="1381" y="1339" class="field">call_session_id</text>
+<text x="1705" y="1339" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="1358" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1358" class="field">status</text>
+<text x="1705" y="1358" class="field" text-anchor="end" fill="#726A80">call_report_generation_…</text>
+<text x="1333" y="1377" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1377" class="field">input_revision</text>
+<text x="1705" y="1377" class="field" text-anchor="end" fill="#726A80">BIGINT</text>
+<text x="1333" y="1396" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1396" class="field">claim_token</text>
+<text x="1705" y="1396" class="field" text-anchor="end" fill="#726A80">UUID?</text>
+<text x="1333" y="1415" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1415" class="field">claim_expires_at</text>
+<text x="1705" y="1415" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="1333" y="1434" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1434" class="field">last_failure_code</text>
+<text x="1705" y="1434" class="field" text-anchor="end" fill="#726A80">VARCHAR(50)?</text>
+<text x="1333" y="1453" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1453" class="field">last_failed_at</text>
+<text x="1705" y="1453" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ?</text>
+<text x="1333" y="1472" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1472" class="field">created_at</text>
+<text x="1705" y="1472" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="1333" y="1491" class="key" fill="#4D83B8">     </text>
+<text x="1381" y="1491" class="field">updated_at</text>
+<text x="1705" y="1491" class="field" text-anchor="end" fill="#726A80">TIMESTAMPTZ</text>
+<text x="48" y="2402" class="subtitle">Generated from backend/src/main/resources/db/migration · audit and reliability columns included</text>
+</svg>
