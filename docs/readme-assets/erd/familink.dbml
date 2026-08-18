@@ -1,0 +1,551 @@
+Project familink {
+  database_type: 'PostgreSQL'
+  Note: 'Diagram model generated from Flyway V1-V12. DBML cannot encode partial-index predicates, so partial UNIQUE indexes keep the unique marker and record their WHERE clause in a note. Use the Flyway migrations—not DBML-exported SQL—as the DDL authority.'
+}
+
+Enum user_gender {
+  MALE
+  FEMALE
+}
+
+Enum group_role {
+  GUARDIAN
+  CARE_RECEIVER
+}
+
+Enum join_request_status {
+  PENDING_ADMIN
+  APPROVED
+  REJECTED
+}
+
+Enum media_type {
+  IMAGE
+  VIDEO
+}
+
+Enum reaction_type {
+  HEART
+  LAUGH
+  SURPRISE
+  SAD
+  SUPPORT
+}
+
+Enum analysis_status {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+Enum notification_type {
+  NEW_POST
+  POST_ACTIVITY
+  EVENT_CHANGED
+  EVENT_REMINDER
+  CALL_REPORT
+  DAILY_REPORT
+  GROUP_JOIN_REQUEST
+}
+
+Enum call_status {
+  CONNECTING
+  IN_PROGRESS
+  COMPLETED
+  INCOMPLETE
+  CANCELLED
+  FAILED
+}
+
+Enum speaker_type {
+  USER
+  ASSISTANT
+}
+
+Enum emotion_category {
+  ANGER
+  SADNESS
+  ANXIETY
+  HURT
+  EMBARRASSMENT
+  JOY
+  NEUTRAL
+}
+
+Enum reminder_slot {
+  DAY_BEFORE
+  HOUR_BEFORE
+}
+
+Enum transcript_integrity_status {
+  COLLECTING
+  COMPLETE
+  RECONCILIATION_REQUIRED
+}
+
+Enum transcript_ingest_status {
+  RESERVED
+  READY
+  APPLIED
+  FAILED
+}
+
+Enum call_report_generation_status {
+  PENDING
+  CLAIMED
+  GEMINI_FAILED
+  DONE
+}
+
+Table users [headercolor: #7764D6] {
+  id bigint [pk, increment]
+  login_id varchar(15) [unique]
+  password_hash varchar(255)
+  name varchar(10)
+  birth_date date
+  gender user_gender
+  profile_image_url varchar(500)
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  withdrawn_at timestamptz
+}
+
+Table family_groups [headercolor: #7764D6] {
+  id bigint [pk, increment]
+  name varchar(10) [not null]
+  invite_code varchar(6) [not null, unique]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table group_members [headercolor: #7764D6] {
+  id bigint [pk, increment]
+  group_id bigint [not null]
+  user_id bigint [not null]
+  role group_role [not null]
+  is_manager boolean [not null]
+  joined_at timestamptz [not null]
+  left_at timestamptz
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (group_id, user_id) [unique]
+    (group_id) [unique, name: 'uq_group_active_manager', note: 'Partial UNIQUE: WHERE is_manager = TRUE AND left_at IS NULL']
+    (user_id) [unique, name: 'uq_user_active_care_receiver', note: 'Partial UNIQUE: WHERE role = \'CARE_RECEIVER\' AND left_at IS NULL']
+  }
+}
+
+Table group_join_requests [headercolor: #7764D6] {
+  id bigint [pk, increment]
+  group_id bigint [not null]
+  applicant_user_id bigint [not null]
+  assigned_role group_role
+  status join_request_status [not null]
+  created_at timestamptz [not null]
+  processed_at timestamptz
+
+  indexes {
+    (group_id, applicant_user_id) [unique, name: 'uq_pending_group_join_request', note: 'Partial UNIQUE: WHERE status = \'PENDING_ADMIN\'']
+  }
+}
+
+Table member_aliases [headercolor: #7764D6] {
+  id bigint [pk, increment]
+  group_id bigint [not null]
+  owner_member_id bigint [not null]
+  target_member_id bigint [not null]
+  alias varchar(10) [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (group_id, owner_member_id, target_member_id) [unique]
+  }
+}
+
+Table member_interests [headercolor: #7764D6] {
+  id bigint [pk, increment]
+  care_receiver_member_id bigint [not null]
+  interest_text varchar(10) [not null]
+  created_at timestamptz [not null]
+
+  indexes {
+    (care_receiver_member_id, interest_text) [unique]
+  }
+}
+
+Table posts [headercolor: #D679A2] {
+  id bigint [pk, increment]
+  group_id bigint [not null]
+  author_member_id bigint [not null]
+  content varchar(140) [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table post_media [headercolor: #D679A2] {
+  id bigint [pk, increment]
+  post_id bigint [not null]
+  media_type media_type [not null]
+  file_url varchar(500) [not null]
+  display_order integer [not null]
+  thumbnail_url varchar(500)
+
+  indexes {
+    (post_id, display_order) [unique]
+  }
+}
+
+Table comments [headercolor: #D679A2] {
+  id bigint [pk, increment]
+  post_id bigint [not null]
+  author_member_id bigint [not null]
+  content varchar(50) [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table post_reactions [headercolor: #D679A2] {
+  id bigint [pk, increment]
+  post_id bigint [not null]
+  group_member_id bigint [not null]
+  reaction_type reaction_type [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (post_id, group_member_id) [unique]
+  }
+}
+
+Table post_analyses [headercolor: #D679A2] {
+  id bigint [pk, increment]
+  post_id bigint [not null, unique]
+  status analysis_status [not null]
+  summary varchar(500)
+  analyzed_at timestamptz
+  created_at timestamptz [not null]
+  attempt_count integer [not null]
+  next_attempt_at timestamptz
+  last_failure_code varchar(50)
+  last_failed_at timestamptz
+  input_updated_at timestamptz
+  claim_token uuid
+  claim_expires_at timestamptz
+}
+
+Table calendar_events [headercolor: #B58A3C] {
+  id bigint [pk, increment]
+  group_id bigint [not null]
+  creator_member_id bigint [not null]
+  last_editor_member_id bigint [not null]
+  title varchar(20) [not null]
+  description varchar(50)
+  event_date date [not null]
+  start_at timestamptz
+  end_at timestamptz
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  end_date date [not null]
+  reminder_schedule_updated_at timestamptz [not null]
+}
+
+Table event_participants [headercolor: #B58A3C] {
+  id bigint [pk, increment]
+  event_id bigint [not null]
+  group_member_id bigint [not null]
+
+  indexes {
+    (event_id, group_member_id) [unique]
+  }
+}
+
+Table carnations [headercolor: #B58A3C] {
+  id bigint [pk, increment]
+  group_id bigint [not null]
+  group_member_id bigint [not null]
+  earned_date date [not null]
+  created_at timestamptz [not null]
+
+  indexes {
+    (group_member_id, earned_date) [unique]
+  }
+}
+
+Table call_sessions [headercolor: #4D83B8] {
+  id bigint [pk, increment]
+  group_id bigint [not null]
+  care_receiver_member_id bigint [not null]
+  persona_id bigint [not null]
+  status call_status [not null]
+  created_at timestamptz [not null]
+  started_at timestamptz
+  ended_at timestamptz
+  lease_expires_at timestamptz
+  transcript_integrity_status transcript_integrity_status [not null]
+  transcript_revision bigint [not null]
+  transcript_finalized_at timestamptz
+}
+
+Table call_transcripts [headercolor: #4D83B8] {
+  id bigint [pk, increment]
+  call_session_id bigint [not null]
+  speaker speaker_type [not null]
+  content text [not null]
+  sequence integer [not null]
+  created_at timestamptz [not null]
+  openai_item_id varchar(100)
+
+  indexes {
+    (call_session_id, sequence) [unique]
+    (call_session_id, openai_item_id) [unique, name: 'uq_call_transcripts_session_item', note: 'Partial UNIQUE: WHERE openai_item_id IS NOT NULL']
+  }
+}
+
+Table call_transcript_events [headercolor: #4D83B8] {
+  id bigint [pk, increment]
+  call_session_id bigint [not null]
+  openai_item_id varchar(100) [not null]
+  speaker speaker_type [not null]
+  sequence integer [not null]
+  status transcript_ingest_status [not null]
+  attempt_count integer [not null]
+  content text
+  content_hash varchar(64)
+  next_attempt_at timestamptz
+  claim_token uuid
+  claim_expires_at timestamptz
+  failure_code varchar(80)
+  ready_at timestamptz
+  applied_at timestamptz
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (call_session_id, openai_item_id) [unique]
+    (call_session_id, sequence) [unique]
+  }
+}
+
+Table call_report_generation_requests [headercolor: #4D83B8] {
+  call_session_id bigint [pk]
+  status call_report_generation_status [not null]
+  input_revision bigint [not null]
+  claim_token uuid
+  claim_expires_at timestamptz
+  last_failure_code varchar(50)
+  last_failed_at timestamptz
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table call_reports [headercolor: #4D83B8] {
+  id bigint [pk, increment]
+  call_session_id bigint [not null, unique]
+  summary varchar(100) [not null]
+  emotion_category emotion_category [not null]
+  emotion_subcategory varchar(50) [not null]
+  guardian_message varchar(100)
+  created_at timestamptz [not null]
+}
+
+Table daily_report_generation_claims [headercolor: #4D83B8] {
+  id bigint [pk, increment]
+  care_receiver_member_id bigint [not null]
+  report_date date [not null]
+  claim_token uuid [not null]
+  claim_expires_at timestamptz [not null]
+  input_report_count integer [not null]
+  input_latest_report_id bigint [not null]
+  created_at timestamptz [not null]
+
+  indexes {
+    (care_receiver_member_id, report_date) [unique]
+  }
+}
+
+Table daily_reports [headercolor: #4D83B8] {
+  id bigint [pk, increment]
+  group_id bigint [not null]
+  care_receiver_member_id bigint [not null]
+  report_date date [not null]
+  summary varchar(200) [not null]
+  emotion_category emotion_category [not null]
+  emotion_subcategory varchar(50) [not null]
+  guardian_message varchar(200)
+  created_at timestamptz [not null]
+
+  indexes {
+    (care_receiver_member_id, report_date) [unique]
+  }
+}
+
+Table notifications [headercolor: #4D9A77] {
+  id bigint [pk, increment]
+  receiver_user_id bigint [not null]
+  actor_user_id bigint
+  group_id bigint
+  related_join_request_id bigint
+  related_post_id bigint
+  related_event_id bigint
+  related_call_report_id bigint
+  related_daily_report_id bigint
+  type notification_type [not null]
+  title text [not null]
+  body text [not null]
+  created_at timestamptz [not null]
+  read_at timestamptz
+  reminder_slot reminder_slot
+  source_event_key varchar(160)
+
+  indexes {
+    (receiver_user_id, related_event_id, type, reminder_slot) [unique, name: 'uq_event_reminder_notification', note: 'Partial UNIQUE: WHERE type = \'EVENT_REMINDER\' AND related_event_id IS NOT NULL · PostgreSQL NULLS NOT DISTINCT']
+    (receiver_user_id, source_event_key) [unique, name: 'uq_notifications_receiver_source_event', note: 'Partial UNIQUE: WHERE source_event_key IS NOT NULL']
+  }
+}
+
+Table notification_settings [headercolor: #4D9A77] {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  notification_type notification_type [not null]
+  is_enabled boolean [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (user_id, notification_type) [unique]
+  }
+}
+
+Table device_tokens [headercolor: #4D9A77] {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  token varchar(500) [not null, unique]
+  device_type varchar(20) [not null]
+  is_active boolean [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Ref: group_members.group_id > family_groups.id
+
+Ref: group_members.user_id > users.id
+
+Ref: group_join_requests.group_id > family_groups.id
+
+Ref: group_join_requests.applicant_user_id > users.id
+
+Ref: member_aliases.group_id > family_groups.id
+
+Ref: member_aliases.owner_member_id > group_members.id
+
+Ref: member_aliases.target_member_id > group_members.id
+
+Ref: member_interests.care_receiver_member_id > group_members.id
+
+Ref: posts.group_id > family_groups.id
+
+Ref: posts.author_member_id > group_members.id
+
+Ref: post_media.post_id > posts.id [delete: cascade]
+
+Ref: comments.post_id > posts.id [delete: cascade]
+
+Ref: comments.author_member_id > group_members.id
+
+Ref: post_reactions.post_id > posts.id [delete: cascade]
+
+Ref: post_reactions.group_member_id > group_members.id
+
+Ref: post_analyses.post_id > posts.id [delete: cascade]
+
+Ref: calendar_events.group_id > family_groups.id
+
+Ref: calendar_events.creator_member_id > group_members.id
+
+Ref: calendar_events.last_editor_member_id > group_members.id
+
+Ref: event_participants.event_id > calendar_events.id [delete: cascade]
+
+Ref: event_participants.group_member_id > group_members.id
+
+Ref: call_sessions.group_id > family_groups.id
+
+Ref: call_sessions.care_receiver_member_id > group_members.id
+
+Ref: call_transcripts.call_session_id > call_sessions.id [delete: cascade]
+
+Ref: call_reports.call_session_id > call_sessions.id [delete: cascade]
+
+Ref: daily_reports.group_id > family_groups.id
+
+Ref: daily_reports.care_receiver_member_id > group_members.id
+
+Ref: carnations.group_id > family_groups.id
+
+Ref: carnations.group_member_id > group_members.id
+
+Ref: notifications.receiver_user_id > users.id
+
+Ref: notifications.actor_user_id > users.id [delete: set null]
+
+Ref: notifications.group_id > family_groups.id [delete: set null]
+
+Ref: notifications.related_join_request_id > group_join_requests.id [delete: set null]
+
+Ref: notifications.related_post_id > posts.id [delete: set null]
+
+Ref: notifications.related_event_id > calendar_events.id [delete: set null]
+
+Ref: notifications.related_call_report_id > call_reports.id [delete: set null]
+
+Ref: notifications.related_daily_report_id > daily_reports.id [delete: set null]
+
+Ref: notification_settings.user_id > users.id
+
+Ref: device_tokens.user_id > users.id
+
+Ref: daily_report_generation_claims.care_receiver_member_id > group_members.id [delete: cascade]
+
+Ref: call_transcript_events.call_session_id > call_sessions.id [delete: cascade]
+
+Ref: call_report_generation_requests.call_session_id > call_sessions.id [delete: cascade]
+
+TableGroup account_group [color: #7764D6] {
+  users
+  family_groups
+  group_members
+  group_join_requests
+  member_aliases
+  member_interests
+}
+
+TableGroup feed_media [color: #D679A2] {
+  posts
+  post_media
+  comments
+  post_reactions
+  post_analyses
+}
+
+TableGroup calendar_engagement [color: #B58A3C] {
+  calendar_events
+  event_participants
+  carnations
+}
+
+TableGroup call_report [color: #4D83B8] {
+  call_sessions
+  call_transcripts
+  call_transcript_events
+  call_report_generation_requests
+  call_reports
+  daily_report_generation_claims
+  daily_reports
+}
+
+TableGroup notification [color: #4D9A77] {
+  notifications
+  notification_settings
+  device_tokens
+}

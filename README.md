@@ -26,7 +26,7 @@ SSAFY 15기 2학기 공통 프로젝트 · 대전 1반 B104
   <img src="https://img.shields.io/badge/FCM-FFCA28?style=flat-square&logo=firebase&logoColor=1F2937" alt="Firebase Cloud Messaging" />
 </p>
 
-[프로젝트 소개](#프로젝트-소개) · [핵심 기능](#핵심-기능) · [시스템 설계](#시스템-설계) · [팀과 기여](#팀과-기여) · [실행 방법](#로컬-실행)
+[프로젝트 소개](#프로젝트-소개) · [핵심 기능](#핵심-기능) · [시스템 설계](#시스템-설계) · [API 명세](docs/api/API_SPEC.md) · [팀과 기여](#팀과-기여) · [실행 방법](#로컬-실행)
 
 </div>
 
@@ -106,11 +106,11 @@ SSAFY 15기 2학기 공통 프로젝트 · 대전 1반 B104
 
 ### 프로젝트 운영 당시 인프라 구성
 
-<a href="docs/readme-assets/architecture/infrastructure-architecture.svg">
-  <img src="docs/readme-assets/architecture/infrastructure-architecture.svg" width="100%" alt="Familink 프로젝트 운영 당시 인프라 아키텍처" />
+<a href="docs/readme-assets/architecture/infrastructure-architecture.png">
+  <img src="docs/readme-assets/architecture/infrastructure-architecture.png" width="100%" alt="Familink 프로젝트 운영 당시 인프라 및 배포 구조도" />
 </a>
 
-[SVG 원본](docs/readme-assets/architecture/infrastructure-architecture.svg) · [PNG 대체 이미지](docs/readme-assets/architecture/infrastructure-architecture.png)
+[운영 인프라 및 배포 구조도 크게 보기](docs/readme-assets/architecture/infrastructure-architecture.png)
 
 최종 운영 환경은 초기 단일 서버 설계에서 발전해, **개인 AWS의 운영 환경**과 **SSAFY EC2의 CI·staging 환경**을 분리했습니다.
 
@@ -119,8 +119,6 @@ SSAFY 15기 2학기 공통 프로젝트 · 대전 1반 B104
 - 내부 Actuator와 외부 HTTPS를 모두 확인하고 실패하면 직전 이미지로 자동 rollback했습니다.
 - CloudWatch에서 호스트·컨테이너 health와 Backend·Nginx·배포 로그를 수집했습니다.
 - 사진·영상은 앱이 비공개 S3에 직접 업로드하고, 운영 애플리케이션은 EC2 IAM Role로 AWS 서비스에 접근했습니다.
-
-> 보라색 영역은 **장대산이 구축한 Backend·Infra 범위**, 회색 AI API 영역은 **팀의 AI 기능 범위**입니다. 현재는 프로젝트 종료 후 과금 방지를 위해 운영 리소스를 정리하고 있습니다.
 
 ### 데이터 모델
 
@@ -131,13 +129,38 @@ SSAFY 15기 2학기 공통 프로젝트 · 대전 1반 B104
 
 <br />
 
-<a href="docs/readme-assets/erd/familink-erd.svg">
-  <img src="docs/readme-assets/erd/familink-erd.svg" width="100%" alt="Familink 최종 데이터 모델 ERD" />
+<a href="docs/readme-assets/erd/familink-erd.png">
+  <img src="docs/readme-assets/erd/familink-erd.png" width="100%" alt="Familink 최종 데이터 모델 ERD" />
 </a>
 
-[SVG 원본](docs/readme-assets/erd/familink-erd.svg) · [PNG 대체 이미지](docs/readme-assets/erd/familink-erd.png)
+[전체 ERD 크게 보기](docs/readme-assets/erd/familink-erd.png) · [dbdiagram.io용 DBML](docs/readme-assets/erd/familink.dbml)
 
-가독성을 위해 반복되는 감사 컬럼은 일부 축약했으며, 전체 스키마는 프로젝트의 Flyway V1~V12 마이그레이션을 기준으로 검증했습니다.
+전체 스키마는 프로젝트의 Flyway V1~V12 마이그레이션과 대조한 DBML을 dbdiagram.io에서 렌더링했습니다.
+
+</details>
+
+### API 명세
+
+Spring Boot 제품 API **63개**를 인증·회원, 그룹·구성원, 파일·피드, 일정, AI 통화, 리포트·카네이션, 알림 도메인으로 나누어 정리했습니다. 각 API의 Method·Path, 권한, 요청 필드, 성공 응답과 주요 오류 코드를 확인할 수 있습니다.
+
+> **[전체 API 명세서 바로가기 →](docs/api/API_SPEC.md)**
+
+<details>
+<summary><b>API 구성 요약 펼쳐보기</b></summary>
+
+| 도메인 | API 수 | 대표 경로 |
+|---|---:|---|
+| 인증·회원 | 8 | `/auth/*`, `/users/me` |
+| 그룹·구성원 | 18 | `/groups/*`, `/join-requests/*` |
+| 파일·피드 | 12 | `/files/*`, `/posts/*`, `/comments/*` |
+| 일정 | 5 | `/groups/{groupId}/events`, `/events/{eventId}` |
+| AI 통화 | 3 | `/call-sessions/*` |
+| 리포트·카네이션 | 7 | `/reports/*`, `/groups/{groupId}/grass` |
+| 알림·기기 토큰 | 10 | `/notifications/*`, `/device-tokens` |
+
+- 성공 응답은 `success`, `message`, `data` 공통 봉투를 사용합니다.
+- 실패 응답은 `code`, `message`, `errors[]`로 클라이언트 분기와 필드 오류를 구분합니다.
+- 인증 API 외에는 Bearer Access Token을 사용하고, 그룹 리소스는 활성 구성원·역할별 권한을 검증합니다.
 
 </details>
 

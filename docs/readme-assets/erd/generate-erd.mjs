@@ -11,6 +11,7 @@ const migrationFiles = fs.readdirSync(migrationDir)
   .sort((a, b) => Number(a.match(/^V(\d+)/)[1]) - Number(b.match(/^V(\d+)/)[1]));
 
 const tables = new Map();
+const enums = new Map();
 
 function splitTopLevel(value) {
   const parts = [];
@@ -59,14 +60,23 @@ function parseColumn(segment) {
   if (!match) return null;
   const [, name, definition] = match;
   if (/^(CONSTRAINT|PRIMARY|FOREIGN|UNIQUE|CHECK)$/i.test(name)) return null;
-  const reference = definition.match(/REFERENCES\s+([a-z_]+)\s*\(([^)]+)\)/i);
+  const reference = definition.match(
+    /REFERENCES\s+([a-z_]+)\s*\(([^)]+)\)(?:\s+ON\s+DELETE\s+(SET\s+NULL|SET\s+DEFAULT|NO\s+ACTION|CASCADE|RESTRICT))?/i,
+  );
   return {
     name,
     type: normalizeType(definition),
     pk: /PRIMARY\s+KEY/i.test(definition),
     uq: /\bUNIQUE\b/i.test(definition),
+    increment: /GENERATED\s+BY\s+DEFAULT\s+AS\s+IDENTITY/i.test(definition),
     nullable: !/NOT\s+NULL/i.test(definition) && !/PRIMARY\s+KEY/i.test(definition),
-    reference: reference ? { table: reference[1], column: reference[2].trim() } : null,
+    reference: reference
+      ? {
+          table: reference[1],
+          column: reference[2].trim(),
+          onDelete: reference[3]?.replace(/\s+/g, ' ').toLowerCase() ?? null,
+        }
+      : null,
   };
 }
 
@@ -85,6 +95,10 @@ function applyUniqueConstraints(table, body) {
 
 for (const filename of migrationFiles) {
   const sql = fs.readFileSync(path.join(migrationDir, filename), 'utf8');
+  const enumRegex = /CREATE TYPE\s+([a-z_]+)\s+AS ENUM\s*\(([\s\S]*?)\);/gi;
+  for (const match of sql.matchAll(enumRegex)) {
+    enums.set(match[1], [...match[2].matchAll(/'((?:''|[^'])+)'/g)].map((value) => value[1].replaceAll("''", "'")));
+  }
   const createRegex = /CREATE TABLE\s+([a-z_]+)\s*\(([\s\S]*?)\);/gi;
   for (const match of sql.matchAll(createRegex)) {
     const [, name, body] = match;
@@ -150,6 +164,7 @@ for (const filename of migrationFiles) {
       tableName,
       columns: rawColumns.split(',').map((item) => item.trim()),
       partial: /\bWHERE\b/i.test(tail),
+      where: tail.match(/\bWHERE\s+([\s\S]*)$/i)?.[1].replace(/\s+/g, ' ').trim() ?? null,
       nullsNotDistinct: /NULLS NOT DISTINCT/i.test(tail),
     });
   }
@@ -282,6 +297,59 @@ for (const table of tables.values()) {
   });
 }
 
+function dbmlQuote(value) {
+  return `'${String(value).replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+}
+
+function dbmlColumn(column) {
+  const settings = [];
+  if (column.pk) settings.push('pk');
+  if (column.increment) settings.push('increment');
+  if (!column.nullable && !column.pk) settings.push('not null');
+  if (column.uq) settings.push('unique');
+  return `  ${column.name} ${column.type.toLowerCase()}${settings.length ? ` [${settings.join(', ')}]` : ''}`;
+}
+
+function dbmlIndex(index) {
+  const settings = ['unique', `name: ${dbmlQuote(index.name)}`];
+  const notes = [];
+  if (index.partial) notes.push(`Partial UNIQUE: WHERE ${index.where}`);
+  if (index.nullsNotDistinct) notes.push('PostgreSQL NULLS NOT DISTINCT');
+  if (notes.length) settings.push(`note: ${dbmlQuote(notes.join(' · '))}`);
+  return `    (${index.columns.join(', ')}) [${settings.join(', ')}]`;
+}
+
+const dbml = [];
+dbml.push(`Project familink {\n  database_type: 'PostgreSQL'\n  Note: 'Diagram model generated from Flyway V1-V12. DBML cannot encode partial-index predicates, so partial UNIQUE indexes keep the unique marker and record their WHERE clause in a note. Use the Flyway migrations—not DBML-exported SQL—as the DDL authority.'\n}`);
+
+for (const [name, values] of enums) {
+  dbml.push(`Enum ${name} {\n${values.map((value) => `  ${value}`).join('\n')}\n}`);
+}
+
+for (const group of groups) {
+  for (const tableName of group.tables) {
+    const table = tables.get(tableName);
+    const indexLines = [
+      ...table.uniqueConstraints.map((columns) => `    (${columns.join(', ')}) [unique]`),
+      ...table.uniqueIndexes.map(dbmlIndex),
+    ];
+    const body = table.columns.map(dbmlColumn);
+    if (indexLines.length) body.push('', '  indexes {', ...indexLines, '  }');
+    dbml.push(`Table ${table.name} [headercolor: ${group.color}] {\n${body.join('\n')}\n}`);
+  }
+}
+
+for (const relation of relations) {
+  const sourceColumn = tables.get(relation.source).columns.find((column) => column.name === relation.column);
+  const deleteSetting = sourceColumn.reference.onDelete ? ` [delete: ${sourceColumn.reference.onDelete}]` : '';
+  dbml.push(`Ref: ${relation.source}.${relation.column} > ${relation.target}.${sourceColumn.reference.column}${deleteSetting}`);
+}
+
+for (const [index, group] of groups.entries()) {
+  const groupName = group.title.toLowerCase().replaceAll(' · ', '_').replaceAll(' ', '_');
+  dbml.push(`TableGroup ${groupName} [color: ${group.color}] {\n${group.tables.map((name) => `  ${name}`).join('\n')}\n}`);
+}
+
 const svg = [];
 svg.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${canvasWidth}" height="${canvasHeight}" viewBox="0 0 ${canvasWidth} ${canvasHeight}" role="img" aria-labelledby="title desc">`);
 svg.push('<title id="title">Familink 최종 데이터 모델 ERD</title>');
@@ -356,4 +424,5 @@ svg.push(`<text x="48" y="${canvasHeight - 48}" class="subtitle">Generated from 
 svg.push('</svg>');
 
 fs.writeFileSync(path.join(here, 'familink-erd.svg'), svg.join('\n'), 'utf8');
-console.log(`Generated familink-erd.svg: ${tables.size} tables, ${relations.length} relations, ${canvasWidth}x${canvasHeight}`);
+fs.writeFileSync(path.join(here, 'familink.dbml'), `${dbml.join('\n\n')}\n`, 'utf8');
+console.log(`Generated familink-erd.svg and familink.dbml: ${tables.size} tables, ${relations.length} relations, ${enums.size} enums, ${canvasWidth}x${canvasHeight}`);
